@@ -427,14 +427,18 @@ export function NewWorkspaceDialog({
 	const submitEnabled = !creating && !templatePending && attachedImages.pending === 0;
 
 	const uploadFiles = async (): Promise<string[] | null> => {
-		try {
-			return await uploadPromptFiles(null, attachedImages.files, {
-				onCopied: attachedImages.markCopied,
-			});
-		} catch (error) {
-			toast.error(attachmentFailureText(error));
+		if (attachedImages.files.length === 0) return [];
+		const upload = new AbortController();
+		const release = attachedImages.holdForUpload(upload);
+		const paths = await uploadPromptFiles(null, attachedImages.files, {
+			signal: upload.signal,
+			onCopied: attachedImages.markCopied,
+		}).catch((error: unknown) => {
+			if (!upload.signal.aborted) toast.error(attachmentFailureText(error));
 			return null;
-		}
+		});
+		release();
+		return paths;
 	};
 
 	const create = async () => {
@@ -577,6 +581,11 @@ export function NewWorkspaceDialog({
 				data-testid="new-workspace-dialog"
 				className="max-w-[600px] gap-12 overflow-visible p-12"
 				onEscapeKeyDown={(event) => {
+					if (attachedImages.uploading) {
+						event.preventDefault();
+						attachedImages.cancelUpload();
+						return;
+					}
 					if (slashCompletion.open) {
 						event.preventDefault();
 						slashCompletion.dismiss();
@@ -724,6 +733,7 @@ export function NewWorkspaceDialog({
 						testId="ws-prompt-images"
 						className=""
 						filesTo="dataDir"
+						locked={creating}
 						onField={() => promptRef.current?.focus()}
 					/>
 				</div>

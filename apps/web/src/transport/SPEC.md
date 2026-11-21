@@ -210,7 +210,10 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `supportsChatAttachments`): picked bytes to `/attachments/`, a pasted local path through
   `attachments.copyLocal`. It reports each written path through `onCopied`, reuses a file's `copied` path
   instead of sending it again (a retry after a partial failure makes no `name-2.ext`), stops between files
-  and aborts the `fetch` on `signal`, and answers the paths or throws `AttachmentUploadError` — a host
+  and aborts the `fetch` on `signal`. A socket request can't be withdrawn, so on `signal` the
+  `copyLocal` wait ends at once while the host's copy runs on: its late answer still reports the path
+  (and a blob answer read before the abort reports too), and a retry of that file meanwhile joins the
+  running copy (keyed by workspace and file id) instead of starting another. It answers the paths or throws `AttachmentUploadError` — a host
   refusal code, a non-JSON answer's HTTP status, an unreachable host or a failed socket request — which
   `attachmentFailureText` words from the catalog, always naming the file — while `hostUrl` resolves a host-relative path
   (custom face URLs, and chat image references through `chat`'s `ChatMediaContext`) against the endpoint; `supportsExtensionSettings` (v105) lets `ExtensionsSettings`

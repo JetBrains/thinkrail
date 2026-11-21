@@ -720,7 +720,11 @@ a project picker, the prompt hero, and the reused
   drop — through the shared `usePromptImages` controller (same classification, image decode/downscale and
   chip strip as the chat `Composer`, [[submodule-web-chat]]); with no worktree yet, Create first copies the
   file attachments into the host data dir (`uploadPromptFiles(null, …)`; a failure toasts and keeps the
-  dialog, and files already copied keep their paths so the next Create skips them), the file chips name
+  dialog, and files already copied keep their paths so the next Create skips them). That copy holds the
+  controller as the composer's send does (`holdForUpload`: the "Copying files…" chip, additions, paste and
+  drop refused), and Esc or the chip's × stops it, leaving the dialog as it was without a toast; the chips
+  stay locked (`PromptImageChips` `locked`: × and Delete inert) until Create settles, so the start carries
+  exactly the chips on screen. The file chips name
   ThinkRail's attachments folder rather than the workspace, and the kick-off text lists their absolute paths; submit is
   **held while any image is still decoding**, and a start with **only images and no text** is a valid
   kick-off. An **empty prompt with no images still lands the user in a chat** — the host starts it without a

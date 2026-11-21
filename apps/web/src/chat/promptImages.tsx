@@ -505,6 +505,7 @@ export function PromptImageChips({
 	testId = "composer-images",
 	className = "px-12 pt-12",
 	filesTo = "workspace",
+	locked = false,
 	onField,
 	onTabOut,
 	handleRef,
@@ -514,12 +515,14 @@ export function PromptImageChips({
 	testId?: string;
 	className?: string;
 	filesTo?: keyof typeof FILE_DESTINATION;
+	locked?: boolean;
 	onField: () => void;
 	onTabOut?: (backward: boolean) => void;
 	handleRef?: Ref<PromptChipsHandle>;
 }) {
 	const t = useT();
 	const { pending, uploading, remove, cancelUpload } = controller;
+	const held = uploading || locked;
 	const destination = FILE_DESTINATION[filesTo];
 	const items = chipItems(controller);
 	const [activeId, setActiveId] = useState<string | null>(null);
@@ -551,7 +554,7 @@ export function PromptImageChips({
 
 	const removeAt = (index: number, next: number | null) => {
 		const item = items[index];
-		if (!item || uploading) return;
+		if (!item || held) return;
 		const rest = items.filter((other) => other.id !== item.id);
 		remove(item.id);
 		const target = next === null ? undefined : rest[next];
@@ -587,7 +590,7 @@ export function PromptImageChips({
 				size="s"
 				tabIndex={-1}
 				label={label}
-				disabled={uploading}
+				disabled={held}
 				onClick={() => removeAt(index, index < items.length - 1 ? index : index - 1)}
 			/>
 		);

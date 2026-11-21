@@ -60,6 +60,58 @@ async function holdUploads(page: Page): Promise<() => void> {
 	return release;
 }
 
+function frameOf(message: string | Buffer): Record<string, unknown> | null {
+	if (typeof message !== "string") return null;
+	try {
+		const value: unknown = JSON.parse(message);
+		return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : null;
+	} catch {
+		return null;
+	}
+}
+
+async function holdSocket(page: Page, method: string, part: "request" | "reply") {
+	const ids = new Set<string>();
+	const acked = new Set<string>();
+	let open = false;
+	const waiting: (() => void)[] = [];
+	const later = (send: () => void) => {
+		if (open) send();
+		else waiting.push(send);
+	};
+	await page.routeWebSocket(/\/ws(\?|$)/, (browser) => {
+		const server = browser.connectToServer();
+		browser.onMessage((message) => {
+			const frame = frameOf(message);
+			const ack = frame?.ack;
+			if (Array.isArray(ack)) {
+				for (const id of ack) if (typeof id === "string" && ids.has(id)) acked.add(id);
+			}
+			if (frame?.method !== method || typeof frame.id !== "string") {
+				server.send(message);
+				return;
+			}
+			ids.add(frame.id);
+			if (part === "request") later(() => server.send(message));
+			else server.send(message);
+		});
+		server.onMessage((message) => {
+			const id = frameOf(message)?.id;
+			if (part === "reply" && typeof id === "string" && ids.has(id))
+				later(() => browser.send(message));
+			else browser.send(message);
+		});
+	});
+	return {
+		seen: () => ids.size,
+		acked: () => acked.size,
+		release: () => {
+			open = true;
+			for (const send of waiting.splice(0)) send();
+		},
+	};
+}
+
 type ClipboardTargets = Record<string, string | Uint8Array<ArrayBuffer>>;
 
 const IMAGE_BUDGET = 64 * 1024;
@@ -422,6 +474,75 @@ test("the New Workspace dialog's paperclip keeps files under the host data dir a
 	await expect(lastUserMessage(page)).toContainText(`- ${path}`);
 });
 
+test("while Create copies the files, the dialog's chips take no removals or additions; Esc gives the draft back, and the start lists exactly the chips shown", async ({
+	page,
+}) => {
+	const startCreate = await holdSocket(page, "workspace.startCreate", "request");
+	await openFixtureProject(page);
+	const release = await holdUploads(page);
+	await page.getByTestId("add-workspace").first().click();
+	const dialog = page.getByTestId("new-workspace-dialog");
+	const prompt = dialog.getByTestId("ws-prompt");
+	const chips = dialog.getByTestId("composer-chip");
+	const uploading = dialog.getByTestId("composer-files-uploading");
+	await prompt.fill("Start from the plan and the notes");
+	await dialog.getByTestId("ws-attach-input").setInputFiles([
+		{ name: "plan.pdf", mimeType: "application/pdf", buffer: PDF },
+		{ name: "plan-notes.md", mimeType: "text/markdown", buffer: Buffer.from("# notes\n") },
+	]);
+	await expect(chips).toHaveCount(2);
+	const stored = join(E2E_DATA_DIR, "attachments");
+	const before = new Set(existsSync(stored) ? readdirSync(stored) : []);
+
+	await page.getByTestId("create-workspace").click();
+	await chips.last().focus();
+	await page.keyboard.press("Delete");
+	await expect(chips).toHaveCount(2);
+	await expect(uploading).toBeVisible();
+	await expect(chips.last().getByRole("button")).toBeDisabled();
+	await dialog
+		.getByTestId("ws-attach-input")
+		.setInputFiles([{ name: "late.txt", mimeType: "text/plain", buffer: Buffer.from("late") }]);
+	await prompt.evaluate((el) => {
+		const dt = new DataTransfer();
+		dt.items.add(new File(["pasted"], "pasted.txt", { type: "text/plain" }));
+		el.dispatchEvent(
+			new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }),
+		);
+		el.dispatchEvent(new DragEvent("drop", { dataTransfer: dt, bubbles: true, cancelable: true }));
+	});
+	await expect(chips).toHaveCount(2);
+	await expect(dialog.getByTestId("ws-attach")).toBeDisabled();
+
+	await page.keyboard.press("Escape");
+	await expect(uploading).toHaveCount(0);
+	await expect(dialog).toBeVisible();
+	await expect(prompt).toBeEnabled();
+	await expect(prompt).toHaveValue("Start from the plan and the notes");
+	await expect(chips).toHaveCount(2);
+	await expect(page.getByTestId("toast").filter({ hasText: "Couldn't copy" })).toHaveCount(0);
+
+	release();
+	await page.unroute("**/attachments/**");
+	await page.getByTestId("create-workspace").click();
+	await expect.poll(startCreate.seen).toBe(1);
+	await expect(uploading).toHaveCount(0);
+	await chips.first().focus();
+	await page.keyboard.press("Delete");
+	await expect(chips).toHaveCount(2);
+	await expect(chips.first().getByRole("button")).toBeDisabled();
+	startCreate.release();
+	await expect(dialog).toBeHidden();
+
+	const added = readdirSync(stored).filter((entry) => !before.has(entry));
+	expect(added.sort()).toEqual(["plan-notes.md", "plan.pdf"]);
+	const sent = lastUserMessage(page);
+	await expect(sent).toContainText(`- ${join(stored, "plan.pdf")}`);
+	await expect(sent).toContainText(`- ${join(stored, "plan-notes.md")}`);
+	await expect(sent).not.toContainText("late.txt");
+	await expect(sent).not.toContainText("pasted.txt");
+});
+
 test("a slow copy holds the draft: text put in meanwhile stays after the send, and only the sent text and chips go", async ({
 	page,
 }) => {
@@ -675,4 +796,59 @@ test("while a slow copy holds the draft, recall and @-mention keys leave it alon
 	await expect(lastUserMessage(page)).toContainText(`- ${ATTACHMENTS}/design.pdf`);
 	await expect(input).toHaveValue("");
 	expect(readdirSync(join(workspace.worktreePath, ATTACHMENTS))).toEqual(["design.pdf"]);
+});
+
+test("Esc or × lets go of a pasted file's slow host copy at once; its late answer sends nothing, and the retry copies it once", async ({
+	page,
+}) => {
+	const copyReply = await holdSocket(page, "attachments.copyLocal", "reply");
+	const copy = await installSystemClipboard(page);
+	const workspace = await openChatComposer(page);
+	const outside = join(E2E_DATA_DIR, "slow-copy");
+	mkdirSync(outside, { recursive: true });
+	const source = join(outside, "slow.pdf");
+	writeFileSync(source, PDF);
+	const input = page.getByTestId("chat-input");
+	const send = page.getByTestId("chat-send");
+	const uploading = page.getByTestId("composer-files-uploading");
+	const file = page.getByTestId("composer-file");
+	await input.focus();
+	copy(fileManagerCopy([source]));
+	await pasteEmptied(page, ["text/uri-list"]);
+	await expect(file).toContainText("slow.pdf");
+	await input.fill("Read the slow file");
+
+	await input.press("Enter");
+	await expect(uploading).toBeVisible();
+	await expect.poll(copyReply.seen).toBe(1);
+	await input.press("Escape");
+	await expect(uploading).toHaveCount(0);
+	await expect(input).not.toHaveAttribute("readonly", "");
+	await expect(input).toHaveValue("Read the slow file");
+	await expect(send).toBeEnabled();
+	await expect(page.getByTestId("composer-command-error")).toHaveCount(0);
+
+	await input.press("Enter");
+	await expect(uploading).toBeVisible();
+	await page.getByTestId("composer-files-uploading-cancel").click();
+	await expect(uploading).toHaveCount(0);
+	await expect(input).toHaveValue("Read the slow file");
+	await expect(send).toBeEnabled();
+	expect(copyReply.seen()).toBe(1);
+
+	copyReply.release();
+	await expect.poll(copyReply.acked).toBe(1);
+	await expect(userMessages(page)).toHaveCount(0);
+	await expect(input).toHaveValue("Read the slow file");
+	await expect(file).toHaveCount(1);
+	await expect(uploading).toHaveCount(0);
+
+	await input.press("Enter");
+	const sent = lastUserMessage(page);
+	await expect(sent).toContainText("Read the slow file");
+	await expect(sent).toContainText(`- ${ATTACHMENTS}/slow.pdf`);
+	await expect(userMessages(page)).toHaveCount(1);
+	await expect(input).toHaveValue("");
+	expect(copyReply.seen()).toBe(1);
+	expect(readdirSync(join(workspace.worktreePath, ATTACHMENTS))).toEqual(["slow.pdf"]);
 });

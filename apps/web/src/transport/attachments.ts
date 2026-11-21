@@ -36,11 +36,14 @@ export class AttachmentUploadError extends Error {
 	}
 }
 
+type CopiedReport = ((id: string, path: string) => void) | undefined;
+
 async function uploadBlob(
 	workspaceId: string | null,
-	name: string,
+	{ id, name }: Pick<PromptFile, "id" | "name">,
 	blob: Blob,
 	signal: AbortSignal | undefined,
+	onCopied: CopiedReport,
 ): Promise<ChatAttachmentResult> {
 	const query =
 		workspaceId === null
@@ -62,12 +65,14 @@ async function uploadBlob(
 		throw new AttachmentUploadError(name, { kind: "unreachable" });
 	}
 	const result: unknown = await response.json().catch(() => null);
+	const answered = isChatAttachmentResult(result);
+	if (answered && result.ok) onCopied?.(id, result.path);
 	signal?.throwIfAborted();
-	if (isChatAttachmentResult(result)) return result;
+	if (answered) return result;
 	throw new AttachmentUploadError(name, { kind: "status", status: response.status });
 }
 
-async function copyLocal(
+async function requestCopy(
 	workspaceId: string | null,
 	name: string,
 	path: string,
@@ -80,6 +85,37 @@ async function copyLocal(
 	} catch (error) {
 		throw new AttachmentUploadError(name, { kind: "request", error });
 	}
+}
+
+const localCopies = new Map<string, Promise<ChatAttachmentResult>>();
+
+function copyLocal(
+	workspaceId: string | null,
+	{ id, name }: Pick<PromptFile, "id" | "name">,
+	path: string,
+	onCopied: CopiedReport,
+): Promise<ChatAttachmentResult> {
+	const key = `${workspaceId ?? ""}\n${id}`;
+	const running = localCopies.get(key);
+	if (running) return running;
+	const copy = requestCopy(workspaceId, name, path).then((result) => {
+		if (result.ok) onCopied?.(id, result.path);
+		return result;
+	});
+	localCopies.set(key, copy);
+	const forget = () => localCopies.delete(key);
+	copy.then(forget, forget);
+	return copy;
+}
+
+function untilAborted<T>(work: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+	if (!signal) return work;
+	return new Promise<T>((resolve, reject) => {
+		const abort = () => reject(signal.reason);
+		if (signal.aborted) abort();
+		signal.addEventListener("abort", abort, { once: true });
+		void work.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+	});
 }
 
 const ERROR_REASON: Record<ChatAttachmentErrorCode, MessageKey> = {
@@ -130,12 +166,11 @@ export async function uploadPromptFiles(
 		}
 		const result =
 			file.source.kind === "blob"
-				? await uploadBlob(workspaceId, file.name, file.source.blob, signal)
-				: await copyLocal(workspaceId, file.name, file.source.path);
+				? await uploadBlob(workspaceId, file, file.source.blob, signal, onCopied)
+				: await untilAborted(copyLocal(workspaceId, file, file.source.path, onCopied), signal);
 		if (!result.ok) {
 			throw new AttachmentUploadError(file.name, { kind: "refused", code: result.error });
 		}
-		onCopied?.(file.id, result.path);
 		paths.push(result.path);
 	}
 	signal?.throwIfAborted();

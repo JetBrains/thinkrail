@@ -1336,7 +1336,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   answer a promise; until it settles the draft is held (field read-only, chips locked, a "Copying files…"
   chip, sends refused) under an `AbortController` kept on the draft (`PromptImagesState.upload`, so a
   remounted composer still reaches it). Esc in the field or the chip's × aborts it: the upload stops, nothing
-  is sent, the draft stays as it was. The field's own editing keys are inert meanwhile — ↑/↓ recall, the `@` and
+  is sent, the draft stays as it was — at once, also while a pasted file's host copy is still out (its late
+  answer only records the path, so the retry doesn't copy it twice; [[submodule-web-transport]]). The field's own editing keys are inert meanwhile — ↑/↓ recall, the `@` and
   `/` menus (hidden) and template-slot Tab — so a cancel gives back exactly the held text; Esc, Shift+Tab to
   the chips and the other focus moves still work. Whatever reaches the composer meanwhile merges instead of being lost —
   restored queue text (Stop, Edit on a queued message, a failed queued send) goes above the held text

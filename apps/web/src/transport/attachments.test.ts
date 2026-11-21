@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
-import type { WsMethodName } from "@thinkrail/contracts";
+import type { ChatAttachmentResult, WsMethodName } from "@thinkrail/contracts";
 import type { PromptFile } from "../store";
 import { AttachmentUploadError, attachmentFailureText, uploadPromptFiles } from "./attachments";
 import { WsTransport } from "./transport";
@@ -9,6 +9,7 @@ let restore: (() => void)[] = [];
 let copies: { path: string; workspaceId?: string }[] = [];
 let puts: string[] = [];
 let answer: (url: string) => Promise<Response> = async () => Response.json({ ok: true, path: "x" });
+let slowCopy: Promise<ChatAttachmentResult> = Promise.resolve({ ok: true, path: "x" });
 
 beforeEach(() => {
 	copies = [];
@@ -22,6 +23,7 @@ beforeEach(() => {
 		if (method !== "attachments.copyLocal") throw new Error(`unexpected ${method}`);
 		copies.push(params);
 		if (params.path.endsWith("offline.pdf")) return Promise.reject(new Error("socket closed"));
+		if (params.path.endsWith("slow.pdf")) return slowCopy;
 		return Promise.resolve({
 			ok: true,
 			path: `.thinkrail/context/attachments/${params.path.slice(1)}`,
@@ -48,6 +50,7 @@ beforeEach(() => {
 afterEach(() => {
 	for (const undo of restore) undo();
 	answer = async () => Response.json({ ok: true, path: "x" });
+	slowCopy = Promise.resolve({ ok: true, path: "x" });
 });
 
 const blob = (id: string, name: string): PromptFile => ({
@@ -129,4 +132,47 @@ test("an aborted upload stops before the next file and rejects as an abort", asy
 	expect(puts).toHaveLength(1);
 	expect(failure).not.toBeInstanceOf(AttachmentUploadError);
 	expect(upload.signal.aborted).toBe(true);
+});
+
+test("a local copy's wait ends at once on abort; a retry meanwhile joins the running copy, and its late answer is still recorded", async () => {
+	let answerCopy: (result: ChatAttachmentResult) => void = () => {};
+	slowCopy = new Promise((resolve) => {
+		answerCopy = resolve;
+	});
+	const copied: [string, string][] = [];
+	const onCopied = (id: string, path: string) => copied.push([id, path]);
+	const upload = new AbortController();
+	const first = uploadPromptFiles("w1", [local("s", "/slow.pdf")], {
+		signal: upload.signal,
+		onCopied,
+	}).catch((error: unknown) => error);
+	upload.abort();
+	const stopped = await first;
+	expect(stopped).not.toBeInstanceOf(AttachmentUploadError);
+	expect(stopped).toBe(upload.signal.reason);
+	expect(copied).toEqual([]);
+
+	const retry = uploadPromptFiles("w1", [local("s", "/slow.pdf")], { onCopied });
+	expect(copies).toHaveLength(1);
+	answerCopy({ ok: true, path: ".thinkrail/context/attachments/slow.pdf" });
+	expect(await retry).toEqual([".thinkrail/context/attachments/slow.pdf"]);
+	expect(copied).toEqual([["s", ".thinkrail/context/attachments/slow.pdf"]]);
+
+	const again = new AbortController();
+	slowCopy = new Promise((resolve) => {
+		answerCopy = resolve;
+	});
+	const late = uploadPromptFiles("w1", [local("t", "/slow.pdf")], {
+		signal: again.signal,
+		onCopied,
+	}).catch((error: unknown) => error);
+	again.abort();
+	await late;
+	answerCopy({ ok: true, path: ".thinkrail/context/attachments/slow-2.pdf" });
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	expect(copies).toHaveLength(2);
+	expect(copied).toEqual([
+		["s", ".thinkrail/context/attachments/slow.pdf"],
+		["t", ".thinkrail/context/attachments/slow-2.pdf"],
+	]);
 });
