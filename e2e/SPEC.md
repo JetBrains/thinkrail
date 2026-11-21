@@ -206,6 +206,12 @@ animates to.
 Entering a workspace auto-opens its latest chat, and a pending questionnaire there claims focus and reveal
 at once. Workbench shortcuts pressed afterwards are user input, and the card yields to them. Questionnaire
 attention coverage therefore closes and reopens the chat after arranging the workbench.
+Reconnect auto-open coverage (`chat-history.spec.ts`) drops the page's socket with the host running and,
+once the probe has forwarded the new connection's `session.list` answer, renames the current chat over a
+second wire. A new title on the tab means the page handled that answer, so a chat the pass opens from its
+local runtime is already placed. A chat it must read first opens only after that read, which the rename
+does not wait for, so the probe also asserts that no new `session.getMessages` for that chat went out on
+the new socket (a replayed read keeps its id): the pass sends the read while it handles the answer.
 Showing a side or the bottom focuses its selected tab (its edge-rail control when no tab renders) one
 animation frame after the region renders; a probe that then focuses inside the shown region first waits
 for that endpoint, or a late frame moves focus away from the probe's target.
