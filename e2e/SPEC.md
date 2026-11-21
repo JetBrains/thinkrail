@@ -460,7 +460,9 @@ bottom Terminal and focus entering an on-screen step of it leaving follow withou
 header or step away, C (clipboard), O (a preview tab) and the Shift+F10 item menu, Tab
 walking only the focused item's controls then leaving, PgUp/PgDn from the composer paging the transcript
 with focus kept, Latest from the keyboard and a history jump landing on the message, focus parked on the
-feed when a wheel scroll unmounts the focused row and the next key bringing it back, newest-first order,
+feed when a wheel scroll unmounts the focused row and the next key bringing it back, newest-first order
+(and, in a 200-message newest-first chat whose old messages render taller than their estimates, End
+reaching the true bottom on the oldest message and Home the top),
 the history overlay's Delete (caret at the end only) and entry menu beside its Tab zoom, the Resources
 inspector's inert transcript and the @ popup taking Escape first, Stop returning focus to the composer
 (a replayed `agent_start` on the intercepted wire keeps the chat streaming without an agent), and h/l on
@@ -482,11 +484,13 @@ meanwhile), a click on a row keeps focus in the tree, and a search-palette file 
 (a CSV's table); in a Markdown preview j walks the blocks, ↓ scrolls a tall fenced block 40 px at a time
 before the cursor moves on (only once its end shows), Space / Shift+Space page and Shift+G / g reach the ends
 with the cursor on the last / first block; a CSV scrolls by j (40 px), Space (a page) and l / h sideways,
-Shift+G reaches the bottom and Esc returns to its row; and a read-only code file moves the caret with the view
+Shift+G reaches the bottom and Esc returns to its row, and in a 300-row CSV whose last rows are multiline
+Shift+G still reaches the true bottom (settled) and g the top; and a read-only code file moves the caret with the view
 on j / k (no "Cannot edit" message), pages on Space, reaches its last / first line on Shift+G / g, shows hint
 labels on `F` (hint mode's Esc keeps the editor) and returns to the tree on the next Esc, and once a wheel
 scrolls away from the caret, j / ↑ step from the first / last visible line instead, so Shift+Mod+M comments on
-the text in view; an HTML file opened with Enter leaves focus on its tab, never in the frame, so F6 /
+the text in view — also down one long wrapped line, where the caret's line is on screen but its row is not
+(j leaves the caret on the top row, ↑ near the bottom); an HTML file opened with Enter leaves focus on its tab, never in the frame, so F6 /
 Shift+F6, the Esc ladder (toolbar, then the row), Mod+1 and Mod+Shift+E all still move it.
 `settings-keyboard.spec.ts` pins the Settings frame's keys: opening lands on the current section's tab, and
 Tab goes search → the one tab stop of the section list → the section's first row, which is the content's

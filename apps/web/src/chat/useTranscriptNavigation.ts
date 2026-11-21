@@ -381,20 +381,41 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 		if (shown) land(list, shown.index, shown.target);
 	};
 
+	const toExtreme = (direction: ReadingDirection) => {
+		if (!scroller || !options) return;
+		const { scrollTop, scrollHeight, clientHeight } = scroller;
+		options.scrollBy(direction < 0 ? -scrollTop : scrollHeight - clientHeight - scrollTop);
+	};
+
 	const edge = (list: TranscriptNavItem[], direction: ReadingDirection) => {
 		const index = direction < 0 ? 0 : list.length - 1;
 		const target = list[index];
-		if (!target || !scroller || !options) return;
+		const current = options;
+		if (!target || !scroller || !current) return;
+		cancel();
 		setCursor(target.id, index);
-		if (target.id === target.rowId && latestRowIds().includes(target.rowId)) {
-			options.scrollToLatest();
-		} else {
-			const { scrollTop, scrollHeight, clientHeight } = scroller;
-			options.scrollBy(direction < 0 ? -scrollTop : scrollHeight - clientHeight - scrollTop);
-		}
-		const mounted = element(target.id);
+		const { id, rowId } = target;
+		const latest = latestRowIds().includes(rowId);
+		if (latest) current.scrollToLatest();
+		else toExtreme(direction);
+		const mounted = element(id);
 		if (mounted) mounted.focus({ preventScroll: true });
-		else whenMounted(target.id);
+		if (latest || direction < 0) {
+			if (!mounted) whenMounted(id);
+			return;
+		}
+		if (!holdsFocus()) park();
+		cancelPending = current.revealRow(
+			rowId,
+			() => options?.rows.findIndex((row) => row.id === rowId) ?? -1,
+			"end",
+			(result) => {
+				cancelPending = null;
+				if (result !== "found") return;
+				toExtreme(1);
+				if (holdsFocus()) (element(id) ?? element(rowId))?.focus({ preventScroll: true });
+			},
+		);
 	};
 
 	const copy = (item: TranscriptNavItem) => {

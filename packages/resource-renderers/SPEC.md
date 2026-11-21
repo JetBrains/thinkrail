@@ -1013,7 +1013,7 @@ A file a reader opens in a tab reads from the keyboard (user, 2026-11-20). `Rend
 there, the views' scrollers become reading surfaces — embedded previews (chat cards, the palette, the
 questionnaire) keep their Tab order and never compete for a region's landing.
 
-- **One handler** (`support/readingSurface.ts`): `useReadingSurface({ label, sideways })` returns
+- **One handler** (`support/readingSurface.ts`): `useReadingSurface({ label, sideways, toEdge })` returns
   `role="document"`, its `aria-label`, `tabIndex=0`, `data-focus-default`, `data-key-scope="reader"` and a
   key handler that acts only on the surface itself (an inner control keeps its keys) through
   `@thinkrail/ui/reading` ([[module-ui]]): `readingCommand` (↑/↓ and the j/k twins a line of
@@ -1023,7 +1023,11 @@ questionnaire) keep their Tab order and never compete for a region's landing.
   matched through `useReaderKeys()` in scope `reader`, which the app resolves (it includes `arrows` and
   `reading`, [[submodule-web-keybindings]]). The ring is `focus-visible:focus-ring-inset`. Used by JSON,
   notebook, PDF (the pages scroller), CSV (on `TableVirtuoso`'s own scroller, which forwards the props, with
-  `sideways`) and the Markdown preview without review.
+  `sideways`) and the Markdown preview without review. A virtualized view passes `toEdge` for g/G: one
+  jump to `scrollHeight` uses the size estimate and stops short of rows taller than it, so CSV calls
+  `scrollToIndex` on its first row (start) or last row, which Virtuoso retries as it measures rows. The
+  last row aligns to the end plus a line, which the scroller clamps to its true bottom (Virtuoso's sum of
+  sub-pixel row heights lands a pixel or two above it).
 - **Markdown with review** keeps its block cursor proxy as the Tab stop (`CursorProxy`'s `focusDefault`
   under a focus home) inside a `reader`-scoped scroller. Plain ↑/↓/j/k scroll before they step, as in the
   chat transcript: a block taller than the rest of the view scrolls a line at a time until its far edge
@@ -1035,9 +1039,12 @@ questionnaire) keep their Tab order and never compete for a region's landing.
 - **Read-only Monaco** (`MonacoEditor`, `readCode`): while the editor is read-only and its text has
   focus (`hasTextFocus`, so the find widget and a focused hover keep every key), ↑/↓ and j/k scroll the
   view one code line and move the caret with it (the caret moves first, then the scroll is set: Monaco's
-  cursor reveal would undo an earlier scroll). A caret off the completely visible lines (a wheel scrolled
-  away from it) first re-anchors to the first of them going down, the last going up
-  (`support/codeReading.ts`), so the step and Shift+Mod+M stay on the text in view. Space/Shift+Space
+  cursor reveal would undo an earlier scroll). A caret off the completely visible rows (a wheel scrolled
+  away from it) first re-anchors to the start of the first of them going down, the last going up
+  (`support/codeReading.ts` `readingAnchor`, then `cursorMove` to the row's start), so the step and
+  Shift+Mod+M stay on the text in view. The check compares line and column against
+  `getVisibleRanges()`, so a caret on the scrolled-away rows of a long wrapped line is off too; a range
+  ending at a wrap column ends before it (that column starts the next, hidden row). Space/Shift+Space
   page (`cursorPageDown`/`Up`), g/G and Home/End go to the file's ends (`cursorTop`/`Bottom`), h/l move
   the caret like ←/→; PgUp/PgDn and ←/→ stay Monaco's. The press is consumed before Monaco types it, so
   no "Cannot edit" message. The container carries `data-key-scope="reader"` and, while the read-only text

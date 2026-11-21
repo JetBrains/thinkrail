@@ -46,6 +46,19 @@ async function openReadingFolder(page: Page): Promise<string> {
 		header.map((_name, col) => `row ${row + 1} cell ${col + 1}`).join(","),
 	);
 	writeFileSync(join(root, "data.csv"), `${[header.join(","), ...rows].join("\n")}\n`);
+	const tallRows = Array.from({ length: 300 }, (_, row) => {
+		const note =
+			row < 260
+				? `note ${row + 1}`
+				: `"${Array.from({ length: 12 }, (_line, line) => `line ${line + 1} of row ${row + 1}`).join("\n")}"`;
+		return `row ${row + 1} cell 1,${note}`;
+	});
+	writeFileSync(join(root, "tall.csv"), `${["name,note", ...tallRows].join("\n")}\n`);
+	const words = Array.from({ length: 2_000 }, (_, index) => `word${index + 1}`).join(" ");
+	writeFileSync(
+		join(root, "wrapped.ts"),
+		`export const words = "${words}";\nexport const after = 1;\n`,
+	);
 	const paragraphs = Array.from({ length: 80 }, (_, index) => `<p>Paragraph ${index + 1}</p>`);
 	writeFileSync(join(root, "page.html"), `<!doctype html><body>${paragraphs.join("")}</body>\n`);
 	mkdirSync(join(root, "nested"));
@@ -258,6 +271,43 @@ test("a table scrolls by line, page and sideways, then Esc goes back to its row"
 	await expect(fileRow(page, "data.csv")).toBeFocused();
 });
 
+function settledDistanceFromEnd(scroller: Locator): Promise<number> {
+	return scroller.evaluate(async (element) => {
+		let previous = [element.scrollTop, element.scrollHeight];
+		let stable = 0;
+		for (let frame = 0; frame < 240 && stable < 20; frame += 1) {
+			await new Promise(requestAnimationFrame);
+			const now = [element.scrollTop, element.scrollHeight];
+			stable = now[0] === previous[0] && now[1] === previous[1] ? stable + 1 : 0;
+			previous = now;
+		}
+		return element.scrollHeight - element.clientHeight - element.scrollTop;
+	});
+}
+
+test("Shift+G in a long table whose last rows are taller than the rest reaches the last row, and g the first", async ({
+	page,
+}) => {
+	await openReadingFolder(page);
+	await openByKeyboard(page, "tall.csv");
+	const table = pane(page).locator('[data-testid="csv-view"] [data-virtuoso-scroller]');
+	await expect(table).toBeFocused();
+	await expect(table.getByText("row 1 cell 1", { exact: true })).toBeVisible();
+	const distanceFromEnd = () =>
+		table.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop);
+
+	await page.keyboard.press("Shift+G");
+	await expect.poll(distanceFromEnd).toBeLessThanOrEqual(1);
+	expect(await settledDistanceFromEnd(table)).toBeLessThanOrEqual(1);
+	await expect(table.getByText("line 12 of row 300")).toBeInViewport();
+	await expect(table).toBeFocused();
+
+	await page.keyboard.press("g");
+	await expect.poll(() => scrollTop(table)).toBe(0);
+	await expect(table.getByText("row 1 cell 1", { exact: true })).toBeInViewport();
+	await expect(table).toBeFocused();
+});
+
 async function editorState(editor: Locator) {
 	return editor.evaluate((root) => {
 		const active = root.querySelector(".line-numbers.active-line-number");
@@ -377,4 +427,74 @@ test("in read-only code scrolled away from its caret, j and ↑ step from the vi
 	await page.keyboard.press("ArrowUp");
 	await expect.poll(async () => (await shownLines(editor)).last).toBe(further.last - 1);
 	await expect.poll(async () => (await editorState(editor)).line).toBe(further.last - 1);
+});
+
+async function wrappedView(editor: Locator) {
+	return editor.evaluate((root) => {
+		const guard = root.querySelector(".overflow-guard") ?? root;
+		const view = guard.getBoundingClientRect();
+		const content = root.querySelector(".lines-content")?.getBoundingClientRect();
+		const caret = root.querySelector<HTMLElement>(".cursors-layer .cursor");
+		const box = caret && caret.style.display !== "none" ? caret.getBoundingClientRect() : null;
+		const shown = box !== null && box.top >= view.top - 0.5 && box.bottom <= view.bottom + 0.5;
+		return {
+			scrolled: content ? Math.round(view.top - content.top) : 0,
+			caretTop: shown ? Math.round(box.top - view.top) : null,
+			height: Math.round(view.height),
+		};
+	});
+}
+
+async function wheelWrapped(page: Page, editor: Locator, notches: number) {
+	const before = (await wrappedView(editor)).scrolled;
+	for (let notch = 0; notch < notches; notch += 1) await page.mouse.wheel(0, 100);
+	await expect.poll(async () => (await wrappedView(editor)).scrolled).toBeGreaterThan(before);
+	let settled = await wrappedView(editor);
+	for (let round = 0; round < 20; round += 1) {
+		await page.waitForTimeout(150);
+		const now = await wrappedView(editor);
+		if (now.scrolled === settled.scrolled) break;
+		settled = now;
+	}
+	return settled;
+}
+
+test("in read-only code scrolled down a long wrapped line, j and ↑ step from its visible rows", async ({
+	page,
+}) => {
+	await openReadingFolder(page);
+	await openByKeyboard(page, "wrapped.ts");
+	const editor = pane(page).locator(".monaco-editor");
+	await expect.poll(async () => (await editorState(editor)).focused).toBe(true);
+	await expect.poll(async () => (await editorState(editor)).line).toBe(1);
+	await expect.poll(async () => (await wrappedView(editor)).caretTop).not.toBeNull();
+	const lineHeight = await editor.evaluate(
+		(root) => root.querySelector<HTMLElement>(".view-line")?.getBoundingClientRect().height ?? 0,
+	);
+	expect(lineHeight).toBeGreaterThan(0);
+	await editor.locator(".margin").hover();
+
+	const below = await wheelWrapped(page, editor, 10);
+	expect(below.scrolled).toBeGreaterThan(10 * lineHeight);
+	expect(below.caretTop).toBeNull();
+	await page.keyboard.press("j");
+	await expect
+		.poll(async () => Math.abs((await wrappedView(editor)).scrolled - below.scrolled - lineHeight))
+		.toBeLessThanOrEqual(1);
+	const stepped = await wrappedView(editor);
+	expect(stepped.caretTop).not.toBeNull();
+	expect(stepped.caretTop ?? Number.POSITIVE_INFINITY).toBeLessThan(lineHeight);
+	expect((await editorState(editor)).message).toBe(false);
+
+	const further = await wheelWrapped(page, editor, 5);
+	expect(further.caretTop).toBeNull();
+	await page.keyboard.press("ArrowUp");
+	await expect
+		.poll(async () =>
+			Math.abs((await wrappedView(editor)).scrolled - further.scrolled + lineHeight),
+		)
+		.toBeLessThanOrEqual(1);
+	const back = await wrappedView(editor);
+	expect(back.caretTop).not.toBeNull();
+	expect(back.caretTop ?? 0).toBeGreaterThan(back.height - 3 * lineHeight);
 });

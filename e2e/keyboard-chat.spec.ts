@@ -836,6 +836,65 @@ test("newest-first walks down from the newest message", async ({ page }) => {
 	}
 });
 
+function seedTallHistoryChat(name: string) {
+	const steps = Array.from({ length: 30 }, (_, step) => `step ${step + 1}`).join("\n");
+	const session = seedWorkspaceSession(repoCwd(), {
+		name,
+		messages: Array.from({ length: 100 }, (_, index) => [
+			{
+				role: "user" as const,
+				text: `request ${index + 1}: page through the long history${index < 50 ? `\n${steps}` : ""}`,
+				timestamp: BASE_TS + index * 2_000,
+			},
+			{
+				role: "assistant" as const,
+				text: `answer ${index + 1}: short`,
+				stopReason: "stop" as const,
+				timestamp: BASE_TS + index * 2_000 + 1_000,
+			},
+		]).flat(),
+	});
+	utimesSync(session.path, new Date(BASE_TS + 300_000), new Date(BASE_TS + 300_000));
+	return session;
+}
+
+test("End in a long newest-first chat whose old messages are taller than estimated reaches the true end", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await selectMessageOrder(page, "newest-first");
+	const session = seedTallHistoryChat("keyboard tall history");
+	try {
+		await enterDefaultWorkspace(page);
+		const chatScroll = page.getByTestId("chat-scroll");
+		const newest = row(page, "answer 100: short");
+		await expect(newest).toBeVisible();
+		await waitForScrollStability(chatScroll);
+		await enterTranscript(page);
+		await expect(newest).toBeFocused();
+		const distanceFromEnd = async () => {
+			const geometry = await readChatScrollGeometry(chatScroll);
+			return geometry.maxScrollTop - geometry.scrollTop;
+		};
+
+		await page.keyboard.press("End");
+		const oldest = row(page, "request 1: page through the long history");
+		await expect(oldest).toBeFocused();
+		await expect.poll(distanceFromEnd).toBeLessThanOrEqual(1);
+		await waitForScrollStability(chatScroll);
+		expect(await distanceFromEnd()).toBeLessThanOrEqual(1);
+		await expect(oldest).toBeInViewport();
+
+		await page.keyboard.press("Home");
+		await expect(page.locator('[data-chat-row-id$=":divider"]').first()).toBeFocused();
+		await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
+		await expect.poll(async () => (await readChatScrollGeometry(chatScroll)).scrollTop).toBe(0);
+		await expect(newest).toBeInViewport();
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
 test("h/l walk a tab strip and j/k a side rail like their arrows", async ({ page }) => {
 	const session = await openToolChat(page);
 	try {

@@ -1,4 +1,5 @@
 import { useT } from "@thinkrail/locales/react";
+import { READING_LINE } from "@thinkrail/ui/reading";
 import { useEffect, useMemo, useRef } from "react";
 import { TableVirtuoso, type TableVirtuosoHandle } from "react-virtuoso";
 import type { ResourceViewProps, ReviewThread } from "../../registry";
@@ -37,7 +38,17 @@ export default function CsvView({
 	onPlacedThreadIds,
 }: ResourceViewProps) {
 	const t = useT();
-	const reading = useReadingSurface({ label: resource.path, sideways: true });
+	const virtuosoRef = useRef<TableVirtuosoHandle>(null);
+	const reading = useReadingSurface({
+		label: resource.path,
+		sideways: true,
+		toEdge: (direction) =>
+			virtuosoRef.current?.scrollToIndex(
+				direction < 0
+					? { index: 0, align: "start" }
+					: { index: "LAST", align: "end", offset: READING_LINE },
+			),
+	});
 	const text = content.kind === "text" ? content.text : "";
 	const table = useMemo(
 		() => parseCsv(text, sniffDelimiter(resource.path, text)),
@@ -45,7 +56,6 @@ export default function CsvView({
 	);
 	const composer = useStampedComposer<CsvSelection>(contentStamp(content));
 	const selection = composer.selection;
-	const virtuosoRef = useRef<TableVirtuosoHandle>(null);
 	const cardRefs = useRef(new Map<string, HTMLDivElement>());
 	const handledFocusRef = useRef<string | null>(null);
 	const placed = useMemo(

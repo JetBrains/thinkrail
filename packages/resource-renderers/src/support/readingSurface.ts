@@ -2,6 +2,7 @@ import { ARROW_TWIN_COMMANDS, type LocalKeyCommand } from "@thinkrail/ui/keyboar
 import { type LocalKeys, useLocalKeys } from "@thinkrail/ui/local-keys";
 import {
 	READING_COMMANDS,
+	type ReadingDirection,
 	type ReadingSpan,
 	readingCommand,
 	scrollReading,
@@ -36,9 +37,11 @@ export interface ReadingSurfaceProps {
 export function useReadingSurface({
 	label,
 	sideways = false,
+	toEdge,
 }: {
 	label: string;
 	sideways?: boolean;
+	toEdge?: (direction: ReadingDirection) => void;
 }): ReadingSurfaceProps {
 	const home = useFocusHome();
 	const keys = useReaderKeys();
@@ -54,7 +57,8 @@ export function useReadingSurface({
 			const command = readingCommand(event.nativeEvent, keys);
 			if (!command || (command.kind === "side" && !sideways)) return;
 			event.preventDefault();
-			scrollReading(event.currentTarget, command);
+			if (command.kind === "edge" && toEdge) toEdge(command.direction);
+			else scrollReading(event.currentTarget, command);
 		},
 	};
 }

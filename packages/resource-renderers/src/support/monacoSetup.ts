@@ -21,7 +21,7 @@ import type { Environment, editor } from "monaco-editor/editor/editor.api.js";
 import * as monaco from "monaco-editor/editor/editor.api.js";
 import editorWorker from "monaco-editor/editor/editor.worker?worker";
 import type { ResourceCodeHost, ResourceCodeLanguage } from "../host";
-import { readingAnchorLine } from "./codeReading";
+import { readingAnchor } from "./codeReading";
 import { editorLanguages } from "./editorLanguages";
 import { editorWrappingOptions } from "./editorWrapping";
 import { createPierreTokens } from "./pierreTokens";
@@ -195,9 +195,14 @@ function anchorCaretInView(
 	direction: ReadingDirection,
 ): void {
 	const caret = codeEditor.getPosition();
-	if (!caret) return;
-	const line = readingAnchorLine(caret.lineNumber, codeEditor.getVisibleRanges(), direction);
-	if (line !== null) codeEditor.setPosition({ lineNumber: line, column: caret.column });
+	const model = codeEditor.getModel();
+	if (!caret || !model) return;
+	const anchor = readingAnchor(caret, codeEditor.getVisibleRanges(), direction, (line) =>
+		model.getLineMaxColumn(line),
+	);
+	if (!anchor) return;
+	codeEditor.setPosition(anchor);
+	codeEditor.trigger("keyboard", "cursorMove", { to: "wrappedLineStart" });
 }
 
 export function readCode(codeEditor: editor.IStandaloneCodeEditor, command: ReadingCommand): void {

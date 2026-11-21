@@ -492,12 +492,16 @@ content and their own controls, which a treeitem's name would flatten and its ro
   re-anchors to the first (↓) or last (↑) visible item without scrolling. Space/PgDn and Shift+Space/PgUp
   scroll a page (`readingPage`: the viewport less a line) and keep the cursor while its item still
   shows, else move it to the first visible item. g/Home and Shift+G/End go to the ends: the cursor
-  takes the first or last item and the feed scrolls to that extreme — the latest edge through
-  `scrollToLatest`, so reaching it re-follows. These scrolls are keyboard-provenance scrolls through the
-  scroll hook's `keyboardScrollBy` / `scrollPage` (a reader moving toward history detaches, one reaching
-  the latest edge re-follows), never `revealElement`. PgUp/PgDn used to jump to the farthest mounted item
-  in a viewport (replaced, 2026-11-20). Keys are unmodified, IME-safe and read only on the article itself
-  (inner controls keep theirs). The arrow twins, the reading twins g / Shift+G (`reading.top` /
+  takes the first or last item and the feed scrolls to that extreme — an item of a latest row through
+  `scrollToLatest`, so reaching it re-follows; a history edge at once (a mounted target takes focus
+  synchronously, so Home then j still walks from the first item). A history bottom then converges:
+  `revealRow` aligns the last row's end and, on "found", the feed takes the exact extreme again — one jump
+  uses Virtuoso's estimated `scrollHeight` and stops short of history taller than its estimate; a top
+  needs no second pass, as nothing above `scrollTop` 0 can grow. Line and page scrolls are
+  keyboard-provenance scrolls through the scroll hook's `keyboardScrollBy` / `scrollPage` (a reader
+  moving toward history detaches, one reaching the latest edge re-follows), never `revealElement`.
+  PgUp/PgDn used to jump to the farthest mounted item in a viewport (replaced, 2026-11-20). Keys are
+  unmodified, IME-safe and read only on the article itself (inner controls keep theirs). The arrow twins, the reading twins g / Shift+G (`reading.top` /
   `reading.bottom`, shared scope `reading`), C (`transcript.copy`) and O (`transcript.open`) are
   rebindable local keys of scope `transcript` ([[submodule-web-keybindings]], *Local keys*), matched by
   physical `code` (a Russian layout's `с` copies) through `useLocalKeys`, which `useTranscriptNavigation`
