@@ -327,10 +327,11 @@ test("the Settings surface lists the section list, setting, list and Esc keys", 
 		"settings.up",
 		"settings.down",
 		"settings.firstLast",
+		"settings.edit",
 		"settings.actions",
 		"settings.back",
 		"settings.change",
-		"settings.apply",
+		"settings.done",
 		"settings.reset",
 		"settings.escape",
 		"settings.list.open",
@@ -340,6 +341,8 @@ test("the Settings surface lists the section list, setting, list and Esc keys", 
 	expect(labels(rows, "settings.nav.down")).toEqual(["↓", "J"]);
 	expect(labels(rows, "settings.nav.search")).toEqual(["S", "/"]);
 	expect(labels(rows, "settings.back")).toEqual(["←", "H"]);
+	expect(labels(rows, "settings.edit")).toEqual(["↵", "Space"]);
+	expect(labels(rows, "settings.done")).toEqual(["↵", "Esc"]);
 	expect(labels(rows, "settings.reset")).toEqual(["Delete"]);
 	expect(labels(rows, "settings.list.remove")).toEqual(["Delete"]);
 	expect(labels(rows, "settings.list.menu")).toEqual(["Shift+F10"]);

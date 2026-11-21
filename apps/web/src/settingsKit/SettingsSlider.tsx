@@ -21,7 +21,7 @@ export function SettingsRangeTrack({
 	children: ReactNode;
 }) {
 	return (
-		<div className="relative h-24">
+		<div className="relative h-24 rounded-sm has-[:focus-visible]:focus-ring-editing">
 			<div className="absolute inset-x-0 top-1/2 flex h-4 -translate-y-1/2 overflow-hidden rounded-full bg-control-bg">
 				{steps.map((start) => (
 					<span

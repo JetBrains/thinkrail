@@ -91,8 +91,8 @@ test("a shortcut is a level-2 tree item and its own jump target", () => {
 	expect(markup).toContain("Default: Ctrl+\\");
 });
 
-test("every side is a real tab stop that hint mode can press: an explicit tabindex, never aria-hidden", () => {
-	const sides = markup.match(/<button[^>]*data-setting-side[^>]*>/g) ?? [];
+test("every button in a tree item is a real tab stop that hint mode can press: an explicit tabindex, never aria-hidden", () => {
+	const sides = markup.match(/<button[^>]*>/g) ?? [];
 	expect(sides.length).toBe(3);
 	for (const side of sides) {
 		expect(side).toMatch(/tabindex="(0|-1)"/);
@@ -108,4 +108,29 @@ test("a locked shortcut has no sides and reads as disabled", () => {
 	expect(row).toContain('aria-disabled="true"');
 	expect(row).toContain('data-locked="true"');
 	expect(markup.match(/data-testid="keybinding-change"/g)).toHaveLength(1);
+});
+
+test("a recording row frames its chord slot with the editing frame, so it reads apart from a focused row", () => {
+	const recording = renderToStaticMarkup(
+		<Tree label="Shortcuts" focusList="keybindings" className="flex flex-col" leaveAtEdges>
+			<KeybindingShortcutRow
+				entry={split}
+				platform={LINUX}
+				winner={(command) => command}
+				changeable
+				recording
+				dimmed={false}
+				message={null}
+				onRecord={noop}
+				onReset={noop}
+				onKeyDown={noop}
+				onBlur={noop}
+			/>
+		</Tree>,
+	);
+	const slot = (html: string) =>
+		html.match(/<span[^>]*data-testid="keybinding-chord"[^>]*>/)?.[0] ?? "";
+	expect(slot(recording)).toContain("focus-ring-editing");
+	expect(recording).toContain("Press a new shortcut");
+	expect(slot(markup)).not.toContain("focus-ring-editing");
 });

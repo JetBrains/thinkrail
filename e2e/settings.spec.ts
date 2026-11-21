@@ -22,6 +22,10 @@ test("settings shows the Local GitHub status block and degrades gh gracefully", 
 	await expect(status).toHaveAttribute("data-connected", "false");
 
 	await page.keyboard.press("Escape");
+	await expect(
+		dialog.locator("[data-setting-row]").filter({ has: page.getByTestId("settings-gh-refresh") }),
+	).toBeFocused();
+	await page.keyboard.press("Escape");
 	await expect(page.getByTestId("settings-nav-github")).toBeFocused();
 	await expect(dialog).toBeVisible();
 	await page.keyboard.press("Escape");
@@ -48,6 +52,10 @@ test("a toast over Settings can be dismissed without closing Settings, and Escap
 
 	await dialog.getByRole("button", { name: "Copy path" }).click();
 	await expect(copied).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(
+		dialog.locator("[data-setting-row]").filter({ has: page.getByTestId("language-folder-path") }),
+	).toBeFocused();
 	await page.keyboard.press("Escape");
 	await expect(page.getByTestId("settings-nav-language")).toBeFocused();
 	await page.keyboard.press("Escape");

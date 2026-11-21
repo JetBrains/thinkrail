@@ -107,12 +107,15 @@ test("a recorded chord runs its command, shows in the cheatsheet and the palette
 	const item = row(page, "group.splitRight");
 	const button = chord(page, "group.splitRight");
 	await item.focus();
+	await expect(button).toHaveCSS("outline-style", "none");
 	await page.keyboard.press("Enter");
 	await expect(button).toContainText("Press a new shortcut… Esc cancels");
+	await expect(button).toHaveCSS("outline-style", "solid");
 	await page.keyboard.press("Control");
 	await expect(button).toContainText("Press a new shortcut… Esc cancels");
 	await pressPlatformShortcut(page, "Alt+KeyS");
 	await expect(button.locator("kbd")).toHaveText(["Ctrl", "Alt", "S"]);
+	await expect(button).toHaveCSS("outline-style", "none");
 	await expect(item).toHaveAttribute("data-custom", "true");
 	await expect(item.getByTestId("keybinding-custom")).toHaveText("Changed");
 	await expect(item.getByTestId("keybinding-default")).toHaveText("Default: Ctrl+\\");

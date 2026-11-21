@@ -524,7 +524,7 @@ test("with no workspace open, user servers are listed, added, switched off for e
 		await page.getByTestId("mcp-remove-confirm").click();
 		await expect(beta).toHaveCount(0);
 		expect(userEntry("user-beta")).toBeUndefined();
-		await expect(alpha.getByTestId("mcp-server-details")).toBeFocused();
+		await expect(alpha).toBeFocused();
 		await expect(settings.getByTestId("mcp-project-servers-hint")).toBeVisible();
 		await closeSettings(page);
 	} finally {

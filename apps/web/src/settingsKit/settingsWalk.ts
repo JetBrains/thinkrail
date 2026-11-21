@@ -1,6 +1,12 @@
 import { TABBABLE_SELECTOR } from "@thinkrail/ui/focus";
-import type { WalkAction } from "./settingsKeys";
+import type { WalkAction, WalkPlace } from "./settingsKeys";
 import { SETTING_ATTR, SETTING_SELECTOR } from "./settingsMarkup";
+
+export interface WalkRect {
+	readonly top: number;
+	readonly bottom: number;
+	readonly left: number;
+}
 
 export interface WalkElement<E> {
 	readonly tagName: string;
@@ -15,6 +21,11 @@ export interface WalkElement<E> {
 	focus(options?: { preventScroll?: boolean }): void;
 	click(): void;
 	checkVisibility?(): boolean;
+	getBoundingClientRect?(): WalkRect;
+	select?(): void;
+	readonly selectionStart?: number | null;
+	readonly selectionEnd?: number | null;
+	readonly value?: string;
 }
 
 const FOLLOWING = 4;
@@ -22,6 +33,11 @@ const FOCUSABLE = `${TABBABLE_SELECTOR},[tabindex]:not(:disabled)`;
 const TEXT_INPUT_TYPES = new Set(["text", "search", "url", "email", "number", "password", "tel"]);
 
 export type TextEntryKind = "single" | "multi";
+
+export function caretAtEnd<E extends WalkElement<E>>(element: E): boolean {
+	const length = element.value?.length ?? 0;
+	return element.selectionStart === length && element.selectionEnd === length;
+}
 
 export function textEntryKind<E extends WalkElement<E>>(element: E): TextEntryKind | null {
 	if (element.tagName === "TEXTAREA") return "multi";
@@ -84,15 +100,8 @@ function treeEntry<E extends WalkElement<E>>(items: readonly E[], edge: StopEdge
 export function stopOf<E extends WalkElement<E>>(row: E, edge: StopEdge = "first"): E | null {
 	const items = treeItems(row);
 	if (items.length > 0) return treeEntry(items, edge);
-	if (row.matches(SETTING_SELECTOR.stop) && focusable(row)) return row;
-	return (
-		pick(within(row, SETTING_SELECTOR.stop)) ??
-		pick(within(row, SETTING_SELECTOR.control).flatMap((slot) => within(slot, FOCUSABLE))) ??
-		pick(
-			within(row, FOCUSABLE).filter((element) => element.closest(SETTING_SELECTOR.side) === null),
-		) ??
-		(focusable(row) ? row : null)
-	);
+	if (focusable(row)) return row;
+	return pick(within(row, FOCUSABLE).filter((element) => unitOf(element) === row)) ?? null;
 }
 
 export function rowsOf<E extends WalkElement<E>>(root: E): E[] {
@@ -101,24 +110,79 @@ export function rowsOf<E extends WalkElement<E>>(root: E): E[] {
 	);
 }
 
-export function sidesOf<E extends WalkElement<E>>(unit: E): E[] {
-	return within(unit, SETTING_SELECTOR.side).filter(
-		(side) => unitOf(side) === unit && focusable(side),
+function unitStop<E extends WalkElement<E>>(unit: E): E | null {
+	return unit.matches(SETTING_SELECTOR.treeItem) ? unit : stopOf(unit);
+}
+
+function partsOf<E extends WalkElement<E>>(unit: E): E[] {
+	return within(unit, FOCUSABLE).filter(
+		(element) =>
+			unitOf(element) === unit && focusable(element) && !element.matches(SETTING_SELECTOR.skipped),
 	);
 }
 
-export function sideOf<E extends WalkElement<E>>(element: E): E | null {
-	const side = element.closest(SETTING_SELECTOR.side);
-	const unit = side ? unitOf(side) : null;
-	return side && unit && sidesOf(unit).includes(side) ? side : null;
+function controlOf<E extends WalkElement<E>>(element: E, unit: E): E | null {
+	const listbox = element.closest(SETTING_SELECTOR.listbox);
+	if (listbox && unit.contains(listbox) && unitOf(listbox) === unit) return listbox;
+	if (textEntryKind(element) !== null || element.matches(SETTING_SELECTOR.range)) return element;
+	return element.tagName === "SELECT" ? element : null;
+}
+
+export interface RowParts<E> {
+	readonly unit: E;
+	readonly stop: E | null;
+	readonly controls: readonly E[];
+	readonly toggle: E | null;
+	readonly primary: E | null;
+	readonly buttons: readonly E[];
+}
+
+function rectOf<E extends WalkElement<E>>(element: E): WalkRect | null {
+	const rect = element.getBoundingClientRect?.() ?? null;
+	return rect && rect.bottom > rect.top ? rect : null;
+}
+
+export function visualOrder<E extends WalkElement<E>>(a: E, b: E): number {
+	const first = rectOf(a);
+	const second = rectOf(b);
+	if (!first || !second) return 0;
+	if (first.bottom <= second.top) return -1;
+	if (second.bottom <= first.top) return 1;
+	return first.left - second.left;
+}
+
+export function partsOfUnit<E extends WalkElement<E>>(unit: E): RowParts<E> {
+	const stop = unitStop(unit);
+	const parts = partsOf(unit).filter((element) => element !== stop);
+	const controls: E[] = [];
+	for (const part of parts) {
+		const control = controlOf(part, unit);
+		if (control && !controls.includes(control)) controls.push(control);
+	}
+	const free = parts.filter((part) => controlOf(part, unit) === null);
+	const toggle = free.find((part) => part.matches(SETTING_SELECTOR.toggle)) ?? null;
+	const primary = unit.matches(SETTING_SELECTOR.primary)
+		? unit
+		: (free.find((part) => part.matches(SETTING_SELECTOR.primary)) ?? null);
+	const buttons = free
+		.filter((part) => part !== toggle && part !== primary)
+		.sort((a, b) => visualOrder(a, b));
+	return { unit, stop, controls, toggle, primary, buttons };
+}
+
+export function placeOf<E extends WalkElement<E>>(root: E, target: E): WalkPlace {
+	const unit = unitOf(target);
+	if (!unit || !root.contains(unit)) return "outside";
+	if (target === unitStop(unit)) return "row";
+	return controlOf(target, unit) ? "control" : "button";
+}
+
+export function isNativeActivator<E extends WalkElement<E>>(element: E): boolean {
+	return element.matches(SETTING_SELECTOR.native);
 }
 
 export function resetOf<E extends WalkElement<E>>(unit: E): E | null {
-	return sidesOf(unit).find((side) => side.matches(SETTING_SELECTOR.reset)) ?? null;
-}
-
-function unitStop<E extends WalkElement<E>>(unit: E): E | null {
-	return unit.matches(SETTING_SELECTOR.treeItem) ? unit : stopOf(unit);
+	return partsOf(unit).find((part) => part.matches(SETTING_SELECTOR.reset)) ?? null;
 }
 
 function land<E extends WalkElement<E>>(element: E | null | undefined): boolean {
@@ -131,6 +195,43 @@ export function focusUnitStop<E extends WalkElement<E>>(element: E): boolean {
 	const unit = unitOf(element);
 	return land(unit ? unitStop(unit) : null);
 }
+
+export function enterControl<E extends WalkElement<E>>(control: E): boolean {
+	const entry = control.matches(SETTING_SELECTOR.listbox)
+		? pick(within(control, FOCUSABLE))
+		: focusable(control)
+			? control
+			: undefined;
+	if (!land(entry)) return false;
+	if (entry && textEntryKind(entry) !== null) entry.select?.();
+	return true;
+}
+
+function activate<E extends WalkElement<E>>(unit: E, space: boolean): boolean {
+	const { controls, toggle, primary, buttons } = partsOfUnit(unit);
+	if (space && toggle) {
+		toggle.click();
+		return true;
+	}
+	const [control] = controls;
+	if (control) {
+		enterControl(control);
+		return true;
+	}
+	const press = primary ?? toggle;
+	if (press) {
+		press.click();
+		return true;
+	}
+	const actions = buttons.filter((button) => !button.matches(SETTING_SELECTOR.reset));
+	const [only] = actions;
+	if (only && actions.length === 1) only.click();
+	else land(buttons[0]);
+	return true;
+}
+
+const expandedAs = <E extends WalkElement<E>>(element: E, value: "true" | "false") =>
+	element.matches(SETTING_SELECTOR.row) && element.getAttribute("aria-expanded") === value;
 
 function itemsAround<E extends WalkElement<E>>(target: E): { unit: E; items: E[] } | null {
 	const unit = unitOf(target);
@@ -154,6 +255,14 @@ function neighbourRow<E extends WalkElement<E>>(root: E, target: E, delta: 1 | -
 	return (delta === 1 ? rows.find(follows) : rows.findLast((row) => !follows(row))) ?? null;
 }
 
+function stepRow<E extends WalkElement<E>>(root: E, target: E, delta: 1 | -1): boolean {
+	if (!root.contains(target) || rowsOf(root).length === 0) return false;
+	if (land(neighbourItem(target, delta))) return true;
+	const next = neighbourRow(root, target, delta);
+	if (next) land(stopOf(next, delta === 1 ? "first" : "last"));
+	return true;
+}
+
 export function focusSettingRow<E extends WalkElement<E>>(root: E, rowId: string | null): boolean {
 	const rows = rowsOf(root);
 	const row = rows.find((candidate) => candidate.getAttribute(SETTING_ATTR.row) === rowId);
@@ -172,14 +281,10 @@ export function performWalk<E extends WalkElement<E>>(
 	action: WalkAction,
 	exits: WalkExits,
 ): boolean {
+	const unit = unitOf(target);
 	switch (action.kind) {
-		case "row": {
-			if (!root.contains(target) || rowsOf(root).length === 0) return false;
-			if (land(neighbourItem(target, action.delta))) return true;
-			const next = neighbourRow(root, target, action.delta);
-			if (next) land(stopOf(next, action.delta === 1 ? "first" : "last"));
-			return true;
-		}
+		case "row":
+			return stepRow(root, target, action.delta);
 		case "edge": {
 			const items = itemsAround(target)?.items;
 			if (land(action.edge === "first" ? items?.[0] : items?.at(-1))) return true;
@@ -187,24 +292,47 @@ export function performWalk<E extends WalkElement<E>>(
 			const row = action.edge === "first" ? rows[0] : rows.at(-1);
 			return row ? land(stopOf(row, action.edge)) : false;
 		}
-		case "side": {
-			const unit = unitOf(target);
+		case "forward": {
 			if (!unit) return false;
-			const sides = sidesOf(unit);
-			const side = sideOf(target);
-			if (action.delta === 1)
-				return land(side ? sides[sides.indexOf(side) + 1] : sides[0]) || !!side;
-			if (!side) return false;
-			return land(sides[sides.indexOf(side) - 1] ?? unitStop(unit));
+			if (expandedAs(target, "false")) {
+				target.click();
+				return true;
+			}
+			if (expandedAs(target, "true")) return stepRow(root, target, 1);
+			const { buttons, controls } = partsOfUnit(unit);
+			const [control] = controls;
+			if (!land(buttons[0]) && control) enterControl(control);
+			return true;
 		}
+		case "button": {
+			if (!unit) return false;
+			const { buttons } = partsOfUnit(unit);
+			const index = buttons.indexOf(target);
+			if (action.delta === 1) land(buttons[index + 1]);
+			else land(index > 0 ? buttons[index - 1] : unitStop(unit));
+			return true;
+		}
+		case "activate":
+			return unit ? activate(unit, action.space) : false;
+		case "along": {
+			if (!unit) return false;
+			const { controls } = partsOfUnit(unit);
+			const index = controls.findIndex((control) => control === target || control.contains(target));
+			const next = controls[index + action.delta];
+			if (next) enterControl(next);
+			else if (action.delta === -1) land(unitStop(unit));
+			return true;
+		}
+		case "exit":
+			return unit ? land(unitStop(unit)) : false;
 		case "nav":
-			exits.toNav();
+			if (expandedAs(target, "true")) target.click();
+			else exits.toNav();
 			return true;
 		case "reset": {
-			const unit = unitOf(target);
 			const reset = unit ? resetOf(unit) : null;
 			if (!unit || !reset) return false;
-			if (sideOf(target)) focusUnitStop(target);
+			if (target !== unitStop(unit)) land(unitStop(unit));
 			reset.click();
 			return true;
 		}

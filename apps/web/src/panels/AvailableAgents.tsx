@@ -43,6 +43,7 @@ export function AgentCatalogRows({
 		return (
 			<SettingsNotice
 				variant="error"
+				rowId="agents-load-failed"
 				testId="agents-load-failed"
 				action={
 					<Button
@@ -61,7 +62,7 @@ export function AgentCatalogRows({
 		);
 	if (catalog.length === 0)
 		return (
-			<p className="py-8 text-text-muted tr-text-metadata" data-testid="agents-empty">
+			<p className="px-8 py-8 text-text-muted tr-text-metadata" data-testid="agents-empty">
 				{t("settings.subagents.empty")}
 			</p>
 		);

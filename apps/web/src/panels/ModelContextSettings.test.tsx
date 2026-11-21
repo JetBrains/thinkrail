@@ -6,7 +6,19 @@ import {
 	MODEL_CONTEXT_WINDOW_LIMITS,
 	type ModelContextSetting,
 } from "@thinkrail/contracts";
+import { localKeys } from "@thinkrail/ui/local-keys";
+import { act } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { LOCAL_KEY_DEFAULTS } from "../keybindings";
+import {
+	dom,
+	type FakeNode,
+	headlessReact,
+	parseMarkup,
+	press,
+	resetDom,
+} from "../settingsKit/settingsFakeDom.test";
+import { settingsKeyDown } from "../settingsKit/useSettingsKeyboard";
 import type { CustomEndpointsState } from "./CustomEndpointsSettings";
 import {
 	contextPreset,
@@ -14,6 +26,7 @@ import {
 	ModelContextControls,
 	modelContextLimitsFor,
 	modelContextRows,
+	useContextLimit,
 } from "./ModelContextSettings";
 
 const setting: ModelContextSetting = {
@@ -63,6 +76,24 @@ function selected(html: string, testId: string): boolean {
 
 const options = (html: string) => html.match(/role="option"/g)?.length ?? 0;
 
+const walkKeys = localKeys(null, "settings", LOCAL_KEY_DEFAULTS.settings);
+
+function walkFrom(html: string, testId: string, key: string) {
+	const root = parseMarkup(html);
+	const target = root.querySelector(`[data-testid="${testId}"]`);
+	if (!target) throw new Error(`no ${testId}`);
+	resetDom();
+	const handled = settingsKeyDown(
+		{ defaultPrevented: false, nativeEvent: press(key) },
+		root,
+		target,
+		walkKeys,
+		{ toNav: () => {} },
+	);
+	const focused: FakeNode | null = dom.focused;
+	return { handled, landed: focused?.getAttribute("data-testid") ?? null };
+}
+
 test("old and unknown hosts do not offer context controls", () => {
 	expect(render({ protocolVersion: CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION - 1 })).toBe("");
 	expect(render({ protocolVersion: null })).toBe("");
@@ -91,17 +122,34 @@ test("a pending save keeps the authoritative 1M override and the choice stays op
 	expect(html).toContain('data-testid="settings-reset-context-window"');
 });
 
-test("non-preset overrides expose an editable Custom field that saves as a side of the row", () => {
+test("non-preset overrides expose an editable Custom field that saves next to the choice, in the same row", () => {
 	const html = render({ settings: [{ ...setting, override: 500_000, contextWindow: 500_000 }] });
 	const input = tag(html, "context-limit-all-input");
 	expect(selected(html, "context-limit-all-custom")).toBe(true);
 	expect(input).toContain('value="500000"');
 	expect(input).toContain('inputMode="numeric"');
-	expect(input).toContain("data-setting-side");
 	expect(input).toContain("data-setting-clean");
 	expect(input).toContain('tabindex="0"');
 	expect(input).toContain('aria-invalid="false"');
 	expect(html).not.toContain("undefined");
+	expect(walkFrom(html, "context-limit-all-custom", "ArrowRight")).toEqual({
+		handled: true,
+		landed: "context-limit-all-input",
+	});
+	expect(walkFrom(html, "context-limit-all-input", "ArrowLeft").handled).toBe(false);
+});
+
+test("inside an expanded model's choice, → past Custom reaches its field, and → on the model reaches its Reset", () => {
+	const html = render({
+		settings: [{ ...setting, override: 500_000, contextWindow: 500_000 }],
+		expanded: ["openai"],
+	});
+	expect(walkFrom(html, "context-limit-openai-gpt-5.5-custom", "ArrowRight").landed).toBe(
+		"context-limit-openai-gpt-5.5-input",
+	);
+	expect(walkFrom(html, "context-limit-openai-gpt-5.5", "ArrowRight").landed).toBe(
+		"context-limit-openai-gpt-5.5-reset",
+	);
 });
 
 test("different overrides show Customized instead of claiming a uniform preset", () => {
@@ -118,7 +166,7 @@ test("different overrides show Customized instead of claiming a uniform preset",
 	expect(html).not.toContain("undefined");
 });
 
-test("the per-model tree groups models by provider, and an expanded model claims ←/→ with its own choice", () => {
+test("the per-model tree groups models by provider, and an expanded model holds its own choice and Reset", () => {
 	const html = render({
 		settings: [
 			setting,
@@ -144,7 +192,6 @@ test("the per-model tree groups models by provider, and an expanded model claims
 	expect(selected(html, "context-limit-openai-gpt-5-1m")).toBe(true);
 	expect(html).toContain('aria-label="Context window for GPT-5 (openai)"');
 	const reset = tag(html, "context-limit-openai-gpt-5-reset");
-	expect(reset).toContain("data-setting-side");
 	expect(reset).toContain("data-setting-reset");
 	expect(reset).toMatch(/tabindex="-?\d"/);
 	expect(html).not.toContain('data-testid="context-limit-openai-codex-gpt-5.5"');
@@ -256,4 +303,95 @@ test("a custom provider gets the wider range only from a host that accepts it", 
 	expect(modelContextLimitsFor("openai", CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION)).toEqual(
 		MODEL_CONTEXT_WINDOW_LIMITS,
 	);
+});
+
+const react = headlessReact();
+
+async function mountLimit(saved: number | null) {
+	const sent: (number | null)[] = [];
+	let limit: ReturnType<typeof useContextLimit> | null = null;
+	function Probe({ override }: { override: number | null }) {
+		limit = useContextLimit(override, String(override), (next) => sent.push(next));
+		return null;
+	}
+	const current = () => {
+		if (!limit) throw new Error("not rendered");
+		return limit;
+	};
+	const render = react.mount();
+	await render(<Probe override={saved} />);
+	return {
+		sent,
+		value: () => current().value,
+		latest: () => current().latest,
+		select: (id: "default" | "1m" | "custom") => act(async () => current().select(id)),
+		save: (next: number) => act(async () => current().save(next)),
+		reset: () => act(async () => current().reset()),
+		host: (override: number | null) => render(<Probe override={override} />),
+	};
+}
+
+test("Custom picked before the 1M save answers survives that reply; a change from elsewhere drops it", async () => {
+	const limit = await mountLimit(null);
+	await limit.select("1m");
+	await limit.select("custom");
+	expect(limit.value()).toBe("custom");
+	await limit.host(1_000_000);
+	expect(limit.value()).toBe("custom");
+	expect(limit.sent).toEqual([1_000_000]);
+	await limit.host(null);
+	expect(limit.value()).toBe("default");
+
+	const peer = await mountLimit(null);
+	await peer.select("custom");
+	await peer.host(1_000_000);
+	expect(peer.value()).toBe("1m");
+});
+
+test("a later pick is compared with the latest requested value, so it is still sent and outlives the earlier reply", async () => {
+	const limit = await mountLimit(null);
+	await limit.select("1m");
+	await limit.select("default");
+	expect(limit.sent).toEqual([1_000_000, null]);
+	expect(limit.latest()).toBeNull();
+	await limit.host(1_000_000);
+	expect(limit.value()).toBe("1m");
+	await limit.host(null);
+	expect(limit.value()).toBe("default");
+	await limit.select("default");
+	expect(limit.sent).toEqual([1_000_000, null]);
+
+	const chain = await mountLimit(null);
+	await chain.select("1m");
+	await chain.select("default");
+	await chain.select("custom");
+	await chain.host(1_000_000);
+	await chain.host(null);
+	expect(chain.value()).toBe("custom");
+});
+
+test("the Custom field's save and Reset are requested values too; a saved number's reply shows what it is", async () => {
+	const limit = await mountLimit(1_000_000);
+	await limit.reset();
+	await limit.select("1m");
+	expect(limit.sent).toEqual([null, 1_000_000]);
+	await limit.host(null);
+	await limit.host(1_000_000);
+	expect(limit.value()).toBe("1m");
+
+	await limit.select("custom");
+	await limit.save(600_000);
+	expect(limit.value()).toBe("custom");
+	expect(limit.latest()).toBe(600_000);
+	await limit.host(600_000);
+	expect(limit.value()).toBe("custom");
+	await limit.save(1_000_000);
+	await limit.host(1_000_000);
+	expect(limit.value()).toBe("1m");
+	await limit.select("custom");
+	await limit.reset();
+	expect(limit.value()).toBe("1m");
+	await limit.host(null);
+	expect(limit.value()).toBe("default");
+	expect(limit.sent).toEqual([null, 1_000_000, 600_000, 1_000_000, null]);
 });

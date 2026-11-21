@@ -136,7 +136,7 @@ Default-terminal creation no longer depends on a host layout revision. The works
 
 ## Layout settings
 
-Built-in presets remain web-owned. The Layout section presents built-ins plus the host-synchronized custom preset catalog, while default preset selection and independent side/bottom limits are local to this frontend surface. The selected default is the explicit Reset frame target; it is not reapplied on workspace switches because every workspace shares the current frame. Capture/rename/delete changes only the shared custom definition. Which preset is applied is never stored: a row reads as **Current** while the live frame matches that preset's geometry (`frameMatchesPreset`), so a manual resize simply clears the mark. Apply or Reset (each behind one confirm) replaces this window's frame and reflows all retained workspace views, preserving resource identities, then persists locally; another frontend is unaffected. A preset row keeps its sides inside the row: a longer translated label wraps them instead of overflowing.
+Built-in presets remain web-owned. The Layout section presents built-ins plus the host-synchronized custom preset catalog, while default preset selection and independent side/bottom limits are local to this frontend surface. The selected default is the explicit Reset frame target; it is not reapplied on workspace switches because every workspace shares the current frame. Capture/rename/delete changes only the shared custom definition. Which preset is applied is never stored: a row reads as **Current** while the live frame matches that preset's geometry (`frameMatchesPreset`), so a manual resize simply clears the mark. Apply or Reset (each behind one confirm) replaces this window's frame and reflows all retained workspace views, preserving resource identities, then persists locally; another frontend is unaffected. A preset row keeps its buttons inside the row: a longer translated label wraps them instead of overflowing.
 
 `LayoutSettings` is built on the Settings kit ([[submodule-web-settingskit]]) in two groups: **Presets** (the presets list, Add new layout, Reset to default and the Advanced group limits) and **Documents** (the Markdown outline position, moved from Appearance). [[submodule-web-panels]]' Settings paragraph describes each row once.
 
@@ -263,8 +263,9 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   Extension (and Off, its rows muted but editable, while switched off). An area is a level-1 row
   (`keybinding-group`), **collapsed by default**, showing:
   - "N shortcuts" ("n of N" while filtering);
-  - "● N changed" while any row is overridden, with a Reset side that drops every changed override in the
-    area (Delete on the area does the same, without a confirm);
+  - "● N changed" while any row is overridden, with a Reset button that drops every changed override in
+    the area (Delete on the area does the same, without a confirm; → on an area expands it, so Delete is the
+    keyboard's way to that Reset);
   - the "local · when focus is in a sidebar tree" caption when every row shares one local scope; an area
     with mixed scopes captions each local run inside instead (an extension scope reads "when focus is in
     {extension}").
@@ -275,8 +276,10 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   chords show a lock and read `aria-disabled`. A direction row shows its arrow locked, "always works", then
   its twin's letter as the editable alias (recording there edits the shared twin, so it applies in every
   element; the four General `arrows.*` rows edit the same commands).
-  - **Filter and jumps.** "Filter by name" matches the title or a key label. Search by keys (reached with
-    Tab from the filter) turns the field into a recorder whose next chord — a plain letter or a locked
+  - **Filter and jumps.** "Filter by name" matches the title or a key label. The filter is a row
+    (`keyboard-filter`): Enter or Space enters the field, Enter or Esc on a clean field returns to the row.
+    Search by keys (the row's button, reached with → from the row or Tab from the field) turns the field
+    into a recorder whose next chord — a plain letter or a locked
     arrow included — filters to rows showing it; Esc leaves. A filter opens every area with a match and
     hides the rest; Esc in a filter with text clears it before the walk takes Esc. A Settings jump to
     `shortcut:<id>` opens the area holding it on every jump (`useSettingsJump`'s `seq`, at mount too) and
@@ -284,14 +287,17 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
     it. Shell passes `useShortcutSearchEntries` (one `SettingsSearchEntry` per row: title, chords or "Not
     assigned", the area and chord labels as keywords) to `SettingsDialog`'s `searchEntries`, so Settings
     search finds individual shortcuts.
-  - **Recording.** Enter or a click on a row (or its **Change** side) records (`chordFromEvent`, the
+  - **Recording.** Enter (or Space) or a click on a row (or its **Change** button) records (`chordFromEvent`, the
     command's `plain` — true for every local command — as `allowPlain`). The row's chord reads "Press a new
     shortcut… Esc cancels" ("Press a key or a chord…" on a local row, "Press a new key for the alias…" on
-    a direction row), and the row keeps focus. A modifier alone keeps waiting, AltGraph is ignored, and Esc
+    a direction row), framed by the kit's editing frame (`focus-ring-editing`, as an entered control is) so
+    a recording row reads apart from a merely focused one, and the row keeps focus. A modifier alone keeps waiting, AltGraph is ignored, and Esc
     cancels; Settings stays open, because the recorder's Esc is an element step the dialog holds for
     (`holdSettingsEscape`). Tab is not captured: leaving cancels. While recording — and while the filter
     has focus in Search by keys — the editor holds the keyboard claim (`claimKeyboard`, below), so no app
-    chord, extension command or double Shift acts on the press being recorded.
+    chord, extension command or double Shift acts on the press being recorded. An outcome's buttons
+    (Replace, Cancel, Assign anyway, Dismiss) belong to the shortcut's row: → walks Change, Reset, then
+    them, in screen order.
   - **Outcomes,** in order: a plain key on a non-plain command → "A shortcut needs…" (dismiss); a
     desktop-native chord, or a press either desktop platform's `shortcutCommands` matcher owns on this
     layout (`isDesktopShortcut`: AZERTY's `KeyZ` Ctrl+W, Russian `Shift+Slash` Ctrl+,) → refused with
@@ -311,11 +317,11 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
     anyway; browser-reserved → Assign anyway; else it assigns, and a key other elements also use adds an
     info note "C also acts in the chat transcript — a different element, so no conflict".
   - **Rows.** An overridden row shows a **Changed** tag (the kit's word, as everywhere in Settings),
-    "Default: …" and a Reset side; Delete on the row resets it. A lost chord is struck through with
-    "{chord} is taken by {winner} — inactive" and an Assign another side. A mark appears per element that
+    "Default: …" and a Reset button; Delete on the row resets it. A lost chord is struck through with
+    "{chord} is taken by {winner} — inactive" and an Assign another button. A mark appears per element that
     takes the row's chord over ("Inside sidebar trees, F runs “Search the visible rows”"; `commandTitle`
     also names a reserved chord's catalog-row winner, such as a desktop row a browser does not list). →
-    reaches the sides Change / Assign another / Reset; each is a real tab stop that follows the tree's
+    reaches the row's buttons Change / Assign another / Reset; each is a real tab stop that follows the tree's
     roving cursor, never `treeRowControlProps`. Rows carry `data-focus-row` in the tree's `data-focus-list`,
     and after an assignment, Replace, Cancel or Reset focus returns to the row.
   - **Writes** go through `transport`'s `updateKeybindings` (one call per edit, Reset all `{}`) and show

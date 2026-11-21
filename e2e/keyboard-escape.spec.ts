@@ -147,7 +147,7 @@ test("Esc leaves a panel's text field for the panel, which keeps its accent line
 		.toBe(true);
 });
 
-test("Esc in a Settings filter clears it, then goes to the section list, then closes Settings", async ({
+test("Esc in a Settings filter clears it, then returns to its row, then goes to the section list, then closes Settings", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -160,6 +160,8 @@ test("Esc in a Settings filter clears it, then goes to the section list, then cl
 	await page.keyboard.press("Escape");
 	await expect(filter).toHaveValue("");
 	await expect(filter).toBeFocused();
+	await page.keyboard.press("Escape");
+	await expect(page.locator('[data-setting-row="keyboard-filter"]')).toBeFocused();
 	await page.keyboard.press("Escape");
 	await expect(nav).toBeFocused();
 	await expect(page.getByTestId("settings-dialog")).toBeVisible();

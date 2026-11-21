@@ -10,7 +10,12 @@ import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import { useRef, useState } from "react";
 import { namedFamilies } from "@/fonts";
-import { SettingsGroup, SettingsNotice } from "@/settingsKit";
+import {
+	SETTINGS_ROW_FOCUS,
+	SettingsGroup,
+	SettingsNotice,
+	useSettingsRowStop,
+} from "@/settingsKit";
 import { useAppStore } from "@/store";
 import { uploadUserFont } from "@/transport";
 import { FamilyName, FontBadge } from "./FontPicker";
@@ -78,6 +83,7 @@ export function CustomFontsView({
 	const t = useT();
 	const input = useRef<HTMLInputElement>(null);
 	const [dragging, setDragging] = useState(false);
+	const dropRow = useSettingsRowStop(SETTING.customFonts.id);
 	const families = [...customFamilies(snapshot)];
 	const empty = families.length === 0;
 	const issues = fileIssues(t, snapshot.files);
@@ -94,7 +100,7 @@ export function CustomFontsView({
 			<section
 				aria-label={t("settings.appearance.customFonts.drop")}
 				data-testid="custom-fonts-drop"
-				data-setting-row={SETTING.customFonts.id}
+				{...dropRow}
 				data-setting-id={SETTING.customFonts.id}
 				data-dragging={dragging}
 				data-empty={empty || undefined}
@@ -108,7 +114,10 @@ export function CustomFontsView({
 					setDragging(false);
 					onFiles([...event.dataTransfer.files]);
 				}}
-				className="my-12 flex flex-wrap items-center gap-12 rounded-md border border-border-default border-dashed px-16 py-12 transition-colors data-[dragging=true]:border-primary data-[dragging=true]:bg-primary-subtle"
+				className={cn(
+					"my-12 flex flex-wrap items-center gap-12 rounded-md border border-border-default border-dashed px-16 py-12 transition-colors data-[dragging=true]:border-primary data-[dragging=true]:bg-primary-subtle",
+					SETTINGS_ROW_FOCUS,
+				)}
 			>
 				<Upload className="size-20 shrink-0 text-text-muted" aria-hidden="true" />
 				<div className="flex min-w-160 flex-1 flex-col gap-2">
@@ -128,7 +137,6 @@ export function CustomFontsView({
 					size="m"
 					tabIndex={0}
 					aria-busy={busy || undefined}
-					data-setting-stop=""
 					data-testid="custom-fonts-choose"
 					onClick={() => input.current?.click()}
 				>

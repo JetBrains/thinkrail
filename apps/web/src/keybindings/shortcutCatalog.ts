@@ -936,6 +936,12 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 			keys: [HOME, END],
 		},
 		{
+			id: "settings.edit",
+			title: "shortcuts.settings.edit",
+			surface: "settings",
+			keys: [ENTER, { key: " " }],
+		},
+		{
 			id: "settings.actions",
 			title: "shortcuts.settings.actions",
 			surface: "settings",
@@ -953,13 +959,13 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 			id: "settings.change",
 			title: "shortcuts.settings.change",
 			surface: "settings",
-			keys: [LEFT, RIGHT],
+			keys: [UP, DOWN, LEFT, RIGHT],
 		},
 		{
-			id: "settings.apply",
-			title: "shortcuts.settings.apply",
+			id: "settings.done",
+			title: "shortcuts.settings.done",
 			surface: "settings",
-			keys: [ENTER, { key: " " }],
+			keys: [ENTER, ESCAPE],
 		},
 		{
 			id: "settings.reset",

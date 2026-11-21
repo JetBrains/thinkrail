@@ -2,6 +2,7 @@ import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
+import { SettingsLine } from "./SettingsLine";
 
 export const SETTINGS_TAG =
 	"shrink-0 rounded-xs border border-border-default px-4 tr-text-label-pill";
@@ -25,6 +26,7 @@ export interface SettingsGroupAction {
 export interface SettingsGroupProps {
 	title: string;
 	description?: ReactNode;
+	descriptionRowId?: string | undefined;
 	scope?: SettingsScope | undefined;
 	action?: SettingsGroupAction | undefined;
 	testId?: string;
@@ -34,6 +36,7 @@ export interface SettingsGroupProps {
 export function SettingsGroup({
 	title,
 	description,
+	descriptionRowId,
 	scope,
 	action,
 	testId,
@@ -43,7 +46,7 @@ export function SettingsGroup({
 	return (
 		<section data-testid={testId} className="flex flex-col">
 			<div className="flex flex-col gap-2 pb-4">
-				<div className="flex flex-wrap items-center gap-8">
+				<div className="flex flex-wrap items-center gap-8 px-8">
 					<h3 className="min-w-0 break-words tr-text-label-pill text-text-subtle">{title}</h3>
 					{scope ? (
 						<span data-scope={scope} className={cn(SETTINGS_TAG, "text-text-muted")}>
@@ -59,7 +62,13 @@ export function SettingsGroup({
 						</div>
 					) : null}
 				</div>
-				{description ? <p className="tr-text-metadata text-text-muted">{description}</p> : null}
+				{description && descriptionRowId ? (
+					<SettingsLine rowId={descriptionRowId} className="rounded-sm py-2">
+						<p className="tr-text-metadata text-text-muted">{description}</p>
+					</SettingsLine>
+				) : description ? (
+					<p className="px-8 tr-text-metadata text-text-muted">{description}</p>
+				) : null}
 			</div>
 			<div className={SETTINGS_ROWS}>{children}</div>
 		</section>
@@ -76,7 +85,7 @@ export function SettingsSubheading({
 	testId?: string;
 }) {
 	return (
-		<div data-testid={testId} className="flex min-w-0 flex-col gap-2 pt-16 pb-4">
+		<div data-testid={testId} className="flex min-w-0 flex-col gap-2 px-8 pt-16 pb-4">
 			<h4 className="tr-text-ui text-text-default">{title}</h4>
 			{description ? (
 				<p className="break-words text-text-muted tr-text-metadata">{description}</p>

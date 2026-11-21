@@ -7,11 +7,14 @@ import { JBCENTRAL_QUOTA_PROTOCOL_VERSION, type ProviderStatus } from "@thinkrai
 import { useT } from "@thinkrail/locales/react";
 import { Button, withIconClass } from "@thinkrail/ui/button";
 import { SkeletonRows } from "@thinkrail/ui/skeleton";
+import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
 import { flushSync } from "react-dom";
 import { AUTH_KIND_LABEL } from "@/chat/modelPicker";
 import {
 	SETTINGS_LIST_ROW,
+	SETTINGS_ROW_FOCUS,
+	SETTINGS_ROW_INSET,
 	SettingsGroup,
 	SettingsList,
 	SettingsPage,
@@ -100,7 +103,7 @@ export function ProvidersSettings() {
 	const showAllProviders = () => {
 		flushSync(() => setShowAllKeys(true));
 		document
-			.querySelector<HTMLElement>(`[data-focus-list="${AVAILABLE_LIST}"] [data-focus-row-primary]`)
+			.querySelector<HTMLElement>(`[data-focus-list="${AVAILABLE_LIST}"] [data-setting-row]`)
 			?.focus();
 	};
 
@@ -284,7 +287,10 @@ function ListedProviderRow(props: {
 }) {
 	const { rowProps, primaryProps, sideProps } = useSettingsListRow(props.provider.id);
 	return (
-		<li {...rowProps} className="[&>div]:last:border-b-0">
+		<li
+			{...rowProps}
+			className={cn(SETTINGS_ROW_INSET, SETTINGS_ROW_FOCUS, "[&>div]:last:border-b-0")}
+		>
 			<ProviderRow {...props} actions={{ primary: primaryProps, side: sideProps }} />
 		</li>
 	);

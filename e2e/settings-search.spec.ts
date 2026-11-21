@@ -15,10 +15,6 @@ const result = (page: Page, id: string) =>
 	page.locator(`[data-testid="settings-search-result"][data-result-id="${id}"]`);
 const settingRow = (page: Page, id: string) =>
 	settingsDialog(page).locator(`#settings-panel [data-setting-id="${id}"]`);
-const focusInside = (page: Page, id: string) =>
-	settingRow(page, id)
-		.first()
-		.evaluate((row) => row.contains(document.activeElement));
 
 interface CatalogEntry {
 	readonly id: string;
@@ -105,7 +101,7 @@ test("results name their section; ↓ walks in, Enter jumps and flashes with the
 	await page.keyboard.press("Enter");
 	await expect(tab(page, "chat")).toHaveAttribute("data-active", "true");
 	await expect(settingRow(page, "message-order")).toHaveAttribute("data-setting-flash", "");
-	await expect.poll(() => focusInside(page, "message-order")).toBe(true);
+	await expect(settingRow(page, "message-order")).toBeFocused();
 	await expect(field(page)).toHaveValue("message order");
 	await expect(list).toHaveCount(0);
 
@@ -142,6 +138,26 @@ test("j/k walk the results, ↑ on the first goes back to the field, and Enter i
 	await page.keyboard.press("Enter");
 	await expect(settingRow(page, first ?? "")).toHaveAttribute("data-setting-flash", "");
 	await expect(field(page)).toHaveValue("width");
+
+	await page.keyboard.press("Escape");
+	await expect(results(page).first()).toBeFocused();
+	await page.keyboard.press("j");
+	const second = (await results(page).nth(1).getAttribute("data-result-id")) ?? "";
+	await expect(results(page).nth(1)).toBeFocused();
+	await page.emulateMedia({ reducedMotion: "reduce" });
+	await page.keyboard.press(" ");
+	const row = settingRow(page, second);
+	await expect(row).toHaveAttribute("data-setting-flash", "");
+	await expect(row).toBeFocused();
+	const flashing = await row.evaluate((element) =>
+		element.hasAttribute("data-setting-flash") ? getComputedStyle(element).backgroundColor : null,
+	);
+	await expect(row).not.toHaveAttribute("data-setting-flash");
+	await expect(row).toBeFocused();
+	const resting = await row.evaluate((element) => getComputedStyle(element).backgroundColor);
+	expect(flashing).not.toBeNull();
+	expect(flashing).not.toBe(resting);
+	expect(resting).not.toBe("rgba(0, 0, 0, 0)");
 });
 
 test("the palette offers a row per setting that opens Settings on it", async ({ page }) => {
@@ -155,7 +171,7 @@ test("the palette offers a row per setting that opens Settings on it", async ({ 
 	await expect(settingsDialog(page)).toBeVisible();
 	await expect(tab(page, "chat")).toHaveAttribute("data-active", "true");
 	await expect(settingRow(page, "message-order")).toHaveAttribute("data-setting-flash", "");
-	await expect.poll(() => focusInside(page, "message-order")).toBe(true);
+	await expect(settingRow(page, "message-order")).toBeFocused();
 });
 
 test("drift check: every catalog entry the search offers jumps to its rendered row", async ({

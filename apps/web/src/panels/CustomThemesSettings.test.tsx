@@ -18,9 +18,7 @@ test("shows the theme folder row with the steps, its two actions, and one notice
 	expect(markup).toContain("/blob/v1.2.3/apps/web/src/themes/bundled/dark.theme.json");
 	expect(markup).toMatch(/<a[^>]*data-testid="custom-themes-example"[^>]*tabindex="0"/);
 	expect(markup).toMatch(/<button[^>]*tabindex="0"[^>]*>.*Copy path/);
-	expect(markup).toMatch(
-		/<button[^>]*tabindex="0"[^>]*data-setting-side=""[^>]*data-testid="custom-themes-open-folder"/,
-	);
+	expect(markup).toMatch(/<button[^>]*tabindex="0"[^>]*data-testid="custom-themes-open-folder"/);
 	expect(markup).toContain('data-testid="custom-theme-issue-copy.theme.json"');
 	expect(markup).toContain("Another theme file already uses this id");
 });

@@ -1,12 +1,15 @@
 import { type LocalKeyEvent, type LocalKeys, useLocalKeys } from "@thinkrail/ui/local-keys";
-import type { FocusEvent, KeyboardEvent } from "react";
+import { type FocusEvent, type KeyboardEvent, useState } from "react";
 import { LOCAL_KEY_DEFAULTS } from "../keybindings";
 import { walkAction, walkKey } from "./settingsKeys";
 import { SETTING_ATTR } from "./settingsMarkup";
+import { createSettingsRowCursor, type SettingsRowCursor } from "./settingsRowCursor";
 import {
+	caretAtEnd,
+	isNativeActivator,
 	performWalk,
+	placeOf,
 	rowIdOf,
-	sideOf,
 	textEntryKind,
 	type WalkElement,
 	type WalkExits,
@@ -19,6 +22,7 @@ export interface SettingsKeyboardOptions extends WalkExits {
 export interface SettingsKeyboardHandlers {
 	readonly onKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
 	readonly onFocus: (event: FocusEvent<HTMLElement>) => void;
+	readonly cursor: SettingsRowCursor;
 }
 
 export interface SettingsKeyPress {
@@ -42,9 +46,12 @@ export function settingsKeyDown<E extends WalkElement<E>>(
 		target.hasAttribute(SETTING_ATTR.clean) &&
 		keys.match(press, { textEntry: false }) === "settings.reset";
 	const action = walkAction(walkKey(press, resetsWhileClean ? "settings.reset" : local), {
+		place: placeOf(root, target),
 		textEntry: entry !== null,
 		multiline: entry === "multi",
-		onSide: sideOf(target) !== null,
+		caretAtEnd: entry !== null && caretAtEnd(target),
+		native: isNativeActivator(target),
+		inForm: target.closest("form") !== null,
 	});
 	return action !== null && performWalk(root, target, action, exits);
 }
@@ -55,7 +62,9 @@ export function useSettingsKeyboard({
 	onRowFocus,
 }: SettingsKeyboardOptions): SettingsKeyboardHandlers {
 	const keys = useLocalKeys("settings", LOCAL_KEY_DEFAULTS.settings);
+	const [cursor] = useState(createSettingsRowCursor);
 	return {
+		cursor,
 		onKeyDown: (event) => {
 			const target = event.target;
 			if (!(target instanceof HTMLElement)) return;
@@ -65,7 +74,9 @@ export function useSettingsKeyboard({
 		},
 		onFocus: (event) => {
 			const rowId = rowIdOf(event.target);
-			if (rowId !== null) onRowFocus?.(rowId);
+			if (rowId === null) return;
+			cursor.set(rowId);
+			onRowFocus?.(rowId);
 		},
 	};
 }
