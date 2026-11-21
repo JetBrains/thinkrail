@@ -345,7 +345,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		setMentionDismissed(false);
 	}, [mentionQuery]);
 
-	const mentionOpen = !mentionDismissed && mentionQuery !== null && mentionCandidates.length > 0;
+	const mentionOpen =
+		!uploading && !mentionDismissed && mentionQuery !== null && mentionCandidates.length > 0;
 
 	const focusSelection = usePendingSelection(ref, setCaret);
 
@@ -462,7 +463,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		},
 	});
 
-	const menuOpen = mentionOpen || slashCompletion.open;
+	const slashOpen = !uploading && slashCompletion.open;
+	const menuOpen = mentionOpen || slashOpen;
+	const slotsActive = slots !== null && !uploading;
 
 	const openHistory = () => {
 		setMentionDismissed(true);
@@ -572,7 +575,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			return;
 		}
 		const fixed = local === null && !e.altKey && !e.ctrlKey && !e.metaKey;
-		if (fixed && slots && !menuOpen) {
+		if (fixed && slotsActive && !menuOpen) {
 			if (e.key === "Tab") {
 				e.preventDefault();
 				stepSlot(e.shiftKey ? -1 : 1);
@@ -608,8 +611,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				return;
 			}
 		}
-		if (fixed && slashCompletion.handleKeyDown(e)) return;
-		const shiftTabOut = composerShiftTabOut(e, menuOpen || slots !== null);
+		if (fixed && slashOpen && slashCompletion.handleKeyDown(e)) return;
+		const shiftTabOut = composerShiftTabOut(e, menuOpen || slotsActive);
 		if (shiftTabOut && (onShiftTabOut?.() || chipsRef.current?.focus())) {
 			e.preventDefault();
 			return;
@@ -626,7 +629,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		}
 		if (local !== null) return;
 		const recallAt = recallIdxRef.current;
-		const recallKey = fixed && !e.shiftKey;
+		const recallKey = fixed && !e.shiftKey && !uploading;
 		if (
 			recallKey &&
 			e.key === "ArrowUp" &&
@@ -708,7 +711,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						</button>
 					))}
 				</div>
-			) : slashCompletion.open ? (
+			) : slashOpen ? (
 				<SlashCommandMenu
 					commands={slashCompletion.matches}
 					activeIndex={slashCompletion.activeIndex}
@@ -733,7 +736,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				/>
 			) : null}
 
-			{slots && !menuOpen ? (
+			{slots && !uploading && !menuOpen ? (
 				<TemplateSlotHint
 					activeIndex={slotIdx}
 					count={slots.length}

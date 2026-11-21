@@ -16,6 +16,7 @@ import { seedExternalCwdSessions } from "./fixtures/sessions";
 declare global {
 	interface Window {
 		__readSystemClipboard?: () => Promise<NativeClipboardContent>;
+		__answerClipboardRead?: (content: NativeClipboardContent) => boolean;
 	}
 }
 
@@ -33,9 +34,15 @@ async function openChatComposer(page: Page): Promise<Workspace> {
 	return workspace;
 }
 
-function lastUserMessage(page: Page) {
-	return page.locator('[data-testid="chat-message"][data-role="user"]').last();
+function userMessages(page: Page) {
+	return page.locator('[data-testid="chat-message"][data-role="user"]');
 }
+
+function lastUserMessage(page: Page) {
+	return userMessages(page).last();
+}
+
+const chatTabs = (page: Page) => page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 
 async function attach(page: Page, files: { name: string; mimeType: string; buffer: Buffer }[]) {
 	await page.getByTestId("composer-attach-input").setInputFiles(files);
@@ -119,6 +126,41 @@ async function installSystemClipboard(page: Page): Promise<(targets: ClipboardTa
 	return (targets) => {
 		offered = targets;
 	};
+}
+
+async function installDeferredClipboard(
+	page: Page,
+): Promise<(content: NativeClipboardContent) => Promise<void>> {
+	await page.addInitScript(() => {
+		const waiting: ((content: NativeClipboardContent) => void)[] = [];
+		Object.defineProperty(globalThis, "__THINKRAIL_NATIVE_CLIPBOARD__", {
+			value: Object.freeze({
+				read: () => new Promise<NativeClipboardContent>((resolve) => waiting.push(resolve)),
+			}),
+		});
+		window.__answerClipboardRead = (content) => {
+			const next = waiting.shift();
+			next?.(content);
+			return next !== undefined;
+		};
+	});
+	return async (content) => {
+		const answered = await page.evaluate(
+			(answer) => window.__answerClipboardRead?.(answer) ?? false,
+			content,
+		);
+		expect(answered).toBe(true);
+	};
+}
+
+async function pasteText(page: Page, text: string) {
+	await page.getByTestId("chat-input").evaluate((el, copied) => {
+		const dt = new DataTransfer();
+		dt.setData("text/plain", copied);
+		el.dispatchEvent(
+			new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }),
+		);
+	}, text);
 }
 
 async function pasteEmptied(page: Page, announced: string[]) {
@@ -524,4 +566,113 @@ test("pasted images the desktop could not inline, or the webview cannot decode, 
 	await expect(lastUserMessage(page)).toContainText(`- ${ATTACHMENTS}/notes.pdf`);
 	await expect(errors).toHaveCount(0);
 	expect(readdirSync(join(workspace.worktreePath, ATTACHMENTS))).toEqual(["notes.pdf"]);
+});
+
+test("a paste the desktop is still reading holds Send, and its late answer lands only on the chat it was pasted into", async ({
+	page,
+}) => {
+	const answer = await installDeferredClipboard(page);
+	await openChatComposer(page);
+	const input = page.getByTestId("chat-input");
+	const pending = page.getByTestId("composer-image-pending");
+	const image = page.getByTestId("composer-image");
+	const screenshot = {
+		kind: "image",
+		mimeType: "image/png",
+		data: PNG.toString("base64"),
+	} as const;
+	await input.fill("Here is the screenshot");
+	await pasteEmptied(page, []);
+	await expect(pending).toBeVisible();
+	await expect(page.getByTestId("chat-send")).toBeDisabled();
+	await input.press("Enter");
+	await answer(screenshot);
+	await expect(image).toContainText("image.png");
+	await expect(pending).toHaveCount(0);
+	await expect(input).toHaveValue("Here is the screenshot");
+	await expect(userMessages(page)).toHaveCount(0);
+
+	await input.press("Enter");
+	await expect(lastUserMessage(page)).toContainText("Here is the screenshot");
+	await expect(lastUserMessage(page).getByTestId("chat-attachment-chip")).toHaveCount(1);
+	await expect(image).toHaveCount(0);
+	await expect(page.getByTestId("chat-composer")).toHaveAttribute("data-streaming", "false");
+
+	await pasteEmptied(page, []);
+	await pasteText(page, fileUri(join(E2E_DATA_DIR, "copied-and-gone.pdf")));
+	await expect(pending).toContainText("Attaching 2…");
+	await page.getByTestId("new-chat").first().click();
+	await expect(chatTabs(page)).toHaveCount(2);
+	await expect(input).toHaveValue("");
+	await input.focus();
+	await answer(screenshot);
+	await answer({ kind: "none" });
+	await expect(image).toHaveCount(0);
+	await expect(pending).toHaveCount(0);
+
+	await chatTabs(page).first().getByRole("tab").click();
+	await expect(chatTabs(page).first()).toHaveAttribute("data-active", "true");
+	await expect(image).toHaveCount(1);
+	await expect(pending).toHaveCount(0);
+	await expect(input).toHaveValue("");
+	await chatTabs(page).last().getByRole("tab").click();
+	await expect(chatTabs(page).last()).toHaveAttribute("data-active", "true");
+	await expect(input).toHaveValue("");
+	await expect(image).toHaveCount(0);
+});
+
+test("while a slow copy holds the draft, recall and @-mention keys leave it alone and Esc gives back exactly what was held", async ({
+	page,
+}) => {
+	const workspace = await openChatComposer(page);
+	const input = page.getByTestId("chat-input");
+	const uploading = page.getByTestId("composer-files-uploading");
+	const mentions = page.getByTestId("mention-menu");
+	await input.fill("Read the design");
+	await input.press("Enter");
+	await expect(lastUserMessage(page)).toContainText("Read the design");
+	await expect(page.getByTestId("chat-composer")).toHaveAttribute("data-streaming", "false");
+
+	const release = await holdUploads(page);
+	await input.press("ArrowUp");
+	await expect(input).toHaveValue("Read the design");
+	await attach(page, [{ name: "design.pdf", mimeType: "application/pdf", buffer: PDF }]);
+	await expect(input).toBeFocused();
+	await input.press("Enter");
+	await expect(uploading).toBeVisible();
+	await input.press("ArrowDown");
+	await expect(input).toHaveValue("Read the design");
+	await input.press("ArrowUp");
+	await expect(input).toHaveValue("Read the design");
+	await input.press("Escape");
+	await expect(uploading).toHaveCount(0);
+	await expect(input).toBeFocused();
+	await expect(input).toHaveValue("Read the design");
+	await expect(page.getByTestId("composer-file")).toContainText("design.pdf");
+
+	await input.fill("See @READ");
+	await expect(mentions).toBeVisible();
+	await input.press("ControlOrMeta+Enter");
+	await expect(uploading).toBeVisible();
+	await expect(mentions).toHaveCount(0);
+	await input.press("Enter");
+	await expect(input).toHaveValue("See @READ");
+	await page.keyboard.press("Shift+Tab");
+	await expect(page.getByTestId("composer-chip").first()).toBeFocused();
+	await page.keyboard.press("Tab");
+	await expect(input).toBeFocused();
+	await input.press("Escape");
+	await expect(uploading).toHaveCount(0);
+	await expect(input).toHaveValue("See @READ");
+	await expect(mentions).toBeVisible();
+
+	release();
+	await page.unroute("**/attachments/**");
+	await input.press("Escape");
+	await expect(mentions).toHaveCount(0);
+	await input.press("Enter");
+	await expect(lastUserMessage(page)).toContainText("See @READ");
+	await expect(lastUserMessage(page)).toContainText(`- ${ATTACHMENTS}/design.pdf`);
+	await expect(input).toHaveValue("");
+	expect(readdirSync(join(workspace.worktreePath, ATTACHMENTS))).toEqual(["design.pdf"]);
 });

@@ -34,6 +34,7 @@ import {
 	CommandItem,
 	CommandList,
 } from "@thinkrail/ui/command";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
@@ -493,7 +494,9 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 					data-testid="model-selector"
 					data-open={open}
 					tabIndex={tabIndex}
-					onKeyDown={onTriggerKeyDown}
+					onKeyDown={(event) => {
+						if (!isImeComposing(event.nativeEvent)) onTriggerKeyDown?.(event);
+					}}
 					className={cn(
 						"flex h-32 min-w-0 items-center gap-8 rounded-sm px-8 tr-text-ui text-text-default transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring data-[open=true]:bg-control-bg-selected",
 						className,

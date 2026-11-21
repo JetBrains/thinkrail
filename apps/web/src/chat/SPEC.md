@@ -1336,7 +1336,9 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   answer a promise; until it settles the draft is held (field read-only, chips locked, a "Copying files…"
   chip, sends refused) under an `AbortController` kept on the draft (`PromptImagesState.upload`, so a
   remounted composer still reaches it). Esc in the field or the chip's × aborts it: the upload stops, nothing
-  is sent, the draft stays as it was. Whatever reaches the composer meanwhile merges instead of being lost —
+  is sent, the draft stays as it was. The field's own editing keys are inert meanwhile — ↑/↓ recall, the `@` and
+  `/` menus (hidden) and template-slot Tab — so a cancel gives back exactly the held text; Esc, Shift+Tab to
+  the chips and the other focus moves still work. Whatever reaches the composer meanwhile merges instead of being lost —
   restored queue text (Stop, Edit on a queued message, a failed queued send) goes above the held text
   (`withRestoredDraft`, the one rule), restored images join as new chips, history Insert / Insert-and-send,
   a suggestion and a template add their text the same way, and an extension's composer edit waits for the
@@ -1356,7 +1358,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   field in DOM, so the browser's order holds. The composer's strip sits above the shell in DOM while its Tab
   place is between the model picker and the field, so there it leaves the browser's sequence and the
   composer routes it: field Shift+Tab → chips (after a waiting question's claim), chips Shift+Tab → picker,
-  picker Tab → chips, chips Tab → field. **Paste and drop** (`attachmentPasteDropHandlers`): drop works
+  picker Tab → chips (the picker forwards its trigger's keys, `onTriggerKeyDown`, only outside an IME
+  composition), chips Tab → field. **Paste and drop** (`attachmentPasteDropHandlers`): drop works
   anywhere on the composer (`onDragOver` on the fieldset). WebKitGTK ≥ 2.50.3 empties pasted and dropped
   files (CVE-2025-13947), so a paste without files asks the optional native clipboard
   (`__THINKRAIL_NATIVE_CLIPBOARD__`, feature-detected — the web has no desktop branch) only when it may hide
@@ -1364,7 +1367,12 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   list by contracts' `copiedFilePaths` — `file://` URIs or GNOME's copied-files text, never bare paths, which
   paste as text); that paste is taken over and, when the bridge has nothing, its own
   text is inserted with `execCommand("insertText")` (undo intact), and announced files the desktop could not
-  list toast "Couldn't read the copied files". A copied image becomes `image.<subtype>` (`image.png` for a
+  list toast "Couldn't read the copied files" (a rejected read counts as `unreadable`). The read is pending work on the
+  draft it was pasted into (`reserve()`: the "Attaching…" chip, sends refused, so Enter cannot send the text
+  ahead of the screenshot) until its answer is applied; a paste during an upload is ignored. A late answer
+  applies only to that draft's generation, so a reset or reopened draft drops it; a chat switched away from
+  still gets its chips (the paste's owner), while the text fallback needs its own field still mounted —
+  otherwise it is dropped rather than typed into whichever field has focus. A copied image becomes `image.<subtype>` (`image.png` for a
   screenshot); copied files arrive with their image bytes or as local paths, and an image file the desktop
   sent without bytes (past its budget) or an `oversized` image lands on the error chip "too large to paste",
   never in the workspace. A drop that announces `Files`, or a URI list it hands over empty

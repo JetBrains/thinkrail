@@ -4,6 +4,7 @@ import {
 	type PromptImagesState,
 	withCopiedPromptFile,
 	withoutPromptChips,
+	withPendingWork,
 } from "./promptImageState";
 
 function draft(): PromptImagesState {
@@ -44,4 +45,14 @@ test("a copied file remembers its path; an unknown id changes nothing", () => {
 	expect(after.files[0]?.copied).toBe(".thinkrail/context/attachments/a.pdf");
 	expect(after.files[1]?.copied).toBeUndefined();
 	expect(withCopiedPromptFile(state, "gone", "x")).toBe(state);
+});
+
+test("pending work counts on the draft it started on; a release after a reset leaves the new draft alone", () => {
+	const state = draft();
+	const reserved = withPendingWork(state, state.generation, 1);
+	expect(reserved.pending).toBe(1);
+	expect(withPendingWork(reserved, state.generation, -1).pending).toBe(0);
+	const reset = { ...newPromptImagesState(), pending: 2 };
+	expect(withPendingWork(reset, state.generation, -1)).toBe(reset);
+	expect(withPendingWork(reset, state.generation, 1)).toBe(reset);
 });

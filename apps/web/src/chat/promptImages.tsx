@@ -42,6 +42,7 @@ import {
 	type PromptImagesState,
 	withCopiedPromptFile,
 	withoutPromptChips,
+	withPendingWork,
 } from "../store";
 import {
 	base64ToBytes,
@@ -63,12 +64,18 @@ export interface PromptImagesOwner {
 	update: (change: (current: PromptImagesState) => PromptImagesState) => void;
 }
 
+export interface PendingWork {
+	current: () => boolean;
+	release: () => void;
+}
+
 export interface PromptImagesController {
 	images: PromptImage[];
 	files: PromptFile[];
 	pending: number;
 	uploading: boolean;
 	errors: PromptImageError[];
+	reserve: () => PendingWork | null;
 	addFiles: (files: File[]) => void;
 	addClipboard: (content: NativeClipboardContent) => void;
 	remove: (id: string) => void;
@@ -103,7 +110,7 @@ function isPastedImage(file: NativeClipboardFile): boolean {
 }
 
 export function attachmentPasteDropHandlers(
-	controller: Pick<PromptImagesController, "addFiles" | "addClipboard">,
+	controller: Pick<PromptImagesController, "addFiles" | "addClipboard" | "reserve">,
 	notify: (message: string) => void,
 ): {
 	onPaste: (e: ClipboardEvent<HTMLElement>) => void;
@@ -122,17 +129,29 @@ export function attachmentPasteDropHandlers(
 			const text = e.clipboardData.getData("text/plain");
 			if (!bridge || !pasteMayHideFiles([...e.clipboardData.types], text)) return;
 			e.preventDefault();
+			const work = controller.reserve();
+			if (!work) return;
 			const field = e.currentTarget;
-			void bridge.read().then((content) => {
-				if (content.kind === "image" || content.kind === "files" || content.kind === "oversized") {
-					controller.addClipboard(content);
-				} else if (text) {
-					field.focus();
-					document.execCommand("insertText", false, text);
-				} else if (content.kind === "unreadable") {
-					notify(translate("chat.attachments.pasteUnreadable"));
-				}
-			});
+			void bridge
+				.read()
+				.catch((): NativeClipboardContent => ({ kind: "unreadable" }))
+				.then((content) => {
+					if (!work.current()) return;
+					if (
+						content.kind === "image" ||
+						content.kind === "files" ||
+						content.kind === "oversized"
+					) {
+						controller.addClipboard(content);
+					} else if (text) {
+						if (!field.isConnected) return;
+						field.focus();
+						document.execCommand("insertText", false, text);
+					} else if (content.kind === "unreadable") {
+						notify(translate("chat.attachments.pasteUnreadable"));
+					}
+				})
+				.finally(work.release);
 		},
 		onDragOver: (e) => {
 			if (!dragMayCarryFiles([...e.dataTransfer.types])) return;
@@ -189,7 +208,7 @@ export function usePromptImages(
 		(picked: File[]) => {
 			if (picked.length === 0) return;
 			const startedGeneration = read().generation;
-			update((current) => ({ ...current, pending: current.pending + picked.length }));
+			update((current) => withPendingWork(current, startedGeneration, picked.length));
 			const decode = async () => {
 				const settled = await Promise.allSettled(picked.map(fileToAttachedImage));
 				update((current) => {
@@ -227,11 +246,7 @@ export function usePromptImages(
 				});
 			};
 			void decode().finally(() =>
-				update((current) =>
-					current.generation !== startedGeneration
-						? current
-						: { ...current, pending: current.pending - picked.length },
-				),
+				update((current) => withPendingWork(current, startedGeneration, -picked.length)),
 			);
 		},
 		[read, update],
@@ -261,6 +276,17 @@ export function usePromptImages(
 		},
 		[update, acceptsFiles],
 	);
+
+	const reserve = useCallback((): PendingWork | null => {
+		const started = read();
+		if (started.upload) return null;
+		const { generation } = started;
+		update((current) => withPendingWork(current, generation, 1));
+		return {
+			current: () => read().generation === generation,
+			release: () => update((current) => withPendingWork(current, generation, -1)),
+		};
+	}, [read, update]);
 
 	const addFiles = useCallback(
 		(picked: File[]) => {
@@ -362,6 +388,7 @@ export function usePromptImages(
 		pending,
 		uploading: upload !== null,
 		errors,
+		reserve,
 		addFiles,
 		addClipboard,
 		remove,

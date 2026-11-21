@@ -374,7 +374,8 @@ the first scenario pins the zero-inset, `no-drag` baseline and the theme-token h
 bridge answers through the desktop's own `readNativeClipboard` over a modelled X clipboard (a fake `xclip`
 serving the targets a screenshot tool, a file manager or a text owner offers; a smaller image budget), so it
 answers what the real reader would. Each paste is the event WebKitGTK delivers: an emptied one for files and
-images, a real Ctrl+V from headless Chromium's own clipboard for text.
+images, a real Ctrl+V from headless Chromium's own clipboard for text. Timing cases swap in a deferred
+bridge the test answers by hand, so a send or a chat switch lands while a read is still pending.
 
 Workbench scenarios exercise the normalized frontend-local frame rather than only the pure model: frame
 geometry/tool placement survives workspace switches while resource tabs and attention differ; closing a final

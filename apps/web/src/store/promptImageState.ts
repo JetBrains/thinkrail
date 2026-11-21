@@ -55,6 +55,15 @@ export function withoutPromptChips(
 	};
 }
 
+export function withPendingWork(
+	state: PromptImagesState,
+	generation: string,
+	delta: number,
+): PromptImagesState {
+	if (state.generation !== generation) return state;
+	return { ...state, pending: state.pending + delta };
+}
+
 export function withCopiedPromptFile(
 	state: PromptImagesState,
 	id: string,

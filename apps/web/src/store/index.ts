@@ -10,6 +10,7 @@ export {
 	type PromptImagesState,
 	withCopiedPromptFile,
 	withoutPromptChips,
+	withPendingWork,
 } from "./promptImageState";
 export * from "./selectMcpServers";
 export * from "./selectors";
