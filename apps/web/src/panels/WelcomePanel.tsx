@@ -9,6 +9,7 @@ import { useT } from "@thinkrail/locales/react";
 import { useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { PRODUCT_NAME } from "../constants/branding";
+import { serversSupported } from "../remote";
 import {
 	selectOnboardingEligible,
 	selectRepoProjects,
@@ -18,7 +19,7 @@ import {
 } from "../store";
 import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
-import { ConnectByLinkDialog } from "./ConnectByLinkDialog";
+import { AddServerDialog } from "./AddServerDialog";
 import { ConnectedLine, type ConnectedSummary } from "./ConnectedLine";
 import { connectedProviderName } from "./ConnectProviderOptions";
 import { canStartProjectlessChat, startProjectlessChat } from "./chatActions";
@@ -50,7 +51,7 @@ export function WelcomePanel() {
 	const wizard = useAppStore((s) => s.onboardingWizard);
 	const setWizard = useAppStore((s) => s.setOnboardingWizard);
 	const [justConnected, setJustConnected] = useState<ConnectedSummary | null>(null);
-	const [connectByLink, setConnectByLink] = useState(false);
+	const [addingServer, setAddingServer] = useState(false);
 
 	useEffect(() => {
 		if (wizard !== "pending" || protocolVersion === null) return;
@@ -120,7 +121,7 @@ export function WelcomePanel() {
 			onOpen={() => void pickAndOpen()}
 			onEnterHostPath={enterHostPath}
 			onClone={cloneRepository}
-			onConnectByLink={() => setConnectByLink(true)}
+			{...(serversSupported() ? { onAddServer: () => setAddingServer(true) } : {})}
 			onOpenRecent={(path) => void openProject(path)}
 			align="start"
 		>
@@ -275,7 +276,7 @@ export function WelcomePanel() {
 					}}
 				/>
 			) : null}
-			{connectByLink ? <ConnectByLinkDialog onClose={() => setConnectByLink(false)} /> : null}
+			{addingServer ? <AddServerDialog onClose={() => setAddingServer(false)} /> : null}
 			{dialogs}
 		</div>
 	);

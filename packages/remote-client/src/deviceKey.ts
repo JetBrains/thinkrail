@@ -1,3 +1,5 @@
+import type { KeyValueStore } from "./hostRegistry";
+
 /** The device's Ed25519 identity: a private key that never leaves the platform, and its public key. */
 export interface DeviceKey {
 	privateKey: CryptoKey;
@@ -10,6 +12,8 @@ export interface DeviceKeyStore {
 	load(): Promise<DeviceKey | null>;
 	/** Stores `key` unless one is already there, and resolves with the key that is kept. */
 	keep(key: DeviceKey): Promise<DeviceKey>;
+	/** The store writes the key out as text, so it must be generated extractable. */
+	serializes?: boolean;
 }
 
 const LEGACY_STORAGE_KEY = "thinkrail.remote.deviceKey";
@@ -68,17 +72,20 @@ export const indexedDbKeyStore: DeviceKeyStore = {
 	},
 };
 
-/** A key from before the IndexedDB store: an extractable JWK in localStorage, imported non-extractable. */
-async function legacyKey(): Promise<DeviceKey | null> {
-	const stored = globalThis.localStorage?.getItem(LEGACY_STORAGE_KEY);
-	if (!stored) return null;
+interface StoredJwk {
+	privateJwk: JsonWebKey;
+	publicKeyRaw: string;
+}
+
+async function fromJwk(text: string | null, extractable: boolean): Promise<DeviceKey | null> {
+	if (!text) return null;
 	try {
-		const parsed = JSON.parse(stored) as { privateJwk: JsonWebKey; publicKeyRaw: string };
+		const parsed = JSON.parse(text) as StoredJwk;
 		const privateKey = await crypto.subtle.importKey(
 			"jwk",
 			parsed.privateJwk,
 			{ name: "Ed25519" },
-			false,
+			extractable,
 			["sign"],
 		);
 		return { privateKey, publicKeyRaw: parsed.publicKeyRaw };
@@ -87,8 +94,31 @@ async function legacyKey(): Promise<DeviceKey | null> {
 	}
 }
 
-async function generated(): Promise<DeviceKey> {
-	const pair = (await crypto.subtle.generateKey({ name: "Ed25519" }, false, [
+/** A key from before the IndexedDB store: an extractable JWK in localStorage, imported non-extractable. */
+const legacyKey = (): Promise<DeviceKey | null> =>
+	fromJwk(globalThis.localStorage?.getItem(LEGACY_STORAGE_KEY) ?? null, false);
+
+/**
+ * A text store for a shell whose web storage does not last (the desktop's webview origin changes between
+ * launches): the key is kept as a JWK there, so it stays extractable — the store, not the page, is what holds it.
+ */
+export function textDeviceKeyStore(store: KeyValueStore): DeviceKeyStore {
+	return {
+		serializes: true,
+		load: () => fromJwk(store.read(LEGACY_STORAGE_KEY), true),
+		async keep(key) {
+			const held = await fromJwk(store.read(LEGACY_STORAGE_KEY), true);
+			if (held) return held;
+			const privateJwk = await crypto.subtle.exportKey("jwk", key.privateKey);
+			const stored: StoredJwk = { privateJwk, publicKeyRaw: key.publicKeyRaw };
+			store.write(LEGACY_STORAGE_KEY, JSON.stringify(stored));
+			return key;
+		},
+	};
+}
+
+async function generated(extractable: boolean): Promise<DeviceKey> {
+	const pair = (await crypto.subtle.generateKey({ name: "Ed25519" }, extractable, [
 		"sign",
 		"verify",
 	])) as CryptoKeyPair;
@@ -105,11 +135,11 @@ async function loadOrCreate(store: DeviceKeyStore): Promise<DeviceKey> {
 	try {
 		stored = await store.load();
 	} catch {
-		return (await legacyKey()) ?? generated();
+		return (await legacyKey()) ?? generated(false);
 	}
 	if (stored) return stored;
-	const legacy = await legacyKey();
-	const key = legacy ?? (await generated());
+	const legacy = store.serializes ? null : await legacyKey();
+	const key = legacy ?? (await generated(store.serializes === true));
 	try {
 		const kept = await store.keep(key);
 		if (legacy) globalThis.localStorage?.removeItem(LEGACY_STORAGE_KEY);

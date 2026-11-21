@@ -2,6 +2,7 @@ import { RiAddLine, RiCloseLine } from "@remixicon/react";
 import type { Project, Workspace } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import type {
+	HostStatus,
 	RemoteSessionItem,
 	RemoteSessionsController,
 	SavedHost,
@@ -9,7 +10,6 @@ import type {
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { type ReactNode, useState } from "react";
 import type { PairState } from "./App";
-import type { HostStatus } from "./hostStatus";
 import { Screen } from "./layout";
 import { HostTree } from "./ProjectTree";
 
