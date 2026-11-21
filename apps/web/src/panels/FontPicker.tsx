@@ -135,7 +135,7 @@ export function FontList({
 		["installed", t("settings.appearance.fonts.picker.installed")],
 	];
 	return (
-		<Command loop className="min-h-0">
+		<Command label={t("settings.appearance.fonts.picker.search")} loop className="min-h-0">
 			<CommandInput
 				placeholder={t("settings.appearance.fonts.picker.search")}
 				value={search}

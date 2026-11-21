@@ -137,7 +137,7 @@ export function BranchPicker({
 						onClick={onRefresh}
 					/>
 				</div>
-				<Command>
+				<Command label={t("panels.branchPicker.search")}>
 					<CommandInput placeholder={t("panels.branchPicker.search")} />
 					<CommandList>
 						<CommandEmpty>{t("panels.branchPicker.empty")}</CommandEmpty>

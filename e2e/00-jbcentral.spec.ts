@@ -71,6 +71,9 @@ test("connects and follows external add, replacement, and remove without a host 
 		.getByTestId("default-model-row")
 		.getByTestId("model-selector")
 		.click();
+	await expect(
+		page.getByRole("combobox", { name: "Search models… (append a level: opus high)", exact: true }),
+	).toBeVisible();
 	await revealModelGroups(page);
 	await expandModelGroup(page, "e2e-central");
 	await expect(
