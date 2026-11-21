@@ -18,8 +18,9 @@ test("the Changes review tab uses the custom file-diff glyph; Review uses the di
 	await expect(reviewTab).toHaveCount(1);
 	const mask = reviewTab.locator(".custom-icon");
 	await expect(mask).toHaveCount(1);
+	await expect(mask).toHaveClass(/custom-icon-file-diff-/);
 	const maskImage = await mask.evaluate((el) => getComputedStyle(el).maskImage);
-	expect(maskImage).toContain("file-diff");
+	expect(maskImage).toMatch(/^url\(/);
 	const box = await mask.boundingBox();
 	expect(box?.width ?? 0).toBeGreaterThan(8);
 

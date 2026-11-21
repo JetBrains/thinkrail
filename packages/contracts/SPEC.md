@@ -70,6 +70,48 @@ the palette ranks with — kept here so host-side search can rank with the same 
   (below) — the composer hands that prompt back to its draft instead of losing it.
   Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
+- **Workspace settling (`workspaceSettling.ts`):** `SettledReason`, `SettledRow`, `WorkspacePartition`,
+  `WorkspaceOrder`, `workspaceSettledReason(workspace, context)` and `partitionWorkspaces(rows, context, order)` —
+  the one rule for which workspaces sit on a project's Settled shelf (parked by hand, PR merged/closed with no
+  work since, or idle past the host's `settleIdleDays`; never Default or a busy workspace), shared by the IDE's
+  store selectors and the phone's tree. The caller supplies `now`, `settleIdleDays`, `busy` and the IDE's
+  live latch, so the rule reads no store.
+- **Remote channel framing (`channelFraming.ts`):** `CHANNEL_CHUNK_BYTES`, `chunkFrames(message)` and
+  `createChannelAssembler()` — the one chunking both ends of the remote WebRTC data channel use, because a
+  platform caps one DataChannel message (WebKit: 64 KiB) while a wire result such as a transcript is
+  megabytes. A message above 16 KiB travels as `[0x00, more]`-prefixed binary chunks (a wire message is JSON,
+  so it never starts with `0x00`); the ordered, reliable channel and back-to-back sends need no chunk ids.
+  `createChannelAssembler(maxBytes)` throws `ChannelMessageTooLargeError` once a message passes `maxBytes`:
+  the host passes `WS_MAX_FRAME_BYTES`, the same cap a WS frame has, and closes the channel; the device
+  passes none, as a browser takes any size of host frame.
+- **ICE (`iceServers.ts`):** `PUBLIC_STUN_URLS`, the public STUN servers both remote peers gather through,
+  so a phone off the host's network can connect peer-to-peer without a ThinkRail server; `IceServer`,
+  `parseIceServers` (bounded, `stun:`/`turn:` schemes only) for the TURN credentials a relay attaches to the
+  device's `ready` frame, and `withPublicStun(extra)`.
+- **Phone access (`remote.*`, `REMOTE_ACCESS_PROTOCOL_VERSION`, v130):** `remote.status` /
+  `remote.setEnabled { enabled }` / `remote.revokeDevice { id }` / `remote.renameDevice { id, label }` /
+  `remote.setDeviceAccess { id, access }` return `RemoteAccessStatus` (`enabled`, reachable `RemoteAddress`es,
+  `RemotePairedDevice`s without their keys, each with its `RemoteDeviceAccess` — `read` or `write`); the
+  `remote.deviceAccess` channel carries `{ access }` to that one device and `remote.hostRoutes` its
+  current `RemoteHostRoutes` (relay addresses + Nostr route, read with `parseRemoteHostRoutes`), so a saved
+  host follows the computer; a read-only device's writes fail with
+  `REMOTE_DEVICE_READ_ONLY`, an unpaired one's with `REMOTE_DEVICE_REVOKED`; the optional `nostr`
+  (`RemoteNostrRoute`: relays and how many are live) is the internet route, absent from an older host;
+  `remote.issueLink` returns a
+  `RemotePairingLink` (`link`, `expiresAt`). Only the computer's own clients may call them
+  (`REMOTE_ACCESS_LOCAL_ONLY` for a paired device); `REMOTE_ACCESS_OFF` when a code is asked for while off.
+- **Pairing link (`pairingUri.ts`):** `buildPairingUri` / `parsePairingUri` for the QR's
+  `thinkrail://pair?v=1` link — relay addresses (`s`), token, host key, project, name, and the optional Nostr
+  route (`PairingNostrRoute`: hex key `o`, relays `r`). A link needs at least one route; a malformed Nostr
+  route is dropped, and an older app ignores it and keeps the relay addresses.
+- **Remote auth transcripts (`pairingAuth.ts`):** `registerTranscript`, `proofTranscript`,
+  `offerTranscript`, `answerTranscript`, `pairingMacInput`, plus `isPairingChallenge` (the 32-byte challenge
+  shape a device checks before signing) — the domain-separated (`thinkrail/<purpose>/v1`) byte strings the
+  host, device and relay sign or MAC, shared so every party builds them identically; the crypto stays per
+  platform. The broker (`brokerProtocol.ts`) and signaling (`signalingProtocol.ts`) frames carry the results.
+  A device's `hello` / `resume` carries its wire `protocolVersion` (the WS's `?protocol=`), so the host serves
+  it as the version it speaks; a frame without one (or with a malformed one) is served as the host's own,
+  which needs no protocol bump.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
   (`NativeUpdateState` / `NativeUpdateBridge`, `NativeWindowState` / `NativeWindowControlsBridge`,
   `NativeQuitHint` / `NativeCommand` / `NativeShortcutsBridge`, and
@@ -145,6 +187,12 @@ the palette ranks with — kept here so host-side search can rank with the same 
   most once, then a `KeyboardEvent.code` that is not a modifier key, joined by `+`, e.g. `Mod+Alt+KeyS`;
   the host validates `AppConfig.keybindings` with it and the web's grammar parses with it), the types
   `KeybindingOverrides` / `KeybindingModifier`,
+  **`unnamedChatTitle(firstPrompt)`** + **`chatTitle(name, firstPrompt)`** (the one
+  chat-title derivation every UI host renders: a trimmed real name wins as `source: "name"`; else the head cut at
+  a word boundary at 48 UTF-16 units with `…`, never inside a surrogate pair, as `source: "prompt"` with the
+  full head as `tooltip`; else `null` for the host's translated default name), **`compactAgeOf(ms, now)`**
+  (the dense-row age buckets `underHour` / `hours` / `days` (<14) / `weeks` (<10) / `months`; the host words
+  them),
   `LINE_WIDTH_COLUMNS` + **`isLineWidth(value)`** (the shared 40–240 integer contract for synchronized
   chat/file wrap columns), `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
   **`isControlMessage(text)`** (the one shared reading of that marker — the client hides such sends on
@@ -154,10 +202,13 @@ the palette ranks with — kept here so host-side search can rank with the same 
   hides their turns, the host's history indexer skips their text; both consume the index slot so jump
   anchors stay aligned) from `domain`; **`isTranscriptMessageRole(role)`**
   and **`isSessionWorking(state)`** (running or idle on background work — the one working test every
-  badge and glance uses) from `piProtocol` (`isTranscriptMessageRole` is the one definition of which roles a transcript carries: the host filters
+  badge and glance uses), **`sessionAttention(state)`** (`SessionAttention`: needs-input, then a failed
+  unread completion as `error`, then `unread`, then `running`, else `null` — the one attention reading the web
+  switcher and the mobile lists share) from `piProtocol` (`isTranscriptMessageRole` is the one definition of which roles a transcript carries: the host filters
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
   would silently shift every later jump anchor); `export *` (value) of `wsProtocol`
-  (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, `WS_MAX_FRAME_BYTES`, and
+  (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, `WS_MAX_FRAME_BYTES`,
+  `WS_OUTBOUND_BUFFER_LIMIT_BYTES`, and
   feature-introduction versions).
 - **Allowed deps:** none at runtime. **Type-only** devDeps on `@earendil-works/pi-ai` +
   `@earendil-works/pi-agent-core`, imported **from their package roots** (type-only → erased at build).
@@ -410,7 +461,7 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   are the one ordering, so the host's `project.list` and every client's rail agree — plus the skill-trust fields **`trusted`**
   (the per-project grant), **`acknowledgedSkills`** (re-confirm-new — which committed aliases are OK'd) and
   **`disabledSkills`** / **`disabledGroups`** (project-baseline per-skill and per-group off — a group is a
-  plugin, a source tier, or the special `@plugins`) plus **`enabledGroups`** (per-group on against the host
+  plugin, a source tier, or the special `@plugins`, **`ALL_PLUGINS_GROUP`**, that gates every plugin) plus **`enabledGroups`** (per-group on against the host
   default), which gate what its skills contribute. **`isSkillGroupEnabled`** is the one group rule shared by
   the host gate and the Skills dialog: a project's explicit choice (on wins over off) beats
   `AppConfig.otherAgentSkills`, which governs only **`OTHER_AGENT_SKILL_GROUPS`** (`personal`, `@plugins`).
@@ -1197,7 +1248,9 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   host's `maxPayloadLength` and the size above which `WsTransport.request` refuses to send. A frame over it
   would close the socket and be replayed on every reconnect, so a message's `REQUEST_IMAGE_BASE64_BUDGET`
   (12 MiB) stays under it with room for the text. It equals Bun's default, which every earlier host
-  already enforced, so it needs no protocol bump.
+  already enforced, so it needs no protocol bump. **`WS_OUTBOUND_BUFFER_LIMIT_BYTES`** (256 MiB) is the
+  host's outbound buffer limit per client, for a WS and a paired device's data channel alike
+  ([[submodule-server-host]] owns why).
 
 ## Chat Resources
 

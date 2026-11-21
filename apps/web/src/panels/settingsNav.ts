@@ -18,6 +18,7 @@ import {
 	RiPuzzle2Line,
 	RiRobot2Line,
 	RiShieldCheckLine,
+	RiSmartphoneLine,
 	RiTerminalBoxLine,
 	RiTranslate2,
 } from "@remixicon/react";
@@ -27,6 +28,7 @@ import {
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
+	REMOTE_ACCESS_PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
@@ -122,6 +124,12 @@ const NAV_GROUPS: SettingsNavGroup[] = [
 				id: SettingsSection.Notifications,
 				label: "settings.nav.notifications",
 				icon: RiNotification3Line,
+			},
+			{
+				id: SettingsSection.Phone,
+				label: "settings.nav.phone",
+				icon: RiSmartphoneLine,
+				requiresProtocolVersion: REMOTE_ACCESS_PROTOCOL_VERSION,
 			},
 			{ id: SettingsSection.Privacy, label: "settings.nav.privacy", icon: RiShieldCheckLine },
 			{

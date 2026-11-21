@@ -17,7 +17,7 @@ test("renders the branded shell and, with no workspace, the Welcome screen", asy
 	expect(themeId).toBeTruthy();
 	const manifest = JSON.parse(
 		readFileSync(
-			new URL(`../apps/web/src/themes/bundled/${themeId}.theme.json`, import.meta.url),
+			new URL(`../packages/design-tokens/themes/${themeId}.theme.json`, import.meta.url),
 			"utf8",
 		),
 	) as { colors: { accent: string } };

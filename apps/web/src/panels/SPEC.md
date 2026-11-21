@@ -525,7 +525,7 @@ the shared **`useProviderAuth`** hook, which `ProvidersSettings` uses too: the s
 (above), re-read once whenever one of them opens — Central's install state and similar host-local facts change
 without a push — `startLogin` / `logout`, and the store-driven
 `LoginDialog` node. For an `anthropic` login started as `oauth` (`LoginState.method`), the node carries the sign-in
-`chat/ExtraUsageNotice` while the report's `warnings.anthropicExtraUsage` is not `false`
+`@thinkrail/chat-ui/ExtraUsageNotice` while the report's `warnings.anthropicExtraUsage` is not `false`
 (`warnsExtraUsageOnSignIn`; an older host's report has no `warnings`, so the notice shows). Exactly one surface mounts that node: Settings → Providers while Settings is open, otherwise the
 connect surface (`ownsLoginDialog`), so a login never renders two stacked dialogs. **Post-connect handoff:**
 when a provider that was not configured when the surface opened becomes configured — an OAuth / API-key
@@ -653,7 +653,7 @@ empty by default); while the prompt is non-empty (worktree mode), a secondary hi
 and branch from the request. The rest stays compact: the base-branch combobox (`git.listBranches`,
 degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is filtered so no stray `origin`),
 a project picker, the prompt hero, and the reused
-  `chat/ModelEffortPicker` in **pre-session** mode. It opens **following the host default**: the pill reads
+  `@thinkrail/chat-ui/ModelEffortPicker` in **pre-session** mode. It opens **following the host default**: the pill reads
   `Default · ‹model› · ‹level›` from the host's `model.default` result (the saved default when available or
   the host's preferred available model) and the popover's Default row is checked. Any explicit pick (model, level, or
   both) flips the dialog to an **explicit pair**; the Default row — and the unavailable-model reconcile below
@@ -752,8 +752,8 @@ a project picker, the prompt hero, and the reused
   2026-11-17). At `md`+ the tabs are a rail grouped **Agent** (Models, Providers, Subagents — the global
   settings, this workspace's override and the available agent roles —, Extensions & skills, MCP servers, Prompt templates, Environment) ·
   **Interface** (Appearance, Text & fonts — fonts, custom fonts and both line widths —, Chat, Layout,
-  Keyboard, Language, Voice input, Terminal) · **System** (Workspaces, Integrations, Notifications, Privacy,
-  Updates). Integrations keeps section id `github`: today it is the GitHub CLI page
+  Keyboard, Language, Voice input, Terminal) · **System** (Workspaces, Integrations, Notifications, Phone
+  access, Privacy, Updates). Integrations keeps section id `github`: today it is the GitHub CLI page
   and it is the home for further integrations. Below `md` the same list is a horizontal scrolling strip without group labels. The
   Feedback tab (`settings-nav-feedback`, “Share feedback”) belongs to that list at
   every width, pinned to the rail's bottom at `md`+. There is no Artifacts section (its one switch, Smart
@@ -1382,6 +1382,35 @@ a project picker, the prompt hero, and the reused
   channel — the visible, in-app acquisition path that does not depend on an
   out-of-focus event. The notification pipeline, suppression, and away-path permission preface live in
   [[submodule-web-notifications]].
+  **`PhoneAccessSettings`** (`phone`, from `REMOTE_ACCESS_PROTOCOL_VERSION`) is phone access over `remote.*`:
+  the switch applies at once (no draft — it starts or stops a listener), while on it shows a one-time
+  pairing code with its expiry and a Copy link action (a phone that pairs from it closes the code with a
+  toast), and lists paired phones (`PhoneDeviceRow`: marked "Connected now" while live,
+  renamed in place with the pencil, **Read / Write** access applied at once, Revoke).
+  `PhoneAccessNetwork` is the network check below it — one row per route (same Wi‑Fi, Tailscale, Internet,
+  or the `--relay` URL alone, then Nostr relays with how many are live) with the addresses found and what a
+  missing or closed route needs — plus a Wi‑Fi-only notice pointing at Tailscale when no route reaches other
+  networks. `phoneHasNoRoute` (no address and no live Nostr relay) gates the no-network warning. Both views read routes from the one `phoneReach` derivation. The QR is an `<img>` of the `qrcode` SVG, which
+  carries its own black-on-white: a scanner needs dark modules on a light field in every theme, so this image
+  is the one place UI colour is not a token. `PhonePairingCode` is the one shown-code card (QR, until when it
+  works or that it expired, Copy link) in Settings' row and the quick panel's stacked layout.
+  `PhoneAccessView` and shell's `PhoneAccessPanel` are props-only halves taking the hook's `PhoneAccess` whole.
+  **One status source:** `useRemoteAccessStatus` (in `usePhoneAccess.ts`) is the status the topbar icon, its
+  quick panel and Settings all render, followed only when `selectSupportsRemoteAccess` (this computer's own
+  host) and dropped on every host reset — one `remote.statusChanged` subscription per transport, one
+  `remote.status` read per connection generation, and every change's reply, last arrival wins (one ordered
+  socket, each reply and push computed when sent, so no ordering gate). `foldRemoteStatus` is the one place a
+  newly paired phone is noticed — a device absent from the previous status on the same connection — and the
+  source toasts it once. There is no client poll: the host pushes every change (see
+  [[submodule-server-remote-transport]]). `usePhoneAccess` adds a view's code lifecycle on top through the
+  pure `phoneAccessState.ts` reducer (unit-tested): a status naming a `paired` phone replaces the shown code
+  with who paired, a code expires on one timer at its `expiresAt`, a failed mint ends the wait, the quick
+  panel's own code waits for the internet check so it carries a public address found, and turning access off
+  bumps a generation so a code minted before it — dead once the relay restarts — is never shown. The switch
+  and each phone's rename / access / revoke run through `createKeyedFlight` (`singleFlight.ts`), which drops a
+  repeat while one is in flight and reports what is busy. Both views say loading until the first status
+  lands and offer Retry when it fails; a code being made and a phone with a change in flight keep their
+  buttons busy until the reply.
   **`PrivacySettings`** manages the additional-data preference and
   confirmation together: one **Usage analytics** group with the **Share additional usage data** switch
   (Reset to `DEFAULT_CONFIG`'s off) over the report details as visible text; the event contract belongs to
@@ -1431,7 +1460,7 @@ a project picker, the prompt hero, and the reused
   **Prompt cache** and **Visible models**.
 
   **Chat model** (`default-model-row`) and **Review model** (`review-model-row`) are the chat's own
-  **`chat/ModelEffortPicker`** — model and effort in one control, the same picker as the chat (user,
+  **`@thinkrail/chat-ui/ModelEffortPicker`** — model and effort in one control, the same picker as the chat (user,
   2026-11-17) — with `canSetDefault={false}`, `tabIndex={0}` and `fitContainer` (the popover stays inside
   the dialog's clipped root). The chat row re-reads `model.default` on open, whenever the live catalog or
   the saved pair changes, and after every save; the host's resolved pair (with the first-available fallback
@@ -2032,7 +2061,7 @@ own section. The kebab menu (`plan-menu`, a
   once its workspace is active, it focuses an already-open tab, `reopenChat`s a live-but-closed one, or
   fetches + hydrates a disk-only one — the reopen flow's two cases above, plus a third case for an
   already-open tab — leaving `ChatView` to consume the request for the scroll + flash (`chat/SPEC.md`'s
-  Jump-to-message bullet). **`Toaster`** is the app-wide toast host the shell mounts once: it subscribes to `store.toasts` and
+  Jump-to-message bullet). **`Toaster`** is the app-wide toast host the shell mounts once (and the phone shell once, above its home indicator): it subscribes to `store.toasts` and
   renders each via the `@thinkrail/ui/toast` primitives, letting Radix own the auto-timeout + swipe/hover-pause
   and routing every close back through `store.dismissToast` (so the store stays the single source of truth).
   Errors persist until dismissed; success/info time out. The **integration piece** — the primitives stay
@@ -2302,7 +2331,7 @@ own section. The kebab menu (`plan-menu`, a
   elements only). Preview anchoring is **exact**: `sourceLines.ts` (adopted from
   inline-edit) stamps elements with remark source positions in RAW-file coordinates
   (`sourceLineRehype` tuple-form takes each segment's offset — segments re-parse from line 1; via
-  `chat/Markdown`'s `rehypePlugins` prop) and the composer resolves selections through the stamps (a
+  `@thinkrail/chat-ui/Markdown`'s `rehypePlugins` prop) and the composer resolves selections through the stamps (a
   boundary-only end block is replaced by its previous stamped sibling), falling back to
   `previewAnchor`'s phrase search for unstamped content. The sidebar remains the full-detail surface. **Review presence is self-announcing and
   PER-FILE**: a center resource tab (file or diff) whose path is still in review wears a `Review` flag with

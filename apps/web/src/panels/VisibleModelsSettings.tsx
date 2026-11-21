@@ -1,3 +1,4 @@
+import { formatContext, groupByProvider } from "@thinkrail/chat-ui/modelPicker";
 import { sameModel, type WireModel } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
@@ -5,7 +6,6 @@ import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { Switch } from "@thinkrail/ui/switch";
 import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, type MouseEvent, useMemo, useState } from "react";
-import { formatContext, groupByProvider } from "@/chat/modelPicker";
 import { LOCAL_KEY_DEFAULTS } from "@/keybindings";
 import { SettingsGroup } from "@/settingsKit";
 import { type ModelRef, useAppStore } from "@/store";

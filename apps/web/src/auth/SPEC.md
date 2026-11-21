@@ -13,7 +13,7 @@ tags: [ui, auth]
 
 The client half of in-app provider login: the accumulating client-side **login-state types** and the
 **presentational** OAuth dialog that renders them. The dialog is the session-less analogue of
-`chat/ExtUiPrompt` — pi's flow, bridged over the wire — but rendered as a modal, because a login runs on
+`@thinkrail/chat-ui/ExtUiPrompt` — pi's flow, bridged over the wire — but rendered as a modal, because a login runs on
 the Welcome screen before any session or chat exists to ask in. (Mirroring the `chat`/ExtUi split, the **frame reducer lives in `store`**,
 not here — `auth` stays presentational + types, so nothing here imports `store`.)
 
@@ -26,7 +26,7 @@ not here — `auth` stays presentational + types, so nothing here imports `store
     browser-vs-paste race), `status` goes `active → success/error`. An optional `method` (`oauth` /
     `api_key`) is the route the caller started. `beginLogin` sets it, and also merges it into a
     dialog that earlier frames already created. An optional `target` names the MCP
-    server of an MCP sign-in or connection test (`LoginPush.target`). **Types only** (like `chat/types`).
+    server of an MCP sign-in or connection test (`LoginPush.target`). **Types only** (like `@thinkrail/chat-ui/types`).
   - `LoginDialog` — **props-driven, no store/transport** (like the chat renderers): renders a `LoginState`
     (an **Open sign-in page** link — a real anchor, so native copy/middle-click work — + **Copy link**;
     never the raw URL text, which can run to hundreds of scope params — a failed clipboard write reveals a

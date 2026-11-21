@@ -2,10 +2,10 @@ import {
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
 } from "@remixicon/react";
+import { ProviderGlyph } from "@thinkrail/chat-ui/ProviderGlyph";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
-import { ProviderGlyph } from "@/chat/ProviderGlyph";
 import { SETTINGS_ROW_FOCUS } from "@/settingsKit";
 import { useTreeItem } from "./treeNavigation";
 

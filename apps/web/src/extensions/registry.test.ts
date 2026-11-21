@@ -1,12 +1,4 @@
 import { expect, test } from "bun:test";
-import askUserQuestion from "@thinkrail/ext-ask-user-question/web";
-import hintMode from "@thinkrail/ext-hint-mode/web";
-import nextSteps from "@thinkrail/ext-next-steps/web";
-import outputs from "@thinkrail/ext-outputs/web";
-import visualize, { MermaidView } from "@thinkrail/ext-visualize/web";
-import type { ToolRenderProps } from "@thinkrail/extension-api/web";
-import { EN } from "@thinkrail/locales";
-import { currentTranslator } from "@thinkrail/locales/react";
 import {
 	DefaultToolRenderer,
 	getToolChrome,
@@ -16,7 +8,15 @@ import {
 	isInteractiveTool,
 	readComposerSuggestions,
 	resolveProminence,
-} from "../chat/toolRegistry";
+} from "@thinkrail/chat-ui/toolRegistry";
+import askUserQuestion from "@thinkrail/ext-ask-user-question/web";
+import hintMode from "@thinkrail/ext-hint-mode/web";
+import nextSteps from "@thinkrail/ext-next-steps/web";
+import outputs from "@thinkrail/ext-outputs/web";
+import visualize, { MermaidView } from "@thinkrail/ext-visualize/web";
+import type { ToolRenderProps } from "@thinkrail/extension-api/web";
+import { EN } from "@thinkrail/locales";
+import { currentTranslator } from "@thinkrail/locales/react";
 import { matchKeybinding, resolveKeybindings, SHORTCUT_CATALOG } from "../keybindings";
 import {
 	enabledWebExtensions,

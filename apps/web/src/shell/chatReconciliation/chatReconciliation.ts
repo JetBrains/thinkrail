@@ -1,6 +1,6 @@
+import { messagesToRuntime } from "@thinkrail/chat-ui/hydrate";
 import { t } from "@thinkrail/locales/react";
 import { useEffect, useRef } from "react";
-import { messagesToRuntime } from "../../chat/hydrate";
 import { type LayoutAttention, readLayoutSelection, tupleKey } from "../../lib";
 import {
 	type CenterNavigationStamp,
@@ -45,7 +45,28 @@ function claimAutoOpenAttempt(workspaceId: string, connectionGeneration: number)
 	return true;
 }
 
+function placedChat(
+	state: ReturnType<typeof useAppStore.getState>,
+	workspaceId: string,
+	sessionId: string,
+): boolean {
+	const document = state.layoutDocumentsByWorkspace[workspaceId];
+	return document
+		? collectAllGroups(document)
+				.flatMap((group) => group.tabs)
+				.some((tab) => tab.kind === "chat" && tab.sessionId === sessionId)
+		: false;
+}
+
 export function hydrateChatResource(workspaceId: string, sessionId: string): Promise<boolean> {
+	return hydrateChat(workspaceId, sessionId, true);
+}
+
+export function hydrateStandaloneChat(workspaceId: string, sessionId: string): Promise<boolean> {
+	return hydrateChat(workspaceId, sessionId, false);
+}
+
+function hydrateChat(workspaceId: string, sessionId: string, placed: boolean): Promise<boolean> {
 	const state = useAppStore.getState();
 	if (
 		state.removedWorkspaceIds[workspaceId] ||
@@ -54,7 +75,12 @@ export function hydrateChatResource(workspaceId: string, sessionId: string): Pro
 		return Promise.resolve(false);
 	}
 	const connectionGeneration = state.connectionGeneration;
-	const key = tupleKey("chat-hydration", workspaceId, sessionId, String(connectionGeneration));
+	const key = tupleKey(
+		placed ? "chat-hydration" : "chat-standalone",
+		workspaceId,
+		sessionId,
+		String(connectionGeneration),
+	);
 	const existing = sessionHydration.get(key);
 	if (existing) return existing;
 	const request = getSessionMessagesWithSkillBaseline({ workspaceId, sessionId })
@@ -67,16 +93,10 @@ export function hydrateChatResource(workspaceId: string, sessionId: string): Pro
 				) {
 					return false;
 				}
-				return hydrateChatResource(workspaceId, sessionId);
+				return hydrateChat(workspaceId, sessionId, placed);
 			}
 			if (!isConnectedGeneration(current, connectionGeneration)) return false;
-			const document = current.layoutDocumentsByWorkspace[workspaceId];
-			const stillPlaced = document
-				? collectAllGroups(document)
-						.flatMap((group) => group.tabs)
-						.some((tab) => tab.kind === "chat" && tab.sessionId === sessionId)
-				: false;
-			if (!stillPlaced) return false;
+			if (placed && !placedChat(current, workspaceId, sessionId)) return false;
 			current.hydrateSession(
 				summary,
 				messagesToRuntime(messages, summary.lastSettlement),
@@ -85,18 +105,11 @@ export function hydrateChatResource(workspaceId: string, sessionId: string): Pro
 				{ activate: false },
 			);
 			const installed = useAppStore.getState();
-			const installedDocument = installed.layoutDocumentsByWorkspace[workspaceId];
-			const placementSurvives = installedDocument
-				? collectAllGroups(installedDocument)
-						.flatMap((group) => group.tabs)
-						.some((tab) => tab.kind === "chat" && tab.sessionId === sessionId)
-				: false;
 			const cacheInstalled = (installed.tabsByWorkspace[workspaceId] ?? []).some(
 				(tab) => tab.kind === "chat" && tab.sessionId === sessionId,
 			);
 			return (
-				placementSurvives &&
-				cacheInstalled &&
+				(!placed || (placedChat(installed, workspaceId, sessionId) && cacheInstalled)) &&
 				!installed.removedWorkspaceIds[workspaceId] &&
 				!installed.deletedSessionsByWorkspace[workspaceId]?.[sessionId] &&
 				installed.sessions[sessionId] !== undefined

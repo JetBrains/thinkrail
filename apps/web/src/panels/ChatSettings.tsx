@@ -1,4 +1,8 @@
 import {
+	type ChatMessageOrder,
+	DEFAULT_CHAT_MESSAGE_ORDER,
+} from "@thinkrail/chat-ui/chatMessageOrder";
+import {
 	type ComposerGrowthLimit,
 	DEFAULT_CONFIG,
 	QUESTION_PANEL_HEIGHT_PERCENT,
@@ -6,7 +10,6 @@ import {
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
-import { type ChatMessageOrder, DEFAULT_CHAT_MESSAGE_ORDER } from "@/chat/chatPreferences";
 import {
 	SettingsChoice,
 	type SettingsChoiceOption,

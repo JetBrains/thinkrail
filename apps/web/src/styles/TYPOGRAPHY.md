@@ -16,12 +16,13 @@ The few [user-adjustable tokens](#user-adjustable-tokens) take their **defaults*
 font settings override them at runtime, and only on `:root`.
 
 ```
-styles/typography.json            the source (see typography.schema.json for the shape)
-styles/typography.schema.json     the editor-facing contract: primitives + fully-resolved styles
-scripts/typography.ts             load / validate / render — the only place CSS names are derived
-scripts/generate-typography.ts    writes the CSS; `--check` fails when it is stale
-scripts/validate-typography.ts    the enforced gate: shape + referential + policy validation
-styles/generated/typography.css   GENERATED, committed, never edited by hand
+packages/design-tokens/
+  styles/typography.json            the source (see typography.schema.json for the shape)
+  styles/typography.schema.json     the editor-facing contract: primitives + fully-resolved styles
+  scripts/typography.ts             load / validate / render — the only place CSS names are derived
+  scripts/generate-typography.ts    writes the CSS; `--check` fails when it is stale
+  scripts/validate-typography.ts    the enforced gate: shape + referential + policy validation
+  styles/generated/typography.css   GENERATED, committed, never edited by hand
 ```
 
 | Command | What it does |
@@ -179,7 +180,7 @@ naming its own type. Two exist:
 
 | | `chat` (`.tr-prose-chat`) | `doc` (`.tr-prose-doc`) |
 |---|---|---|
-| mounted by | `chat/Markdown.tsx` | `resource-renderers/support/MarkdownPreview.tsx` |
+| mounted by | `chat-ui/src/Markdown.tsx` | `resource-renderers/support/MarkdownPreview.tsx` |
 | body, blockquote, lists | 14 / 370 / 1.45 | 14 / 370 / 1.45 |
 | h1 | 18 / 600 | **24 / 600** |
 | h2 | 14 / 600 | **20 / 600** |
@@ -210,7 +211,7 @@ definitions of their own.
 and colour inherit from the enclosing element, so bold in a heading keeps the heading's size and bold in
 a cell keeps the table's.
 
-A "prose skin" at a call site carries only spacing, measure and chrome (`chat/Markdown.tsx` = bubble
+A "prose skin" at a call site carries only spacing, measure and chrome (`chat-ui/src/Markdown.tsx` = bubble
 rhythm, `resource-renderers/support/MarkdownPreview.tsx` = document rhythm, heading rules, table chrome). Never add a
 typography class or value to a skin; change `proseSystems` instead. Adding a third surface means adding a
 JSON entry — the generator, the naming and the guards all follow.

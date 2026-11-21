@@ -11,6 +11,7 @@ export {
 } from "./errorReports";
 export { errorText } from "./errorText";
 export { hostUrl, uploadUserFont } from "./fonts";
+export { isHostResetting, onHostReset } from "./hostReset";
 export {
 	requestMcpList,
 	requestUserMcpList,
@@ -32,6 +33,7 @@ export {
 	getTransport,
 	initTransport,
 	loadInAppSurvey,
+	mountRemoteSession,
 	respondToTool,
 	runHostUpdate,
 	supportsChangeMutations,

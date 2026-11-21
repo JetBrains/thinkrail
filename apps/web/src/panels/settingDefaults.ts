@@ -1,7 +1,7 @@
+import { DEFAULT_CHAT_MESSAGE_ORDER } from "@thinkrail/chat-ui/chatMessageOrder";
 import { type AppConfig, type AppConfigUpdate, DEFAULT_CONFIG } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
-import { DEFAULT_CHAT_MESSAGE_ORDER } from "@/chat/chatPreferences";
 import type { SettingsReset } from "@/settingsKit";
 import { CLIENT_PREFERENCE_DEFAULTS, DEFAULT_LOCAL_LAYOUT_PREFERENCES, useAppStore } from "@/store";
 import { saveSettings } from "./saveSettings";

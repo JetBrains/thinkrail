@@ -1,0 +1,49 @@
+/*
+ * Apple's CJK faces as fallbacks named in the interface and brand stacks (`typography.json`), each limited by
+ * `unicode-range` to its own scripts. Geist has no CJK, and iOS 26 WebKit's `-apple-system` claims characters it
+ * cannot draw instead of falling back, so Chinese, Japanese and Korean rendered as boxes on the phone. Naming
+ * PingFang directly in the stack fixed CJK but also handed it every other script Geist lacks (Greek came out
+ * full-width), hence these range-limited aliases. A missing glyph still falls through to the next family:
+ * kana go to Hiragino (PingFang SC has none), Han to PingFang, Hangul to Apple SD Gothic Neo. `local()` only —
+ * nothing is downloaded, and systems without these faces skip them.
+ */
+@font-face {
+	font-family: "TR Kana";
+	src: local("HiraginoSans-W3"), local("Hiragino Sans W3");
+	font-weight: 100 500;
+	unicode-range: U+3040-30FF, U+31F0-31FF, U+FF65-FF9F;
+}
+@font-face {
+	font-family: "TR Kana";
+	src: local("HiraginoSans-W6"), local("Hiragino Sans W6");
+	font-weight: 501 900;
+	unicode-range: U+3040-30FF, U+31F0-31FF, U+FF65-FF9F;
+}
+@font-face {
+	font-family: "TR Han";
+	src: local("PingFangSC-Regular"), local("HiraginoSans-W3");
+	font-weight: 100 500;
+	unicode-range:
+		U+2E80-2FFF, U+3000-303F, U+3100-312F, U+31A0-31BF, U+3200-33FF, U+3400-4DBF, U+4E00-9FFF,
+		U+F900-FAFF, U+FE30-FE4F, U+FF00-FF64, U+FFE0-FFEF, U+20000-2FA1F;
+}
+@font-face {
+	font-family: "TR Han";
+	src: local("PingFangSC-Semibold"), local("HiraginoSans-W6");
+	font-weight: 501 900;
+	unicode-range:
+		U+2E80-2FFF, U+3000-303F, U+3100-312F, U+31A0-31BF, U+3200-33FF, U+3400-4DBF, U+4E00-9FFF,
+		U+F900-FAFF, U+FE30-FE4F, U+FF00-FF64, U+FFE0-FFEF, U+20000-2FA1F;
+}
+@font-face {
+	font-family: "TR Hangul";
+	src: local("AppleSDGothicNeo-Regular");
+	font-weight: 100 500;
+	unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7AF, U+D7B0-D7FF;
+}
+@font-face {
+	font-family: "TR Hangul";
+	src: local("AppleSDGothicNeo-Bold");
+	font-weight: 501 900;
+	unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7AF, U+D7B0-D7FF;
+}

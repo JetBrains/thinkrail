@@ -78,6 +78,7 @@ import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
 import { LocationBar } from "./locationBar";
 import { NativeWindowControls } from "./NativeWindowControls";
+import { PhoneAccessTopbar } from "./PhoneAccessTopbar";
 import { PROJECT_HOME_PROJECTS_REGION_ID, ProjectHome } from "./ProjectHome";
 import { installRegionTracker, pressRegionKey } from "./regions";
 import { SearchPaletteHost } from "./SearchPaletteHost";
@@ -298,6 +299,7 @@ function ShellLayout() {
 						onClick={() => useAppStore.getState().openSearch()}
 					/>
 					<JbcentralQuotaTopbar />
+					<PhoneAccessTopbar />
 					<span
 						data-testid="connection-status"
 						data-status={status}

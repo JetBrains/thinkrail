@@ -12,8 +12,8 @@
 			"!designs",
 			"!design-audit/buttons.html",
 			"!**/.claude",
-			"!apps/web/src/styles/generated",
-			"!apps/web/src/chat/generated"
+			"!packages/design-tokens/styles/generated",
+			"!packages/chat-ui/src/generated"
 		]
 	},
 	"formatter": {
@@ -100,6 +100,7 @@
 			"includes": [
 				"apps/web/**",
 				"apps/website/**",
+				"packages/chat-ui/**",
 				"packages/resource-renderers/**",
 				"packages/ui/**",
 				"thinkrail-extensions/*/web/**"

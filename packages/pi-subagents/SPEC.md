@@ -184,7 +184,7 @@ extensions that set holds is the **embedder's** choice, never this package's.
 - **Forbidden:** any `@thinkrail/*` package (must work under vanilla pi); `@earendil-works/pi-tui`
   (the pure-pi bar is default rendering); `pi-delegation/src/*` internals.
 - The web card / transcript view are the *presentation* side, joined by tool name
-  (`registerToolRenderer("Agent", …)`) — they live in `apps/web` (`chat/tools/subagent`), never here.
+  (`registerToolRenderer("Agent", …)`) — they live in [[module-chat-ui]] (`packages/chat-ui/src/tools/subagent`), never here.
 
 ## User stop
 

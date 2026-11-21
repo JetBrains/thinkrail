@@ -1,10 +1,10 @@
+import { registerToolRenderer } from "@thinkrail/chat-ui/toolRegistry";
 import askUserQuestion from "@thinkrail/ext-ask-user-question/web";
 import hintMode from "@thinkrail/ext-hint-mode/web";
 import nextSteps from "@thinkrail/ext-next-steps/web";
 import outputs from "@thinkrail/ext-outputs/web";
 import visualize from "@thinkrail/ext-visualize/web";
 import type { ExtensionCommand, WebExtension } from "@thinkrail/extension-api/web";
-import { registerToolRenderer } from "../chat/toolRegistry";
 
 export const webExtensions: readonly WebExtension[] = [
 	visualize,

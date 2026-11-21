@@ -74,6 +74,7 @@ import {
 	PROTOCOL_VERSION,
 	PROVIDER_WARNINGS_PROTOCOL_VERSION,
 	QUESTION_PANEL_PROTOCOL_VERSION,
+	REMOTE_ACCESS_PROTOCOL_VERSION,
 	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	RESOURCE_META_PROTOCOL_VERSION,
 	REVIEW_ACTIONS_PROTOCOL_VERSION,
@@ -794,4 +795,13 @@ test("subagent catalog and per-name preference start at protocol 127", () => {
 	expect(SUBAGENT_CATALOG_PROTOCOL_VERSION).toBe(127);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SUBAGENT_CATALOG_PROTOCOL_VERSION);
 	expect(DEFAULT_CONFIG.disabledSubagents).toEqual([]);
+});
+
+test("phone access is switched from Settings from v130", () => {
+	expect(REMOTE_ACCESS_PROTOCOL_VERSION).toBe(130);
+	expect(PROTOCOL_VERSION).toBe(130);
+	expect(WS_METHODS.remoteStatus).toBe("remote.status");
+	expect(WS_METHODS.remoteSetEnabled).toBe("remote.setEnabled");
+	expect(WS_METHODS.remoteIssueLink).toBe("remote.issueLink");
+	expect(WS_METHODS.remoteRevokeDevice).toBe("remote.revokeDevice");
 });

@@ -116,7 +116,7 @@ nudges `fsChanged`. Nothing cleans the folder: sent messages keep naming its fil
   socket's [[submodule-server-speech]] relay, so it never joins the `clientKey → socket` registry, the
   replay cache or any channel: binary 20 ms audio frames would otherwise be hashed and retained
   per request. `host` publishes
-  `speech.changed` whole to v107 sockets, which also get `ServerWelcome.speech`; static serving with
+  `speech.changed` whole to v107 sockets, which also get `ServerWelcome.speech`; and static serving with
   `index.html` fallback, the `server.welcome` push, the **`?client=` page identity** read off the socket URL at
   upgrade (threaded to every handler as `RequestContext`; it addresses terminal output but no longer *owns*
   PTYs — see [[submodule-server-terminal]]) plus the `clientKey → socket` registry and the **replay-namespace
@@ -1046,7 +1046,7 @@ enabled/confirmed choice before entering analytics attribution.
   ([[submodule-web-transport]]). Raising the cap instead was tried and rejected: pi echoes a prompt's
   images back through `pi.event` several times, multiplying the outbound volume against the buffer limit
   below (#1179, #1180); providers also reject a whole request near 20 MB.
-- **The outbound buffer limit is 256 MiB (`WS_OUTBOUND_BUFFER_LIMIT_BYTES`), well above any reconnect
+- **The outbound buffer limit is 256 MiB (`WS_OUTBOUND_BUFFER_LIMIT_BYTES`, [[module-contracts]]), well above any reconnect
   resync.**
   - **The default and the failure.** uWS checks the buffered amount *before* each send. Under Bun's
     16 MiB default, a reply over 16 MiB (a screenshot-heavy `session.getMessages`, 39 MB) was accepted,
@@ -1086,7 +1086,8 @@ enabled/confirmed choice before entering analytics attribution.
     (`agent_settled` included) and leave the tab streaming forever while it kept talking to the host.
     `publishScoped` and
     `pi.extensionUi`'s audience filter share one `fanOut` loop: subscription, then the socket filter,
-    then `sendOrQuarantine`. A test rejects any `.publish(` call in the server source. Addressed sends
+    then `sendOrQuarantine`; each paired device's wire bridge gets the same frame unless the scope is `localOnly`, admitted by the
+    protocol version that device declared in its handshake, which also builds its welcome and dispatches its requests. A test rejects any `.publish(` call in the server source. Addressed sends
     (search results, MCP login, feedback asks) use the same rule. The terminal publisher keeps its
     own latch and treats a quarantined socket as unavailable.
 - **A backpressured socket gets stream snapshots conflated, not dropped (#1179).**
