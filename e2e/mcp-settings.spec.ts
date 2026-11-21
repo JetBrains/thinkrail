@@ -518,7 +518,7 @@ test("with no workspace open, user servers are listed, added, switched off for e
 		await expect(toggle).toHaveAttribute("aria-checked", "true");
 		await expect.poll(() => userEntry("user-beta")?.enabled).toBeUndefined();
 
-		await beta.getByTestId("mcp-server-details").focus();
+		await beta.focus();
 		await page.keyboard.press("Delete");
 		await expect(page.getByRole("alertdialog", { name: "Remove user-beta?" })).toBeVisible();
 		await page.getByTestId("mcp-remove-confirm").click();

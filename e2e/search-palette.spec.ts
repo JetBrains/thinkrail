@@ -487,11 +487,9 @@ test("the double-Shift row opens the Keyboard settings, and Ctrl+R stays inert u
 	await expect(palette(page)).toBeHidden();
 	await expect(page.getByTestId("settings-dialog")).toBeVisible();
 	await expect(page.getByTestId("settings-nav-keyboard")).toHaveAttribute("data-active", "true");
-	await expect(page.getByTestId("settings-double-shift")).toBeFocused();
-	await expect(page.locator('[data-setting-id="double-shift"]')).toHaveAttribute(
-		"data-setting-flash",
-		"",
-	);
+	const setting = page.locator('[data-setting-id="double-shift"]');
+	await expect(setting).toBeFocused();
+	await expect(setting).toHaveAttribute("data-setting-flash", "");
 });
 
 test("a setting's own palette row opens Settings on that setting, focused and flashed", async ({
@@ -506,11 +504,11 @@ test("a setting's own palette row opens Settings on that setting, focused and fl
 	await row.click();
 	await expect(palette(page)).toBeHidden();
 	await expect(page.getByTestId("settings-nav-text")).toHaveAttribute("data-active", "true");
+	const setting = page.locator('[data-setting-id="chat-line-width"]');
+	await expect(setting).toBeFocused();
+	await expect(setting).toHaveAttribute("data-setting-flash", "");
+	await page.keyboard.press("Enter");
 	await expect(page.getByTestId("chat-line-width-input")).toBeFocused();
-	await expect(page.locator('[data-setting-id="chat-line-width"]')).toHaveAttribute(
-		"data-setting-flash",
-		"",
-	);
 	await closeSettings(page);
 });
 

@@ -213,7 +213,8 @@ test("a package declared in settings but missing on disk is listed as Not instal
 	await expect(row).toHaveAttribute("data-installed", "false");
 	await expect(row.getByTestId("package-not-installed")).toBeVisible();
 	await expect(row.getByTestId("package-toggle")).toHaveCount(0);
-	await row.locator("[data-focus-row-primary]").focus();
+	await row.focus();
+	await expect(row).toBeFocused();
 	await page.keyboard.press("Delete");
 	await expect(
 		page.getByRole("alertdialog", { name: /Remove @e2e\/never-published/ }),

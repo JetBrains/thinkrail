@@ -1076,7 +1076,7 @@ test("custom presets synchronize while defaults and group limits remain window-l
 	await expect(peer.getByRole("textbox", { name: "Maximum side groups" })).toHaveValue("6");
 
 	const confirm = page.getByTestId("confirm-dialog");
-	await custom.getByTestId("layout-preset-apply").focus();
+	await custom.focus();
 	await page.keyboard.press("Delete");
 	await expect(confirm).toContainText("Delete My renamed workbench?");
 	await confirm.getByRole("button", { name: "Cancel" }).click();

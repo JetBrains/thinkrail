@@ -123,7 +123,7 @@ test.describe("templates management", () => {
 		await confirm.getByRole("button", { name: "Cancel" }).click();
 		await expect(confirm).toBeHidden();
 		await expect(row).toHaveCount(1);
-		await row.getByTestId("template-edit").focus();
+		await row.focus();
 		await page.keyboard.press("Delete");
 		await expect(confirm).toBeVisible();
 		await page.getByTestId("template-confirm-delete").click();
