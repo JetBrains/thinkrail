@@ -16,6 +16,7 @@ import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/prov
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type {
 	AppConfig,
+	OpenPrResult,
 	Project,
 	SubagentCatalogEntry,
 	Template,
@@ -32,6 +33,7 @@ import type {
 import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	INITIAL_TERMINAL_TAB_KEY,
+	PR_COMPARE_BODY_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	WS_METHODS,
 } from "@thinkrail/contracts";
@@ -397,6 +399,53 @@ test("starting a PR mutation reactivates a parked workspace before any network a
 	const after = rows.find((row) => row.id === workspace.id);
 	expect(after?.settledOverride).toBeUndefined();
 	expect(after?.lastActiveAt ?? 0).toBeGreaterThanOrEqual(workspace.lastActiveAt ?? 0);
+});
+
+test.each([
+	["github.com", "body"],
+	["gitlab.com", "merge_request[description]"],
+])("pr.open preserves the compare body across client versions on %s", async (forge, bodyKey) => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Compare work" },
+		CTX,
+	)) as Workspace;
+	const remote = join(dataDir, "origin.git");
+	const origin = `https://${forge}/acme/widgets.git`;
+	git(dataDir, "init", "--bare", remote);
+	git(repo, "remote", "add", "origin", origin);
+	git(repo, "config", `url.${remote}.pushInsteadOf`, origin);
+	git(repo, "config", "protocol.https.allow", "never");
+	const savedOffline = process.env.THINKRAIL_GH_OFFLINE;
+	process.env.THINKRAIL_GH_OFFLINE = "1";
+	onTestFinished(() => {
+		if (savedOffline === undefined) delete process.env.THINKRAIL_GH_OFFLINE;
+		else process.env.THINKRAIL_GH_OFFLINE = savedOffline;
+	});
+
+	const short = "完整描述";
+	const long = "完整描述😀".repeat(600);
+	const oldClient = { ...CTX, protocolVersion: PR_COMPARE_BODY_PROTOCOL_VERSION - 1 };
+	const newClient = { ...CTX, protocolVersion: PR_COMPARE_BODY_PROTOCOL_VERSION };
+	const input = { workspaceId: workspace.id, title: "Title" };
+	await expect(handleRequest("pr.open", { ...input, body: long }, oldClient)).rejects.toThrow(
+		/branch was pushed.*review page was not opened.*Copy or save your description before reloading/,
+	);
+	expect(gitText(remote, "rev-parse", `refs/heads/${workspace.branch}`)).toBe(
+		gitText(workspace.worktreePath, "rev-parse", "HEAD"),
+	);
+	for (const ctx of [oldClient, newClient]) {
+		const result = (await handleRequest("pr.open", { ...input, body: short }, ctx)) as OpenPrResult;
+		expect(result.action).toBe("compare");
+		expect(new URL(result.compareUrl ?? "").searchParams.get(bodyKey)).toBe(short);
+		expect(result.omittedBody).toBeUndefined();
+	}
+	for (const ctx of [newClient, CTX]) {
+		const result = (await handleRequest("pr.open", { ...input, body: long }, ctx)) as OpenPrResult;
+		expect(result.action).toBe("compare");
+		expect(new URL(result.compareUrl ?? "").searchParams.has(bodyKey)).toBe(false);
+		expect(result.omittedBody).toBe(long);
+	}
 });
 
 test("branch status reports a review-free branch, and workspace.push publishes it", async () => {

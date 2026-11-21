@@ -2,6 +2,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
+import { PR_COMPARE_BODY_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import {
 	createWorkspaceViaDialog,
 	enterDefaultWorkspace,
@@ -231,6 +232,94 @@ test("Open PR from the topbar composes from commits or the repository template",
 		rmSync(bare, { recursive: true, force: true });
 	}
 });
+
+for (const [forge, bodyKey] of [
+	["github.com", "body"],
+	["gitlab.com", "merge_request[description]"],
+] as const) {
+	for (const legacy of [true, false]) {
+		test(`oversized review drafts on ${forge} stay available to ${legacy ? "older clients" : "clients without clipboard access"}`, async ({
+			page,
+			context,
+		}) => {
+			if (legacy) {
+				await page.addInitScript((version) => {
+					window.WebSocket = class extends WebSocket {
+						constructor(url: string | URL, protocols?: string | string[]) {
+							const endpoint = new URL(url, window.location.href);
+							if (endpoint.pathname === "/ws")
+								endpoint.searchParams.set("protocol", String(version));
+							super(endpoint, protocols);
+						}
+					};
+				}, PR_COMPARE_BODY_PROTOCOL_VERSION - 1);
+			} else {
+				await page.addInitScript(() => {
+					Object.defineProperty(navigator, "clipboard", {
+						configurable: true,
+						value: { writeText: () => Promise.reject(new Error("denied")) },
+					});
+				});
+			}
+
+			await openFixtureProject(page);
+			const { worktreePath } = await createWorkspaceViaDialog(page);
+			const bare = bareRemote();
+			const origin = `https://${forge}/acme/sample.git`;
+			await context.route(`https://${forge}/**`, (route) => route.fulfill({ body: "" }));
+			try {
+				commitFile(worktreePath, "ship.ts", "export const ship = 1;\n", "feat: ship segment");
+				gitAs(worktreePath, "remote", "add", "origin", origin);
+				gitAs(worktreePath, "config", `url.${bare}.pushInsteadOf`, origin);
+				gitAs(worktreePath, "config", "protocol.https.allow", "never");
+				await revalidate(page);
+				await page.getByTestId("scope-ship-review-primary").click();
+				const title = page.getByTestId("open-pr-compose-title");
+				const body = page.getByTestId("open-pr-compose-body");
+				const draft = "保留完整描述😀".repeat(600);
+				await title.fill("Edited title");
+				await body.fill(draft);
+				await page.getByTestId("open-pr-compose-submit").click();
+
+				if (legacy) {
+					const notice = page.getByText(
+						/Your branch was pushed, but the review page was not opened/,
+					);
+					await expect(notice.first()).toContainText(
+						"Copy or save your description before reloading",
+					);
+					await expect(title).toBeVisible();
+					await expect(title).toHaveValue("Edited title");
+					await expect(body).toHaveValue(draft);
+					expect(context.pages()).toEqual([page]);
+					return;
+				}
+
+				const dialog = page.getByTestId("open-pr-setup-dialog");
+				const description = dialog.getByTestId("open-pr-omitted-body");
+				await expect(description).toHaveValue(draft);
+				await dialog.getByTestId("open-pr-omitted-body-copy").click();
+				await expect(dialog.getByText("Copied", { exact: true })).toHaveCount(0);
+				await description.press("ControlOrMeta+A");
+				expect(
+					await description.evaluate((el: HTMLTextAreaElement) =>
+						el.value.slice(el.selectionStart, el.selectionEnd),
+					),
+				).toBe(draft);
+				const link = dialog.getByTestId("open-pr-setup-compare");
+				const popup = page.waitForEvent("popup");
+				await link.click();
+				const url = new URL((await popup).url());
+				expect(url.hostname).toBe(forge);
+				expect(url.searchParams.has(bodyKey)).toBe(false);
+			} finally {
+				gitAs(worktreePath, "config", "--unset", "protocol.https.allow");
+				gitAs(worktreePath, "config", "--unset", `url.${bare}.pushInsteadOf`);
+				rmSync(bare, { recursive: true, force: true });
+			}
+		});
+	}
+}
 
 test("an Open PR draft belongs to its workspace and closes when the scope moves", async ({
 	page,

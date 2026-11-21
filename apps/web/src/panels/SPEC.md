@@ -1928,7 +1928,15 @@ own section. The kebab menu (`plan-menu`, a
   generation, so a refresh that times out cannot wipe the cached answer that arrived while it ran. The
   URL is kept across refetches while the review number matches. A `compare` result opens the prefilled
   GitHub
-  compare page (`window.open`); every outcome toasts, uncommitted files get a separate info toast.
+  compare page (`window.open`); every outcome toasts, uncommitted files get a separate info toast. A
+  `compare` result that carries **`omittedBody`** means the description did not fit the URL: the runner
+  opens `PrSetupDialog` instead of the tab (`compare-body`, or the `gh` variant carrying the same body) so
+  the full text sits in a selectable box with a copy button — no auto-open, no claim that the form is
+  prefilled. The copy button is a convenience: it reports "copied" only from `copyText`'s own answer, so a
+  plain-HTTP remote client or a denied permission leaves the text on screen, per `lib/SPEC.md`. When the
+  `gh` setup dialog shows the omitted body, it does not also show the prefill hint. An older browser
+  that receives the host's compatibility error keeps its edits through the ordinary submit-error
+  path; reloading is not a draft save.
   The `pr.open` request runs with a **180s timeout** (push + gh mutation can outlast the transport's
   60s default) and the header button wears a spinner while any PR work is in flight — the
   **Pushing…** label only during the actual submit (a preview fetch is not a push, and its failure

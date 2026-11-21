@@ -111,7 +111,7 @@ pushes nothing rather than opening a PR for another branch with this one's title
    for a key passphrase on `/dev/tty` and hang the whole call until the client times out — batch
    mode turns that hang into the immediate `Permission denied` the classification is built for.
 3. GitLab.com origin → `action: "compare"` with GitLab's prefilled new-MR page (`gitlabNewMrUrl`: source,
-   target, title, description trimmed like the GitHub compare body) — no `glab` mutation this iteration. Any
+   target, title, and the description under the same URL budget as the GitHub compare body) — no `glab` mutation this iteration. Any
    other origin (incl. local/bare test remotes) → `action: "pushed"` — the honest floor.
 4. GitHub origin: every `gh` call carries `--repo <slug>`, the push URL's repository — gh would otherwise
    resolve the repository from the remote's fetch URL, so a split origin would look up, edit, or create the
@@ -135,10 +135,14 @@ pushes nothing rather than opening a PR for another branch with this one's title
    list` again): if the PR exists server-side despite the error, it is returned as `created` —
    never the compare fallback, which would invite a duplicate.
 5. `gh` missing/unauthenticated/failed, or `THINKRAIL_GH_OFFLINE=1` (the e2e seam shared with the
-   `github` module) → `action: "compare"` + a prefilled `quick_pull` compare URL (title + body,
-   with the body cut to its longest whole-code-point prefix that keeps the encoded URL within
-   4,000 characters: a CJK character encodes to 9, and github.com fails a request whose URL and
-   cookies together pass about 7,000 bytes) — the zero-auth fallback the client opens in a browser.
+   `github` module) → `action: "compare"` + a prefilled `quick_pull` compare URL (title, plus the body
+   when the encoded URL stays within 4,000 characters: a CJK character encodes to 9, and github.com
+   fails a request whose URL and cookies together pass about 7,000 bytes) — the zero-auth fallback the
+   client opens in a browser. **A body is carried whole or not at all** (`CompareUrl` in `pr.ts`): cutting
+   it to the longest prefix that fits would return a URL whose description looks complete but stops
+   mid-sentence, and no client that opens it can tell. A body that does not fit comes back as
+   **`omittedBody`** on the result and the client copies it for the user to paste — the server never
+   writes a marker into the description to say it was shortened.
    When `github`'s `ghSetupProblem()` can name why (`missing` / `unauthenticated`), the result
    carries it as **`ghProblem`** so the client shows setup guidance instead of a bare compare
    hand-off. The probe runs **only after the gh flow actually failed** (never on the happy path —

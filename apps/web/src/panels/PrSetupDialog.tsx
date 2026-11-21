@@ -17,14 +17,60 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
+import { Textarea } from "@thinkrail/ui/textarea";
 import { useState } from "react";
 import { copyText } from "@/lib";
 
 export type PrSetupState =
 	| { kind: "push-auth"; detail: string }
-	| { kind: "gh"; problem: GhSetupProblem; compareUrl?: string };
+	/** `omittedBody`: the description did not fit the compare URL, so the dialog has to show it. */
+	| { kind: "gh"; problem: GhSetupProblem; compareUrl?: string; omittedBody?: string }
+	/** The compare fallback could not carry the description and `gh` was not the problem. */
+	| { kind: "compare-body"; compareUrl: string; body: string };
 
 const CopiedIcon = withIconClass(Check, "text-feedback-success");
+
+/**
+ * The full PR description, when it could not ride in the compare URL.
+ *
+ * A read-only textarea keeps it selectable, which is what `lib/SPEC.md` asks of a failed clipboard
+ * write (an insecure context such as plain-HTTP remote access has no `navigator.clipboard`, and a
+ * denied permission fails the same way). The copy button is the convenience, never the only way out:
+ * its "copied" state is set only from `copyText`'s own answer.
+ */
+export function DescriptionBox({ body }: { body: string }) {
+	const t = useT();
+	const [copied, setCopied] = useState(false);
+	const copy = async () => {
+		if (await copyText(body)) {
+			setCopied(true);
+			setTimeout(() => setCopied(false), 1_500);
+		}
+	};
+	return (
+		<div className="flex min-h-0 flex-col gap-8">
+			<Textarea
+				readOnly
+				value={body}
+				data-testid="open-pr-omitted-body"
+				rows={10}
+				className="min-h-160 flex-1 resize-y tr-code-text"
+			/>
+			<div className="flex justify-end">
+				<Button
+					variant="outline"
+					size="m"
+					iconLeft={copied ? CopiedIcon : Copy}
+					tooltip={t("panels.prSetup.copyDescription")}
+					data-testid="open-pr-omitted-body-copy"
+					onClick={() => void copy()}
+				>
+					{t(copied ? "panels.prSetup.copied" : "panels.prSetup.copyDescription")}
+				</Button>
+			</div>
+		</div>
+	);
+}
 
 function CommandRow({ command, onRun }: { command: string; onRun: (command: string) => void }) {
 	const t = useT();
@@ -136,7 +182,13 @@ export function PrSetupDialog({
 		<Dialog open={state !== null} onOpenChange={(open) => !open && onClose()}>
 			<DialogContent
 				data-testid="open-pr-setup-dialog"
-				data-reason={state?.kind === "gh" ? `gh-${state.problem}` : state?.kind}
+				data-reason={
+					state?.kind === "gh"
+						? `gh-${state.problem}`
+						: state?.kind === "compare-body"
+							? "compare-body"
+							: state?.kind
+				}
 			>
 				{state?.kind === "push-auth" ? (
 					<>
@@ -175,9 +227,23 @@ export function PrSetupDialog({
 								<CommandRow key={command} command={command} onRun={onRun} />
 							))}
 						</div>
-						{state.compareUrl ? (
+						{state.omittedBody === undefined ? null : (
+							<>
+								<p className="tr-text-ui text-text-muted">{t("panels.prSetup.bodyDescription")}</p>
+								<DescriptionBox body={state.omittedBody} />
+							</>
+						)}
+						{state.compareUrl && state.omittedBody === undefined ? (
 							<p className="tr-text-ui text-text-muted">{t("panels.prSetup.compareHint")}</p>
 						) : null}
+					</>
+				) : state?.kind === "compare-body" ? (
+					<>
+						<DialogHeader>
+							<DialogTitle>{t("panels.prSetup.bodyTitle")}</DialogTitle>
+							<DialogDescription>{t("panels.prSetup.bodyDescription")}</DialogDescription>
+						</DialogHeader>
+						<DescriptionBox body={state.body} />
 					</>
 				) : null}
 				<DialogFooter>
@@ -194,9 +260,24 @@ export function PrSetupDialog({
 							{t("panels.prSetup.openCompare")}
 						</a>
 					) : null}
-					<Button iconLeft={RefreshCw} data-testid="open-pr-setup-retry" onClick={onRetry}>
-						{t("panels.prSetup.tryAgain")}
-					</Button>
+					{state?.kind === "compare-body" ? (
+						<a
+							data-testid="open-pr-setup-compare"
+							href={state.compareUrl}
+							target="_blank"
+							rel="noopener noreferrer"
+							onClick={onCompareOpen}
+							className={buttonVariants({ variant: "outline", size: "l" })}
+						>
+							<ExternalLink aria-hidden />
+							{t("panels.prSetup.openCompare")}
+						</a>
+					) : null}
+					{state?.kind === "compare-body" ? null : (
+						<Button iconLeft={RefreshCw} data-testid="open-pr-setup-retry" onClick={onRetry}>
+							{t("panels.prSetup.tryAgain")}
+						</Button>
+					)}
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>

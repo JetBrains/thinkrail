@@ -257,18 +257,27 @@ export function gitlabProject(remoteUrl: string): string | null {
 	return match?.[1] ?? null;
 }
 
-function withBody(url: string, key: string, body: string): string {
-	const chars = Array.from(body);
-	const urlWith = (count: number) =>
-		count ? `${url}&${new URLSearchParams({ [key]: chars.slice(0, count).join("") })}` : url;
-	let low = 0;
-	let high = chars.length;
-	while (low < high) {
-		const mid = Math.ceil((low + high) / 2);
-		if (urlWith(mid).length <= COMPARE_URL_LIMIT) low = mid;
-		else high = mid - 1;
-	}
-	return urlWith(low);
+/**
+ * A compare/new-MR URL and, when the description could not ride in it, that description.
+ *
+ * A body is carried whole or not at all. Cutting it to a prefix that happens to fit would hand
+ * back a URL whose description looks complete but stops mid-sentence, and every caller that opens
+ * it — `useShipRunner` in a new tab, `PrSetupDialog` as a link — has no way to tell the difference.
+ * A CJK character encodes to 9 URL characters, so for those bodies the cut point is roughly a
+ * tenth of the ASCII one: silent against a 4,000-character budget only for the languages that
+ * never hit it. `omittedBody` is how the full text reaches the client instead.
+ */
+export interface CompareUrl {
+	url: string;
+	/** Set when the body did not fit: the caller must deliver it some other way (the client copies it). */
+	omittedBody?: string;
+}
+
+function withBody(url: string, key: string, body: string): CompareUrl {
+	if (!body) return { url };
+	const full = `${url}&${new URLSearchParams({ [key]: body })}`;
+	if (full.length <= COMPARE_URL_LIMIT) return { url: full };
+	return { url, omittedBody: body };
 }
 
 export function gitlabNewMrUrl(
@@ -277,7 +286,7 @@ export function gitlabNewMrUrl(
 	branch: string,
 	title: string,
 	body: string,
-): string {
+): CompareUrl {
 	const query = new URLSearchParams({
 		"merge_request[source_branch]": branch,
 		"merge_request[target_branch]": baseRef(baseBranch),
@@ -303,13 +312,21 @@ export function onBaseBranch(
 	return remote !== null && ws.baseBranch === `${remote}/${ws.branch}`;
 }
 
+/** The compare hand-off fields: the URL always, the description only when it did not fit in it. */
+function compareHandoff(value: CompareUrl): Pick<OpenPrResult, "compareUrl" | "omittedBody"> {
+	return {
+		compareUrl: value.url,
+		...(value.omittedBody === undefined ? {} : { omittedBody: value.omittedBody }),
+	};
+}
+
 export function compareQuickPullUrl(
 	slug: string,
 	baseBranch: string,
 	branch: string,
 	title: string,
 	body: string,
-): string {
+): CompareUrl {
 	const base = baseRef(baseBranch);
 	const query = new URLSearchParams({ quick_pull: "1", title });
 	return withBody(
@@ -529,7 +546,7 @@ export async function openPr(
 		return {
 			action: "compare",
 			branch: ws.branch,
-			compareUrl: gitlabNewMrUrl(gitlab, ws.baseBranch, ws.branch, title, await prBody()),
+			...compareHandoff(gitlabNewMrUrl(gitlab, ws.baseBranch, ws.branch, title, await prBody())),
 			dirtyFiles,
 		};
 	}
@@ -558,7 +575,7 @@ export async function openPr(
 	return {
 		action: "compare",
 		branch: ws.branch,
-		compareUrl: compareQuickPullUrl(slug, ws.baseBranch, ws.branch, title, body),
+		...compareHandoff(compareQuickPullUrl(slug, ws.baseBranch, ws.branch, title, body)),
 		...(problem ? { ghProblem: problem } : {}),
 		dirtyFiles,
 	};
