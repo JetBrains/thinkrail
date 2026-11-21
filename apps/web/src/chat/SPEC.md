@@ -1403,7 +1403,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   the line says each request lists at most `SKILL_LISTING_MAX_TOKENS` of it and the agent searches for the
   rest, since the model's window sets the budget in between. Past that ceiling it turns warning colour with
   a hint to switch unused groups off. All props-driven; behavior detail lives in the components' jsdoc.
-- **Attachments (`promptImages.tsx`, `attachments.ts`)** — any file, picked, pasted or dropped, joins one
+- **Attachments (chat-ui's `promptImages.tsx` and `attachments.ts`)** — any file, picked, pasted or dropped, joins one
   draft beside the images (`PromptImagesState.files`: picked bytes or a local path; browser-local, never
   persisted). **Classification:** contracts' `attachmentImageType` — a raster image by type or extension,
   HEIC, TIFF and AVIF included, so one the webview cannot decode keeps its error chip on every path — takes

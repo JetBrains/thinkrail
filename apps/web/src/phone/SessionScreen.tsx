@@ -52,7 +52,7 @@ import { useModelCatalog } from "../chat/useModelCatalog";
 import { useSessionStats } from "../chat/useSessionStats";
 import { useTranscriptSync } from "../chat/useTranscriptSync";
 import { hydrateStandaloneChat } from "../shell/chatReconciliation";
-import { EMPTY_RUNTIME, selectCanRenameChat, useAppStore } from "../store";
+import { EMPTY_RUNTIME, selectCanRenameChat, toast, useAppStore } from "../store";
 import { getTransport, respondToTool } from "../transport";
 import { reasonOf, singleFlight } from "./async";
 import { ResourcesTool, SkillsTool } from "./ChatTools";
@@ -230,7 +230,10 @@ export function SessionScreen({
 
 	const pickerRef = useRef<ModelEffortPickerHandle>(null);
 	const externalPicker = useMemo<ModelEffortPickerHandle>(
-		() => ({ open: (query) => pickerRef.current?.open(query) }),
+		() => ({
+			open: (query) => pickerRef.current?.open(query),
+			focus: () => pickerRef.current?.focus(),
+		}),
 		[],
 	);
 	const chats = useWorkspaceChats(client, workspaceId, items);
@@ -550,6 +553,9 @@ export function SessionScreen({
 											ref={composerRef}
 											value={draft}
 											onChange={(text) => useAppStore.getState().setChatDraft(sessionId, text)}
+											readDraft={() => useAppStore.getState().sessions[sessionId]?.draft ?? ""}
+											acceptsFiles={false}
+											onAttachmentNotice={toast.info}
 											imageOwner={imageOwner}
 											isStreaming={isStreaming}
 											awaitingResponse={awaitingToolCallId != null}

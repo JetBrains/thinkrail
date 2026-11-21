@@ -22,6 +22,9 @@ function render(externalModelPicker?: ModelEffortPickerHandle, divider?: boolean
 			<Composer
 				value=""
 				onChange={() => {}}
+				readDraft={() => ""}
+				acceptsFiles={false}
+				onAttachmentNotice={() => {}}
 				isStreaming={false}
 				awaitingResponse={false}
 				growthLimit="half-chat"
@@ -55,7 +58,7 @@ test("without a slot the composer renders the desktop model popover trigger", ()
 });
 
 test("an external picker leaves the field free of model controls", () => {
-	const markup = render({ open: () => {} });
+	const markup = render({ open: () => {}, focus: () => {} });
 	expect(markup).not.toContain('data-testid="model-selector"');
 	expect(markup).toContain('data-testid="chat-input"');
 });

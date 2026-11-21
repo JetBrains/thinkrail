@@ -104,7 +104,7 @@ the tab badged with the Needs-you count; a tap lands in that chat (a row whose c
   models); a tap picks and closes, and the composer's `/model` opens it — send / steer / follow-up /
   interrupt through the same `session.*` methods as the IDE, tool-card answers through
   `session.respondToTool`). Every chat action reports its failure in one line above the field ("what failed: why"; `async.ts`'s `reasonOf` words a read-only or revoked refusal and a closed connection in the phone's locale instead of the host's English):
-  the draft and its images are the store's `draft` / `promptImages`, as in the IDE, so back or a chat switch keeps them; a message that did not go returns to the field ahead of anything typed since, with its images; a failed model or
+  the draft and its images are the store's `draft` / `promptImages`, as in the IDE, so back or a chat switch keeps them; images attach as on desktop, but files never do (`acceptsFiles` off: the workspace upload is the host's HTTP door, which a paired device does not reach); a message that did not go returns to the field ahead of anything typed since, with its images; a failed model or
   effort change reverts only while it is still the shown choice; queue edits and stop run one at a time
   (`async.ts`'s `singleFlight`), and an interrupt sent while a stop is still in flight stays in the field. Extension cards are the IDE's own registry (`registerWebExtensions`), with the
   store's `hostState.awaitingToolCallId` so only the call the agent waits on accepts an answer. An extension
