@@ -2,11 +2,17 @@ import {
 	type ComponentType,
 	type LazyExoticComponent,
 	lazy,
+	type ReactNode,
 	useCallback,
 	useMemo,
 	useState,
 } from "react";
-import { type ResourceHost, useResourceEnvironment, useResourceHost } from "../host";
+import {
+	ResourceEnvironmentProvider,
+	type ResourceHost,
+	useResourceEnvironment,
+	useResourceHost,
+} from "../host";
 import {
 	type ResourceDescriptor,
 	type ResourceDiffProps,
@@ -83,11 +89,18 @@ export function usePreloadResourceView(): (resource: ResourceDescriptor) => void
 	);
 }
 
+function FocusHome({ children }: { children: ReactNode }) {
+	const environment = useResourceEnvironment();
+	const home = useMemo(() => ({ ...environment, focusHome: true }), [environment]);
+	return <ResourceEnvironmentProvider value={home}>{children}</ResourceEnvironmentProvider>;
+}
+
 export function RendererView({
 	renderer,
 	mobile,
+	focusHome = false,
 	...props
-}: ResourceViewProps & { renderer: ResourceRenderer; mobile: boolean }) {
+}: ResourceViewProps & { renderer: ResourceRenderer; mobile: boolean; focusHome?: boolean }) {
 	const key = rendererImplementationKey(renderer.id, mobile);
 	let Component = viewComponents.get(key);
 	if (!Component) {
@@ -95,7 +108,8 @@ export function RendererView({
 		viewComponents.set(key, Component);
 		lazyViews.set(key, Component);
 	}
-	return <Component {...props} />;
+	const view = <Component {...props} />;
+	return focusHome ? <FocusHome>{view}</FocusHome> : view;
 }
 
 export function RendererDiff({

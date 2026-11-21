@@ -6,14 +6,14 @@ export const DOUBLE_CLICK_SETTLE_MS = 250;
 
 let lastFirstClickAt = Number.NEGATIVE_INFINITY;
 
-export function firstClickOnly(
-	run: () => void,
+export function firstClickOnly<E extends { detail: number }>(
+	run: (event: E) => void,
 	now: () => number = () => performance.now(),
-): (event: { detail: number }) => void {
+): (event: E) => void {
 	return (event) => {
 		if (event.detail > 1) return;
 		if (event.detail === 1) lastFirstClickAt = now();
-		run();
+		run(event);
 	};
 }
 
@@ -359,6 +359,7 @@ export function hasLayer(root: Pick<Document, "querySelector">, selector: string
 }
 
 const TEXT_ENTRY_ROOT_SELECTOR = ".monaco-editor, .xterm";
+export const READ_ONLY_TEXT_SELECTOR = '[data-text-entry="false"]';
 
 export function isTextEntryTarget(target: EventTarget | null): boolean {
 	const element = target as {
@@ -366,10 +367,13 @@ export function isTextEntryTarget(target: EventTarget | null): boolean {
 		tagName?: string;
 		closest?: (selector: string) => Element | null;
 	} | null;
+	if (element === null) return false;
+	const within = (selector: string) =>
+		typeof element.closest === "function" && element.closest(selector) !== null;
+	if (within(READ_ONLY_TEXT_SELECTOR)) return false;
 	return (
-		element !== null &&
-		(element.isContentEditable === true ||
-			/^(INPUT|TEXTAREA|SELECT)$/.test(element.tagName ?? "") ||
-			(typeof element.closest === "function" && element.closest(TEXT_ENTRY_ROOT_SELECTOR) !== null))
+		element.isContentEditable === true ||
+		/^(INPUT|TEXTAREA|SELECT)$/.test(element.tagName ?? "") ||
+		within(TEXT_ENTRY_ROOT_SELECTOR)
 	);
 }

@@ -46,7 +46,7 @@ import {
 } from "./artifactsModel";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { deleteEntry, pasteInto, renameEntry } from "./fileTreeActions";
-import { openFileInTab } from "./openTabs";
+import { KEYBOARD_OPEN, type OpenTabOptions, openFileInTab, treeOpenFocus } from "./openTabs";
 import { TreeRow } from "./TreeRow";
 import { Tree, treeRowControlProps, useTreeItem } from "./treeNavigation";
 import { useWorkspaceRead } from "./useWorkspaceRead";
@@ -122,10 +122,11 @@ export function ArtifactsPanel({
 			expanded.has(SMART_UNATTACHED)
 		: (tree?.some((node) => node.kind === "dir" && expanded.has(node.path)) ?? false);
 	const requestRemoval: RequestRemoval = (path, kept) => setRemoval({ path, kept, open: true });
-	const openKept = (path: string) => void openFileInTab(workspaceId, path, "keep");
+	const openKept = (path: string) =>
+		void openFileInTab(workspaceId, path, "keep", undefined, KEYBOARD_OPEN);
 	const openArtifactKept = (path: string) => {
 		const artifact = snapshot?.artifacts.find((entry) => entry.path === path);
-		if (artifact) void openArtifact(workspaceId, artifact, "keep");
+		if (artifact) void openArtifact(workspaceId, artifact, "keep", KEYBOARD_OPEN);
 	};
 
 	if (unsupported) {
@@ -404,7 +405,8 @@ function ArtifactRowView({
 	});
 	const Icon = artifactIcon(row);
 	const restore = () => void restoreDeletedArtifact(workspaceId, artifact);
-	const open = (intent: "preview" | "keep") => void openArtifact(workspaceId, artifact, intent);
+	const open = (intent: "preview" | "keep", options?: OpenTabOptions) =>
+		void openArtifact(workspaceId, artifact, intent, options);
 	const treeItem = useTreeItem(artifact.path, {
 		level: 1,
 		label: name,
@@ -463,7 +465,7 @@ function ArtifactRowView({
 										{...treeItem}
 										data-testid="artifact-open"
 										data-focus-row-primary
-										onClick={firstClickOnly(() => open("preview"))}
+										onClick={firstClickOnly((event) => open("preview", treeOpenFocus(event)))}
 										onDoubleClick={() => open("keep")}
 										onKeyDown={onRowKeyDown}
 										className={cn(
@@ -592,7 +594,16 @@ function OutputNode({
 						onClick={
 							isDir
 								? () => setExpanded((value) => !value)
-								: firstClickOnly(() => void openFileInTab(workspaceId, node.path, "preview"))
+								: firstClickOnly(
+										(event) =>
+											void openFileInTab(
+												workspaceId,
+												node.path,
+												"preview",
+												undefined,
+												treeOpenFocus(event),
+											),
+									)
 						}
 						onDoubleClick={
 							isDir ? undefined : () => void openFileInTab(workspaceId, node.path, "keep")

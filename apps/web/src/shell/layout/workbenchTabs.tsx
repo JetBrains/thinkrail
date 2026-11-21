@@ -724,6 +724,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 							icon={X}
 							label={t("workbench.tab.closeNamed", { name })}
 							tabIndex={-1}
+							data-hint-reveal
 							data-testid={tab.kind === "terminal" ? "terminal-tab-close" : "editor-tab-close"}
 							onClick={onClose}
 							className="mr-4 shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"

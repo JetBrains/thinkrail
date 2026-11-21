@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef } from "react";
 import type { ResourceViewProps, ReviewThread } from "../../registry";
 import { ReviewComposer } from "../../support/ReviewComposer";
 import { ReviewThreadCard } from "../../support/ReviewThreadCard";
+import { READING_SURFACE_CLASS, useReadingSurface } from "../../support/readingSurface";
 import { revealReviewCard } from "../../support/revealFocus";
 import { contentStamp, useStampedComposer } from "../reviewComposerState";
 import { StaleComposerNotice } from "../StaleComposerNotice";
@@ -31,6 +32,7 @@ export default function JsonView({
 	onPlacedThreadIds,
 }: ResourceViewProps) {
 	const t = useT();
+	const reading = useReadingSurface({ label: resource.path });
 	const text = content.kind === "text" ? content.text : "";
 	const document = useMemo(() => scanJson(text), [text]);
 	const composer = useStampedComposer<JsonNode>(contentStamp(content));
@@ -103,7 +105,8 @@ export default function JsonView({
 		<div
 			ref={rootRef}
 			data-testid="json-view"
-			className="h-full overflow-auto bg-container-workspace-bg p-12"
+			{...reading}
+			className={`h-full overflow-auto bg-container-workspace-bg p-12 ${READING_SURFACE_CLASS}`}
 		>
 			{notice ? (
 				<div data-testid="json-dialect" className="pb-8 tr-text-metadata text-text-muted">

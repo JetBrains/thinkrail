@@ -6,7 +6,7 @@ import { chatDisplayName, copyText } from "../lib";
 import { canStartProjectlessChat, startProjectlessChat } from "../panels/chatActions";
 import { enterDefaultWorkspace } from "../panels/defaultWorkspace";
 import { startChatInTab } from "../panels/openChat";
-import { openFileInTab } from "../panels/openTabs";
+import { KEYBOARD_OPEN, openFileInTab } from "../panels/openTabs";
 import { availableSettings, useSettingsCatalogContext } from "../panels/settingsCatalog";
 import { settingsNavGroups } from "../panels/settingsNav";
 import {
@@ -102,7 +102,8 @@ function useWorkspaceBackfill(): void {
 const hostHitTargets: HostHitTargets = {
 	navigateToWorkspace: paletteNavigator.navigateToWorkspace,
 	loadWorkspaceRow: paletteNavigator.loadWorkspaceRow,
-	openFile: (workspaceId, path) => openFileInTab(workspaceId, path, "keep"),
+	openFile: (workspaceId, path) =>
+		openFileInTab(workspaceId, path, "keep", undefined, KEYBOARD_OPEN),
 	openSpec: (workspaceId, path, line) =>
 		useAppStore.getState().requestSpecView(workspaceId, path, line),
 	openChatLocation: (location) => useAppStore.getState().requestChatLocation(location),

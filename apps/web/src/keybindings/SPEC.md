@@ -179,7 +179,7 @@ binding does.
 - **A local command** is `{ id, scope, chords }` acting only while focus is inside its element. The app
   declares them in `localKeys.ts` (`APP_LOCAL_COMMANDS`, ids `<scope>.<action>`, one direction per
   command) under `LOCAL_SCOPES` — `tabs`, `rails`, `trees`, `review`, `review.surface`, `transcript`,
-  `composer`, `history`, `palette`, `findInFiles`, `settings.nav`, `settings`, `settings.list`, each titled
+  `reader`, `composer`, `history`, `palette`, `findInFiles`, `settings.nav`, `settings`, `settings.list`, each titled
   for the editor (`where`, `inside`). An
   extension command with a `scope` is local too ([[module-extension-api]]); its id and scope must start
   with `<extension name>.`, and the resolver drops any extension command, global or local, that does not
@@ -192,6 +192,14 @@ binding does.
   `rails`, `trees`, `review.surface`, `transcript` and the three Settings scopes include it, so one rebind
   applies in every element.
   A scope another includes is not an element of its own: it never appears in the `local` map.
+- **Shared scope `reading`** (`@thinkrail/ui/reading`'s `READING_COMMANDS`: `reading.top` G and
+  `reading.bottom` Shift+G, by `code`) holds the letters that go to an end; `transcript` and `reader` include
+  it. **`reader`** is the element of a file being read ([[module-resource-renderers]], *Reading keys*: its
+  reading surfaces, the Markdown preview's scroller and the read-only editor declare
+  `data-key-scope="reader"`); it has no commands of its own and includes `arrows` and `reading`. The
+  catalog's `reader` surface ("Reading a file") lists them, its own locked rows (Space/Shift+Space and
+  PgUp/PgDn a page, Esc back to the Files tree), and the transcript's rows show the same twins; a twin row
+  points at an `arrows` or a `reading` command.
 - **Settings scopes** ([[submodule-web-settingskit]]): `settings.nav` on the section tablist
   (`settings.nav.search`, S and `/`; no other letter, so F stays hint mode's), `settings` on the content
   pane (`settings.reset`, Delete resets the focused row) and `settings.list` on each list inside it

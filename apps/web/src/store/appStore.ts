@@ -375,12 +375,15 @@ export interface ComposerFocusRequest {
 	dismissHistory?: true;
 }
 
+export type TabOpenFocus = "content" | "none";
+
 export interface LayoutOpenOptions {
 	targetGroupId?: string;
 	activate?: boolean;
 	navigation?: CenterNavigationStamp | null;
 	countNavigation?: boolean;
 	claimPreview?: boolean;
+	focus?: TabOpenFocus;
 }
 
 export type LayoutIntent =
@@ -395,6 +398,7 @@ export type LayoutIntent =
 			claimPreview?: boolean;
 			navigation?: CenterNavigationStamp | null;
 			countNavigation?: boolean;
+			focus?: TabOpenFocus;
 	  }
 	| { id: string; kind: "close"; workspaceId: string; tabId: string }
 	| {
@@ -1922,6 +1926,7 @@ function layoutOpenIntentFields(options: LayoutOpenOptions) {
 		...(Object.hasOwn(options, "navigation") ? { navigation: options.navigation } : {}),
 		...(options.countNavigation !== undefined ? { countNavigation: options.countNavigation } : {}),
 		...(options.claimPreview ? { claimPreview: true } : {}),
+		...(options.focus ? { focus: options.focus } : {}),
 	};
 }
 

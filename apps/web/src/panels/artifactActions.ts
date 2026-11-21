@@ -4,7 +4,7 @@ import { fileName, tupleKey } from "../lib";
 import { selectAttentionCenterTab, toast, useAppStore } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
 import { mentionText } from "./artifactsModel";
-import { openFileInTab } from "./openTabs";
+import { type OpenTabOptions, openFileInTab } from "./openTabs";
 
 export function selectArtifactMentionTarget(
 	state: ReturnType<typeof useAppStore.getState>,
@@ -71,11 +71,14 @@ export async function openArtifact(
 	workspaceId: string,
 	artifact: WorkspaceArtifact,
 	intent: "preview" | "keep",
+	options?: OpenTabOptions,
 ): Promise<void> {
-	if (artifact.state !== "deleted") return openFileInTab(workspaceId, artifact.path, intent);
+	if (artifact.state !== "deleted") {
+		return openFileInTab(workspaceId, artifact.path, intent, undefined, options);
+	}
 	const navigation = useAppStore.getState().beginCenterNavigation(workspaceId);
 	if (!(await restoreDeletedArtifact(workspaceId, artifact))) return;
-	await openFileInTab(workspaceId, artifact.path, intent, navigation);
+	await openFileInTab(workspaceId, artifact.path, intent, navigation, options);
 }
 
 export async function discardArtifact(workspaceId: string, path: string): Promise<void> {

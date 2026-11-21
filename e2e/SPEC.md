@@ -430,7 +430,10 @@ opens a Radix dropdown (whose open menu then scopes the labels) and focuses the 
 the first letter narrows the labels, Backspace restores them and Shift on the last letter only focuses a
 Files row; an open Settings dialog scopes the labels and survives the Esc that leaves hint mode; plain `F`
 labels Settings from a section tab, a content row and a search result, and typing a label presses it
-(nothing in Settings binds `F`); and
+(nothing in Settings binds `F`); while labels show a tab's hover-only × is revealed (opacity 1, a dashed
+outline) and labelled, its label closes that tab and focus lands on the neighbouring tab, and the × hides
+again; Shift on a Resources row's revealed Stop label (a mocked running command) focuses Stop, which
+stays shown, without stopping it; and
 Settings → Extensions & skills lists Hint mode without tool chips, switching it off silences both keys and drops
 its cheatsheet rows until it is switched back on. A label is found by its position at the target's
 top-left; a target must be scrolled into view and its panel's entrance animation finished before the
@@ -448,13 +451,18 @@ and `F` still starts hint mode. Each test resets the overrides (and re-enables h
 wire in `afterEach`.
 `keyboard-chat.spec.ts` pins the chat transcript's keyboard model on seeded chats: `Mod+↑` from the
 composer onto the newest message and Esc back with the draft and caret intact (a multi-line draft first
-takes the caret to its start), ↑/↓ with k/j and Home/End, →/← and l/h expanding an Activity and walking
+takes the caret to its start), ↑/↓ with k/j and Home/End, ↓/j scrolling a message taller than the
+feed 40 px at a time with the cursor kept until its end shows and only then stepping on (k scrolls it
+back), Shift+Space / Space / PgUp paging the feed by the viewport less a line, Shift+G / Home reaching the
+ends (the latest edge following), →/← and l/h expanding an Activity and walking
 its nested Thinking and tool steps, a keyboard expand of the newest Activity in a chat shortened by the
 bottom Terminal and focus entering an on-screen step of it leaving follow without scrolling the focused
 header or step away, C (clipboard), O (a preview tab) and the Shift+F10 item menu, Tab
 walking only the focused item's controls then leaving, PgUp/PgDn from the composer paging the transcript
 with focus kept, Latest from the keyboard and a history jump landing on the message, focus parked on the
-feed when a wheel scroll unmounts the focused row and the next key bringing it back, newest-first order,
+feed when a wheel scroll unmounts the focused row and the next key bringing it back, newest-first order
+(and, in a 200-message newest-first chat whose old messages render taller than their estimates, End
+reaching the true bottom on the oldest message and Home the top),
 the history overlay's Delete (caret at the end only) and entry menu beside its Tab zoom, the Resources
 inspector's inert transcript and the @ popup taking Escape first, Stop returning focus to the composer
 (a replayed `agent_start` on the intercepted wire keeps the chat streaming without an agent), and h/l on
@@ -468,8 +476,25 @@ filter's row, the third goes to the section list, the fourth closes Settings; an
 also pins the Esc ladder: the TODO input → its panel → the chat feed (no ring, the center's accent line),
 and a Files row, the chat's own tab and a top-bar button straight to the feed; with a file in the center,
 a Files row, the file's tab and a terminal tab land in its Monaco editor with the tab unchanged, and
-Monaco keeps its Esc; a dialog's button closes the dialog and climbs no further; on Project Home the
+Esc in that read-only editor goes back to the file's row; a dialog's button closes the dialog and climbs no further; on Project Home the
 Projects tree lands in the main pane.
+`keyboard-reading.spec.ts` pins reading files from the keyboard: Enter on a Files row opens the file with
+focus in it (the Markdown block cursor), Esc returns to the row (reopening its folder if it was collapsed
+meanwhile), a click on a row keeps focus in the tree, and a search-palette file pick lands focus in the file
+(a CSV's table); in a Markdown preview j walks the blocks, ↓ scrolls a tall fenced block 40 px at a time
+before the cursor moves on (only once its end shows), Space / Shift+Space page and Shift+G / g reach the ends
+with the cursor on the last / first block; a CSV scrolls by j (40 px), Space (a page) and l / h sideways,
+Shift+G reaches the bottom and Esc returns to its row, and in a 300-row CSV whose last rows are multiline
+Shift+G still reaches the true bottom (settled) and g the top; and a read-only code file moves the caret with the view
+on j / k (no "Cannot edit" message), pages on Space, reaches its last / first line on Shift+G / g, shows hint
+labels on `F` (hint mode's Esc keeps the editor) and returns to the tree on the next Esc, and once a wheel
+scrolls away from the caret, j / ↑ step from the first / last visible line instead, so Shift+Mod+M comments on
+the text in view — also down one long wrapped line, where the caret's line is on screen but its row is not
+(j leaves the caret on the top row, ↑ near the bottom); in a 600-line code file Space / Shift+Space scroll
+the view by the viewport less 40 px from where it is, also after a wheel scrolled away from the caret, keep
+the caret while it shows and else put it on the first fully visible line (j steps from there), and Space
+near the end stops at the end with the caret kept; an HTML file opened with Enter leaves focus on its tab,
+never in the frame, so F6 / Shift+F6, the Esc ladder (toolbar, then the row), Mod+1 and Mod+Shift+E all still move it.
 `settings-keyboard.spec.ts` pins the Settings frame's keys: opening lands on the current section's tab, and
 Tab goes search → the one tab stop of the section list → the section's first row, which is the content's
 one row stop before any row is focused, after a section change too; ↑/↓, j/k and Home/End open a section

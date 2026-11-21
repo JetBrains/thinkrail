@@ -244,7 +244,7 @@ test("Esc on a side or bottom rail's tool button climbs to the chat feed", async
 	}
 });
 
-test("Esc on a Files row or a tab lands in the editor of the file the center shows, and Monaco keeps its Esc", async ({
+test("Esc on a Files row or a tab lands in the editor of the file the center shows, and Esc in the read-only editor goes back to its row", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -271,7 +271,8 @@ test("Esc on a Files row or a tab lands in the editor of the file the center sho
 	await expect(notes).toHaveAttribute("data-active", "true");
 
 	await page.keyboard.press("Escape");
-	await expect.poll(inEditor).toBe(true);
+	await expect(row).toHaveText(/^notes\.txt/);
+	await expect(notes).toHaveAttribute("data-active", "true");
 
 	await notes.getByRole("tab").focus();
 	await page.keyboard.press("Escape");

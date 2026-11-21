@@ -4,6 +4,7 @@ import {
 	ARROW_TWINS_SCOPE,
 	type LocalKeyCommand,
 } from "@thinkrail/ui/keyboard";
+import { READING_COMMANDS, READING_SCOPE } from "@thinkrail/ui/reading";
 import type { PhysicalChord } from "./keybindings";
 
 export interface LocalScopeInfo {
@@ -19,6 +20,10 @@ export const LOCAL_SCOPES = {
 	[ARROW_TWINS_SCOPE]: {
 		where: "shortcuts.scope.arrows.where",
 		inside: "shortcuts.scope.arrows.inside",
+	},
+	[READING_SCOPE]: {
+		where: "shortcuts.scope.reading.where",
+		inside: "shortcuts.scope.reading.inside",
 	},
 	tabs: {
 		where: "shortcuts.scope.tabs.where",
@@ -45,7 +50,12 @@ export const LOCAL_SCOPES = {
 	transcript: {
 		where: "shortcuts.scope.transcript.where",
 		inside: "shortcuts.scope.transcript.inside",
-		includes: ARROWS,
+		includes: [ARROW_TWINS_SCOPE, READING_SCOPE],
+	},
+	reader: {
+		where: "shortcuts.scope.reader.where",
+		inside: "shortcuts.scope.reader.inside",
+		includes: [ARROW_TWINS_SCOPE, READING_SCOPE],
 	},
 	composer: {
 		where: "shortcuts.scope.composer.where",
@@ -120,6 +130,7 @@ export const APP_LOCAL_COMMANDS: readonly LocalCommandDefaults[] = [
 		title: null,
 		chords,
 	})),
+	...READING_COMMANDS.map(({ id, chords }) => ({ id, scope: READING_SCOPE, title: null, chords })),
 	local("tabs", "close", DELETE),
 	local("tabs", "moveBefore", { ...LEFT, ...MOVE }),
 	local("tabs", "moveAfter", { ...RIGHT, ...MOVE }),
@@ -175,12 +186,14 @@ function scopeDefaults(scope: AppLocalScope): readonly LocalKeyCommand[] {
 
 export const LOCAL_KEY_DEFAULTS: Readonly<Record<AppLocalScope, readonly LocalKeyCommand[]>> = {
 	[ARROW_TWINS_SCOPE]: scopeDefaults(ARROW_TWINS_SCOPE),
+	[READING_SCOPE]: scopeDefaults(READING_SCOPE),
 	tabs: scopeDefaults("tabs"),
 	rails: scopeDefaults("rails"),
 	trees: scopeDefaults("trees"),
 	review: scopeDefaults("review"),
 	"review.surface": scopeDefaults("review.surface"),
 	transcript: scopeDefaults("transcript"),
+	reader: scopeDefaults("reader"),
 	composer: scopeDefaults("composer"),
 	history: scopeDefaults("history"),
 	palette: scopeDefaults("palette"),

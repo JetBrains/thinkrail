@@ -482,14 +482,32 @@ content and their own controls, which a treeitem's name would flatten and its ro
 - **Built from data, not the DOM.** The visible items derive from the projected rows plus the fold cache
   (`foldOverride`), in visual order for both message orders (rows reverse, steps inside a row never do),
   so a move can target a row Virtuoso unmounted. The sidebar trees' rule (`lib`'s `resolveTreeMove`)
-  resolves ↑/↓ and k/j, Home/End, → and l (expand, else first child), ← and h (collapse, else parent);
-  PgUp/PgDn go to the farthest mounted item within one viewport; Enter toggles. Keys are unmodified,
-  IME-safe and read only on the article itself (inner controls keep theirs). The arrow twins, C
-  (`transcript.copy`) and O (`transcript.open`) are rebindable local keys of scope `transcript`
-  ([[submodule-web-keybindings]], *Local keys*), matched by physical `code` (a Russian layout's `с`
-  copies) through `useLocalKeys`, which `useTranscriptNavigation` hands the controller on every render;
-  the arrows, Home/End, PgUp/PgDn, Enter and Esc are locked. Expansion clicks the item's own toggle
-  (`data-activity-node-toggle`, `data-chat-item-toggle`), so fold-geometry preservation still runs.
+  resolves → and l (expand, else first child), ← and h (collapse, else parent); Enter toggles.
+- **Reading keys** (user, 2026-11-20; `@thinkrail/ui/reading`, [[module-ui]]). ↓/j and ↑/k **scroll
+  before they step**: while the current item's own extent (up to its first nested item, so an expanded
+  group's header steps into its steps) reaches past the viewport edge in that direction, the feed
+  scrolls `READING_LINE` (40 px), clamped so the edge lands exactly in view; only then does the cursor
+  move to the neighbouring item, revealed minimally (a short item whole, a tall one its near edge plus a
+  line), so a tall message is read to its end instead of skipped. A cursor item wholly off screen
+  re-anchors to the first (↓) or last (↑) visible item without scrolling. Space/PgDn and Shift+Space/PgUp
+  scroll a page (`readingPage`: the viewport less a line) and keep the cursor while its item still
+  shows, else move it to the first visible item. g/Home and Shift+G/End go to the ends: the cursor
+  takes the first or last item and the feed scrolls to that extreme — an item of a latest row through
+  `scrollToLatest`, so reaching it re-follows; a history edge at once (a mounted target takes focus
+  synchronously, so Home then j still walks from the first item). A history bottom then converges:
+  `revealRow` aligns the last row's end and, on "found", the feed takes the exact extreme again — one jump
+  uses Virtuoso's estimated `scrollHeight` and stops short of history taller than its estimate; a top
+  needs no second pass, as nothing above `scrollTop` 0 can grow. Line and page scrolls are
+  keyboard-provenance scrolls through the scroll hook's `keyboardScrollBy` / `scrollPage` (a reader
+  moving toward history detaches, one reaching the latest edge re-follows), never `revealElement`.
+  PgUp/PgDn used to jump to the farthest mounted item in a viewport (replaced, 2026-11-20). Keys are
+  unmodified, IME-safe and read only on the article itself (inner controls keep theirs). The arrow twins, the reading twins g / Shift+G (`reading.top` /
+  `reading.bottom`, shared scope `reading`), C (`transcript.copy`) and O (`transcript.open`) are
+  rebindable local keys of scope `transcript` ([[submodule-web-keybindings]], *Local keys*), matched by
+  physical `code` (a Russian layout's `с` copies) through `useLocalKeys`, which `useTranscriptNavigation`
+  hands the controller on every render; the arrows, Home/End, PgUp/PgDn, Space, Enter and Esc are
+  locked. Expansion clicks the item's own toggle (`data-activity-node-toggle`, `data-chat-item-toggle`),
+  so fold-geometry preservation still runs.
 - **Item actions.** C copies the message source, a thought's text or a tool call's result text (nothing
   for an Activity group, a running tool or a skill/review card) with a "Copied" toast; O opens the path of
   `read`/`edit`/`write` and the single-spec tools (`spec_create`/`spec_get`/`spec_update`) through the same
@@ -503,9 +521,10 @@ content and their own controls, which a treeitem's name would flatten and its ro
   (`focusAndReveal`; unconfirmed with the user, the recommended answer): the question is the chat's focus
   home. The controller learns of it through the `waitingQuestion()` option `ChatView` passes down (the
   dock's claim, else `null`), and `transcriptKeyAction` turns Esc into `question` when one waits.
-- **Scrolling stays the controller's.** A mounted target that sticks out is revealed with
-  `revealElement` (`nearest`, user-navigation; nested items keep the breadcrumb inset), an unmounted one
-  with `revealRow` and focused on "found"; an unmounted latest row itself returns to the edge instead, so
+- **Scrolling stays the controller's.** A line step reveals a mounted target through `keyboardScrollBy`
+  (above); a Tab or ←/→ target that sticks out is revealed with `revealElement` (`nearest`,
+  user-navigation; nested items keep the breadcrumb inset in both), an unmounted one with `revealRow`
+  and focused on "found"; an unmounted latest row itself returns to the edge instead, so
   reaching the newest item re-follows rather than detaching. Focus always uses `preventScroll`, and a
   target already on screen only moves focus, so walking visible items never detaches a following reader
   — except on the latest row: a keyboard expand there (→/l, Enter, the menu's Expand) and focus entering
@@ -535,7 +554,8 @@ content and their own controls, which a treeitem's name would flatten and its ro
   for the feed: the feed carries `data-focus-park`, the shell's landing for a field's Esc
   ([[submodule-web-shell]], *Esc leaves a text field*), so the composer has no code for it. Focus rests on
   the feed with no ring and the draft and caret stay; `F` starts hint mode at once and ↑/↓ or j/k start
-  walking from the cursor (the parked-feed rule above). **While a docked question waits** the same Esc,
+  walking from the cursor (the parked-feed rule above), the page keys page the feed without a cursor and
+  g/G/Home/End go to an end with it. **While a docked question waits** the same Esc,
   draft or not, lands on its `[data-focus-claim]` (the shell's landing prefers a claim to the park), and
   the card's own Esc returns to the composer, so Esc toggles question ↔ composer (user, 2026-11-17). A
   plain Shift+Tab in the composer (no template slots, no open menu) goes to the docked
@@ -543,7 +563,7 @@ content and their own controls, which a treeitem's name would flatten and its ro
   through `focusAndReveal`), never to its Skip button, which the browser's own order would reach first. In the composer, Mod+↑ (`composer.enterTranscript`, rebindable; checked before plain ↑ recall) focuses the newest content item (a
   trailing round divider is skipped) when the draft is empty or one visual line, or the caret is already at
   its start; otherwise it first moves the caret to the start. PgUp/PgDn there page the transcript with
-  keyboard provenance and keep focus. `ChatTranscriptHandle.focusNewest()` / `scrollPage()` are the seams.
+  keyboard provenance (the same `readingPage` as the feed's) and keep focus. `ChatTranscriptHandle.focusNewest()` / `scrollPage()` are the seams.
   **Latest** activated from the keyboard (`detail === 0`) parks focus on the feed, returns to the edge and
   focuses the newest item once it mounts; **Stop** refocuses the composer explicitly; a jump-to-message
   focuses the row it revealed.

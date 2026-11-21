@@ -17,6 +17,7 @@
 		"./local-keys": "./local-keys.tsx",
 		"./menu-styles": "./menu-styles.ts",
 		"./popover": "./popover.tsx",
+		"./reading": "./reading.ts",
 		"./resizable": "./resizable.tsx",
 		"./skeleton": "./skeleton.tsx",
 		"./switch": "./switch.tsx",
