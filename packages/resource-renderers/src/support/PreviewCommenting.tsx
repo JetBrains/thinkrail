@@ -3,7 +3,6 @@ import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
 import {
 	type ReadingCommand,
-	readingCommand,
 	scrollBeforeStep,
 	scrollReading,
 	spansOverlap,
@@ -30,6 +29,7 @@ import {
 	blockIndexAt,
 	blockRange,
 	blockRangeLines,
+	blockSpan,
 	blockText,
 	type CursorBlock,
 	cursorBlockElements,
@@ -37,7 +37,7 @@ import {
 	firstVisibleBlock,
 } from "./blockCursor";
 import { CURSOR_PROXY_HOST, type CursorOption, CursorProxy } from "./CursorProxy";
-import { cursorCommand, useReviewSurfaceKeys } from "./cursorKeys";
+import { readingCursorKey, useReviewSurfaceKeys } from "./cursorKeys";
 import { mapPreviewSelection } from "./previewAnchor";
 import { ReviewComposer } from "./ReviewComposer";
 import { READER_SCOPE, useReaderKeys, viewportSpan } from "./readingSurface";
@@ -287,56 +287,56 @@ export function PreviewCommenting({
 		blocks: readonly CursorBlock[],
 		at: number,
 	) => {
-		const current = elements[at];
-		const shownIn = (element: HTMLElement) =>
-			spansOverlap(element.getBoundingClientRect(), viewportSpan(scroller));
+		const view = viewportSpan(scroller);
+		const shownAt = (index: number) => {
+			const span = blockSpan(elements, index);
+			return span !== null && spansOverlap(span, view);
+		};
 		if (command.kind === "page" || command.kind === "edge") {
 			scrollReading(scroller, command);
 			if (command.kind === "edge") {
 				placeCursor((command.direction < 0 ? blocks[0] : blocks.at(-1))?.start);
-			} else if (current && shownIn(current)) placeCursor(undefined);
-			else placeCursor(blocks[elements.findIndex(shownIn)]?.start);
+			} else if (shownAt(at)) placeCursor(undefined);
+			else placeCursor(blocks[elements.findIndex((_element, index) => shownAt(index))]?.start);
 			return;
 		}
+		const current = blockSpan(elements, at);
 		if (command.kind !== "line" || !current) return;
-		const view = viewportSpan(scroller);
-		const rect = current.getBoundingClientRect();
-		if (!spansOverlap(rect, view)) {
-			const shown = elements.flatMap((element, index) => (shownIn(element) ? [index] : []));
-			placeCursor(blocks[(command.direction > 0 ? shown[0] : shown.at(-1)) ?? at]?.start);
+		if (!spansOverlap(current, view)) {
+			const visible = elements.flatMap((_element, index) => (shownAt(index) ? [index] : []));
+			placeCursor(blocks[(command.direction > 0 ? visible[0] : visible.at(-1)) ?? at]?.start);
 			return;
 		}
 		const before = scroller.scrollTop;
-		scroller.scrollTop += scrollBeforeStep(view, rect, command.direction);
+		scroller.scrollTop += scrollBeforeStep(view, current, command.direction);
 		if (scroller.scrollTop !== before) {
 			placeCursor(undefined);
 			return;
 		}
-		const next = elements[at + command.direction];
+		const next = blockSpan(elements, at + command.direction);
 		const block = blocks[at + command.direction];
 		if (!next || !block) return;
-		scroller.scrollTop += stepRevealDelta(view, next.getBoundingClientRect());
+		scroller.scrollTop += stepRevealDelta(view, next);
 		placeCursor(block.start);
 	};
 
 	const onCursorKey = (event: KeyboardEvent<HTMLDivElement>) => {
 		const scroller = scrollerRef.current;
 		if (!scroller) return;
-		const command = cursorCommand(event.nativeEvent, keys);
-		const plainWalk =
-			command === null || ((command.kind === "move" || command.kind === "edge") && !command.extend);
-		const reading = plainWalk ? readingCommand(event.nativeEvent, readerKeys) : null;
-		if (!command && !reading) return;
+		const key = readingCursorKey(event.nativeEvent, keys, readerKeys);
+		if (!key) return;
 		const elements = cursorBlockElements(scroller);
 		const blocks = cursorBlocksOf(elements);
 		const start = blockCursor ?? firstVisibleBlock(elements, scroller);
-		if (reading) {
-			if (reading.kind === "side") return;
+		if (key.kind === "reading") {
+			if (key.command.kind === "side") return;
 			event.preventDefault();
-			if (start) readBlocks(reading, scroller, elements, blocks, blockIndexAt(blocks, start.line));
+			if (start) {
+				readBlocks(key.command, scroller, elements, blocks, blockIndexAt(blocks, start.line));
+			}
 			return;
 		}
-		const outcome = start && command ? blockCursorCommand(blocks, start, command) : null;
+		const outcome = start ? blockCursorCommand(blocks, start, key.command) : null;
 		if (!outcome) return;
 		event.preventDefault();
 		if (outcome.kind === "comment") {
@@ -347,10 +347,8 @@ export function PreviewCommenting({
 		}
 		setBlockCursor(outcome.state);
 		setCursorShown(true);
-		const target = elements[blockIndexAt(blocks, outcome.state.line)];
-		if (target) {
-			scroller.scrollTop += stepRevealDelta(viewportSpan(scroller), target.getBoundingClientRect());
-		}
+		const target = blockSpan(elements, blockIndexAt(blocks, outcome.state.line));
+		if (target) scroller.scrollTop += stepRevealDelta(viewportSpan(scroller), target);
 	};
 
 	const onCursorFocus = (event: FocusEvent<HTMLDivElement>) => {

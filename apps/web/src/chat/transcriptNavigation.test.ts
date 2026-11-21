@@ -282,6 +282,36 @@ describe("transcriptKeyAction", () => {
 			direction: 1,
 		});
 	});
+
+	test("an end key rebound onto Shift+J goes to the end, and Shift+G no longer does", () => {
+		const rebound = localKeys(
+			{
+				platform: "Linux x86_64",
+				scopes: new Map([
+					[
+						"transcript",
+						[
+							{ id: "arrows.down", chord: { code: "KeyJ", key: "J" } },
+							{ id: "reading.bottom", chord: { code: "KeyJ", key: "J", shift: true } },
+						],
+					],
+				]),
+				isTextEntry: () => false,
+			},
+			"transcript",
+			LOCAL_KEY_DEFAULTS.transcript,
+		);
+		expect(transcriptKeyAction(press({ key: "J", code: "KeyJ", shiftKey: true }), rebound)).toEqual(
+			{ kind: "edge", direction: 1 },
+		);
+		expect(transcriptKeyAction(press({ key: "j" }), rebound)).toEqual({
+			kind: "line",
+			direction: 1,
+		});
+		expect(
+			transcriptKeyAction(press({ key: "G", code: "KeyG", shiftKey: true }), rebound),
+		).toBeNull();
+	});
 });
 
 describe("the composer's way into the transcript", () => {

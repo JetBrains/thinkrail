@@ -58,6 +58,21 @@ export interface ReadingSpan {
 	readonly bottom: number;
 }
 
+export interface ReadingStop<T> {
+	getBoundingClientRect(): ReadingSpan;
+	contains(other: T): boolean;
+}
+
+export function ownReadingSpan<T extends ReadingStop<T>>(
+	stop: T,
+	next: T | null | undefined,
+): ReadingSpan {
+	const { top, bottom } = stop.getBoundingClientRect();
+	const end =
+		next && next !== stop && stop.contains(next) ? next.getBoundingClientRect().top : bottom;
+	return { top, bottom: Math.max(top, end) };
+}
+
 export function spansOverlap(span: ReadingSpan, view: ReadingSpan): boolean {
 	return span.bottom > view.top + 1 && span.top < view.bottom - 1;
 }

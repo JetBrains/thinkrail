@@ -1036,6 +1036,16 @@ questionnaire) keep their Tab order and never compete for a region's landing.
   keys scroll and keep the cursor while its block shows, else move it to the first visible block; g/G and
   Home/End scroll to the ends with the cursor on the first or last block. Shift extends, Enter and
   Shift+Mod+M comment and Esc clears a range exactly as before (*Keyboard review surfaces*).
+  A block's extent for all of this — the scroll, "shows", the reveal of a stepped-to or extended-to
+  block and the first visible block a fresh focus takes — is its own: `blockSpan`, i.e.
+  `ownReadingSpan` ([[module-ui]]), ends a parent at its first nested stop. A parent bullet's box holds
+  its whole sub-list, so measuring the box read the sub-list twice: j scrolled through it on the parent,
+  then stepped back up to its first child. Key precedence (`readingCursorKey` in
+  `support/cursorKeys.ts`): Enter, `review.surface.comment` and Esc keep the review actions first; an
+  exact `reader` match reads next; a shifted twin extends only when no reader key matches exactly. So
+  `reading.bottom` rebound to Shift+J goes to the end instead of extending (the rebind has no conflict,
+  because Shift-extension is a fallback, not a binding). The transcript and the other reading surfaces
+  have no Shift fallback, so an exact match already wins there.
 - **Read-only Monaco** (`MonacoEditor`, `readCode`): while the editor is read-only and its text has
   focus (`hasTextFocus`, so the find widget and a focused hover keep every key), ↑/↓ and j/k scroll the
   view one code line and move the caret with it (the caret moves first, then the scroll is set: Monaco's
