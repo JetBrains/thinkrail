@@ -22,6 +22,12 @@ const tab = (page: Page, id: string) => page.getByTestId(`settings-nav-${id}`);
 const searchField = (page: Page) => page.getByTestId("settings-search");
 const focusIn = (page: Page, selector: string) =>
 	page.evaluate((within) => document.activeElement?.closest(within) != null, selector);
+const onFirstRow = (page: Page) =>
+	page.evaluate(() => {
+		const active = document.activeElement;
+		const first = document.querySelector("[data-settings-content] [data-setting-row]");
+		return active !== null && active === first;
+	});
 const focusedRow = (page: Page) =>
 	page.evaluate(
 		() =>
@@ -62,7 +68,7 @@ async function expectSection(page: Page, id: string): Promise<void> {
 	);
 }
 
-test("opening lands on the current section's tab; Tab goes search → the one nav stop → content", async ({
+test("opening lands on the current section's tab; Tab goes search → the one nav stop → the section's first row", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -84,6 +90,16 @@ test("opening lands on the current section's tab; Tab goes search → the one na
 	await expect(tab(page, "privacy")).toBeFocused();
 	await page.keyboard.press("Tab");
 	await expect.poll(() => focusIn(page, "[data-settings-content]")).toBe(true);
+	await expect.poll(() => onFirstRow(page)).toBe(true);
+
+	await tab(page, "appearance").click();
+	await expectSection(page, "appearance");
+	await expect(page.getByTestId("settings-appearance")).toBeVisible();
+	await page.keyboard.press("Tab");
+	await expect.poll(() => onFirstRow(page)).toBe(true);
+	await expect(
+		settingsDialog(page).locator('#settings-panel [data-setting-row][tabindex="0"]'),
+	).toHaveCount(1);
 });
 
 test("↑/↓/j/k/Home/End open a section at once and keep focus on its tab; other letters do nothing", async ({
@@ -168,20 +184,24 @@ test("Esc steps back: a dirty field reverts, then the section list, then Setting
 	await expect(settingsDialog(page)).toBeVisible();
 
 	await page.keyboard.press("Escape");
+	await expect(page.locator('[data-setting-row="chat-line-width"]')).toBeFocused();
+	await page.keyboard.press("Escape");
 	await expectSection(page, "text");
 	await page.keyboard.press("Escape");
 	await expect(settingsDialog(page)).toBeHidden();
 	await expect(opener).toBeFocused();
 });
 
-test("one ↑/↓ walk crosses a switch, a field, a tree and a row without wrapping; Home and End reach the ends", async ({
+test("one ↑/↓ walk crosses a switch row, a field row, a tree and a row without wrapping; Home and End reach the ends", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
 	await openSettingsSection(page, "keyboard");
-	const doubleShift = page.getByTestId("settings-double-shift");
+	const row = (id: string) => settingsDialog(page).locator(`[data-setting-row="${id}"]`);
+	const doubleShift = row("double-shift");
+	const filterRow = row("keyboard-filter");
 	const filter = page.getByTestId("keybinding-filter");
-	const exportButton = page.getByTestId("keybinding-export");
+	const exportRow = row("keyboard-import-export");
 	const items = settingsDialog(page).locator(
 		'[data-setting-row="keyboard-shortcuts"] [role="treeitem"]',
 	);
@@ -192,6 +212,12 @@ test("one ↑/↓ walk crosses a switch, a field, a tree and a row without wrapp
 	await page.keyboard.press("ArrowUp");
 	await expect(doubleShift).toBeFocused();
 	await page.keyboard.press("ArrowDown");
+	await expect(filterRow).toBeFocused();
+	await page.keyboard.press("ArrowRight");
+	await expect(page.getByTestId("keybinding-search-keys")).toBeFocused();
+	await page.keyboard.press("ArrowLeft");
+	await expect(filterRow).toBeFocused();
+	await page.keyboard.press("Enter");
 	await expect(filter).toBeFocused();
 	await page.keyboard.press("ArrowDown");
 	await expect(items.first()).toBeFocused();
@@ -200,21 +226,21 @@ test("one ↑/↓ walk crosses a switch, a field, a tree and a row without wrapp
 	await page.keyboard.press("End");
 	await expect(items.last()).toBeFocused();
 	await page.keyboard.press("ArrowDown");
-	await expect(exportButton).toBeFocused();
+	await expect(exportRow).toBeFocused();
 	await page.keyboard.press("ArrowDown");
-	await expect(exportButton).toBeFocused();
+	await expect(exportRow).toBeFocused();
 	await page.keyboard.press("ArrowUp");
 	await expect(items.last()).toBeFocused();
 	await page.keyboard.press("Home");
 	await expect(items.first()).toBeFocused();
 	await page.keyboard.press("k");
-	await expect(filter).toBeFocused();
+	await expect(filterRow).toBeFocused();
 
-	await exportButton.focus();
+	await page.getByTestId("keybinding-export").focus();
 	await page.keyboard.press("Home");
 	await expect(doubleShift).toBeFocused();
 	await page.keyboard.press("End");
-	await expect(exportButton).toBeFocused();
+	await expect(exportRow).toBeFocused();
 
 	await filter.fill("split");
 	const shortcuts = settingsDialog(page).getByTestId("keybinding-row");
@@ -227,7 +253,7 @@ test("one ↑/↓ walk crosses a switch, a field, a tree and a row without wrapp
 	await expect(items.last()).toBeFocused();
 });
 
-test("a list walks row by row; Delete asks first and focus lands on the neighbour; Shift+F10 opens the row menu", async ({
+test("a list walks row by row; → reaches its buttons, Delete asks first and focus lands on the neighbour row, Enter opens it; Shift+F10 opens the row menu", async ({
 	page,
 }) => {
 	const entry = { command: resolveBunExecutable(), args: [STDIO_SERVER], enabled: false };
@@ -246,21 +272,24 @@ test("a list walks row by row; Delete asks first and focus lands on the neighbou
 		const names = await rows.evaluateAll((list) =>
 			list.map((row) => row.getAttribute("data-name")),
 		);
-		const details = (index: number) =>
-			page
-				.locator(`[data-testid="mcp-server-row"][data-name="${names[index]}"]`)
-				.getByTestId("mcp-server-details");
+		const row = (index: number) =>
+			page.locator(`[data-testid="mcp-server-row"][data-name="${names[index]}"]`);
 
 		await page.keyboard.press("ArrowRight");
-		await expect(page.getByTestId("mcp-add")).toBeFocused();
+		await expect(settingsDialog(page).locator('[data-setting-row="mcp-add"]')).toBeFocused();
 		await page.keyboard.press("ArrowDown");
-		await expect(details(0)).toBeFocused();
+		await expect(row(0)).toBeFocused();
 		await page.keyboard.press("ArrowDown");
-		await expect(details(1)).toBeFocused();
+		await expect(row(1)).toBeFocused();
 		await page.keyboard.press("ArrowDown");
-		await expect(details(2)).toBeFocused();
+		await expect(row(2)).toBeFocused();
 		await page.keyboard.press("ArrowUp");
-		await expect(details(1)).toBeFocused();
+		await expect(row(1)).toBeFocused();
+		await page.keyboard.press("ArrowRight");
+		await expect(row(1).getByTestId("mcp-server-menu")).toBeFocused();
+		await page.keyboard.press("ArrowLeft");
+		await expect(row(1)).toBeFocused();
+		await expect(row(1).getByTestId("mcp-server-toggle")).toHaveAttribute("aria-checked", "false");
 
 		await page.keyboard.press("Delete");
 		const confirm = page.getByTestId("mcp-remove-confirm");
@@ -268,8 +297,14 @@ test("a list walks row by row; Delete asks first and focus lands on the neighbou
 		await expect(rows).toHaveCount(3);
 		await confirm.click();
 		await expect(rows).toHaveCount(2);
-		await expect(details(2)).toBeFocused();
+		await expect(row(2)).toBeFocused();
 		await expect(settingsDialog(page)).toBeVisible();
+		await page.keyboard.press("Enter");
+		await expect(page.getByTestId("mcp-details-dialog")).toBeVisible();
+		await expect(page.getByTestId("mcp-details-dialog")).toContainText(names[2] ?? "");
+		await page.keyboard.press("Escape");
+		await expect(page.getByTestId("mcp-details-dialog")).toHaveCount(0);
+		await expect(row(2)).toBeFocused();
 
 		await page.keyboard.press("Shift+F10");
 		await expect(page.getByTestId("mcp-menu-remove")).toBeVisible();
@@ -292,11 +327,12 @@ test.describe("cheap and expensive choices", () => {
 		}
 	});
 
-	test("a cheap choice applies on each arrow and → at its end reaches Reset; Delete resets the row", async ({
+	test("a cheap choice is entered with Enter, applies on each arrow, and Esc returns to the row keeping it; → then reaches Reset; Delete resets", async ({
 		page,
 	}) => {
 		await openFixtureProject(page);
 		await openSettingsSection(page, "chat");
+		const row = settingsDialog(page).locator('[data-setting-row="message-order"]');
 		const oldest = page.getByTestId("chat-order-oldest-first");
 		const newest = page.getByTestId("chat-order-newest-first");
 		const reset = page.getByTestId("settings-reset-message-order");
@@ -304,20 +340,35 @@ test.describe("cheap and expensive choices", () => {
 		await expect(reset).toHaveCount(0);
 
 		await page.keyboard.press("ArrowRight");
+		await expect(row).toBeFocused();
+		await page.keyboard.press("Enter");
 		await expect(oldest).toBeFocused();
 		await page.keyboard.press("ArrowRight");
 		await expect(newest).toBeFocused();
 		await expect(newest).toHaveAttribute("data-active", "true");
 		await expect(settingsDialog(page).getByText("Press Enter to apply")).toHaveCount(0);
 		await page.keyboard.press("ArrowRight");
+		await expect(newest).toBeFocused();
+		await page.keyboard.press("Escape");
+		await expect(row).toBeFocused();
+		await expect(newest).toHaveAttribute("data-active", "true");
+		await expect(settingsDialog(page)).toBeVisible();
+
+		await page.keyboard.press("ArrowRight");
 		await expect(reset).toBeFocused();
+		await expect(newest).toHaveAttribute("data-active", "true");
+		await page.keyboard.press("ArrowRight");
+		await expect(reset).toBeFocused();
+		await page.keyboard.press("ArrowLeft");
+		await expect(row).toBeFocused();
+		await page.keyboard.press("ArrowRight");
 		await page.keyboard.press("Delete");
 		await expect(oldest).toHaveAttribute("data-active", "true");
 		await expect(reset).toHaveCount(0);
-		await expect.poll(() => focusedRow(page)).toBe("message-order");
+		await expect(row).toBeFocused();
 	});
 
-	test("an expensive choice waits for Enter, Esc cancels the pending pick, and Delete resets it", async ({
+	test("an expensive choice keeps a pending pick until Enter applies it and returns to the row; Esc cancels it and returns; Delete resets", async ({
 		page,
 	}) => {
 		await openFixtureProject(page);
@@ -329,6 +380,15 @@ test.describe("cheap and expensive choices", () => {
 		await expect(system).toHaveAttribute("data-active", "true");
 
 		await page.keyboard.press("ArrowRight");
+		await expect(row).toBeFocused();
+		await page.keyboard.press("ArrowDown");
+		await expect(row).not.toBeFocused();
+		await expect(system).toHaveAttribute("data-active", "true");
+		await expect(english).not.toHaveAttribute("data-pending", "true");
+		await page.keyboard.press("ArrowUp");
+		await expect(row).toBeFocused();
+
+		await page.keyboard.press("Enter");
 		await expect(system).toBeFocused();
 		await page.keyboard.press("ArrowDown");
 		await expect(english).toBeFocused();
@@ -336,19 +396,87 @@ test.describe("cheap and expensive choices", () => {
 		await expect(system).toHaveAttribute("data-active", "true");
 		await expect(hint).toBeVisible();
 		await page.keyboard.press("Escape");
-		await expect(system).toBeFocused();
+		await expect(row).toBeFocused();
 		await expect(english).not.toHaveAttribute("data-pending", "true");
+		await expect(system).toHaveAttribute("data-active", "true");
 		await expect(hint).toHaveCount(0);
 		await expect(settingsDialog(page)).toBeVisible();
 
+		await page.keyboard.press("Enter");
 		await page.keyboard.press("ArrowDown");
+		await expect(english).toHaveAttribute("data-pending", "true");
 		await page.keyboard.press("Enter");
 		await expect(english).toHaveAttribute("data-active", "true");
+		await expect(row).toBeFocused();
 		await expect(row).toHaveAttribute("data-changed", "true");
 		await page.keyboard.press("Delete");
 		await expect(system).toHaveAttribute("data-active", "true");
 		await expect(row).not.toHaveAttribute("data-changed", "true");
 	});
+});
+
+test("walking ↓ and ↑ through Appearance lands on whole rows and never changes the theme", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await openSettingsSection(page, "appearance");
+	const html = page.locator("html");
+	const theme = await html.getAttribute("data-theme");
+	const rows = settingsDialog(page).locator("#settings-panel [data-setting-row]");
+	const count = await rows.count();
+	expect(count).toBeGreaterThan(3);
+
+	await page.keyboard.press("ArrowRight");
+	const seen: (string | null)[] = [];
+	for (let step = 0; step < count + 2; step += 1) {
+		seen.push(await focusedRow(page));
+		await expect
+			.poll(() => page.evaluate(() => document.activeElement?.hasAttribute("data-setting-row")))
+			.toBe(true);
+		await page.keyboard.press("ArrowDown");
+	}
+	for (let step = 0; step < count + 2; step += 1) await page.keyboard.press("k");
+	expect(seen).toContain("dark-theme");
+	expect(seen).toContain("contrast");
+	await expect(html).toHaveAttribute("data-theme", theme ?? "");
+	await expect(settingsDialog(page).locator('[data-setting-row][data-changed="true"]')).toHaveCount(
+		0,
+	);
+});
+
+test("Space on a switch row toggles it and stays on the row; Enter enters a field and Esc leaves it", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await openSettingsSection(page, "keyboard");
+	const row = settingsDialog(page).locator('[data-setting-row="double-shift"]');
+	const toggle = page.getByTestId("settings-double-shift");
+	await page.keyboard.press("ArrowRight");
+	await expect(row).toBeFocused();
+	const before = await toggle.getAttribute("aria-checked");
+	await page.keyboard.press(" ");
+	await expect(row).toBeFocused();
+	await expect(toggle).not.toHaveAttribute("aria-checked", before ?? "");
+	await page.keyboard.press("Enter");
+	await expect(toggle).toHaveAttribute("aria-checked", before ?? "");
+	await expect(row).toBeFocused();
+
+	const filterRow = settingsDialog(page).locator('[data-setting-row="keyboard-filter"]');
+	const filter = page.getByTestId("keybinding-filter");
+	await page.keyboard.press("ArrowDown");
+	await page.keyboard.press(" ");
+	await expect(filter).toBeFocused();
+	await page.keyboard.type("split");
+	await expect(filter).toHaveValue("split");
+	await page.keyboard.press("Enter");
+	await expect(filterRow).toBeFocused();
+	await expect(filter).toHaveValue("split");
+	await page.keyboard.press("Enter");
+	await page.keyboard.press("Escape");
+	await expect(filter).toHaveValue("");
+	await expect(filter).toBeFocused();
+	await page.keyboard.press("Escape");
+	await expect(filterRow).toBeFocused();
 });
 
 test("content scroll starts at the top in every section", async ({ page }) => {

@@ -194,12 +194,12 @@ test("servers are a keyboard list: Enter edits, Remove is a side, and the addres
 	expect(list).toContain('data-setting-id="custom-servers"');
 	const edits = html.match(/<button[^>]*data-testid="custom-endpoints-edit"[^>]*>/g) ?? [];
 	expect(edits).toHaveLength(2);
-	expect(edits[0]).toContain("data-focus-row-primary");
+	expect(edits[0]).toContain("data-setting-primary");
 	expect(edits[0]).toContain('tabindex="0"');
 	expect(edits[1]).toContain('tabindex="-1"');
 	expect(edits[0]).toContain('aria-label="Edit Gateway"');
 	const removes = html.match(/<button[^>]*data-testid="custom-endpoints-remove"[^>]*>/g) ?? [];
-	expect(removes[0]).toContain("data-setting-side");
+	expect(removes[0]).toContain('tabindex="0"');
 	expect(removes[0]).toContain('aria-label="Remove Gateway"');
 	expect(html).toContain("https://llm.example.com/v1 · 1 model");
 	expect(html).not.toContain('title="https://llm.example.com/v1"');

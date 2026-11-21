@@ -30,23 +30,35 @@ const event = (code: string, key: string, textEntry = false, init: Partial<Setti
 	return { pressed, local: content.match(pressed, { textEntry }) };
 };
 
-const ON_ROW: WalkContext = { textEntry: false, multiline: false, onSide: false };
-const ON_SIDE: WalkContext = { ...ON_ROW, onSide: true };
-const IN_FIELD: WalkContext = { textEntry: true, multiline: false, onSide: false };
-const IN_TEXTAREA: WalkContext = { textEntry: true, multiline: true, onSide: false };
+const ON_ROW: WalkContext = {
+	place: "row",
+	textEntry: false,
+	multiline: false,
+	caretAtEnd: false,
+	native: false,
+	inForm: false,
+};
+const ON_BUTTON: WalkContext = { ...ON_ROW, place: "button", native: true };
+const IN_CHOICE: WalkContext = { ...ON_ROW, place: "control", native: true };
+const IN_SLIDER: WalkContext = { ...ON_ROW, place: "control" };
+const IN_FIELD: WalkContext = { ...ON_ROW, place: "control", textEntry: true };
+const IN_TEXTAREA: WalkContext = { ...IN_FIELD, multiline: true };
+const OUTSIDE: WalkContext = { ...ON_ROW, place: "outside" };
 
 describe("walkKey", () => {
-	test("reads the arrows, Home/End and Esc, unmodified only", () => {
+	test("reads the arrows, Home/End, Enter, Space and Esc, unmodified only", () => {
 		expect(walkKey(press("ArrowDown"), null)).toBe("down");
 		expect(walkKey(press("ArrowUp"), null)).toBe("up");
 		expect(walkKey(press("ArrowLeft"), null)).toBe("left");
 		expect(walkKey(press("ArrowRight"), null)).toBe("right");
 		expect(walkKey(press("Home"), null)).toBe("home");
 		expect(walkKey(press("End"), null)).toBe("end");
+		expect(walkKey(press("Enter"), null)).toBe("enter");
+		expect(walkKey(press(" "), null)).toBe("space");
 		expect(walkKey(press("Escape"), null)).toBe("escape");
 		expect(walkKey(press("ArrowDown", { shiftKey: true }), null)).toBeNull();
 		expect(walkKey(press("ArrowDown", { altKey: true }), null)).toBeNull();
-		expect(walkKey(press("Enter"), null)).toBeNull();
+		expect(walkKey(press("Enter", { ctrlKey: true }), null)).toBeNull();
 		expect(walkKey(press("f"), null)).toBeNull();
 	});
 
@@ -78,31 +90,70 @@ describe("walkKey", () => {
 });
 
 describe("walkAction", () => {
-	test("↑/↓ move between rows, from a single-line field too, never from a multi-line one", () => {
+	test("↑/↓ move between rows from anywhere a control left them, never from a multi-line field", () => {
 		expect(walkAction("down", ON_ROW)).toEqual({ kind: "row", delta: 1 });
-		expect(walkAction("up", ON_SIDE)).toEqual({ kind: "row", delta: -1 });
+		expect(walkAction("up", ON_BUTTON)).toEqual({ kind: "row", delta: -1 });
+		expect(walkAction("down", IN_CHOICE)).toEqual({ kind: "row", delta: 1 });
 		expect(walkAction("down", IN_FIELD)).toEqual({ kind: "row", delta: 1 });
 		expect(walkAction("up", IN_TEXTAREA)).toBeNull();
 	});
 
 	test("Home/End go to the first and last row outside text entry", () => {
 		expect(walkAction("home", ON_ROW)).toEqual({ kind: "edge", edge: "first" });
-		expect(walkAction("end", ON_SIDE)).toEqual({ kind: "edge", edge: "last" });
+		expect(walkAction("end", ON_BUTTON)).toEqual({ kind: "edge", edge: "last" });
 		expect(walkAction("home", IN_FIELD)).toBeNull();
 	});
 
-	test("→ goes to the sides, ← back along them, else to the nav; a field keeps both for its caret", () => {
-		expect(walkAction("right", ON_ROW)).toEqual({ kind: "side", delta: 1 });
-		expect(walkAction("right", ON_SIDE)).toEqual({ kind: "side", delta: 1 });
-		expect(walkAction("left", ON_SIDE)).toEqual({ kind: "side", delta: -1 });
+	test("on a row → goes forward to its buttons and ← to the nav; on a button they walk the buttons", () => {
+		expect(walkAction("right", ON_ROW)).toEqual({ kind: "forward" });
 		expect(walkAction("left", ON_ROW)).toEqual({ kind: "nav" });
-		expect(walkAction("left", IN_FIELD)).toBeNull();
-		expect(walkAction("right", IN_TEXTAREA)).toBeNull();
+		expect(walkAction("right", ON_BUTTON)).toEqual({ kind: "button", delta: 1 });
+		expect(walkAction("left", ON_BUTTON)).toEqual({ kind: "button", delta: -1 });
+		expect(walkAction("left", OUTSIDE)).toEqual({ kind: "nav" });
+		expect(walkAction("right", OUTSIDE)).toBeNull();
 	});
 
-	test("Delete resets and Esc steps out wherever they reach the walk", () => {
+	test("inside a control the ←/→ a control left move along the row; a field keeps them for its caret but its end", () => {
+		expect(walkAction("left", IN_CHOICE)).toEqual({ kind: "along", delta: -1 });
+		expect(walkAction("right", IN_SLIDER)).toEqual({ kind: "along", delta: 1 });
+		expect(walkAction("left", IN_FIELD)).toBeNull();
+		expect(walkAction("right", IN_FIELD)).toBeNull();
+		expect(walkAction("right", { ...IN_FIELD, caretAtEnd: true })).toEqual({
+			kind: "along",
+			delta: 1,
+		});
+		expect(walkAction("right", { ...IN_TEXTAREA, caretAtEnd: true })).toBeNull();
+	});
+
+	test("Enter and Space on a row activate it; on a button they stay native", () => {
+		expect(walkAction("enter", ON_ROW)).toEqual({ kind: "activate", space: false });
+		expect(walkAction("space", ON_ROW)).toEqual({ kind: "activate", space: true });
+		expect(walkAction("enter", { ...ON_ROW, native: true })).toBeNull();
+		expect(walkAction("enter", ON_BUTTON)).toBeNull();
+		expect(walkAction("space", ON_BUTTON)).toBeNull();
+		expect(walkAction("enter", OUTSIDE)).toBeNull();
+	});
+
+	test("Enter leaves a control for its row; Space too, except in a field; a form or a textarea keeps Enter", () => {
+		expect(walkAction("enter", IN_SLIDER)).toEqual({ kind: "exit" });
+		expect(walkAction("space", IN_SLIDER)).toEqual({ kind: "exit" });
+		expect(walkAction("enter", IN_FIELD)).toEqual({ kind: "exit" });
+		expect(walkAction("space", IN_FIELD)).toBeNull();
+		expect(walkAction("enter", { ...IN_FIELD, inForm: true })).toBeNull();
+		expect(walkAction("enter", IN_TEXTAREA)).toBeNull();
+		expect(walkAction("enter", IN_CHOICE)).toBeNull();
+	});
+
+	test("Esc leaves a control or a button for its row; on a row it steps out of the section", () => {
+		expect(walkAction("escape", IN_FIELD)).toEqual({ kind: "exit" });
+		expect(walkAction("escape", ON_BUTTON)).toEqual({ kind: "exit" });
+		expect(walkAction("escape", ON_ROW)).toEqual({ kind: "escape" });
+		expect(walkAction("escape", OUTSIDE)).toEqual({ kind: "escape" });
+	});
+
+	test("Delete resets wherever it reaches the walk", () => {
 		expect(walkAction("reset", ON_ROW)).toEqual({ kind: "reset" });
-		expect(walkAction("escape", IN_FIELD)).toEqual({ kind: "escape" });
+		expect(walkAction("reset", IN_CHOICE)).toEqual({ kind: "reset" });
 		expect(walkAction(null, ON_ROW)).toBeNull();
 	});
 });

@@ -153,6 +153,7 @@ export function ExtensionsCatalog({
 		return (
 			<SettingsNotice
 				variant="error"
+				rowId="extensions-failed"
 				testId="extensions-failed"
 				action={
 					onRetry ? (
@@ -312,7 +313,7 @@ export function ExtensionsSettings() {
 								{t("settings.extensions.install")}
 							</Button>
 						}
-						sides={<GalleryLink side />}
+						sides={<GalleryLink />}
 					/>
 				</SettingsGroup>
 			) : null}

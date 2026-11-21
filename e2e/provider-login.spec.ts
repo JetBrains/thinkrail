@@ -64,9 +64,9 @@ test("signs in through the OAuth dialog (select → open-URL + paste → success
 	);
 	await search.fill("Signed-in providers");
 	await signedIn.click();
-	await expect(page.locator(SIGNOUT)).toBeFocused();
+	await expect(page.locator(CONFIGURED)).toBeFocused();
 
-	await page.locator(SIGNOUT).click();
+	await page.keyboard.press("Enter");
 	await expect(page.locator(CONFIGURED)).toHaveCount(0);
 	await search.fill("Signed-in providers");
 	await expect(page.getByTestId("settings-search-results")).toContainText("“Signed-in providers”");

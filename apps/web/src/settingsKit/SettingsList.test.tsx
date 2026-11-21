@@ -39,11 +39,13 @@ test("a list carries the focus-recovery markup and its key scope", () => {
 		expect(markup).toContain(`data-focus-row="${id}"`);
 		expect(markup).toContain(`data-setting-row="mcp:user/${id}"`);
 	}
-	expect(markup.match(/data-focus-row-primary/g)).toHaveLength(2);
-	expect(markup.match(/data-setting-stop/g)).toHaveLength(2);
+	expect(markup.match(/data-setting-primary/g)).toHaveLength(2);
+	expect(markup).not.toContain("data-focus-row-primary");
 });
 
-test("only the active row's primary and sides are tab stops, and each renders a tabindex", () => {
+test("each row is a focusable walk stop; only the active row's primary and buttons are tab stops", () => {
+	const rows = markup.match(/<li[^>]*>/g) ?? [];
+	expect(rows.map((row) => /tabindex="(-?\d)"/.exec(row)?.[1])).toEqual(["-1", "-1"]);
 	const buttons = markup.match(/<button[^>]*>/g) ?? [];
 	expect(buttons.map((button) => /tabindex="(-?\d)"/.exec(button)?.[1])).toEqual([
 		"0",
@@ -51,7 +53,6 @@ test("only the active row's primary and sides are tab stops, and each renders a 
 		"-1",
 		"-1",
 	]);
-	expect(buttons[1]).toContain("data-setting-side");
 });
 
 test("the active row is the focused one while it exists, else the first", () => {

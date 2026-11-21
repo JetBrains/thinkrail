@@ -27,13 +27,14 @@ test("the presets are one list: each row is a walk row whose primary applies and
 		"-1",
 		"-1",
 	]);
-	expect(primaries.every((primary) => primary.includes("data-setting-stop"))).toBe(true);
+	expect(primaries.every((primary) => primary.includes("data-setting-primary"))).toBe(true);
+	expect(rows.every((row) => /tabindex="(0|-1)"/.test(row))).toBe(true);
 	expect(primaries.every((primary) => primary.includes('aria-disabled="true"'))).toBe(true);
 	expect(markup).toContain("Open a workspace to apply a layout to its window.");
 });
 
-test("Set default is a side of every preset but the default, whose help is visible text", () => {
-	const sides = tags(/<button[^>]*data-setting-side[^>]*>[^<]*Set default/g);
+test("Set default is a button of every preset but the default, whose help is visible text", () => {
+	const sides = tags(/<button(?![^>]*data-setting-primary)[^>]*>[^<]*Set default/g);
 	expect(sides).toHaveLength(BUILTIN_LAYOUT_PRESETS.length - 1);
 	expect(markup).toContain(
 		"Reset to default rearranges this window into this layout. The default is remembered for this window only.",
@@ -57,7 +58,7 @@ test("Advanced is a disclosure; the outline position is a cheap choice in Docume
 	expect(markup).toContain('data-setting-id="markdown-outline"');
 });
 
-test("a custom preset's row offers Rename and Delete… as sides; built-ins can't be asked to delete", () => {
+test("a custom preset's row offers Rename and Delete… as buttons; built-ins can't be asked to delete", () => {
 	const row = renderToStaticMarkup(
 		<SettingsList focusList="layout-presets" label="Layout presets" rowIds={[custom.id]}>
 			<PresetRow
@@ -76,7 +77,7 @@ test("a custom preset's row offers Rename and Delete… as sides; built-ins can'
 			/>
 		</SettingsList>,
 	);
-	const sides = tags(/<button[^>]*data-setting-side[^>]*>/g, row);
+	const sides = tags(/<button(?![^>]*data-setting-primary)[^>]*>/g, row);
 	expect(sides.map((side) => /aria-label="([^"]+)"/.exec(side)?.[1] ?? null)).toEqual([
 		null,
 		"Rename My split",

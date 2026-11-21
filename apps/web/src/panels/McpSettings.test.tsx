@@ -77,17 +77,18 @@ test("a row is a list row: Details as its primary, then transport and exposure c
 	expect(html).toContain('data-testid="mcp-server-row"');
 	expect(html).toContain('data-focus-row="user:fixture"');
 	expect(html).toContain('data-state="connected"');
-	expect(html).toMatch(
-		/<button[^>]*data-focus-row-primary=""[^>]*data-testid="mcp-server-details"/,
-	);
+	expect(html).toMatch(/<button[^>]*data-setting-primary=""[^>]*data-testid="mcp-server-details"/);
 	expect(html).toMatch(/data-testid="mcp-server-status"[^>]*>Connected · 2 tools</);
 	expect(html).not.toContain('data-testid="mcp-server-scope"');
 	expect(html).toContain("runs on host, inherits the host environment");
 	expect(html).toMatch(/data-testid="mcp-server-exposure"[^>]*data-exposure="deferred"/);
 	expect(html).toMatch(/data-testid="mcp-server-exposure"[^>]*>Deferred</);
 	expect(html).toMatch(/aria-checked="true"[^>]*data-testid="mcp-server-toggle"/);
-	expect(html).toMatch(/data-setting-side=""[^>]*data-testid="mcp-server-toggle"/);
-	expect(html).toMatch(/data-setting-side=""[^>]*data-testid="mcp-server-menu"/);
+	expect(html).toMatch(/<li[^>]*data-setting-row="user:fixture"[^>]*tabindex="-1"/);
+	expect(html).toMatch(/tabindex="-1"[^>]*data-testid="mcp-server-toggle"/);
+	expect(html.match(/<button[^>]*data-testid="mcp-server-menu"[^>]*>/)?.[0]).toContain(
+		'tabindex="-1"',
+	);
 	expect(html).toContain('aria-label="Disable fixture in this project"');
 	expect(html).not.toContain('data-testid="mcp-server-action"');
 	expect(html).not.toContain("truncate");
@@ -355,9 +356,9 @@ test("the notice states the host and, in a project, the in-chat confirm; the emp
 		/>,
 	);
 	expect(empty).toContain('data-testid="mcp-empty-import"');
-	expect(empty).toMatch(
-		/data-testid="mcp-empty-add"[^>]*data-setting-stop=""[^>]*data-focus-fallback="mcp:user"/,
-	);
+	expect(empty).toMatch(/data-testid="mcp-empty-add"[^>]*data-focus-fallback="mcp:user"/);
+	expect(empty).toContain('data-setting-row="mcp-add/add"');
+	expect(empty.match(/data-setting-row="mcp-add\/preset\//g)).toHaveLength(MCP_PRESETS.length);
 	expect(empty).toContain('data-setting-id="mcp-add"');
 	expect(MCP_PRESETS.length).toBeGreaterThan(0);
 	expect(empty).toContain('data-testid="mcp-empty-presets"');

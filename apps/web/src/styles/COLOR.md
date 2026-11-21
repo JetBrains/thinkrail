@@ -95,6 +95,14 @@ When the container holds other focusable controls with their own ring, scope it 
   as Canvas, and `outline-hidden` keeps a system-colour outline there.
 - **Text fields** (input, textarea, composer shell, inline rename) keep the `control-border-active` border
   swap and add the outset ring.
+- **Settings rows** (and their tree items) show focus as a whole row: `focus-ring-row` fills the row with
+  `primary-subtle` and draws a 2px `focus-ring` bar on its left edge, an inset shadow, with a transparent
+  outline that forced colours paint. It is a focus utility like the rings, applied as
+  `focus-visible:focus-ring-row` and kept with `has-[:focus-visible]:focus-ring-row` while focus is inside
+  the row, so a focused Reset or option keeps its own ring on top of the row fill
+  ([settingsKit/SPEC.md](../settingsKit/SPEC.md), *The model*). A control being edited inside the row adds
+  `focus-ring-editing`, a 1px `focus-ring` outline 3px out around the whole control: a deliberate second
+  frame — the ring says which option, the frame says the arrows now change this value.
 - **Selected and focused** stay apart: where selection draws an accent border or ring, focus uses the
   outset ring, so the gap shows which row has focus. Where the focusable child fills the selected row and
   an outset ring would spill into the next row (Specs tree rows), the row drops its selection ring while a
@@ -131,9 +139,11 @@ No region is dimmed. A veil that muted every region but the active one (`region-
 was too strong. Mark the active region; do not dim the others.
 
 A Settings search jump flashes the row it lands on (`data-setting-flash`,
-[settingsKit/SPEC.md](../settingsKit/SPEC.md)) with a `primary-subtle` **background**, held about 0.8 s
-and faded over the rest of 1.6 s, static under `prefers-reduced-motion`. It is a highlight, not a focus
-signal: the row's control already shows the ring, so the flash never draws one.
+[settingsKit/SPEC.md](../settingsKit/SPEC.md)) with a `primary-soft` **background**, held about 0.8 s
+and faded over the rest of 1.6 s into whatever the row shows underneath, static under
+`prefers-reduced-motion`. It is one step above the focused row's `primary-subtle` fill, so it reads on the
+row the jump focused; a `primary-subtle` flash vanished into that fill. It is a highlight, not a focus
+signal: the row already shows `focus-ring-row`, so the flash never draws a ring.
 
 ## Transparency: one form only
 

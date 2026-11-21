@@ -6,6 +6,7 @@ import { closeSettings, openSettingsSection, openWorkspaceChat } from "./fixture
 import { connectCentral, openProviders, waitForCentralState } from "./fixtures/jbcentral";
 import { E2E_CENTRAL_EXTENSION_SOURCE, E2E_PI_AGENT_DIR } from "./fixtures/paths";
 import { shot } from "./fixtures/screenshots";
+import { unreachedInSection } from "./fixtures/settingsTree";
 import { E2eWire } from "./fixtures/wire";
 
 const modelsPath = join(E2E_PI_AGENT_DIR, "models.json");
@@ -286,7 +287,7 @@ test("custom budgets save on Enter, validate the 272K–1M range and keep unrela
 		"data-context-override",
 		"750000",
 	);
-	await expect(input).toBeFocused();
+	await expect(page.getByTestId(`context-limit-${target}`)).toBeFocused();
 	await expect.poll(async () => (await setting("openai"))?.contextWindow).toBe(750_000);
 	expect((await setting("openai-codex"))?.override).toBeNull();
 	await page.reload();
@@ -373,30 +374,89 @@ test("the compact selector supports keyboard changes at mobile width", async ({ 
 	await shot(section, "models-settings", "context-mobile");
 });
 
-test("the per-model tree walks like the file tree and a model row's ←/→ change its window", async ({
+test("the per-model tree walks like the file tree; a model row's window changes only inside its choice, entered with Enter", async ({
 	page,
 }) => {
 	const provider = page.locator('[data-testid="model-context-provider"][data-provider="openai"]');
 	const model = page.getByTestId(`context-limit-openai-${modelId}`);
+	const reset = page.getByTestId(`context-limit-openai-${modelId}-reset`);
 	await provider.focus();
 	await page.keyboard.press("ArrowRight");
 	await expect(provider).toHaveAttribute("aria-expanded", "true");
 	await page.keyboard.press("ArrowRight");
 	await expect(model).toBeFocused();
+	await page.keyboard.press("ArrowDown");
+	await page.keyboard.press("ArrowUp");
+	await expect(model).toBeFocused();
+	await expectChosen(page, `openai-${modelId}`, "default");
+
+	await page.keyboard.press("Enter");
+	await expect(option(page, `openai-${modelId}`, "default")).toBeFocused();
+	await expectChosen(page, `openai-${modelId}`, "default");
 	await page.keyboard.press("ArrowRight");
 	await expectChosen(page, `openai-${modelId}`, "1m");
 	await expect.poll(async () => (await setting("openai"))?.override).toBe(1_000_000);
+	await page.keyboard.press("Escape");
 	await expect(model).toBeFocused();
-	await expect(page.getByTestId(`context-limit-openai-${modelId}-reset`)).toBeVisible();
+	await expectChosen(page, `openai-${modelId}`, "1m");
+	await page.keyboard.press("ArrowRight");
+	await expect(reset).toBeFocused();
+	await expectChosen(page, `openai-${modelId}`, "1m");
 	await page.keyboard.press("ArrowLeft");
+	await expect(model).toBeFocused();
+	await page.keyboard.press("Delete");
 	await expectChosen(page, `openai-${modelId}`, "default");
 	await expect.poll(async () => (await setting("openai"))?.override).toBeNull();
+	await expect(model).toBeFocused();
 	await page.keyboard.press("ArrowLeft");
 	await expect(provider).toBeFocused();
 	await page.keyboard.press("ArrowLeft");
 	await expect(provider).toHaveAttribute("aria-expanded", "false");
 	await expect(model).toHaveCount(0);
 	expect((await setting("openai-codex"))?.override).toBeNull();
+});
+
+test("with the context tree open and Custom chosen, every button, choice and field in Models is reachable with the arrows and Enter", async ({
+	page,
+}) => {
+	test.setTimeout(120_000);
+	await expandProviders(page, "openai");
+	await choose(page, "all", "custom");
+	await choose(page, `openai-${modelId}`, "custom");
+	await expect(page.getByTestId("context-limit-all-input")).toBeVisible();
+	await expect(page.getByTestId(`context-limit-openai-${modelId}-input`)).toBeVisible();
+	expect(await unreachedInSection(page, "models")).toEqual([]);
+	await expectOverrides(null);
+});
+
+test("the shared choice is entered with Enter, → → walks it to Custom, which the 1M save's later reply keeps, and → past Custom lands in the Custom field", async ({
+	page,
+}) => {
+	const row = page.locator('[data-setting-row="context-window"]');
+	const input = page.getByTestId("context-limit-all-input");
+	await row.focus();
+	await page.keyboard.press("Enter");
+	await expect(option(page, "all", "default")).toBeFocused();
+	await page.keyboard.press("ArrowRight");
+	await page.keyboard.press("ArrowRight");
+	await expectChosen(page, "all", "custom");
+	await expectOverrides(1_000_000);
+	await expect(page.getByTestId("context-limit-all")).toHaveAttribute(
+		"data-context-override",
+		"1000000",
+	);
+	await expectChosen(page, "all", "custom");
+	await expect(option(page, "all", "custom")).toBeFocused();
+	await expect(input).toBeVisible();
+	await page.keyboard.press("ArrowRight");
+	await expect(input).toBeFocused();
+	await expectChosen(page, "all", "custom");
+	await page.keyboard.press("ArrowLeft");
+	await expect(input).toBeFocused();
+	await page.keyboard.type("600000");
+	await page.keyboard.press("Enter");
+	await expect(row).toBeFocused();
+	await expectOverrides(600_000);
 });
 
 test("pre-v76 hosts hide context controls without sending unsupported requests", async ({

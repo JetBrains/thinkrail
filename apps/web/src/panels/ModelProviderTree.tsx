@@ -6,14 +6,17 @@ import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { ProviderGlyph } from "@/chat/ProviderGlyph";
+import { SETTINGS_ROW_FOCUS } from "@/settingsKit";
 import { useTreeItem } from "./treeNavigation";
 
 const CONTROL = "button, input";
 
 export const MODEL_TREE = "flex flex-col rounded-sm border border-border-default";
 
-export const MODEL_TREE_ROW =
-	"flex min-h-40 cursor-default flex-wrap items-center gap-8 border-border-muted border-t py-6 pr-8 transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring-inset";
+export const MODEL_TREE_ROW = cn(
+	"flex min-h-40 cursor-default flex-wrap items-center gap-8 border-border-muted border-t py-6 pr-8 transition-colors hover:bg-control-bg-hovered",
+	SETTINGS_ROW_FOCUS,
+);
 
 export function fromItemControl(
 	event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>,

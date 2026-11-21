@@ -59,7 +59,6 @@ test("each provider row's switch is tri-state and counts the models it shows", (
 	expect(toggle(html, "openai")).toContain('data-state="some"');
 	expect(toggle(html, "anthropic")).toContain('aria-pressed="true"');
 	expect(toggle(html, "google")).toContain('aria-pressed="false"');
-	expect(toggle(html, "openai")).toContain("data-setting-side");
 	expect(toggle(html, "openai")).toMatch(/tabindex="-?\d"/);
 	expect(html).toContain("1 of 2 shown");
 	expect(html).toContain("0 of 1 shown");
@@ -79,7 +78,6 @@ test("an expanded provider lists its models indented, each with its own switch",
 	expect(html).toContain("400K · reasoning");
 	const hidden = html.match(/<button[^>]*data-testid="model-visibility-openai-gpt-b"[^>]*>/)?.[0];
 	expect(hidden).toContain('aria-checked="false"');
-	expect(hidden).toContain("data-setting-side");
 	expect(hidden).toMatch(/tabindex="-?\d"/);
 	expect(html).toMatch(/data-testid="model-visibility-openai-gpt-a"[^>]*>/);
 });

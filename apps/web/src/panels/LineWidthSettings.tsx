@@ -61,9 +61,9 @@ export function LineWidthCard({ kind, value, bounded, onSave }: LineWidthCardPro
 		<section
 			aria-labelledby={headingId}
 			data-testid={`${kind}-line-width-control`}
-			className="flex min-w-0 flex-col rounded-md border border-border-default bg-clip-padding px-12"
+			className="flex min-w-0 flex-col rounded-md border border-border-default bg-clip-padding px-4"
 		>
-			<div className="flex flex-col gap-2 pt-12 pb-4">
+			<div className="flex flex-col gap-2 px-8 pt-12 pb-4">
 				<h4 id={headingId} className="tr-title-compact text-text-default">
 					{t(copy.title)}
 				</h4>

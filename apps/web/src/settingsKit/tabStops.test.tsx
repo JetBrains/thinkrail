@@ -46,10 +46,13 @@ const markup = renderToStaticMarkup(
 	</SettingsPage>,
 );
 
-test("every button and input the blocks render has an explicit tabindex (WebKit Tab skips the rest)", () => {
+test("every button, input and row the blocks render has an explicit tabindex (WebKit Tab skips the rest)", () => {
 	const stops = markup.match(/<(button|input)\b[^>]*>/g) ?? [];
 	expect(stops.length).toBe(4);
 	expect(stops.filter((stop) => !/tabindex="(0|-1)"/.test(stop))).toEqual([]);
+	const rows = markup.match(/<fieldset\b[^>]*data-setting-row[^>]*>/g) ?? [];
+	expect(rows.length).toBe(3);
+	expect(rows.filter((row) => !/tabindex="(0|-1)"/.test(row))).toEqual([]);
 });
 
 test("the page and group render the heading, description and a visible scope tag", () => {
@@ -72,7 +75,7 @@ test("a number field is text with a numeric keyboard, clean until edited", () =>
 test("a disclosure toggle is a walk row and its own stop", () => {
 	const toggle = markup.match(/<button[^>]*aria-expanded[^>]*>/)?.[0] ?? "";
 	expect(toggle).toContain('data-setting-row="advanced"');
-	expect(toggle).toContain("data-setting-stop");
+	expect(toggle).toContain("focus-visible:focus-ring-row");
 	expect(toggle).toContain('aria-expanded="true"');
 	expect(markup).toContain('data-setting-row="left-groups"');
 });

@@ -16,6 +16,7 @@ import {
 	SETTINGS_LIST_ROW,
 	SettingsGroup,
 	type SettingsGroupAction,
+	SettingsLine,
 	SettingsList,
 	SettingsNotice,
 	SettingsPage,
@@ -245,7 +246,10 @@ export function TemplatesPage({
 	if (failed) {
 		return (
 			<SettingsPage testId="settings-templates" title={title} description={description}>
-				<div className="flex flex-col items-start gap-8">
+				<SettingsLine
+					rowId="templates-load-failed"
+					className="flex flex-col items-start gap-8 py-8"
+				>
 					<p role="alert" data-testid="templates-error" className="text-text-muted tr-text-ui">
 						{t("settings.templates.loadFailed")}
 					</p>
@@ -258,7 +262,7 @@ export function TemplatesPage({
 					>
 						{t("common.retry")}
 					</Button>
-				</div>
+				</SettingsLine>
 			</SettingsPage>
 		);
 	}
@@ -283,7 +287,7 @@ export function TemplatesPage({
 						<p
 							data-testid="project-templates-empty"
 							data-setting-id={SETTING.projectTemplates.id}
-							className="py-8 text-text-muted tr-text-metadata"
+							className="px-8 py-8 text-text-muted tr-text-metadata"
 						>
 							{t("settings.templates.projectEmpty")}
 						</p>
@@ -318,7 +322,10 @@ export function TemplatesPage({
 					/>
 				)}
 				{workspaceId ? null : (
-					<p data-testid="project-templates-hint" className="pt-8 text-text-muted tr-text-metadata">
+					<p
+						data-testid="project-templates-hint"
+						className="px-8 pt-8 text-text-muted tr-text-metadata"
+					>
 						{t("settings.templates.projectHint")}
 					</p>
 				)}
@@ -416,6 +423,7 @@ function GlobalTemplatesEmpty() {
 		<SettingsNotice
 			variant="info"
 			icon={<MagicWand className="size-14" />}
+			rowId="templates-starters"
 			testId="global-templates-empty"
 			action={
 				<Button

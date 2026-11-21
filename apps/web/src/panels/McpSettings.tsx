@@ -38,9 +38,12 @@ import { useNow } from "@/components/useNow";
 import type { McpStateTone } from "@/lib";
 import {
 	SETTINGS_LIST_PRIMARY,
+	SETTINGS_ROW_FOCUS,
+	SETTINGS_ROW_INSET,
 	SETTINGS_ROWS,
 	SETTINGS_TAG,
 	SettingsGroup,
+	SettingsLine,
 	SettingsList,
 	SettingsNotice,
 	SettingsPage,
@@ -357,7 +360,11 @@ export function McpServerRowView({
 			data-scope={summary.scope}
 			data-state={row.state}
 			data-attention={row.attention || undefined}
-			className="flex flex-col gap-4 border-border-muted border-b py-6 last:border-b-0"
+			className={cn(
+				"flex flex-col gap-4 border-border-muted border-b py-6 last:border-b-0",
+				SETTINGS_ROW_INSET,
+				SETTINGS_ROW_FOCUS,
+			)}
 		>
 			<div className="flex flex-wrap items-center gap-8">
 				<button
@@ -705,18 +712,22 @@ export function McpEmptyState({
 	onPreset: (preset: McpPreset) => void;
 }) {
 	const t = useT();
+	const row = settingId ?? "mcp-empty";
 	return (
 		<div
 			data-testid="mcp-empty"
-			data-setting-row={settingId ?? "mcp-empty"}
 			data-setting-id={settingId}
-			className="flex flex-col items-start gap-12 py-8"
+			className="flex flex-col items-stretch gap-12 py-8"
 		>
-			<p className="tr-text-ui text-text-default">{t("mcp.empty.title")}</p>
+			<p className="px-8 tr-text-ui text-text-default">{t("mcp.empty.title")}</p>
 			{MCP_PRESETS.length > 0 ? (
-				<ul className="flex w-full flex-col gap-4" data-testid="mcp-empty-presets">
+				<div className="flex w-full flex-col gap-4" data-testid="mcp-empty-presets">
 					{MCP_PRESETS.map((preset) => (
-						<li key={preset.id} className="flex items-center gap-8">
+						<SettingsLine
+							key={preset.id}
+							rowId={`${row}/preset/${preset.id}`}
+							className="flex items-center gap-8 py-4"
+						>
 							<span className="flex min-w-0 flex-1 flex-col">
 								<span className="tr-title-compact text-text-default">{t(preset.title)}</span>
 								<span className="break-words text-text-muted tr-text-metadata">
@@ -732,25 +743,23 @@ export function McpEmptyState({
 								size="m"
 								iconLeft={Plus}
 								tabIndex={0}
-								data-setting-side=""
 								aria-label={t("mcp.empty.addPreset", { name: t(preset.title) })}
 								disabled={disabled}
 								onClick={() => onPreset(preset)}
 							>
 								{t("common.add")}
 							</Button>
-						</li>
+						</SettingsLine>
 					))}
-				</ul>
+				</div>
 			) : null}
-			<div className="flex flex-wrap gap-8">
+			<SettingsLine rowId={`${row}/add`} className="flex flex-wrap gap-8 py-4">
 				<Button
 					variant="primary"
 					size="m"
 					iconLeft={Plus}
 					tabIndex={0}
 					data-testid="mcp-empty-add"
-					data-setting-stop=""
 					data-focus-fallback={focusList}
 					disabled={disabled}
 					onClick={onAdd}
@@ -762,13 +771,12 @@ export function McpEmptyState({
 					size="m"
 					tabIndex={0}
 					data-testid="mcp-empty-import"
-					data-setting-side=""
 					disabled={disabled}
 					onClick={onImport}
 				>
 					{t("mcp.empty.import")}
 				</Button>
-			</div>
+			</SettingsLine>
 		</div>
 	);
 }
@@ -1208,7 +1216,7 @@ export function McpServersPanel({
 				</div>
 				{servers === null ? (
 					readFailure ? (
-						<div className="flex flex-col items-start gap-8">
+						<SettingsLine rowId="mcp-read-failed" className="flex flex-col items-start gap-8 py-8">
 							<p role="alert" data-testid="mcp-error" className="text-text-muted tr-text-ui">
 								{t("mcp.settings.readFailed", { error: readFailure })}
 							</p>
@@ -1221,7 +1229,7 @@ export function McpServersPanel({
 							>
 								{t("common.retry")}
 							</Button>
-						</div>
+						</SettingsLine>
 					) : (
 						<SkeletonRows rows={3} label={t("mcp.settings.loading")} />
 					)
@@ -1256,7 +1264,7 @@ export function McpServersPanel({
 						{inProject ? null : (
 							<p
 								data-testid="mcp-project-servers-hint"
-								className="pt-8 text-text-muted tr-text-metadata"
+								className="px-8 pt-8 text-text-muted tr-text-metadata"
 							>
 								{t("mcp.settings.projectServersHint")}
 							</p>
@@ -1274,7 +1282,7 @@ export function McpServersPanel({
 							<p
 								data-testid="mcp-untrusted"
 								data-setting-id={SETTING.mcpProjectServers.id}
-								className="py-8 text-text-muted tr-text-metadata"
+								className="px-8 py-8 text-text-muted tr-text-metadata"
 							>
 								{t("mcp.settings.untrusted")}
 							</p>
@@ -1290,7 +1298,7 @@ export function McpServersPanel({
 							<p
 								data-testid="mcp-project-empty"
 								data-setting-id={SETTING.mcpProjectServers.id}
-								className="py-8 text-text-muted tr-text-metadata"
+								className="px-8 py-8 text-text-muted tr-text-metadata"
 							>
 								{t("mcp.settings.projectEmpty")}
 							</p>
