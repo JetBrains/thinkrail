@@ -653,7 +653,7 @@ export function Header({
 			{labels?.entry && labels.entry.labels.length > 0 ? (
 				<span
 					data-testid="session-insights-session-user"
-					className="flex min-w-0 max-w-240 shrink items-center overflow-hidden"
+					className="flex min-w-0 max-w-240 shrink-0 items-center overflow-hidden"
 				>
 					<LabelChips
 						labels={labels.entry.labels}
