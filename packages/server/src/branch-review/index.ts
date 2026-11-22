@@ -7,3 +7,4 @@ export {
 	reviewNumber,
 	runProviderCommand,
 } from "./branchReview";
+export { getPullRequest, listPullRequests, pullRequestSizes } from "./pullRequests";

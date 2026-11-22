@@ -31,9 +31,15 @@ import {
 import { useShallow } from "zustand/react/shallow";
 import { useNow } from "@/components/useNow";
 import type { ChatAction } from "@/lib";
-import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
+import {
+	type ParsedTemplate,
+	slashArgument,
+	templateToSlashCommand,
+	useTemplateCommandPicker,
+} from "@/prompt";
 import {
 	EMPTY_RUNTIME,
+	isChatWorkspace,
 	type PromptFile,
 	SettingsSection,
 	selectCanRenameChat,
@@ -91,6 +97,8 @@ import {
 	prepareNameChatCommand,
 } from "./nativeCommands";
 import type { PromptImagesOwner } from "./promptImages";
+import { isPullRequestArgumentComplete } from "./pullRequestArguments";
+import { usePullRequestCompletion } from "./pullRequestCompletion";
 import { QueueStrip } from "./QueueStrip";
 import { deriveRecentPrompts } from "./recentPrompts";
 import {
@@ -225,6 +233,10 @@ export default function ChatView({
 				.flat()
 				.find((w) => w.id === workspaceId)?.projectId,
 	);
+	const repositoryProjectId = useAppStore((s) => {
+		const workspace = selectWorkspaceById(s, workspaceId);
+		return workspace && !isChatWorkspace(workspace) ? workspace.projectId : null;
+	});
 	const [skillsOpen, setSkillsOpen] = useState(false);
 	const skillsStale = useAppStore((s) => selectSkillsStale(s, workspaceId, sessionId));
 	const persisted = useAppStore((s) => selectChatPersisted(s, workspaceId, sessionId));
@@ -495,6 +507,15 @@ export default function ChatView({
 			cancelled = true;
 		};
 	}, [slashActive, workspaceId]);
+
+	const prArgument = slashArgument(draft, commands);
+	const pullRequests = usePullRequestCompletion(
+		repositoryProjectId,
+		prArgument?.command.argumentCompletion === "pull-request" &&
+			!isPullRequestArgumentComplete(prArgument.query)
+			? prArgument.query
+			: null,
+	);
 
 	const mergedCommands = useMemo(
 		() =>
@@ -1158,6 +1179,8 @@ export default function ChatView({
 					onPickTemplate={onPickTemplate}
 					onManageTemplates={onManageTemplates}
 					templatesEmpty={templatesEmpty}
+					pullRequests={pullRequests}
+					pullRequestNotice={t("chat.prCompletion.busyWorkspace")}
 				/>
 			</div>
 			<TemplateEditorDialog

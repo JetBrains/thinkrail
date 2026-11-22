@@ -2047,6 +2047,10 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   pre-session catalog maps only `resourceLoader.getSkills()` through the same skill→command helper and
   applies the **same project-trust gate**, so New Workspace preview and a real session cannot disagree
   except for the accepted base-branch/current-checkout timing difference.
+- That skill→command helper (`toSkillCommands`) also reads each skill's ThinkRail frontmatter key
+  `argument-completion` (pi ignores it) and sets `SlashCommandInfo.argumentCompletion` for a known
+  kind (`pull-request`); the read is cached per file and modification time, and an unknown kind or an
+  unreadable file simply omits it. Both catalogs therefore agree on which commands take a pull request.
 - Dialog promises honor abort/timeout and are settled (+ dismissed in the UI) on session disposal — a
   bridged `uiContext` call must never hang.
 - **Prompt-template `/name` expansion** — typed-through references like `/name args` in a prompt ride

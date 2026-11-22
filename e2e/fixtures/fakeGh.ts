@@ -21,6 +21,13 @@ export interface FakePr {
 	queued?: boolean;
 	mergedWith?: string | undefined;
 	headOwner?: string;
+	title?: string;
+	author?: string;
+	additions?: number;
+	deletions?: number;
+	changedFiles?: number;
+	updatedAt?: string;
+	reviewRequested?: boolean;
 }
 
 export interface FakeGhScenario {
@@ -31,6 +38,7 @@ export interface FakeGhScenario {
 		deleteBranchOnMerge?: boolean;
 	};
 	prs: FakePr[];
+	viewer?: string;
 }
 
 function fail(message: string): never {
@@ -74,7 +82,13 @@ function main(): void {
 		mergedAt: null,
 		closedAt: null,
 		createdAt: "2026-01-01T00:00:00Z",
+		title: `Pull request ${pr.number}`,
+		additions: 0,
+		deletions: 0,
+		changedFiles: 0,
+		updatedAt: "2026-01-01T00:00:00Z",
 		...pr,
+		author: { login: pr.author ?? "octo" },
 	});
 	const find = (selector: string | undefined) =>
 		scenario.prs.find((pr) => String(pr.number) === selector) ??
@@ -91,6 +105,10 @@ function main(): void {
 			...scenario.repo,
 		};
 		process.stdout.write(`${JSON.stringify(project(repo))}\n`);
+		return;
+	}
+	if (group === "api" && command === "graphql") {
+		process.stdout.write(`${JSON.stringify(graphql(scenario, argv.slice(2), shape))}\n`);
 		return;
 	}
 	if (group !== "pr") fail(`fake gh: unsupported command ${argv.join(" ")}`);
@@ -141,6 +159,91 @@ function main(): void {
 		default:
 			fail(`fake gh: unsupported command ${argv.join(" ")}`);
 	}
+}
+
+function graphql(
+	scenario: FakeGhScenario,
+	args: string[],
+	shape: (pr: FakePr) => Record<string, unknown>,
+): unknown {
+	const fields = new Map<string, string>();
+	for (let index = 0; index < args.length; index += 2) {
+		if (args[index] !== "-f" && args[index] !== "-F")
+			fail(`fake gh: unsupported api arg ${args[index]}`);
+		const pair = args[index + 1] ?? "";
+		const at = pair.indexOf("=");
+		fields.set(pair.slice(0, at), pair.slice(at + 1));
+	}
+	const query = fields.get("query") ?? "";
+	const viewer = scenario.viewer ?? "me";
+	if (query.includes("search(")) {
+		const terms = (fields.get("q") ?? "").split(/\s+/).filter(Boolean);
+		const words = terms.filter((term) => !term.includes(":"));
+		const has = (term: string) => terms.includes(term);
+		const authors = terms.filter((term) => term.startsWith("author:")).map((term) => term.slice(7));
+		const rows = scenario.prs
+			.filter((pr) => pr.state === "OPEN")
+			.filter((pr) => !has("review-requested:@me") || pr.reviewRequested === true)
+			.filter((pr) => !has("draft:false") || pr.isDraft !== true)
+			.filter((pr) =>
+				authors.every((author) => (pr.author ?? "octo") === (author === "@me" ? viewer : author)),
+			)
+			.filter((pr) => {
+				const title = String(shape(pr).title).toLowerCase();
+				return words.every((word) => title.includes(word.toLowerCase()));
+			})
+			.sort(
+				(left, right) =>
+					String(shape(right).updatedAt).localeCompare(String(shape(left).updatedAt)) ||
+					right.number - left.number,
+			);
+		const size = Number(/first: (\d+)/.exec(query)?.[1] ?? "20");
+		const from = Number(fields.get("after") ?? "0");
+		const page = rows.slice(from, from + size);
+		return {
+			data: {
+				viewer: { login: viewer },
+				search: {
+					pageInfo: {
+						hasNextPage: from + size < rows.length,
+						endCursor: from + size < rows.length ? String(from + size) : null,
+					},
+					nodes: page.map((pr) => {
+						const row = shape(pr);
+						return {
+							number: pr.number,
+							title: row.title,
+							url: row.url,
+							state: pr.state,
+							isDraft: row.isDraft,
+							headRefName: pr.headRefName,
+							baseRefName: row.baseRefName,
+							updatedAt: row.updatedAt,
+							author: row.author,
+							reviewRequests: {
+								nodes: pr.reviewRequested ? [{ requestedReviewer: { login: viewer } }] : [],
+							},
+						};
+					}),
+				},
+			},
+		};
+	}
+	if (query.includes("repository(")) {
+		const repository: Record<string, unknown> = {};
+		for (const [, number] of query.matchAll(/p(\d+): pullRequest/g)) {
+			const pr = scenario.prs.find((candidate) => String(candidate.number) === number);
+			if (!pr) continue;
+			const row = shape(pr);
+			repository[`p${number}`] = {
+				additions: row.additions,
+				deletions: row.deletions,
+				changedFiles: row.changedFiles,
+			};
+		}
+		return { data: { repository } };
+	}
+	return fail("fake gh: unsupported graphql query");
 }
 
 if (import.meta.main) main();

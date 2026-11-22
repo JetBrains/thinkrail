@@ -81,6 +81,7 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 		t: currentTranslator(),
 		contextProjectId: "p1",
 		canStartChat: false,
+		reviewAvailable: false,
 		activeWorkspace: workspace,
 		editors: [],
 		historyAvailable: false,
@@ -101,6 +102,7 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 		extensionPanels: [],
 		actions: {
 			newWorkspace: noop,
+			reviewPullRequest: noop,
 			newProjectlessChat: noop,
 			openDefaultWorkspace: noop,
 			openProject: noop,
@@ -178,6 +180,24 @@ describe("palette project and Settings commands", () => {
 		);
 		expect(row("workspace.new", deps({ contextProjectId: null }))).toBeUndefined();
 		expect(row("workspace.openDefault", deps({ contextProjectId: null }))).toBeUndefined();
+	});
+
+	test("Review a pull request is offered only for a repository on a host that lists pull requests", () => {
+		expect(row("workspace.reviewPr", deps())).toBeUndefined();
+		expect(
+			row("workspace.reviewPr", deps({ reviewAvailable: true, contextProjectId: null })),
+		).toBeUndefined();
+		let opened = 0;
+		const review = row(
+			"workspace.reviewPr",
+			deps({
+				reviewAvailable: true,
+				actions: { ...deps().actions, reviewPullRequest: () => (opened += 1) },
+			}),
+		);
+		expect(review?.title).toBe("Review a pull request…");
+		review?.run?.();
+		expect(opened).toBe(1);
 	});
 
 	test("Find in files is offered only where it has a scope, with the chord it shares with the shell", () => {

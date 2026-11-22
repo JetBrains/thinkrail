@@ -656,6 +656,45 @@ test("disabled packages default empty, round-trip deduped, and reject a malforme
 	expect(getConfig().disabledPackages).toEqual(["npm:x"]);
 });
 
+test("pull-request filters merge per project, forget with null, persist, and drop malformed values", () => {
+	expect(DEFAULT_CONFIG.pullRequestFilters).toEqual({});
+	expect(getConfig().pullRequestFilters).toEqual({});
+	updateConfig({ pullRequestFilters: { p1: { scope: "mine", drafts: false } } });
+	const next = updateConfig({
+		pullRequestFilters: { p2: { scope: "all", drafts: true, author: "ada" } },
+	});
+	expect(next.pullRequestFilters).toEqual({
+		p1: { scope: "mine", drafts: false },
+		p2: { scope: "all", drafts: true, author: "ada" },
+	});
+	expect(updateConfig({ pullRequestFilters: { p1: null } }).pullRequestFilters).toEqual({
+		p2: { scope: "all", drafts: true, author: "ada" },
+	});
+	resetConfigCache();
+	expect(getConfig().pullRequestFilters).toEqual({
+		p2: { scope: "all", drafts: true, author: "ada" },
+	});
+	for (const value of [
+		[],
+		"x",
+		{ p: { scope: "closed", drafts: true } },
+		{ p: { scope: "all" } },
+	]) {
+		const invalid = { pullRequestFilters: value } as unknown as AppConfigUpdate;
+		expect(() => updateConfig(invalid)).toThrow(
+			"pullRequestFilters must map project ids to pull-request filters or null",
+		);
+	}
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({
+			pullRequestFilters: { a: { scope: "all", drafts: true }, b: { scope: "x" }, c: 1 },
+		}),
+	);
+	resetConfigCache();
+	expect(getConfig().pullRequestFilters).toEqual({ a: { scope: "all", drafts: true } });
+});
+
 test("an out-of-range subagent limit is rejected before persistence or broadcast", () => {
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));

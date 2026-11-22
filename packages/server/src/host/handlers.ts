@@ -117,7 +117,12 @@ import {
 	startProxyJbcentral,
 	updateJbcentral,
 } from "../auth";
-import { providerFromRemoteUrl } from "../branch-review";
+import {
+	getPullRequest,
+	listPullRequests,
+	providerFromRemoteUrl,
+	pullRequestSizes,
+} from "../branch-review";
 import { forgetWorkspaceChanges, revertChange, undoChange } from "../changes";
 import { selectDirectory } from "../dialog";
 import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
@@ -915,6 +920,18 @@ const handlers: WsHandlers = {
 		if (moved) nudgeBaseRefWorkspaces(p.projectId, p.ref);
 		return { ok };
 	},
+	"pr.list": (params) =>
+		listPullRequests(repositoryProject(params.projectId).path, {
+			filter: params.filter,
+			...(params.query ? { query: params.query } : {}),
+			...(params.cursor ? { cursor: params.cursor } : {}),
+		}),
+	"pr.get": (params) => getPullRequest(repositoryProject(params.projectId).path, params.number),
+	"pr.sizes": (params) =>
+		pullRequestSizes(
+			repositoryProject(params.projectId).path,
+			Array.isArray(params.numbers) ? params.numbers : [],
+		),
 	"github.authStatus": () => githubAuthStatus(),
 	"github.refresh": () => githubRefresh(),
 	"pr.preview": (params, ctx) =>

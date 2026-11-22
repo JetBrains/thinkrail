@@ -297,7 +297,10 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   - the cheap-win mirrors (declared in the Node-only `pi-coding-agent`): **`SessionStats`** + **`ContextUsage`**
     (tokens/cost/context bar — display only) and **`SlashCommandInfo`** + **`SlashCommandSourceInfo`** (the
     command autocomplete rows, returned by live `session.getCommands`, skill-only pre-session `skill.list`,
-    and mapped prompt-template listings), and **`SkillCatalogEntry`** + **`SkillDecision`** (`load`/`untrusted`/`pending-ack`/
+    and mapped prompt-template listings; the additive optional `argumentCompletion` (v133, today only
+    `"pull-request"`) is ThinkRail's, not pi's: the host reads a skill's `argument-completion`
+    frontmatter key so a prompt can offer the argument — an older host omits it and prompts send the
+    command as typed), and **`SkillCatalogEntry`** + **`SkillDecision`** (`load`/`untrusted`/`pending-ack`/
     `disabled`) — the workspace Skills manager's `skills.state` rows; the additive optional `manualOnly`
     marks pi's `disable-model-invocation` skills, which pi never lists in the prompt (an older host omits it).
   - **`ExtensionCatalogEntry`** (`{ name, title, description?, enabled, tools, hasParentExtensions?, hasChildExtensions, settings?, apiVersion? }`) — one
@@ -622,7 +625,8 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   fileLineWidthBounded, voiceInputEnabled, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
   favoriteModels, recentModels, reviewAutoFix, agentReviewEnabled, subagentsEnabled, subagentMaxConcurrent,
   jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, disabledExtensions, extensionSettings, otherAgentSkills,
-  onboardingDismissed, interfaceFont, codeFont, codeFontSize, codeLigatures, fontWeightOffset, keybindings }` — an extensible
+  onboardingDismissed, interfaceFont, codeFont, codeFontSize, codeLigatures, fontWeightOffset, keybindings,
+  pullRequestFilters }` — an extensible
   bag; the five font fields join at v102 and normalize together through `normalizeFontSettings` (host load, web
   store, fonts runtime); the line-width fields join the wire at protocol v61, `terminalWindowsShell` at v62, and
   `voiceInputEnabled` (default `true`) with voice input at v107, and `questionPanelHeight`
@@ -666,7 +670,10 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   [[submodule-server-extensions]]); `extensionSettings` (`ExtensionSettingValues`, default `{}`, on the wire from
   `EXTENSION_SETTINGS_PROTOCOL_VERSION` = v105) maps extension name → setting key → boolean for the settings
   an `ExtensionCatalogEntry` declares — an absent key means the descriptor's `default`, and
-  `settings.update { extensionSettings }` merges per key; `keybindings` (`KeybindingOverrides`, default `{}`,
+  `settings.update { extensionSettings }` merges per key; `pullRequestFilters` (default `{}`, from v133)
+  maps a project id to the pull-request completion's last `PullRequestFilter` (`isPullRequestFilter`
+  validates one; `DEFAULT_PULL_REQUEST_FILTER` is all open including drafts), and
+  `settings.update { pullRequestFilters }` merges per project, `null` forgetting one; `keybindings` (`KeybindingOverrides`, default `{}`,
   on the wire from **`KEYBINDINGS_PROTOCOL_VERSION`** = v123) maps a command id — the app's or a web
   extension's — to the user's chords, replacing its defaults (`[]` unbinds, an absent id keeps them); an
   update replaces the whole map, unknown ids are kept, and a malformed value is refused with
@@ -1001,6 +1008,18 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   queued it (merge queue / auto-merge), in which case the branch is never deleted; a merge that landed while
   the branch deletion failed is a success with the reason), and **`workspace.deleteRemoteBranch`** (`{ workspaceId,
   branch }` → `Ack`; `PUSH_AUTH_FAILED` as for a push) /
+  the v133 **pull-request reads** (`PULL_REQUEST_REVIEW_PROTOCOL_VERSION`, gating the prompts'
+  pull-request completion so a newer client sends the command as typed against an older host):
+  **`pr.list`** (`{ projectId, filter: { scope: "review-requested" | "mine" | "all", drafts, author? },
+  query?, cursor? }` → `PullRequestPage { pullRequests, nextCursor?, unavailable? }` — one page of the
+  project's open GitHub pull requests matching the filter and the typed words, most recently updated
+  first, each a `PullRequestSummary` with `baseRef` already resolved on the local remote and
+  `reviewRequested` for the signed-in `gh` user, **without `size`**; when it cannot list, an empty page
+  with the reason — `missing` / `unauthenticated` (the `GhSetupProblem` pair), `not-github`, or
+  `failed`), **`pr.sizes`** (`{ projectId, numbers }` → `PullRequestSizeEntry[]`, the diff stats of the
+  rows on screen, leaving out any it could not read) and **`pr.get`** (`{ projectId, number }` →
+  `PullRequestSummary | null` with `size`, in any state, `null` when it does not exist or cannot be
+  read; `reviewRequested` is always `false` there) /
   **`project.setTrust`** (persist a project's trust grant → the updated `Project`; gates its committed
   cross-agent skill aliases; `resources: true` also grants pi-level resource trust, see Project trust) /
   **`skill.list`** (a pre-session, skill-only `SlashCommandInfo[]` preview for a `projectId`, resolved from

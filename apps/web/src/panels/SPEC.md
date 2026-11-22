@@ -636,9 +636,11 @@ resources stop loading, running subagents stop and open chats reload only when `
 pre-session half of the user's skill settings; the chat header opens the same dialog in workspace mode
 (with Reload).
 
-**`NewWorkspaceDialog`** is the start-working surface: **a target control** (a two-option segment — a
-native radio group, `fieldset` + sr-only `legend` over visually-hidden radio inputs, so assistive tech
-hears one mutually-exclusive choice — both always visible: the two-mode model in one glance) chooses **where** the work runs, and the header is
+**`NewWorkspaceDialog`** is the start-working surface: **a target control** (a segment of up to three
+options — a native radio group, `fieldset` + sr-only `legend` over visually-hidden radio inputs, so
+assistive tech hears one mutually-exclusive choice: **Isolated workspace** and **Project folder** when a
+repository project is open and **Chat without a project** where a chat can start — every available mode
+visible at once) chooses **where** the work runs, and the header is
 **mode-aware** so it always names the operation truthfully: **Isolated workspace** → title **“Create
 workspace”**, description **“A separate checkout on its own new branch. Files, chats, changes, and
 terminals stay scoped to it.”**; **Project folder** → title **“Work in project folder”**, description
@@ -738,6 +740,16 @@ a project picker, the prompt hero, and the reused
   missing API key) surfaces as an `error` turn, after the user's message, in the chat the handoff opens; a
   failed chat start toasts instead. `retryDraft` (Edit & retry) reopens the dialog prefilled with the failed
   creation's prompt, images, model + effort and base branch.
+  **Reviewing a pull request** has no mode of its own: typing `/skill:reviewing-a-pr ` in the prompt
+  (the skill declares a pull-request argument) opens the shared pull-request completion
+  (`chat/PullRequestCompletionMenu` over `chat/pullRequestCompletion`, [[submodule-web-chat]]) above the
+  prompt instead of the slash menu, with the dialog as the author dropdown's container. Picking one
+  inserts its link after the command, sets **From** to the PR's `baseRef` (prefetched as a picked remote
+  base is) and says so next to the picker ("base of #N") until another base is chosen; the command and
+  the link are tinted through a backdrop behind the transparent textarea. The palette's **Review a pull
+  request…** row opens the dialog with the command seeded, so the list is already open. The workspace
+  is created like any other prompt — `workspace.startCreate` from the chosen base with the prompt as the
+  kickoff, the agent naming it.
   **`WorkspaceCreation.tsx`** renders a creation in the two places the user waits: `WorkspaceCreationRow`
   under its project in `ProjectTree` — inside the live list right after the Default row(s), newest first,
   i.e. exactly where its workspace lands, so the handoff never moves the row (spinner + `Creating… N%` + a `<progress>` bar while running; failed:

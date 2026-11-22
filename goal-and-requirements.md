@@ -145,6 +145,14 @@ What ThinkRail does, at product level; the linked spec owns the detail.
 - **Review** — anchored comments on files and diffs, collected without starting the agent and sent as
   structured context to chats that can resolve them; local review, not a forge integration
   ([[submodule-server-reviews]]).
+- **Pull-request review** — typing the `reviewing-a-pr` command in a prompt (New Workspace or a chat)
+  offers the repository's GitHub pull requests as its argument (paged search, filters remembered per
+  project; any by number or link), and the agent reviews the picked one in a workspace on its code —
+  a fresh one, or a new one it starts when the chat's own workspace has work — through the
+  `reviewing-a-pr` workflow: measured evidence, findings that survived
+  an attempt to refute them, a one-page brief with the user's decisions, and a GitHub review read and
+  posted through the user's `gh` only on their confirmation — it never approves on its own
+  ([[submodule-workflow-skills]], [[submodule-server-branch-review]], [[submodule-web-chat]]).
 - **Open PR** — push the workspace branch and open or update its GitHub PR through the user's `gh`,
   falling back to a prefilled compare URL (GitLab: the prefilled new-MR page), from the plan or straight
   from the topbar, whose Remote and Pull request segments always show the branch's next step — publish,

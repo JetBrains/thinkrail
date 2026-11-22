@@ -10,6 +10,7 @@ import { IconButton } from "@thinkrail/ui/button";
 import { LocalKeymapProvider } from "@thinkrail/ui/local-keys";
 import { useEffect, useState } from "react";
 import { useContinuations } from "../chat/continuations";
+import { REVIEW_PULL_REQUEST_PROMPT } from "../chat/pullRequestArguments";
 import { openFindInFiles } from "../findInFiles";
 import {
 	applyFontPreference,
@@ -395,6 +396,7 @@ function ShellLayout() {
 			<SurveyWindow />
 			<SearchPaletteHost
 				onNewWorkspace={(_projectId, initialPrompt) => openNewWork(initialPrompt)}
+				onReviewPullRequest={() => openNewWork(REVIEW_PULL_REQUEST_PROMPT)}
 				onToggleProjectsHome={homeProjects.toggle}
 				hasUpdateSettings={updates !== null}
 			/>

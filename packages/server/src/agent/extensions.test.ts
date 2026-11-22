@@ -1,5 +1,13 @@
 import { describe, expect, it, jest, spyOn } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	utimesSync,
+	writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -44,6 +52,8 @@ import {
 	setExtensionSettingsResolver,
 	setInstalledPackagesListener,
 	setSpecsEnabledResolver,
+	skillArgumentCompletion,
+	toSkillCommands,
 	withoutSpecRule,
 } from "./extensions";
 import { headlessSearchPolicy } from "./headlessSearch";
@@ -1605,5 +1615,71 @@ describe("pi packages", () => {
 			restore();
 			rmSync(root, { recursive: true, force: true });
 		}
+	});
+});
+
+describe("skill argument completion", () => {
+	const skillFile = (frontmatter: string) => {
+		const dir = mkdtempSync(join(tmpdir(), "thinkrail-skill-arg-"));
+		const path = join(dir, "SKILL.md");
+		writeFileSync(
+			path,
+			`---\nname: probe\ndescription: Use when probing.\n${frontmatter}---\n\n# Probe\n`,
+		);
+		return { dir, path };
+	};
+
+	it("surfaces a declared pull-request argument on the skill's slash command", () => {
+		const { dir, path } = skillFile("argument-completion: pull-request\n");
+		try {
+			const [command] = toSkillCommands([
+				{
+					name: "probe",
+					description: "Use when probing.",
+					filePath: path,
+					baseDir: dir,
+					sourceInfo: { path, source: "local", scope: "user", origin: "top-level" },
+					disableModelInvocation: false,
+				},
+			]);
+			expect(command).toMatchObject({ name: "skill:probe", argumentCompletion: "pull-request" });
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("ignores an unknown kind, a missing key and an unreadable file", () => {
+		for (const frontmatter of ["argument-completion: issue\n", ""]) {
+			const { dir, path } = skillFile(frontmatter);
+			try {
+				expect(skillArgumentCompletion(path)).toBeNull();
+			} finally {
+				rmSync(dir, { recursive: true, force: true });
+			}
+		}
+		expect(skillArgumentCompletion(join(tmpdir(), "no-such-skill", "SKILL.md"))).toBeNull();
+	});
+
+	it("rereads a skill whose file changed", () => {
+		const { dir, path } = skillFile("");
+		try {
+			expect(skillArgumentCompletion(path)).toBeNull();
+			writeFileSync(
+				path,
+				"---\nname: probe\ndescription: x\nargument-completion: pull-request\n---\n",
+			);
+			const later = new Date(Date.now() + 5_000);
+			utimesSync(path, later, later);
+			expect(skillArgumentCompletion(path)).toBe("pull-request");
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("the bundled reviewing-a-pr skill declares a pull-request argument", () => {
+		const path = createRequire(import.meta.url).resolve(
+			"pi-thinkrail-workflow/skills/reviewing-a-pr/SKILL.md",
+		);
+		expect(skillArgumentCompletion(path)).toBe("pull-request");
 	});
 });

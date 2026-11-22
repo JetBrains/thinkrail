@@ -44,6 +44,7 @@ import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { type DefaultPairOption, ModelEffortPicker } from "@/chat/ModelEffortPicker";
+import { PullRequestCompletionMenu } from "@/chat/PullRequestCompletionMenu";
 import {
 	deriveProjectTrustNotice,
 	type ProjectTrustNotice,
@@ -57,6 +58,8 @@ import {
 	PromptImageChips,
 	usePromptImages,
 } from "@/chat/promptImages";
+import { isPullRequestArgumentComplete, pullRequestReferenceOf } from "@/chat/pullRequestArguments";
+import { usePullRequestCompletion } from "@/chat/pullRequestCompletion";
 import { SkillsButton } from "@/chat/SkillsButton";
 import { SkillsDialog } from "@/chat/SkillsDialog";
 import { useModelCatalog } from "@/chat/useModelCatalog";
@@ -67,14 +70,19 @@ import {
 	beginTemplateSlotSession,
 	finalizeTemplateSlotSession,
 	type ParsedTemplate,
+	promptTintClass,
+	replaceSlashArgument,
 	SlashCommandMenu,
 	selectedSlashCommandValue,
+	slashArgument,
+	slashArgumentTint,
 	slashCommandCatalogOrEmpty,
 	slashCommandQuery,
 	stepTemplateSlotSession,
 	TemplateSlotHint,
 	type TemplateSlotSessionState,
 	templateToSlashCommand,
+	useArgumentCompletion,
 	usePendingSelection,
 	useSlashCommandCompletion,
 	useTemplateCommandPicker,
@@ -224,6 +232,49 @@ export function NewWorkspaceDialog({
 		},
 	});
 	const slashActive = slashCommandQuery(prompt) !== null;
+
+	const prArgument = chat ? null : slashArgument(prompt, skillCommands);
+	const prQuery =
+		prArgument?.command.argumentCompletion === "pull-request" &&
+		!isPullRequestArgumentComplete(prArgument.query)
+			? prArgument.query
+			: null;
+	const pullRequests = usePullRequestCompletion(open && !chat ? selectedProjectId : null, prQuery);
+	const prChipRef = useRef<HTMLButtonElement>(null);
+	const backdropRef = useRef<HTMLDivElement>(null);
+	const [prBase, setPrBase] = useState<{ number: number; baseRef: string } | null>(null);
+	const pickPullRequest = (index: number) => {
+		const pr = pullRequests?.items[index];
+		const argument = slashArgument(prompt, skillCommands);
+		if (!pr || !argument) return;
+		const next = replaceSlashArgument(prompt, argument, pr.url);
+		updatePromptDraft(next, null);
+		focusPromptSelection(next.length);
+		setBaseRef(pr.baseRef);
+		prefetchBase(pr.baseRef);
+		setPrBase({ number: pr.number, baseRef: pr.baseRef });
+	};
+	const prCompletion = useArgumentCompletion({
+		value: prompt,
+		commands: skillCommands,
+		itemCount: pullRequests?.items.length ?? 0,
+		isComplete: (argument) =>
+			argument.command.argumentCompletion !== "pull-request" ||
+			isPullRequestArgumentComplete(argument.query),
+		onPick: pickPullRequest,
+		onTab: () => prChipRef.current?.focus(),
+	});
+	const prMenuOpen = prCompletion.argument !== null && pullRequests !== null;
+	const promptTint =
+		prArgument && !slotSession
+			? slashArgumentTint(
+					prompt,
+					prArgument,
+					pullRequestReferenceOf(prArgument.query.split(/\s/)[0] ?? "")
+						? (prArgument.query.split(/\s/)[0] ?? "").length
+						: 0,
+				)
+			: null;
 
 	const stepPromptSlot = (direction: 1 | -1) => {
 		if (!slotSession) return;
@@ -586,6 +637,11 @@ export function NewWorkspaceDialog({
 						attachedImages.cancelUpload();
 						return;
 					}
+					if (prMenuOpen) {
+						event.preventDefault();
+						prCompletion.dismiss();
+						return;
+					}
 					if (slashCompletion.open) {
 						event.preventDefault();
 						slashCompletion.dismiss();
@@ -678,6 +734,11 @@ export function NewWorkspaceDialog({
 								onRefresh={refreshBranches}
 							/>
 						) : null}
+						{isolated && prBase && prBase.baseRef === baseRef ? (
+							<span data-testid="ws-base-from-pr" className="text-primary tr-text-metadata">
+								{t("panels.newWorkspace.fromPullRequest", { number: prBase.number })}
+							</span>
+						) : null}
 						{chat ? null : (
 							<SkillsButton
 								onOpen={() => setManageSkills(true)}
@@ -739,11 +800,35 @@ export function NewWorkspaceDialog({
 				</div>
 
 				<div className="relative shrink-0">
+					{promptTint ? (
+						<div
+							ref={backdropRef}
+							data-testid="ws-prompt-tint"
+							aria-hidden
+							className="pointer-events-none absolute inset-0 overflow-hidden rounded-sm border border-transparent bg-control-bg"
+						>
+							<div className="w-full whitespace-pre-wrap break-words px-12 py-8 tr-text-ui">
+								{promptTint.map((segment) => (
+									<span
+										key={segment.start}
+										data-tint={segment.tone === "plain" ? undefined : segment.tone}
+										className={cn("text-transparent", promptTintClass(segment.tone))}
+									>
+										{segment.text}
+									</span>
+								))}
+							</div>
+						</div>
+					) : null}
 					<Textarea
 						ref={promptRef}
 						data-testid="ws-prompt"
 						value={prompt}
 						disabled={creating}
+						onScroll={(event) => {
+							if (backdropRef.current)
+								backdropRef.current.scrollTop = event.currentTarget.scrollTop;
+						}}
 						{...attachmentPasteDropHandlers(attachedImages, toast.info)}
 						onChange={(e) => {
 							const next = e.target.value;
@@ -755,7 +840,7 @@ export function NewWorkspaceDialog({
 						placeholder={t("panels.newWorkspace.promptPlaceholder")}
 						spellCheck={false}
 						rows={6}
-						className="min-h-[160px]"
+						className={cn("relative min-h-[160px]", promptTint && "bg-transparent")}
 						onKeyDown={(e) => {
 							if (isImeComposing(e.nativeEvent)) return;
 							if (slotSession && !slashCompletion.open) {
@@ -772,6 +857,7 @@ export function NewWorkspaceDialog({
 									return;
 								}
 							}
+							if (prMenuOpen && prCompletion.handleKeyDown(e)) return;
 							if (slashCompletion.handleKeyDown(e)) return;
 							if (e.key === "Enter" && !e.shiftKey) {
 								e.preventDefault();
@@ -779,7 +865,18 @@ export function NewWorkspaceDialog({
 							}
 						}}
 					/>
-					{slashCompletion.open ? (
+					{prMenuOpen && pullRequests ? (
+						<PullRequestCompletionMenu
+							completion={pullRequests}
+							activeIndex={prCompletion.activeIndex}
+							onPick={pickPullRequest}
+							onHover={prCompletion.setActiveIndex}
+							firstChipRef={prChipRef}
+							onLeaveFilters={() => promptRef.current?.focus()}
+							container={dialogEl}
+							className="absolute right-0 bottom-full left-0 z-50 mb-4"
+						/>
+					) : slashCompletion.open ? (
 						<SlashCommandMenu
 							commands={slashCompletion.matches}
 							activeIndex={slashCompletion.activeIndex}

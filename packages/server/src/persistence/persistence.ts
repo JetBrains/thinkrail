@@ -24,6 +24,7 @@ import {
 	isKeybindingChord,
 	isLineWidth,
 	isLocalePreference,
+	isPullRequestFilter,
 	isQuestionPanelHeight,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
@@ -32,6 +33,7 @@ import {
 	normalizeFontSettings,
 	normalizeThemePreference,
 	type Project,
+	type PullRequestFilter,
 	type SessionCompletion,
 	type TurnChangeSet,
 	type WireModel,
@@ -662,6 +664,15 @@ function storedExtensionSettings(value: unknown): ExtensionSettingValues {
 	return result;
 }
 
+function storedPullRequestFilters(value: unknown): Record<string, PullRequestFilter> {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+	return Object.fromEntries(
+		Object.entries(value).filter((entry): entry is [string, PullRequestFilter] =>
+			isPullRequestFilter(entry[1]),
+		),
+	);
+}
+
 function storedKeybindings(value: unknown): KeybindingOverrides {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return {};
 	const result: KeybindingOverrides = {};
@@ -772,6 +783,7 @@ export function loadConfig(): AppConfig {
 		onboardingDismissed: value.onboardingDismissed === true,
 		...normalizeFontSettings(value),
 		keybindings: storedKeybindings(value.keybindings),
+		pullRequestFilters: storedPullRequestFilters(value.pullRequestFilters),
 	};
 }
 

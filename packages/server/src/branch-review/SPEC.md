@@ -2,7 +2,7 @@
 id: submodule-server-branch-review
 type: submodule-design
 status: active
-title: branch-review — open PR/MR metadata
+title: branch-review — open PR/MR metadata and the project's pull requests
 parent: module-server
 depends-on: [module-contracts]
 implements: [task-branch-pr-awareness]
@@ -28,9 +28,42 @@ consumer that only understood open reviews reads a merged/closed row as a live P
 contracts spec pins `state` to `WORKSPACE_SETTLE_PROTOCOL_VERSION` and the host answers such a client's
 `workspace.openReview` with `null` for a merged or closed review.
 
+It also answers the prompts' pull-request completion (`pr.list` / `pr.sizes` / `pr.get`, v133,
+`pullRequests.ts`): pages of a project's open GitHub pull requests for a filter, their diff stats, and
+one pull request by number in any state, as `PullRequestSummary` rows. Not keyed by a branch.
+
+- **The repository is the first GitHub remote in `gh`'s own order** (`upstream`, `github`, `origin`,
+  then the rest) and every call names it (`repo:<slug>`, `--repo <slug>`, `owner`/`name` variables) so
+  `gh` never falls back to its own default repository. `baseRef` is `<that remote>/<baseRefName>`: a fork
+  checkout reviews the PRs of the repository it forked, and the workspace is cut from that
+  repository's base. No GitHub remote → `not-github` without running `gh`.
+- **A page is one GitHub search** (`gh api graphql`, `search(type: ISSUE, first: 20, after)`):
+  `repo:<slug> is:pr is:open sort:updated-desc` plus the filter's qualifiers — `review-requested:@me` or
+  `author:@me` for the scope, `draft:false` without drafts, `author:<login>` (a login-shaped value only),
+  and the typed words with `in:title`. Typed words are words only: any token with a `:`, the `AND` /
+  `OR` / `NOT` operators, quotes and leading `-`/`+` are dropped, because GitHub ORs `repo:` qualifiers
+  and a typed one would widen the search to another repository; a row whose URL is not under
+  `https://github.com/<slug>/pull/` is dropped as well. GitHub filters and pages, so a filter or a search reaches every
+  open PR, not just the newest. A row is marked `reviewRequested` in the waiting scope, or when a user
+  review request names the signed-in `viewer` (a team request is visible only in the waiting scope).
+- **Rows come without sizes; `pr.sizes` adds them.** Diff stats are most of GitHub's answer time
+  (measured on 46 PRs: ~0.7 s without, 1–3 s with), so the page returns first and one aliased query
+  (`p<N>: pullRequest(number: N)`, 50 numbers at most) fills in the shown rows. `pr.get` reads one PR
+  with its size through `gh pr view`.
+- **Successful answers are kept 60 s** — pages per (worktree, search, cursor), sizes per (repository,
+  number) — so reopening the completion or paging back is instant. Failures are never kept, and
+  expired entries are pruned whenever a new one is stored, so per-keystroke queries never accumulate.
+- **One budget per call.** Remote inspection, the query and the diagnosis share `LOOKUP_TIMEOUT_MS`
+  from the first call.
+- **Failures are named, never thrown.** A failed search asks `github`'s `ghSetupProblem()` — only
+  then, as `pr.open` does — for `missing` / `unauthenticated`; anything else (a usable `gh` that
+  failed, a malformed answer, a probe that did not answer in time, or the `THINKRAIL_GH_OFFLINE` seam,
+  where the probe reports `null` by design) is `failed`, which the completion offers to retry.
+  `pr.sizes` leaves out what it could not read; `pr.get` degrades every failure to `null`.
+
 ## Boundary
 
-- **Owns:** remote-host detection and bounded, asynchronous CLI lookup returning an `OpenBranchReview` or `null`, plus the short-lived memory of successful lookup answers.
+- **Owns:** remote-host detection and the bounded, asynchronous CLI lookup of a branch's review, returning an `OpenBranchReview` or `null`, plus the short-lived memory of successful lookup answers; and the uncached listing and lookup of a project's GitHub pull requests (`PullRequestList` / `PullRequestSummary`).
 - **Remote-host detection is asynchronous too.** Its `git config` / `git remote` reads run through
   `gitAsync` under `LOOKUP_TIMEOUT_MS`, never a synchronous spawn: the host's settled-lifecycle pass runs
   this lookup for every candidate row every five minutes, and the synchronous reads blocked the whole host
@@ -55,7 +88,9 @@ contracts spec pins `state` to `WORKSPACE_SETTLE_PROTOCOL_VERSION` and the host 
   shape. The repository's merge methods and `deleteBranchOnMerge` come from `gh repo view`, asked only
   when such a PR exists and cached per origin URL for 10 minutes (successes only); a failed read leaves
   them out without failing the lookup.
-- **Public surface:** `findBranchReviewOutcome(cwd, branch, { fresh? })` → `{ value, reliable }` — `reliable`
+- **Public surface:** `listPullRequests(cwd, { filter, query?, cursor? })` / `pullRequestSizes(cwd, numbers)` /
+  `getPullRequest(cwd, number)` (above);
+  `findBranchReviewOutcome(cwd, branch, { fresh? })` → `{ value, reliable }` — `reliable`
   is the cacheable bit surfaced, so a host that *persists* the answer can tell "the provider says there is
   no review" from "the provider did not answer" and keep its last-known snapshot through a `gh` outage;
   `forgetOpenBranchReview(cwd)`; plus the read primitives the `pr` action module reuses —
@@ -71,9 +106,10 @@ contracts spec pins `state` to `WORKSPACE_SETTLE_PROTOCOL_VERSION` and the host 
 - `forgetOpenBranchReview(cwd)` invalidates every branch generation for that worktree. A lookup superseded
   while in flight must resolve through the current generation rather than return or re-cache its stale
   answer; this is what makes invalidation safe against a concurrent read.
-- **Allowed deps:** `contracts` for the result type; the server `git` barrel for local remote inspection and for `nonInteractiveGitEnv()`, the one definition of the environment a subprocess runs under — `process.env` plus `GIT_TERMINAL_PROMPT=0` (this module layers its own `GH_PROMPT_DISABLED`/`GLAB_PROMPT_DISABLED` on top); the `subprocess` barrel, which runs the lookup under this module's `LOOKUP_TIMEOUT_MS`.
+- **Allowed deps:** `contracts` for the result type; `github` (`ghSetupProblem`, the named reason a
+  pull-request listing failed); the server `git` barrel for local remote inspection and for `nonInteractiveGitEnv()`, the one definition of the environment a subprocess runs under — `process.env` plus `GIT_TERMINAL_PROMPT=0` (this module layers its own `GH_PROMPT_DISABLED`/`GLAB_PROMPT_DISABLED` on top); the `subprocess` barrel, which runs the lookup under this module's `LOOKUP_TIMEOUT_MS`.
 - **Forbidden:** `host`, `workspaces`, browser code, persistence, or any PR/review action beyond this read (actions live in `pr`).
-- Missing CLI/authentication, unsupported remotes, timeouts, malformed output, and no open review all degrade to `null`.
+- For the branch lookup, missing CLI/authentication, unsupported remotes, timeouts, malformed output, and no open review all degrade to `null` (the pull-request listing names its reasons instead, above).
 - **The bound has to be the *call's*, not the child's.** Killing `gh`/`glab` and then awaiting its stdout to
   EOF never returns when a grandchild inherited that pipe, and `review.get` awaits this lookup — so the
   degrade-to-`null` promised above was reachable only through the client's own causeless request timeout.

@@ -254,6 +254,78 @@ export interface MergePrResult {
 
 export type GhSetupProblem = "missing" | "unauthenticated";
 
+export type PullRequestState = "open" | "merged" | "closed";
+
+/** v133: a pull request's diff stats; `pr.list` rows come without them and `pr.sizes` fills them in. */
+export interface PullRequestSize {
+	additions: number;
+	deletions: number;
+	changedFiles: number;
+}
+
+/** v133 `pr.list` / `pr.get`: a GitHub pull request of a project's repository, as the user's `gh` reads it. */
+export interface PullRequestSummary {
+	number: number;
+	title: string;
+	/** The author's login; empty when GitHub reports none (a deleted account). */
+	author: string;
+	state: PullRequestState;
+	draft: boolean;
+	headRefName: string;
+	baseRefName: string;
+	/** The base on the local remote that hosts the PR (`origin/main`), ready to pass as a workspace `baseRef`. */
+	baseRef: string;
+	url: string;
+	/** Present from `pr.get`; a `pr.list` row leaves it out (see `pr.sizes`). */
+	size?: PullRequestSize;
+	/** ISO-8601 time of the PR's last update. */
+	updatedAt: string;
+	/** The signed-in `gh` user is a requested reviewer. */
+	reviewRequested: boolean;
+}
+
+/** Which open pull requests `pr.list` searches: requested from the signed-in user, authored by them, or all. */
+export type PullRequestScope = "review-requested" | "mine" | "all";
+
+export interface PullRequestFilter {
+	scope: PullRequestScope;
+	/** Include draft pull requests. */
+	drafts: boolean;
+	/** Only this author's pull requests (a GitHub login). */
+	author?: string;
+}
+
+export const DEFAULT_PULL_REQUEST_FILTER: PullRequestFilter = { scope: "all", drafts: true };
+
+const PULL_REQUEST_SCOPES: readonly string[] = ["review-requested", "mine", "all"];
+
+export function isPullRequestFilter(value: unknown): value is PullRequestFilter {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	const filter = value as Record<string, unknown>;
+	return (
+		typeof filter.scope === "string" &&
+		PULL_REQUEST_SCOPES.includes(filter.scope) &&
+		typeof filter.drafts === "boolean" &&
+		(filter.author === undefined ||
+			(typeof filter.author === "string" && filter.author.trim().length > 0))
+	);
+}
+
+/** Why `pr.list` could not list: `gh` absent, signed out, a repository with no GitHub remote, or any other failure. */
+export type PullRequestListProblem = GhSetupProblem | "not-github" | "failed";
+
+export interface PullRequestPage {
+	/** One page of matching open pull requests, most recently updated first; empty when `unavailable` is set. */
+	pullRequests: PullRequestSummary[];
+	/** Pass back as `cursor` for the next page; absent on the last page. */
+	nextCursor?: string;
+	unavailable?: PullRequestListProblem;
+}
+
+export interface PullRequestSizeEntry extends PullRequestSize {
+	number: number;
+}
+
 export interface PrDraft {
 	title: string;
 	body: string;
@@ -1616,6 +1688,8 @@ export interface AppConfig extends ThemePreference {
 	fontWeightOffset: number;
 	/** The user's chords by command id, replacing its defaults; `[]` unbinds it, an absent id keeps them. */
 	keybindings: KeybindingOverrides;
+	/** v133: the pull-request completion's last filter, by project id. */
+	pullRequestFilters: Record<string, PullRequestFilter>;
 }
 
 export type ExtensionSettingValues = Record<string, Record<string, boolean>>;
@@ -1723,9 +1797,16 @@ export function isSkillGroupEnabled(
 export type AppConfigUpdate = Partial<
 	Omit<
 		AppConfig,
-		"defaultModel" | "defaultEffort" | "reviewModel" | "reviewEffort" | "recentModels"
+		| "defaultModel"
+		| "defaultEffort"
+		| "reviewModel"
+		| "reviewEffort"
+		| "recentModels"
+		| "pullRequestFilters"
 	>
 > & {
+	/** Merged per project; `null` forgets a project's filter. */
+	pullRequestFilters?: Record<string, PullRequestFilter | null>;
 	defaultModel?: WireModel | null;
 	defaultEffort?: ThinkingLevel | null;
 	reviewModel?: WireModel | null;
@@ -2043,6 +2124,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	codeLigatures: false,
 	fontWeightOffset: FONT_WEIGHT_OFFSET.default,
 	keybindings: {},
+	pullRequestFilters: {},
 };
 
 export type FontSettings = Pick<
