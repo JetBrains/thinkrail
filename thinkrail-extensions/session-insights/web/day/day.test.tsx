@@ -50,7 +50,7 @@ function session(
 }
 
 const DAY: DayTimelineResult = {
-	apiVersion: 10,
+	apiVersion: 11,
 	state: { phase: "ready", indexed: 2, total: 2 },
 	day: "2026-11-03",
 	days: ["2026-10-30", "2026-11-03", "2026-11-05"],

@@ -228,7 +228,7 @@ function sequences(): StatsSequences {
 
 function sequencesResult(): StatsSequencesResult {
 	return {
-		apiVersion: 10,
+		apiVersion: 11,
 		state: STATE,
 		digests: { ready: 2, total: 2, stale: 0 },
 		sessions: SESSIONS,
@@ -349,7 +349,7 @@ function metric(overrides: Partial<CompareMetric> & Pick<CompareMetric, "id">): 
 
 function compareResult(): SlicesCompareResult {
 	return {
-		apiVersion: 10,
+		apiVersion: 11,
 		state: STATE,
 		digests: { ready: 2, total: 2, stale: 0 },
 		sessions: SESSIONS,
@@ -578,7 +578,7 @@ describe("the A/B slices", () => {
 			openFile: noop,
 			scope: { workspaceId: "w1", projectId: "p1" },
 			hostProtocol: 130,
-			hostApiVersion: 10,
+			hostApiVersion: 11,
 		});
 		const signal = new AbortController().signal;
 		await loadSequences(host(sequencesResult()), { kind: "all" }, signal);

@@ -2759,6 +2759,7 @@
 	"sessionInsights.metric.toolErrors.how": "Tool results marked as errors, and their share of all tool calls.",
 	"sessionInsights.metric.toolStats.how": "Counted from the tool calls of the main sessions and their results' isError; a shell command is keyed by its head (bun test, git diff). Error rates carry a 95% Wilson interval.",
 	"sessionInsights.metric.turnDuration.how": "From what started the turn to the end of its last call, from entry timestamps and pi's durations.",
+	"sessionInsights.metric.turns.how": "Turns started by your prompts, or by a background command's or subagent's completion that woke the idle agent.",
 	"sessionInsights.metric.userWait.how": "Time inside the turn while an ask_user_question call was open — the agent was waiting for your answer.",
 	"sessionInsights.metric.waits.how": "A heuristic: at every moment the session waits on one actor — an open question to you, a tool, the model, a subagent — and a pause belongs to what ended it: your prompt, a background completion, or nobody.",
 	"sessionInsights.metric.wallTime.how": "From the session's first entry to its last.",

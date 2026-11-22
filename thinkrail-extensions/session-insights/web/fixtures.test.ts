@@ -12,6 +12,7 @@ export const SOURCES: Readonly<Record<MetricId, readonly string[]>> = {
 	start: ["entry.timestamp"],
 	wallTime: ["entry.timestamp"],
 	activeTime: ["entry.timestamp"],
+	turns: ["message[user]"],
 	tokens: ["message[assistant].usage"],
 	cost: ["message[assistant].usage.cost.total"],
 	subagentsOutside: ["child transcript usage"],
@@ -100,7 +101,7 @@ export function listResult(
 	options: { projects?: readonly ListProject[]; state?: IndexState } = {},
 ): SessionsListResult {
 	return {
-		apiVersion: 10,
+		apiVersion: 11,
 		state: options.state ?? { phase: "ready", indexed: rows.length, total: rows.length },
 		projects: options.projects ?? PROJECTS,
 		rows,

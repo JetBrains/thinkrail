@@ -36,12 +36,12 @@ function host(
 		openArtifacts: noop,
 		scope: { workspaceId: "w1", projectId: "p1" },
 		hostProtocol: 130,
-		hostApiVersion: 10,
+		hostApiVersion: 11,
 	};
 }
 
 const LABELS: LabelsGetResult = {
-	apiVersion: 10,
+	apiVersion: 11,
 	sessions: [
 		{ sessionId: "s1", labels: ["good", "login"], note: null, noted: true },
 		{ sessionId: "s2", labels: ["Good"], note: null, noted: false },
@@ -157,7 +157,7 @@ describe("labels in the list", () => {
 				null,
 			),
 		).rejects.toBeInstanceOf(VersionSkew);
-		const saved = { apiVersion: 10, ok: false, code: "LABELS_FULL" } as const;
+		const saved = { apiVersion: 11, ok: false, code: "LABELS_FULL" } as const;
 		expect(
 			await saveLabels(
 				host(() => saved),
@@ -252,7 +252,7 @@ describe("the export menu", () => {
 				phase={{
 					kind: "done",
 					result: {
-						apiVersion: 10,
+						apiVersion: 11,
 						ok: true,
 						kind: "trace",
 						path: ".thinkrail/context/session-insights/a.trace.json",
@@ -295,7 +295,7 @@ describe("the export menu", () => {
 				phase={{
 					kind: "failed",
 					result: {
-						apiVersion: 10,
+						apiVersion: 11,
 						ok: false,
 						kind: "html",
 						code: "CHECK_FAILED",
@@ -316,7 +316,7 @@ describe("the export menu", () => {
 	test("runExport writes into the panel's own workspace and refuses another payload version", async () => {
 		const seen: unknown[] = [];
 		const answer = {
-			apiVersion: 10,
+			apiVersion: 11,
 			ok: true,
 			kind: "fixture",
 			path: "p/",

@@ -113,7 +113,7 @@ const RULES: FindingsListResult["rules"] = {
 
 function findingsResult(findings: Finding[]): FindingsListResult {
 	return {
-		apiVersion: 10,
+		apiVersion: 11,
 		state: STATE,
 		digests: { ready: 2, total: 2, stale: 0 },
 		sessions: SESSIONS,
@@ -324,7 +324,7 @@ function usageResult(): StatsUsageResult {
 	});
 	const claude = series({ key: "anthropic/claude" });
 	return {
-		apiVersion: 10,
+		apiVersion: 11,
 		state: STATE,
 		digests: { ready: 2, total: 2, stale: 0 },
 		sessions: SESSIONS,
@@ -440,7 +440,7 @@ function hotspotsResult(): StatsHotspotsResult {
 		}),
 	];
 	return {
-		apiVersion: 10,
+		apiVersion: 11,
 		state: STATE,
 		digests: { ready: 2, total: 2, stale: 0 },
 		sessions: SESSIONS,
@@ -630,7 +630,7 @@ describe("statistics queries", () => {
 		openFile: noop,
 		scope: { workspaceId: "w1", projectId: "p1" },
 		hostProtocol: 130,
-		hostApiVersion: 10,
+		hostApiVersion: 11,
 	});
 	const signal = new AbortController().signal;
 
@@ -646,7 +646,7 @@ describe("statistics queries", () => {
 		await expect(
 			loadFindings(host({ ...findingsResult([]), apiVersion: 5 }), { kind: "all" }, signal),
 		).rejects.toBeInstanceOf(VersionSkew);
-		expect(await hideFinding(host({ apiVersion: 10, hidden: ["a"] }), "a", true, signal)).toEqual([
+		expect(await hideFinding(host({ apiVersion: 11, hidden: ["a"] }), "a", true, signal)).toEqual([
 			"a",
 		]);
 		expect(stillReading({ state: STATE, digests: { ready: 1, total: 2, stale: 0 } })).toBe(true);

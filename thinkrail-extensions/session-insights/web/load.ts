@@ -9,7 +9,7 @@ import type {
 } from "@thinkrail/pi-session-insights/core";
 
 export const SESSIONS_LIST: SessionsListQuery = "sessions.list";
-export const API_VERSION: SessionInsightsApiVersion = 10;
+export const API_VERSION: SessionInsightsApiVersion = 11;
 export const SESSION_PANEL = "session";
 export const COMPARE_PANEL = "compare";
 

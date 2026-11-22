@@ -1,4 +1,4 @@
-export const SESSION_INSIGHTS_API_VERSION = 10;
+export const SESSION_INSIGHTS_API_VERSION = 11;
 export const SESSIONS_LIST_QUERY = "sessions.list";
 export const SESSION_SUMMARY_QUERY = "session.summary";
 export const SESSION_TRACE_QUERY = "session.trace";
@@ -29,6 +29,7 @@ export const LABELS_SET_QUERY = "labels.set";
 export const EXPORT_HTML_QUERY = "export.html";
 export const EXPORT_TRACE_QUERY = "export.trace";
 export const EXPORT_FIXTURE_QUERY = "export.fixture";
+export const SESSION_OVERVIEW_QUERY = "session.overview";
 export const FIRST_PROMPT_CHARS = 140;
 export const TRACE_LABEL_CHARS = 120;
 export const TRACE_PAGE_EVENTS = 2000;
@@ -161,6 +162,7 @@ export type LabelsSetQuery = typeof LABELS_SET_QUERY;
 export type ExportHtmlQuery = typeof EXPORT_HTML_QUERY;
 export type ExportTraceQuery = typeof EXPORT_TRACE_QUERY;
 export type ExportFixtureQuery = typeof EXPORT_FIXTURE_QUERY;
+export type SessionOverviewQuery = typeof SESSION_OVERVIEW_QUERY;
 export type ChildEventPrefix = typeof CHILD_EVENT_PREFIX;
 export type SessionInsightsApiVersion = typeof SESSION_INSIGHTS_API_VERSION;
 export type TracePageEvents = typeof TRACE_PAGE_EVENTS;
@@ -190,6 +192,7 @@ export type MetricId =
 	| "start"
 	| "wallTime"
 	| "activeTime"
+	| "turns"
 	| "tokens"
 	| "cost"
 	| "subagentsOutside"
@@ -233,6 +236,10 @@ export const METRIC_SOURCES: Readonly<Record<MetricId, readonly string[]>> = {
 	start: ["entry.timestamp", "session.timestamp"],
 	wallTime: ["entry.timestamp", "session.timestamp"],
 	activeTime: ["entry.timestamp"],
+	turns: [
+		"message[user]",
+		"custom_message[background-command-completion|subagent-completion].details.delivery",
+	],
 	tokens: [
 		"message[assistant].usage",
 		"message[toolResult].usage",
@@ -3042,3 +3049,209 @@ export type ExportResult =
 			/** A plain detail (an errno code, a cut); never a secret, a path or a body. */
 			detail: string;
 	  };
+
+// ── Overview ──
+
+/** What the Overview's cards carry at most. */
+export const OVERVIEW_RULES = {
+	/** Plan steps listed before the rest is counted. */
+	planSteps: 12,
+	/** Changed files listed before the rest is counted. */
+	files: 5,
+	/** Bars of the per-call chart; longer sessions fold consecutive calls into one bar. */
+	callBars: 120,
+	/** A recovery attempt's label, cut to this many characters. */
+	labelChars: 48,
+} as const;
+
+export interface OverviewPlanStep {
+	id: string;
+	/** Its position in the plan, from 1. */
+	n: number;
+	title: string;
+	status: PlanStatus;
+	errors: Figure;
+	cost: Figure;
+	tokens: Figure;
+	/** The `todo_*` calls that changed it. */
+	events: readonly string[];
+}
+
+/** The plan's steps (removed ones left out) and how many are done. */
+export interface OverviewPlan {
+	steps: readonly OverviewPlanStep[];
+	/** Steps past `OVERVIEW_RULES.planSteps`, not sent. */
+	more: number;
+	done: Figure;
+	total: Figure;
+}
+
+/** What happened: the outcome, the work, its failures, the wait for the user, the activity, plan and skills. */
+export interface OverviewHappened {
+	outcome: SessionOutcome | null;
+	turns: Figure;
+	llmCalls: Figure;
+	toolCalls: Figure;
+	toolFailures: Figure;
+	/** Failed tool calls a retry recovered (the errors section's heuristic). */
+	recovered: Figure;
+	/** Time inside turns the agent waited for the user's answers. */
+	userWait: Figure;
+	start: Figure;
+	end: Figure;
+	/** From the first event to the end of the last work. */
+	span: Figure;
+	/** The session's model and tool calls as ticks on its own clock, as a subagent's are. */
+	activity: SubagentActivity | null;
+	plan: OverviewPlan | null;
+	/** Skills activated, in the order first loaded. */
+	skills: readonly string[];
+}
+
+/** Why it cost what it did: the headline, the diagnosis `session.cost` fills its template from, its evidence and the calls. */
+export interface OverviewCost {
+	headline: "cost" | "tokens";
+	total: Figure;
+	diagnosis: CostDiagnosis;
+	/** Cache reads over all request tokens. */
+	cacheShare: Figure;
+	/** Calls that wrote a large context to the cache again. */
+	rewrites: Figure;
+	compactions: Figure;
+	/** Calls at or over 80 % of their own model's context window; `null` when no window is the host's. */
+	highContext: Figure;
+	calls: Figure;
+	/** Each bar's value (cost, or tokens when the headline is tokens): the costliest of `perBar` consecutive calls. */
+	bars: readonly number[];
+	perBar: number;
+}
+
+export interface OverviewAttempt {
+	eventId: string;
+	/** The tool, or the model of a model chain. */
+	name: string | null;
+	/** One redacted line, cut to `OVERVIEW_RULES.labelChars`. */
+	label: string;
+	failed: boolean;
+}
+
+export interface OverviewChain {
+	/** `RecoveryChain.index`, what `error.detail` takes. */
+	index: number;
+	kind: "tool" | "model";
+	outcome: ChainOutcome;
+	attempts: readonly OverviewAttempt[];
+	/** Calls issued between consecutive attempts (at most 8 counted per gap). */
+	between: readonly number[];
+	/** The first failure's error line, redacted. */
+	line: string;
+	recoveredIn: Figure;
+}
+
+export interface OverviewErrors {
+	/** Failed tool and model calls. */
+	failures: Figure;
+	/** Of them, those whose chain recovered. */
+	recovered: Figure;
+	/** From each recovered chain's first failure to its recovery, summed. */
+	recoveredIn: Figure;
+	chains: number;
+	/** The chain with the most attempts (the earliest on a tie), tool chains before model chains. */
+	chain: OverviewChain | null;
+}
+
+export interface OverviewContext {
+	peak: Figure;
+	/** The window of the peak call's model: the host's, or the largest context seen (`approximated`). */
+	window: Figure;
+	/** The peak over that window. */
+	peakShare: Figure;
+	average: Figure;
+	cacheShare: Figure;
+	misses: Figure;
+	compactions: Figure;
+}
+
+export interface OverviewFile {
+	/** As `FileRow.path`: relative to the session's folder when inside it, else redacted. */
+	path: string;
+	inside: boolean;
+	added: number;
+	removed: number;
+	failed: boolean;
+	rework: boolean;
+}
+
+export interface OverviewFiles {
+	totals: FileTotals;
+	/** Files changed or failed to change, in the files matrix's order. */
+	rows: readonly OverviewFile[];
+	/** Such files past `OVERVIEW_RULES.files`, not sent. */
+	more: number;
+}
+
+export interface OverviewSubagents {
+	count: Figure;
+	/** `null` when the session spawned none. */
+	overview: SubagentsOverview | null;
+}
+
+export interface OverviewTurns {
+	/** Turns the user's prompt started. */
+	prompts: Figure;
+	/** `ask_user_question` calls: the times the agent waited for the user. */
+	asks: Figure;
+}
+
+/** This session's part in a finding: how often, up to three calls, and an outlier's value. */
+export interface OverviewFindingLink {
+	count: number;
+	events: readonly string[];
+	value?: number;
+}
+
+/** A finding of the session's scope that links it, with what its one-line sentence needs. */
+export interface OverviewFinding {
+	id: string;
+	rule: FindingRule;
+	group: FindingGroup;
+	severity: FindingSeverity;
+	heuristic: boolean;
+	subject: string | null;
+	count: number;
+	total: number | null;
+	ratio: number | null;
+	figures: Partial<Readonly<Record<FindingFigure, Figure>>>;
+	names: readonly string[];
+	/** Sessions behind the finding in its scope. */
+	sessions: number;
+	link: OverviewFindingLink | null;
+}
+
+/** The Overview's cards, every one built from the same trace revision. */
+export interface SessionOverviewCards {
+	revision: string;
+	happened: OverviewHappened;
+	cost: OverviewCost;
+	/** `null` when no tool or model call failed. */
+	errors: OverviewErrors | null;
+	context: OverviewContext;
+	files: OverviewFiles;
+	subagents: OverviewSubagents;
+	turns: OverviewTurns;
+	/** The scope's findings that link this session, not hidden; `null` while the index or the scope's digests are still being built. */
+	findings: readonly OverviewFinding[] | null;
+	digests: DigestProgress;
+}
+
+export interface SessionOverviewResult {
+	apiVersion: number;
+	found: boolean;
+	/**
+	 * No indexed session has this id yet while the index is still being built: ask again rather than
+	 * read `found: false` as gone.
+	 */
+	pending: boolean;
+	overview: SessionOverviewCards | null;
+	sources: Readonly<Record<MetricId, readonly string[]>>;
+}

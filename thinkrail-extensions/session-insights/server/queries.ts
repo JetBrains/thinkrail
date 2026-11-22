@@ -15,6 +15,7 @@ import {
 	buildSessionAnalysis,
 	buildSessionCost,
 	buildSessionFiles,
+	buildSessionOverview,
 	buildSessionSubagents,
 	buildSessionSummary,
 	buildSessionsAlign,
@@ -97,6 +98,7 @@ import {
 	SESSION_COST_QUERY,
 	SESSION_FILES_QUERY,
 	SESSION_INSIGHTS_API_VERSION,
+	SESSION_OVERVIEW_QUERY,
 	SESSION_SUBAGENTS_QUERY,
 	SESSION_SUMMARY_QUERY,
 	SESSION_TIMELINE_QUERY,
@@ -110,9 +112,11 @@ import {
 	type SessionCostResult,
 	type SessionFilesResult,
 	SessionIndex,
+	type SessionOverviewResult,
 	type SessionSubagentsResult,
 	type SessionsAlignResult,
 	type SessionsListInput,
+	type SessionsListScope,
 	type SessionsSearchResult,
 	type SessionTimelineResult,
 	SLICES_COMPARE_QUERY,
@@ -213,13 +217,19 @@ export function sessionInsightsQueries(
 	 */
 	const lookup = async (
 		sessionId: string,
-	): Promise<{ file: string; removed: boolean } | "pending" | null> => {
+	): Promise<{ file: string; removed: boolean; projectId: string | null } | "pending" | null> => {
 		const sessions = sessionIndex();
 		const state = await sessions.ensureFresh(FRESH_BUDGET_MS);
 		const summary = sessions.summaryOf(sessionId);
 		if (!summary) return state.phase === "ready" ? null : "pending";
 		const placement = host.sessionScope({ kind: "all" }).locate(summary.cwd);
-		return placement ? { file: summary.file, removed: placement.workspace === "removed" } : null;
+		return placement
+			? {
+					file: summary.file,
+					removed: placement.workspace === "removed",
+					projectId: placement.projectId,
+				}
+			: null;
 	};
 	/** The shown session, read as not found while it is still pending (for queries asked once it was found). */
 	const shownSession = async (sessionId: string) => {
@@ -237,8 +247,10 @@ export function sessionInsightsQueries(
 		if (child) return child;
 		return sessionIndex().state().phase === "ready" ? null : "pending";
 	};
-	const subagentsInput = async (sessionId: string): Promise<SubagentsInput | null> => {
-		const shown = await shownSession(sessionId);
+	const subagentsOf = async (
+		sessionId: string,
+		shown: { file: string; removed: boolean } | null,
+	): Promise<SubagentsInput | null> => {
 		const store = traceStore();
 		const trace = shown ? await store.trace(shown.file) : null;
 		if (!shown || !trace) return null;
@@ -252,6 +264,8 @@ export function sessionInsightsQueries(
 			activity,
 		};
 	};
+	const subagentsInput = async (sessionId: string) =>
+		subagentsOf(sessionId, await shownSession(sessionId));
 
 	const list: ExtensionQuery = async (params) => {
 		const { scope, fresh } = parseSessionsListParams(params);
@@ -477,6 +491,49 @@ export function sessionInsightsQueries(
 			...(withLabels ? { labelsOf: labelLookup(await readLabels(jsonStore())) } : {}),
 		};
 		return { input, state };
+	};
+
+	const overview: ExtensionQuery = async (params): Promise<SessionOverviewResult> => {
+		const { sessionId } = parseSessionParams(params, SESSION_OVERVIEW_QUERY);
+		const found = await lookup(sessionId);
+		const shown = found === "pending" ? null : found;
+		const input = await subagentsOf(sessionId, shown);
+		if (!shown || !input)
+			return {
+				apiVersion: SESSION_INSIGHTS_API_VERSION,
+				found: false,
+				pending: found === "pending",
+				overview: null,
+				sources: METRIC_SOURCES,
+			};
+		const sessions = sessionIndex();
+		const scope: SessionsListScope = shown.projectId
+			? { kind: "project", projectId: shown.projectId }
+			: { kind: "all" };
+		const findings = await buildFindingsList(
+			{
+				...listInput(sessions, host.sessionScope(scope)),
+				digests: digestStore(),
+				contextWindow,
+				store: jsonStore(),
+				redactor: traceStore().redaction,
+			},
+			sessions.state(),
+		);
+		return {
+			apiVersion: SESSION_INSIGHTS_API_VERSION,
+			found: true,
+			pending: false,
+			overview: await buildSessionOverview({
+				sessionId,
+				trace: input.trace,
+				outcome: host.sessionStatus(sessionId).completion?.outcome ?? null,
+				contextWindow,
+				subagents: input,
+				findings,
+			}),
+			sources: METRIC_SOURCES,
+		};
 	};
 
 	const searchAcross: ExtensionQuery = async (params): Promise<SessionsSearchResult> => {
@@ -735,6 +792,7 @@ export function sessionInsightsQueries(
 	return {
 		[SESSIONS_LIST_QUERY]: list,
 		[SESSION_SUMMARY_QUERY]: summary,
+		[SESSION_OVERVIEW_QUERY]: overview,
 		[SESSION_TRACE_QUERY]: trace,
 		[EVENT_GET_QUERY]: event,
 		[EVENT_ANCHOR_QUERY]: anchor,

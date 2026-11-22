@@ -46,6 +46,7 @@ export const METRIC_HOW = {
 	start: "sessionInsights.metric.start.how",
 	wallTime: "sessionInsights.metric.wallTime.how",
 	activeTime: "sessionInsights.metric.activeTime.how",
+	turns: "sessionInsights.metric.turns.how",
 	tokens: "sessionInsights.metric.tokens.how",
 	cost: "sessionInsights.metric.cost.how",
 	subagentsOutside: "sessionInsights.metric.subagentsOutside.how",

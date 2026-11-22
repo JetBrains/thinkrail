@@ -35,6 +35,7 @@ import type {
 	SessionCostResult,
 	SessionFilesResult,
 	SessionListRow,
+	SessionOverviewResult,
 	SessionSubagentsResult,
 	SessionSummaryResult,
 	SessionsAlignResult,
@@ -379,11 +380,12 @@ describe("session-insights server descriptor", () => {
 		expect(descriptor.settings).toBeUndefined();
 		// The panel replaces the package's vanilla /insights: a user's install of it stays out of sessions.
 		expect(descriptor.supersedesPackages).toEqual([corePackage.name]);
-		expect(descriptor.apiVersion).toBe(10);
+		expect(descriptor.apiVersion).toBe(11);
 		const fake = fakeHost("descriptor");
 		expect(Object.keys(sessionInsights.queries?.(fake.host) ?? {})).toEqual([
 			"sessions.list",
 			"session.summary",
+			"session.overview",
 			"session.trace",
 			"event.get",
 			"event.anchor",
@@ -621,6 +623,59 @@ describe("one session's analysis", () => {
 		expect(((await summary({ sessionId: "hidden" })) as SessionSummaryResult).session).toBeNull();
 		expect(((await summary({ sessionId: "nope" })) as SessionSummaryResult).session).toBeNull();
 		await expect(Promise.resolve(summary({}))).rejects.toThrow("Invalid session.summary params");
+	});
+
+	test("session.overview composes one revision's cards and the scope's findings once its digests are built", async () => {
+		const fake = fakeHost("overview", {
+			contextWindow: async () => 200_000,
+			status: {
+				priced: {
+					live: false,
+					completion: { completionId: "run-1", outcome: "succeeded" },
+				},
+			},
+		});
+		seed(fake);
+		const queries = sessionInsights.queries?.(fake.host);
+		if (!queries) throw new Error("no queries");
+		const ask = async <T>(name: string, params: unknown) => (await queries[name]?.(params)) as T;
+		await ask("sessions.list", { scope: { kind: "all" } });
+		let result = await ask<SessionOverviewResult>("session.overview", { sessionId: "priced" });
+		for (let attempt = 0; attempt < 50 && result.overview?.findings === null; attempt++) {
+			await Bun.sleep(20);
+			result = await ask<SessionOverviewResult>("session.overview", { sessionId: "priced" });
+		}
+		expect(result).toMatchObject({ apiVersion: API_VERSION, found: true, pending: false });
+		expect(result.sources.turns.length).toBeGreaterThan(0);
+		const page = await ask<SessionTraceResult>("session.trace", { sessionId: "priced" });
+		const cost = await ask<SessionCostResult>("session.cost", { sessionId: "priced" });
+		const overview = result.overview;
+		if (!cost.cost) throw new Error("no cost");
+		expect(overview?.revision).toBe(page.meta?.revision ?? "");
+		expect(overview?.happened).toMatchObject({
+			outcome: "succeeded",
+			turns: { value: 1 },
+			llmCalls: { value: 2 },
+			toolCalls: { value: 3 },
+			toolFailures: { value: 1 },
+		});
+		expect(overview?.cost.total).toEqual(cost.cost.total);
+		expect(overview?.cost.diagnosis).toEqual(cost.cost.diagnosis);
+		expect(overview?.context.window).toEqual({ value: 200_000, origin: "host" });
+		expect(overview?.errors?.failures.value).toBe(1);
+		expect(overview?.subagents.count.value).toBe(1);
+		expect(overview?.subagents.overview?.roles).toHaveLength(1);
+		expect(overview?.digests).toEqual({ ready: 2, total: 2, stale: 0 });
+		expect(overview?.findings).toEqual(expect.any(Array));
+		for (const sessionId of ["hidden", "nope"])
+			expect(await ask<SessionOverviewResult>("session.overview", { sessionId })).toMatchObject({
+				found: false,
+				pending: false,
+				overview: null,
+			});
+		await expect(Promise.resolve(queries["session.overview"]?.({}))).rejects.toThrow(
+			"Invalid session.overview params",
+		);
 	});
 
 	test("session.trace pages the skeleton; event.get re-reads one body; event.anchor asks the host", async () => {
@@ -1304,6 +1359,9 @@ describe("while the index is still being built", () => {
 		expect(
 			await ask<SessionsAlignResult>("sessions.align", { a: "early", b: "late" }),
 		).toMatchObject({ found: false, pending: true });
+		expect(
+			await ask<SessionOverviewResult>("session.overview", { sessionId: "late" }),
+		).toMatchObject({ found: false, pending: true, overview: null });
 		const indexed = await ask<SessionSummaryResult>("session.summary", { sessionId: "early" });
 		expect(indexed).toMatchObject({ session: { sessionId: "early" }, pending: false });
 		const first = await search({ seq: 1, query: "deploy" });

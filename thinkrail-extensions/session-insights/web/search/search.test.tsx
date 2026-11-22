@@ -89,7 +89,7 @@ function hit(overrides: Partial<SearchHit> = {}): SearchHit {
 
 function answer(overrides: Partial<SessionsSearchResult> = {}): SessionsSearchResult {
 	return {
-		apiVersion: 10,
+		apiVersion: 11,
 		seq: 1,
 		status: "done",
 		state: { phase: "ready", indexed: 1, total: 1 },

@@ -268,7 +268,7 @@ describe("the two-session diff", () => {
 	test("pages the alignment in and refuses another payload version", async () => {
 		const pages: SessionsAlignResult[] = [
 			{
-				apiVersion: 10,
+				apiVersion: 11,
 				found: true,
 				pending: false,
 				alignment: { ...ALIGNMENT, rows: ROWS.slice(0, 3), next: 3 },
@@ -276,7 +276,7 @@ describe("the two-session diff", () => {
 				sources: SOURCES,
 			},
 			{
-				apiVersion: 10,
+				apiVersion: 11,
 				found: true,
 				pending: false,
 				alignment: { ...ALIGNMENT, rows: ROWS.slice(3), cursor: 3 },
@@ -296,7 +296,7 @@ describe("the two-session diff", () => {
 			openFile: noop,
 			scope: { workspaceId: "w1", projectId: "p1" },
 			hostProtocol: 130,
-			hostApiVersion: 10,
+			hostApiVersion: 11,
 		});
 		const signal = new AbortController().signal;
 		const progress: number[] = [];
@@ -333,7 +333,7 @@ describe("the two-session diff", () => {
 		expect(live?.newer).toBe(true);
 		expect(
 			await loadAlignment(
-				host(() => ({ apiVersion: 10, found: false, alignment: null, sources: SOURCES })),
+				host(() => ({ apiVersion: 11, found: false, alignment: null, sources: SOURCES })),
 				"a",
 				"b",
 				signal,
@@ -343,7 +343,7 @@ describe("the two-session diff", () => {
 		expect(
 			await loadAlignment(
 				host(() => ({
-					apiVersion: 10,
+					apiVersion: 11,
 					found: false,
 					pending: true,
 					alignment: null,

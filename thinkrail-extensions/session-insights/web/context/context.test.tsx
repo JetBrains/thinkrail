@@ -29,7 +29,7 @@ const host = {
 	openFile: () => {},
 	scope: { workspaceId: "w1", projectId: "p1" },
 	hostProtocol: 130,
-	hostApiVersion: 10,
+	hostApiVersion: 11,
 } satisfies PanelHost;
 
 function call(n: number, overrides: Partial<ContextCall> = {}): ContextCall {
