@@ -226,7 +226,7 @@ describe("the overview's cards", () => {
 		expect(words).toContain("0 calls ≥ 80 % of the window");
 		expect(words).toContain("$ per call · 19 calls");
 		expect(words).toContain(
-			"Cost 3.4× the project median ($0.27 against $0.08) — one of 3 outliers.",
+			"Cost 3.4× the project median ($0.27 against $0.08); outliers in the project: 3.",
 		);
 		expect(words).toContain("1 failure · 1 recovered in 9.1 s");
 		expect(markup.match(/data-testid="overview-attempt"/g)).toHaveLength(2);

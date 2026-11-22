@@ -32,7 +32,8 @@ export function findingText(t: Translator, finding: OverviewFinding): string {
 	return t(SENTENCE[finding.rule], {
 		subject: finding.subject ?? "",
 		names: finding.names.join(", "),
-		count: formatCount(locale, finding.count),
+		count: finding.rule === "commandFailing" ? (finding.total ?? 0) : finding.count,
+		countText: formatCount(locale, finding.count),
 		total: formatCount(locale, finding.total ?? 0),
 		here: formatCount(locale, finding.link?.count ?? 0),
 		ratio:

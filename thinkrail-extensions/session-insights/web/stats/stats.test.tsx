@@ -236,7 +236,7 @@ describe("findings", () => {
 			openFile: noop,
 			scope: { workspaceId: "w1", projectId: "p1" },
 			hostProtocol: 130,
-			hostApiVersion: 10,
+			hostApiVersion: 11,
 		};
 		const markup = html(
 			<StatsView

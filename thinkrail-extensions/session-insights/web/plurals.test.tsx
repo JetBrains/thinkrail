@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { applyLocale, currentTranslator } from "@thinkrail/locales/react";
+import type { OverviewFinding } from "@thinkrail/pi-session-insights/core";
+import { findingText } from "./overview/findings";
 import { findingsSummary } from "./stats/FindingsBadge";
 
 const tally = (error: number, warning: number, info: number) => ({
@@ -8,6 +10,24 @@ const tally = (error: number, warning: number, info: number) => ({
 	info,
 	total: error + warning + info,
 });
+
+function failing(count: number, total: number): OverviewFinding {
+	return {
+		id: "command:bun test",
+		rule: "commandFailing",
+		group: "commands",
+		severity: "warning",
+		heuristic: false,
+		subject: "bun test",
+		count,
+		total,
+		ratio: null,
+		figures: {},
+		names: [],
+		sessions: 1,
+		link: null,
+	};
+}
 
 describe("counts agree with their number", () => {
 	test("in English, one reads singular", () => {
@@ -40,6 +60,12 @@ describe("counts agree with their number", () => {
 			}),
 		).toBe("Searching… 2 events so far · read 0 of 1 session");
 		expect(t("sessionInsights.compare.pairs", { count: 1 })).toBe("1 pair");
+		expect(findingText(t, failing(1, 1))).toBe(
+			"“bun test” fails systematically: 1 of 1 run in the project.",
+		);
+		expect(findingText(t, failing(2, 3))).toBe(
+			"“bun test” fails systematically: 2 of 3 runs in the project.",
+		);
 	});
 
 	test("in Russian, one, few and many read their own forms", async () => {
@@ -55,6 +81,12 @@ describe("counts agree with their number", () => {
 			);
 			expect(t("sessionInsights.hotspots.scopeFiles", { count: 21, n: "21" })).toBe("21 файл");
 			expect(t("sessionInsights.compare.pairs", { count: 4 })).toBe("4 пары");
+			expect(findingText(t, failing(1, 21))).toBe(
+				"«bun test» падает систематически: 1 из 21 запуска в проекте.",
+			);
+			expect(findingText(t, failing(3, 5))).toBe(
+				"«bun test» падает систематически: 3 из 5 запусков в проекте.",
+			);
 		} finally {
 			await applyLocale("en", {});
 		}
