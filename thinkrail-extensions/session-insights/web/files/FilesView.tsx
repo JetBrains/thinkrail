@@ -60,7 +60,12 @@ function Cell({ cell }: { cell: FileCell | undefined }) {
 	if (!cell) return <td className="w-24 border-border-default border-l" />;
 	const [, reads, edits, writes, failed] = cell;
 	const changed = edits + writes;
-	const label = t("sessionInsights.files.cellLabel", { reads, edits, writes, failed });
+	const label = [
+		t("sessionInsights.files.reads", { count: reads, n: reads }),
+		t("sessionInsights.files.edits", { count: edits, n: edits }),
+		t("sessionInsights.files.writes", { count: writes, n: writes }),
+		t("sessionInsights.files.failedEdits", { count: failed, n: failed }),
+	].join(", ");
 	return (
 		<td className="relative w-24 border-border-default border-l text-center" title={label}>
 			{changed > 0 ? (
@@ -491,14 +496,14 @@ function Detail({
 				</Button>
 			</header>
 			<span className="flex flex-wrap items-center gap-6 tr-text-metadata text-text-muted">
-				{t("sessionInsights.files.counts", {
-					reads: row.reads,
-					edits: row.edits,
-					writes: row.writes,
-				})}
+				{[
+					t("sessionInsights.files.reads", { count: row.reads, n: row.reads }),
+					t("sessionInsights.files.edits", { count: row.edits, n: row.edits }),
+					t("sessionInsights.files.writes", { count: row.writes, n: row.writes }),
+				].join(" · ")}
 				{row.failed > 0 ? (
 					<span className="text-feedback-error">
-						{t("sessionInsights.files.failedEdits", { n: row.failed })}
+						{t("sessionInsights.files.failedEdits", { count: row.failed, n: row.failed })}
 					</span>
 				) : null}
 				<IconTooltip
@@ -549,6 +554,7 @@ function Detail({
 							{t("sessionInsights.files.receipt", {
 								added: formatCount(locale, row.receipt.added),
 								removed: formatCount(locale, row.receipt.removed),
+								count: row.receipt.runs,
 								runs: row.receipt.runs,
 							})}
 						</button>
@@ -647,6 +653,8 @@ export function FilesView({
 	files,
 	sources,
 	onShowInTrace,
+	path: selected,
+	onPath: setSelected,
 }: {
 	host: PanelHost;
 	sessionId: string;
@@ -654,12 +662,16 @@ export function FilesView({
 	files: SessionFiles;
 	sources: Sources;
 	onShowInTrace: (id: string) => void;
+	/** The picked file, whose touches and diffs show. */
+	path: string | null;
+	onPath: (path: string) => void;
 }) {
 	const t = useT();
 	const locale = localeOf(t);
 	const [filter, setFilter] = useState<Filter>("all");
-	const [shown, setShown] = useState(ROWS_SHOWN);
-	const [selected, setSelected] = useState<string | null>(null);
+	const [shown, setShown] = useState(() =>
+		Math.max(ROWS_SHOWN, files.rows.findIndex((row) => row.path === selected) + 1),
+	);
 	const rows = files.rows.filter((row) =>
 		filter === "changed"
 			? changes(row) > 0
@@ -719,6 +731,7 @@ export function FilesView({
 							? "sessionInsights.files.summarySteps"
 							: "sessionInsights.files.summaryTurns",
 						{
+							count: files.totals.files,
 							files: formatCount(locale, files.totals.files),
 							changed: formatCount(locale, files.totals.changed),
 							rework: formatCount(locale, files.totals.rework),

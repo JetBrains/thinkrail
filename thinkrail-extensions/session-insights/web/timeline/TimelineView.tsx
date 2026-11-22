@@ -15,7 +15,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { isBadged } from "../copy";
 import { DetailsPanel } from "../details/DetailsPanel";
 import { FigureBadge, FigureDetails, type Sources } from "../FigureCell";
@@ -188,6 +188,7 @@ export function describeHit(
 			return [
 				bandLabel(t, locale, analysis, { kind: "step", id: step.id }),
 				t("sessionInsights.timeline.tip.stepCalls", {
+					count: step.toolCalls.value ?? 0,
 					calls: formatCount(locale, step.toolCalls.value ?? 0),
 					errors: formatCount(locale, step.errors.value ?? 0),
 				}),
@@ -450,6 +451,7 @@ export function TimelineView({
 	sources,
 	selected,
 	onSelect,
+	toolbarStart,
 }: {
 	host: PanelHost;
 	sessionId: string;
@@ -461,6 +463,8 @@ export function TimelineView({
 	sources: Sources;
 	selected: number;
 	onSelect: (index: number) => void;
+	/** Leads the toolbar (the trace's view modes). */
+	toolbarStart?: ReactNode;
 }) {
 	const t = useT();
 	const locale = localeOf(t);
@@ -472,6 +476,7 @@ export function TimelineView({
 	});
 	const [root, setRoot] = useState<HTMLDivElement | null>(null);
 	const { palette, font } = useCanvasLook(root);
+	const stacked = host.placement === "chatPane";
 	const [mode, setMode] = useState<AxisMode>("time");
 	const [compress, setCompress] = useState(true);
 	const [showPlan, setShowPlan] = useState(true);
@@ -585,12 +590,16 @@ export function TimelineView({
 					case "tools":
 						return [
 							label,
-							lane.tracks > 1 ? t("sessionInsights.timeline.tracks", { n: lane.tracks }) : null,
+							lane.tracks > 1
+								? t("sessionInsights.timeline.tracks", { count: lane.tracks, n: lane.tracks })
+								: null,
 						];
 					case "subagents":
 						return [
 							label,
-							lane.tracks > 1 ? t("sessionInsights.timeline.tracks", { n: lane.tracks }) : null,
+							lane.tracks > 1
+								? t("sessionInsights.timeline.tracks", { count: lane.tracks, n: lane.tracks })
+								: null,
 						];
 					case "spend":
 						return [
@@ -855,14 +864,18 @@ export function TimelineView({
 
 	return (
 		<div ref={setRoot} data-testid="timeline-view" className="h-full min-h-0">
-			<ResizablePanelGroup direction="horizontal" className="h-full min-h-0">
-				<ResizablePanel defaultSize={68} minSize={40}>
+			<ResizablePanelGroup
+				direction={stacked ? "vertical" : "horizontal"}
+				className="h-full min-h-0"
+			>
+				<ResizablePanel defaultSize={stacked ? 60 : 68} minSize={stacked ? 25 : 40}>
 					<div className="flex h-full min-h-0 flex-col">
 						<div
 							role="toolbar"
 							aria-label={t("sessionInsights.timeline.toolbar")}
 							className="flex shrink-0 flex-wrap items-center gap-8 border-border-default border-b px-12 py-4"
 						>
+							{toolbarStart}
 							<fieldset
 								aria-label={t("sessionInsights.timeline.axis")}
 								className="flex items-center gap-4"
@@ -1010,8 +1023,13 @@ export function TimelineView({
 					</div>
 				</ResizablePanel>
 				<ResizableHandle />
-				<ResizablePanel defaultSize={32} minSize={22}>
-					<div className="h-full min-h-0 border-border-default border-l">
+				<ResizablePanel defaultSize={stacked ? 40 : 32} minSize={stacked ? 20 : 22}>
+					<div
+						className={cn(
+							"h-full min-h-0 border-border-default",
+							stacked ? "border-t" : "border-l",
+						)}
+					>
 						<DetailsPanel
 							host={host}
 							sessionId={sessionId}

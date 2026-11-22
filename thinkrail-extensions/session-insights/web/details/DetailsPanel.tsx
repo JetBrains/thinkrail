@@ -30,6 +30,7 @@ import type { TraceModel } from "../trace/model";
 import { eventIcon, eventSubtitle, eventTitle, eventTone, MARK_TITLE } from "../trace/TraceTree";
 import { useKeyedQuery } from "../useKeyedQuery";
 import { CappedTextView } from "./CappedTextView";
+import { useDetailsHost } from "./context";
 import { JsonViewer } from "./JsonViewer";
 import { SubagentTab } from "./SubagentTab";
 import { type DetailTab, initialTab, RENDERED_TOOLS, TAB_LABEL, tabsFor } from "./tabs";
@@ -508,7 +509,11 @@ export function DetailsPanel({
 	const event = model.at(index) ?? null;
 	const [attempt, setAttempt] = useState(0);
 	const state = useEventBody(host, sessionId, event?.id ?? null, attempt);
-	const [lastTab, setLastTab] = useState<DetailTab | null>(null);
+	const shared = useDetailsHost();
+	const [ownTab, setOwnTab] = useState<DetailTab | null>(null);
+	const lastTab = shared ? shared.tab : ownTab;
+	const setLastTab = shared ? shared.onTab : setOwnTab;
+	const showInChat = shared?.showInChat ?? null;
 	const [opening, setOpening] = useState(false);
 	const [notice, setNotice] = useState<{ eventId: string; text: string } | null>(null);
 	const panelId = useId();
@@ -527,8 +532,23 @@ export function DetailsPanel({
 	const Icon = eventIcon(event);
 	const target = eventRef(event.id).childId === undefined ? chatTargetOf(overview) : null;
 	const crumbs = [...model.ancestors(index)].reverse();
+	const showBeside = (show: NonNullable<typeof showInChat>) => {
+		const eventId = event.id;
+		setOpening(true);
+		show(eventId).then((outcome) => {
+			setOpening(false);
+			if (outcome === "notInChat")
+				setNotice({ eventId, text: t("sessionInsights.details.notShownInChat") });
+			else if (outcome === "failed")
+				setNotice({ eventId, text: t("sessionInsights.details.openFailed") });
+		});
+	};
 	const openInChat = () => {
 		if (!target) return;
+		if (showInChat) {
+			showBeside(showInChat);
+			return;
+		}
 		setOpening(true);
 		loadAnchor(host, sessionId, event.id).then(
 			(result) => {
@@ -649,7 +669,14 @@ export function DetailsPanel({
 						tooltip={target ? undefined : t("sessionInsights.details.chatUnavailable")}
 						onClick={openInChat}
 					>
-						{t("sessionInsights.details.openInChat")}
+						{showInChat
+							? t("sessionInsights.details.showInChat")
+							: t("sessionInsights.details.openInChat")}
+						{showInChat && shared?.shown === event.id ? (
+							<span data-testid="details-shown" className="text-text-subtle">
+								{t("sessionInsights.details.shownAtLeft")}
+							</span>
+						) : null}
 					</Button>
 					<IconButton
 						icon={RiFocus3Line}

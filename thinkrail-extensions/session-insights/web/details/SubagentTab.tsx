@@ -269,11 +269,20 @@ export function SubagentTab({
 							}
 						/>
 						<p className="tr-text-metadata text-text-muted tabular-nums">
-							{t("sessionInsights.subagents.counts", {
-								llm: formatCount(locale, run.activity.llmCalls),
-								tools: formatCount(locale, run.activity.toolCalls),
-								errors: formatCount(locale, run.activity.errors),
-							})}
+							{[
+								t("sessionInsights.subagents.llmCalls", {
+									count: run.activity.llmCalls,
+									n: formatCount(locale, run.activity.llmCalls),
+								}),
+								t("sessionInsights.subagents.toolCalls", {
+									count: run.activity.toolCalls,
+									n: formatCount(locale, run.activity.toolCalls),
+								}),
+								t("sessionInsights.subagents.failedCalls", {
+									count: run.activity.errors,
+									n: formatCount(locale, run.activity.errors),
+								}),
+							].join(" · ")}
 						</p>
 					</>
 				) : (
@@ -363,7 +372,10 @@ export function SubagentTab({
 							{run.result.status ? <span>· {run.result.status}</span> : null}
 							<span className="tabular-nums">
 								·{" "}
-								{t("sessionInsights.subagents.chars", { n: formatCount(locale, run.result.chars) })}
+								{t("sessionInsights.subagents.chars", {
+									count: run.result.chars,
+									n: formatCount(locale, run.result.chars),
+								})}
 							</span>
 						</p>
 						<LinkButton

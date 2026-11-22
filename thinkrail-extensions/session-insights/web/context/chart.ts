@@ -5,7 +5,10 @@ import { CACHE_RAMP, CATEGORIES, CATEGORY_SERIES } from "./look";
 /** Layout of the composition chart, CSS pixels. */
 export const GUTTER = 52;
 export const RIGHT = 12;
-export const TOP = 22;
+/** Rows of compaction and model-switch labels above the bars. */
+export const LABEL_ROWS = 3;
+export const LABEL_ROW = 15;
+export const TOP = 7 + LABEL_ROWS * LABEL_ROW;
 export const BARS = 220;
 const GAP = 6;
 const MISS_ROW = 10;

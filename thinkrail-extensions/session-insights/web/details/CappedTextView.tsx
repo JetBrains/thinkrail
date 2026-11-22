@@ -17,8 +17,14 @@ function Omitted({ chars, lines }: { chars: number; lines: number }) {
 		>
 			<RiScissorsCutLine aria-hidden className="size-12 shrink-0" />
 			{t("sessionInsights.details.omitted", {
-				lines: formatCount(locale, lines),
-				chars: formatCount(locale, chars),
+				lines: t("sessionInsights.details.lines", {
+					count: lines,
+					n: formatCount(locale, lines),
+				}),
+				chars: t("sessionInsights.details.characters", {
+					count: chars,
+					n: formatCount(locale, chars),
+				}),
 			})}
 		</span>
 	);
@@ -71,7 +77,10 @@ export function CappedTextView({
 			<div className="flex min-w-0 items-center gap-8 border-border-default border-b px-8 py-2">
 				<span className="tr-text-eyebrow text-text-muted">{label}</span>
 				<span className="tr-text-caption text-text-subtle tabular-nums">
-					{t("sessionInsights.details.chars", { chars: formatCount(locale, value.chars) })}
+					{t("sessionInsights.details.chars", {
+						count: value.chars,
+						n: formatCount(locale, value.chars),
+					})}
 				</span>
 				<IconButton
 					icon={RiFileCopyLine}

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { TraceEvent } from "@thinkrail/pi-session-insights/core";
 import { llm, sampleEvents, T0, tool, turn } from "./events.test";
-import { hitTest, layoutFrame, mergePixels, ROW_HEIGHT } from "./frame";
+import { hitTest, layoutFrame, mergePixels, ROW_HEIGHT, rowInView, scrollTarget } from "./frame";
 import { TraceModel } from "./model";
 import { TimeScale } from "./scale";
 
@@ -145,5 +145,31 @@ describe("layoutFrame", () => {
 		expect(events.length).toBe(10_040);
 		expect(frame.bars).toHaveLength(40);
 		expect(elapsed).toBeLessThan(process.env.SESSION_INSIGHTS_PERF === "1" ? 8 : 500);
+	});
+});
+
+describe("scrolling a row into view", () => {
+	const height = ROW_HEIGHT * 10;
+
+	test("a row shows only when all of it is inside the viewport", () => {
+		expect(rowInView(0, 0, height)).toBe(true);
+		expect(rowInView(9, 0, height)).toBe(true);
+		expect(rowInView(10, 0, height)).toBe(false);
+		expect(rowInView(4, ROW_HEIGHT * 5, height)).toBe(false);
+	});
+
+	test("a jump centres a row out of view; a row in view stays put", () => {
+		expect(scrollTarget(500, 0, height, "center")).toBe(
+			500 * ROW_HEIGHT - (height - ROW_HEIGHT) / 2,
+		);
+		expect(scrollTarget(2, 0, height, "center")).toBeNull();
+		expect(scrollTarget(1, ROW_HEIGHT * 300, height, "center")).toBe(0);
+	});
+
+	test("moving past an edge scrolls just enough; restoring the top row puts it at the top", () => {
+		expect(scrollTarget(10, 0, height, "nearest")).toBe(ROW_HEIGHT);
+		expect(scrollTarget(3, ROW_HEIGHT * 5, height, "nearest")).toBe(ROW_HEIGHT * 3);
+		expect(scrollTarget(40, 0, height, "start")).toBe(ROW_HEIGHT * 40);
+		expect(scrollTarget(40, ROW_HEIGHT * 40, height, "start")).toBeNull();
 	});
 });

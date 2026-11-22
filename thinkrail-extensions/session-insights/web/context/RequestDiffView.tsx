@@ -273,7 +273,10 @@ function MessageRow({ message }: { message: RequestMessage }) {
 			</span>
 			<span className="truncate text-text-default">{message.label}</span>
 			<span className="text-right text-text-subtle tabular-nums">
-				{t("sessionInsights.request.chars", { n: formatCount(locale, message.chars) })}
+				{t("sessionInsights.request.chars", {
+					count: message.chars,
+					n: formatCount(locale, message.chars),
+				})}
 			</span>
 		</li>
 	);

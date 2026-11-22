@@ -272,10 +272,16 @@ export function SubagentsView({
 						{t("sessionInsights.subagents.question")}
 					</span>
 					<span className="ml-auto tr-text-caption text-text-subtle tabular-nums">
-						{t("sessionInsights.subagents.totals", {
-							runs: formatCount(locale, view.runs.length),
-							waves: formatCount(locale, view.waves.length),
-						})}
+						{[
+							t("sessionInsights.subagents.runs", {
+								count: view.runs.length,
+								n: formatCount(locale, view.runs.length),
+							}),
+							t("sessionInsights.subagents.waves", {
+								count: view.waves.length,
+								n: formatCount(locale, view.waves.length),
+							}),
+						].join(" · ")}
 					</span>
 				</div>
 				<div

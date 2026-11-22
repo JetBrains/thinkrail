@@ -24,7 +24,7 @@ import { causeText } from "./causes";
 import { CACHE_SWATCH, CATEGORIES, CATEGORY_LABEL, CATEGORY_SWATCH } from "./look";
 import { RequestDiffView } from "./RequestDiffView";
 
-type Mode = "chart" | "diff";
+export type ContextMode = "chart" | "diff";
 const MISSES_SHOWN = 40;
 const GREW_SHOWN = 7;
 
@@ -431,6 +431,8 @@ export function ContextView({
 	selectedId,
 	onSelectId,
 	onShowInTrace,
+	mode,
+	onMode: setMode,
 }: {
 	host: PanelHost;
 	sessionId: string;
@@ -440,10 +442,12 @@ export function ContextView({
 	selectedId: string | null;
 	onSelectId: (id: string) => void;
 	onShowInTrace: (id: string) => void;
+	/** The chart, or the request diff of the selected call. */
+	mode: ContextMode;
+	onMode: (mode: ContextMode) => void;
 }) {
 	const t = useT();
 	const locale = localeOf(t);
-	const [mode, setMode] = useState<Mode>("chart");
 	const picked = selectedCall(data, model, selectedId);
 	const selected = picked ?? defaultCall(data);
 	const call = selected === null ? undefined : data.calls[selected];
@@ -487,11 +491,20 @@ export function ContextView({
 					/>
 				</fieldset>
 				<span className="ml-auto tr-text-caption text-text-subtle">
-					{t("sessionInsights.context.counts", {
-						calls: formatCount(locale, data.calls.length),
-						misses: formatCount(locale, data.misses.value ?? 0),
-						compactions: formatCount(locale, data.compactions.length),
-					})}
+					{[
+						t("sessionInsights.context.countCalls", {
+							count: data.calls.length,
+							n: formatCount(locale, data.calls.length),
+						}),
+						t("sessionInsights.context.countMisses", {
+							count: data.misses.value ?? 0,
+							n: formatCount(locale, data.misses.value ?? 0),
+						}),
+						t("sessionInsights.context.countCompactions", {
+							count: data.compactions.length,
+							n: formatCount(locale, data.compactions.length),
+						}),
+					].join(" · ")}
 				</span>
 			</div>
 			{mode === "diff" && call ? (

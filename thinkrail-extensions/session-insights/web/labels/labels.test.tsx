@@ -6,7 +6,7 @@ import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { runExport } from "../export/api";
-import { cutOptions, ExportMenu, ExportOptions, ExportOutcome } from "../export/ExportMenu";
+import { cutOptions, ExportOptions, ExportOutcome, ExportTrigger } from "../export/ExportMenu";
 import { listResult, START, sessionRow } from "../fixtures.test";
 import { SessionsView, sessionsLabelled } from "../SessionsPanel";
 import { SessionsTable } from "../SessionsTable";
@@ -198,17 +198,9 @@ describe("the export menu", () => {
 	});
 
 	test("the trigger is one Export button; the options name the cut, keep labels off and say masking is best effort", () => {
-		expect(
-			html(
-				<ExportMenu
-					host={host(() => null)}
-					sessionId="s1"
-					turns={[]}
-					defaultTurn={null}
-					selectedEvent={null}
-				/>,
-			),
-		).toMatch(/data-testid="session-insights-export"[^>]*>.*Export/);
+		expect(html(<ExportTrigger onPick={noop} />)).toMatch(
+			/data-testid="session-insights-export"[^>]*>.*Export/,
+		);
 		const fixture = html(
 			<ExportOptions
 				kind="fixture"

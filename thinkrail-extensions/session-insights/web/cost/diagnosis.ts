@@ -22,6 +22,7 @@ function focusClause(t: Translator, locale: string, d: CostDiagnosis): string {
 	return t(
 		focus.kind === "steps" ? "sessionInsights.cost.focusSteps" : "sessionInsights.cost.focusTurns",
 		{
+			count: focus.items.length,
 			share: formatShare(locale, focus.share, 1) ?? "",
 			items,
 			peak: formatTokens(locale, focus.peakContext),
@@ -39,12 +40,14 @@ export function diagnosisText(t: Translator, locale: string, cost: DiagnosisSour
 			return t("sessionInsights.cost.diagnosis.none");
 		case "longContext":
 			return t("sessionInsights.cost.diagnosis.longContext", {
+				count: d.calls,
 				calls: formatCount(locale, d.calls),
 				average: formatTokens(locale, d.averageContext),
 				focus,
 			});
 		case "cacheRewrites":
 			return t("sessionInsights.cost.diagnosis.cacheRewrites", {
+				count: d.rewrites?.calls ?? 0,
 				calls: formatCount(locale, d.rewrites?.calls ?? 0),
 				value: valueText(locale, cost, d.rewrites?.value ?? 0),
 				share: formatShare(locale, d.rewrites?.value ?? 0, total) ?? "",
@@ -52,12 +55,14 @@ export function diagnosisText(t: Translator, locale: string, cost: DiagnosisSour
 			});
 		case "manyCalls":
 			return t("sessionInsights.cost.diagnosis.manyCalls", {
+				count: d.calls,
 				calls: formatCount(locale, d.calls),
 				median: valueText(locale, cost, d.medianCall),
 				focus,
 			});
 		case "spread":
 			return t("sessionInsights.cost.diagnosis.spread", {
+				count: d.calls,
 				calls: formatCount(locale, d.calls),
 				median: valueText(locale, cost, d.medianCall),
 				focus,

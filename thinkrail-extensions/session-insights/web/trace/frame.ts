@@ -3,6 +3,31 @@ import { isFailure, type SeriesKey, seriesOf, type TraceModel } from "./model";
 import type { TimeScale, View } from "./scale";
 
 export const ROW_HEIGHT = 24;
+
+export type ScrollAlign = "start" | "center" | "nearest";
+
+/** Whether all of `row` shows in a list of fixed rows scrolled to `scrollTop` with `height` in view. */
+export function rowInView(row: number, scrollTop: number, height: number): boolean {
+	const top = row * ROW_HEIGHT;
+	return top >= scrollTop - 0.5 && top + ROW_HEIGHT <= scrollTop + height + 0.5;
+}
+
+/**
+ * Where to scroll a list of fixed rows to show `row`: at the top (`start`), in the middle (`center`) or
+ * at the nearer edge (`nearest`); `null` when it already shows (for `start`, when it is the top row).
+ */
+export function scrollTarget(
+	row: number,
+	scrollTop: number,
+	height: number,
+	align: ScrollAlign,
+): number | null {
+	const top = row * ROW_HEIGHT;
+	if (align === "start") return Math.abs(scrollTop - top) < 1 ? null : top;
+	if (rowInView(row, scrollTop, height)) return null;
+	if (align === "center") return Math.max(0, top - (height - ROW_HEIGHT) / 2);
+	return top < scrollTop ? top : top + ROW_HEIGHT - height;
+}
 /** Narrower spans than this draw as a 1px tick; group rows merge their children per pixel. */
 const MIN_BAR_PX = 1;
 

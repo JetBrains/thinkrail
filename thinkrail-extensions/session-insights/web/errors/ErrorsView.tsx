@@ -83,6 +83,7 @@ function chainTitle(t: Translator, chain: RecoveryChain): string {
 			})
 		: t("sessionInsights.errors.toolChain", {
 				tool: chain.name ?? "",
+				count: chain.attempts.length,
 				n: chain.attempts.length,
 			});
 }
@@ -488,6 +489,8 @@ export function ErrorsView({
 	analysis,
 	sources,
 	onShowInTrace,
+	chain: chosen,
+	onChain,
 }: {
 	host: PanelHost;
 	sessionId: string;
@@ -495,14 +498,19 @@ export function ErrorsView({
 	analysis: SessionAnalysis | null;
 	sources: Sources;
 	onShowInTrace: (focus: TraceFocus, first: string) => void;
+	/** The chain whose detail shows (its `index`); `null`: the first retried one. */
+	chain: number | null;
+	onChain: (index: number) => void;
 }) {
 	const t = useT();
 	const locale = localeOf(t);
 	const chains = analysis?.chains ?? [];
 	const retried = chains.filter((chain) => chain.kind === "model" || chain.attempts.length > 1);
 	const single = chains.filter((chain) => chain.kind === "tool" && chain.attempts.length === 1);
-	const [chosen, setChosen] = useState<number | null>(null);
-	const [showSingle, setShowSingle] = useState(false);
+	const [showSingle, setShowSingle] = useState(() =>
+		single.some((chain) => chain.index === chosen),
+	);
+	const stacked = host.placement === "chatPane";
 	const current = chains.find((chain) => chain.index === chosen) ?? retried[0] ?? chains[0] ?? null;
 	if (!analysis || (chains.length === 0 && analysis.repeats.length === 0))
 		return (
@@ -522,7 +530,7 @@ export function ErrorsView({
 		/>
 	);
 	return (
-		<ResizablePanelGroup direction="horizontal" className="h-full min-h-0">
+		<ResizablePanelGroup direction={stacked ? "vertical" : "horizontal"} className="h-full min-h-0">
 			<ResizablePanel defaultSize={58} minSize={35}>
 				<div data-testid="errors-view" className="h-full min-h-0 overflow-auto">
 					<div className="flex min-w-0 flex-col gap-12 p-12">
@@ -677,7 +685,7 @@ export function ErrorsView({
 											chain={chain}
 											model={model}
 											active={current?.index === chain.index}
-											onOpen={() => setChosen(chain.index)}
+											onOpen={() => onChain(chain.index)}
 										/>
 									))}
 								</ul>
@@ -706,7 +714,7 @@ export function ErrorsView({
 												chain={chain}
 												model={model}
 												active={current?.index === chain.index}
-												onOpen={() => setChosen(chain.index)}
+												onOpen={() => onChain(chain.index)}
 											/>
 										))}
 									</ul>
@@ -772,7 +780,9 @@ export function ErrorsView({
 			</ResizablePanel>
 			<ResizableHandle />
 			<ResizablePanel defaultSize={42} minSize={25}>
-				<div className="h-full min-h-0 border-border-default border-l">
+				<div
+					className={cn("h-full min-h-0 border-border-default", stacked ? "border-t" : "border-l")}
+				>
 					{current ? (
 						<ChainDetail
 							key={current.index}

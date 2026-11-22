@@ -238,8 +238,9 @@ export async function loadAnchor(
 	host: PanelHost,
 	sessionId: string,
 	eventId: string,
+	signal?: AbortSignal,
 ): Promise<EventAnchorResult> {
-	return checked(await host.query(EVENT_ANCHOR, { sessionId, eventId }), isAnchorResult);
+	return checked(await host.query(EVENT_ANCHOR, { sessionId, eventId }, signal), isAnchorResult);
 }
 
 export async function searchTrace(

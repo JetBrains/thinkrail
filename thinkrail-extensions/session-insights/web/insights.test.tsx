@@ -179,6 +179,8 @@ describe("the errors section", () => {
 				analysis={ANALYSIS}
 				sources={SOURCES}
 				onShowInTrace={() => {}}
+				chain={null}
+				onChain={() => {}}
 			/>,
 		);
 		expect(markup).toContain('data-testid="errors-tool-row" data-tool="bash"');
@@ -225,6 +227,8 @@ describe("the errors section", () => {
 				}}
 				sources={SOURCES}
 				onShowInTrace={() => {}}
+				chain={null}
+				onChain={() => {}}
 			/>,
 		);
 		expect(markup).toContain('data-outcome="unfinished"');
@@ -246,6 +250,8 @@ describe("the errors section", () => {
 				analysis={{ ...ANALYSIS, chains: [], repeats: [] }}
 				sources={SOURCES}
 				onShowInTrace={() => {}}
+				chain={null}
+				onChain={() => {}}
 			/>,
 		);
 		expect(markup).toContain('data-testid="errors-empty"');

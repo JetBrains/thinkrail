@@ -1,7 +1,8 @@
-import { localeOf, useT } from "@thinkrail/locales/react";
+import { localeOf, type Translator, useT } from "@thinkrail/locales/react";
 import type { ContextCall, SessionContext } from "@thinkrail/pi-session-insights/core";
 import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type ChartLabel, placeLabels, textMeasure } from "../chartLabels";
 import { formatClock, formatCount, formatShare, formatTokens } from "../format";
 import { keyLabels, PANEL_COMMANDS, PANEL_KEYS, PANEL_SCOPE, plainKey } from "../keys";
 import { useCanvasLook } from "../trace/look";
@@ -14,11 +15,12 @@ import {
 	drawChart,
 	drawOverview,
 	fullView,
+	LABEL_ROW,
+	LABEL_ROWS,
 	OVERVIEW_HEIGHT,
 	panBy,
 	positionAt,
 	sizeCanvas,
-	TOP,
 	viewShowing,
 	xOf,
 	zoomAt,
@@ -27,48 +29,83 @@ import { CATEGORIES, CATEGORY_LABEL } from "./look";
 
 const ZOOM_STEP = 1.6;
 const CHART_KEYS = [PANEL_KEYS.zoomIn, PANEL_KEYS.zoomOut, PANEL_KEYS.zoomFit] as const;
-const LABEL_HEIGHT = 15;
+const FIRST_LABEL_Y = 14;
 
-/** Each compaction's drop and each model switch, as SVG text over the canvas so it reads like text. */
-function Markers({ data, view, width }: { data: SessionContext; view: ChartView; width: number }) {
-	const t = useT();
+/** The compaction and model-switch labels in view, compactions first, each with its shorter forms. */
+export function markerLabels(
+	t: Translator,
+	data: SessionContext,
+	view: ChartView,
+	width: number,
+): ChartLabel[] {
 	const locale = localeOf(t);
-	const indexOf = useMemo(() => new Map(data.calls.map((call, at) => [call.id, at])), [data.calls]);
-	if (width <= 0) return null;
-	const labels: { key: string; x: number; text: string; testId: string; tone: string }[] = [];
-	for (const cliff of data.compactions) {
-		const at = cliff.after ? indexOf.get(cliff.after) : undefined;
-		if (at === undefined) continue;
+	const indexOf = new Map(data.calls.map((call, at) => [call.id, at]));
+	const xAt = (id: string | null) => {
+		const at = id === null ? undefined : indexOf.get(id);
+		if (at === undefined) return null;
 		const x = xOf(view, width, at - 0.5);
-		if (x < 0 || x > width) continue;
-		labels.push({
+		return x < 0 || x > width ? null : x;
+	};
+	const cliffs: ChartLabel[] = [];
+	for (const cliff of data.compactions) {
+		const x = xAt(cliff.after);
+		if (x === null) continue;
+		if (cliff.beforeTokens === null || cliff.afterTokens === null || cliff.change === null) {
+			cliffs.push({ key: cliff.id, x, variants: [t("sessionInsights.context.cliffBare")] });
+			continue;
+		}
+		const before = formatTokens(locale, cliff.beforeTokens);
+		const after = formatTokens(locale, cliff.afterTokens);
+		const change = `${cliff.change < 0 ? "−" : "+"}${formatShare(locale, Math.abs(cliff.change), 1) ?? ""}`;
+		cliffs.push({
 			key: cliff.id,
 			x,
-			testId: "context-cliff",
-			tone: "fill-series-7",
-			text:
-				cliff.beforeTokens !== null && cliff.afterTokens !== null && cliff.change !== null
-					? t("sessionInsights.context.cliff", {
-							before: formatTokens(locale, cliff.beforeTokens),
-							after: formatTokens(locale, cliff.afterTokens),
-							change: `${cliff.change < 0 ? "−" : "+"}${formatShare(locale, Math.abs(cliff.change), 1) ?? ""}`,
-						})
-					: t("sessionInsights.context.cliffBare"),
+			variants: [
+				t("sessionInsights.context.cliff", { before, after, change }),
+				t("sessionInsights.context.cliffShort", { before, after }),
+				change,
+			],
 		});
 	}
+	const switches: ChartLabel[] = [];
 	for (const change of data.switches) {
-		const at = indexOf.get(change.at);
-		if (at === undefined) continue;
-		const x = xOf(view, width, at - 0.5);
-		if (x < 0 || x > width) continue;
-		labels.push({
+		const x = xAt(change.at);
+		if (x === null) continue;
+		const model = change.to ?? "—";
+		const short = model.split("/").pop() ?? model;
+		switches.push({
 			key: `switch:${change.at}`,
 			x,
-			testId: "context-switch",
-			tone: "fill-series-3",
-			text: t("sessionInsights.context.switch", { model: change.to ?? "—" }),
+			variants: [
+				t("sessionInsights.context.switch", { model }),
+				...(short !== model ? [t("sessionInsights.context.switch", { model: short })] : []),
+			],
 		});
 	}
+	const byX = (a: ChartLabel, b: ChartLabel) => a.x - b.x;
+	return [...cliffs.sort(byX), ...switches.sort(byX)];
+}
+
+/** Each compaction's drop and each model switch, as SVG text over the canvas so it reads like text. */
+function Markers({
+	data,
+	view,
+	width,
+	font,
+}: {
+	data: SessionContext;
+	view: ChartView;
+	width: number;
+	font: string;
+}) {
+	const t = useT();
+	const measure = useMemo(() => textMeasure(font), [font]);
+	if (width <= 0) return null;
+	const placed = placeLabels(markerLabels(t, data, view, width), {
+		width,
+		rows: LABEL_ROWS,
+		measure,
+	});
 	return (
 		<svg
 			aria-hidden="true"
@@ -76,18 +113,22 @@ function Markers({ data, view, width }: { data: SessionContext; view: ChartView;
 			height={CHART_HEIGHT}
 			className="pointer-events-none absolute inset-x-0 top-0 block"
 		>
-			{labels.map((label) => (
-				<text
-					key={label.key}
-					data-testid={label.testId}
-					x={Math.min(width - 4, label.x + 4)}
-					y={TOP - 8 + (label.testId === "context-switch" ? LABEL_HEIGHT : 0)}
-					textAnchor={label.x > width * 0.75 ? "end" : "start"}
-					className={`${label.tone} tr-text-metadata`}
-				>
-					{label.text}
-				</text>
-			))}
+			{placed.map((label) => {
+				const cliff = !label.key.startsWith("switch:");
+				return (
+					<text
+						key={label.key}
+						data-testid={cliff ? "context-cliff" : "context-switch"}
+						data-level={label.level}
+						x={label.x}
+						y={FIRST_LABEL_Y + label.row * LABEL_ROW}
+						textAnchor={label.anchor}
+						className={`${cliff ? "fill-series-7" : "fill-series-3"} tr-text-caption`}
+					>
+						{label.text}
+					</text>
+				);
+			})}
 		</svg>
 	);
 }
@@ -310,7 +351,7 @@ export function ContextChart({
 				data-testid="context-chart"
 				data-calls={count}
 				data-misses={data.calls.filter((call) => call.miss).length}
-				className="relative h-324 has-[:focus-visible]:focus-ring-inset"
+				className="relative h-354 has-[:focus-visible]:focus-ring-inset"
 			>
 				<button
 					type="button"
@@ -327,9 +368,9 @@ export function ContextChart({
 					<canvas
 						ref={chartRef}
 						data-testid="context-canvas"
-						className="absolute inset-x-0 top-0 block h-292 w-full cursor-crosshair"
+						className="absolute inset-x-0 top-0 block h-322 w-full cursor-crosshair"
 					/>
-					<Markers data={data} view={view} width={width} />
+					<Markers data={data} view={view} width={width} font={font} />
 					<canvas
 						ref={overviewRef}
 						data-testid="context-overview"

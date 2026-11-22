@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import type { PanelHost } from "@thinkrail/extension-api/web";
+import { currentTranslator } from "@thinkrail/locales/react";
 import type {
 	ContextCall,
+	CostMoment,
 	SessionContext,
 	SessionCost,
 	SessionFiles,
@@ -11,6 +13,7 @@ import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { CostView } from "../cost/CostView";
+import { diagnosisText } from "../cost/diagnosis";
 import { FilesView } from "../files/FilesView";
 import { SOURCES } from "../fixtures.test";
 import { PANEL_KEYS, PANEL_SCOPE } from "../keys";
@@ -99,10 +102,13 @@ describe("context and cache", () => {
 				selectedId="c2"
 				onSelectId={() => {}}
 				onShowInTrace={() => {}}
+				mode="chart"
+				onMode={() => {}}
 			/>,
 		);
 		expect(markup).toContain('data-testid="context-chart"');
 		expect(markup).toContain('data-calls="3"');
+		expect(markup).toContain("3 calls · 2 cache misses · 1 compaction");
 		expect(markup.match(/data-testid="context-miss"/g)).toHaveLength(2);
 		expect(markup).toContain('data-cause="systemPrompt"');
 		expect(markup).toContain("pause 6 min &gt; cache TTL (5 min)");
@@ -127,6 +133,8 @@ describe("context and cache", () => {
 				selectedId="c2"
 				onSelectId={() => {}}
 				onShowInTrace={() => {}}
+				mode="chart"
+				onMode={() => {}}
 			/>
 		);
 		const defaults = html(view);
@@ -248,6 +256,51 @@ const COST: SessionCost = {
 };
 
 describe("why expensive", () => {
+	test("its copy agrees with its counts: one call, one plan step", () => {
+		const t = currentTranslator();
+		const one: SessionCost = {
+			...COST,
+			diagnosis: {
+				...COST.diagnosis,
+				calls: 1,
+				focus: {
+					kind: "steps",
+					items: [{ n: 1, title: "Build the parser", value: 2.5 }],
+					share: 0.98,
+					peakContext: 95_000,
+				},
+			},
+		};
+		expect(diagnosisText(t, "en", one)).toBe(
+			"Expensive because of a long context: 1 call re-read 63.6K tokens on average; 98% of the spend went to plan step 1 «Build the parser» at a context up to 95K.",
+		);
+		const turns: SessionCost = {
+			...one,
+			diagnosis: {
+				...one.diagnosis,
+				kind: "manyCalls",
+				calls: 3,
+				focus: {
+					kind: "turns",
+					items: [{ n: 4, title: "Docs", value: 1 }],
+					share: 0.5,
+					peakContext: 1_000,
+				},
+			},
+		};
+		expect(diagnosisText(t, "en", turns)).toContain("3 model calls at a median");
+		expect(diagnosisText(t, "en", turns)).toContain("went to turn 4 «Docs»");
+		const markup = html(
+			<CostView
+				cost={{ ...one, moments: [{ ...(COST.moments[0] as CostMoment), llmCalls: 1 }] }}
+				sources={SOURCES}
+				onShowInTrace={() => {}}
+			/>,
+		);
+		expect(markup).toContain(" · 1 call × $1.00 · ");
+		expect(markup).toContain("2 calls at a context ≥ 80K");
+	});
+
 	test("shows the diagnosis, the moments linked to their call and prompt, and an unexplained spike", () => {
 		const markup = html(<CostView cost={COST} sources={SOURCES} onShowInTrace={() => {}} />);
 		expect(markup).toContain('data-kind="longContext"');
@@ -340,6 +393,8 @@ describe("files", () => {
 				files={FILES}
 				sources={SOURCES}
 				onShowInTrace={() => {}}
+				path={null}
+				onPath={() => {}}
 			/>,
 		);
 		expect(markup.match(/data-testid="files-row"/g)).toHaveLength(2);
