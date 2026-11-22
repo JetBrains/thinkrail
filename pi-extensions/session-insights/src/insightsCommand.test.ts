@@ -18,6 +18,8 @@ import {
 	shortIds,
 	vanillaInsightsLocations,
 } from "./insightsCommand.ts";
+import { createRedactor } from "./redact.ts";
+import { TraceStore } from "./traceStore.ts";
 
 process.env.TZ = "UTC";
 
@@ -232,6 +234,23 @@ describe("/insights reports", () => {
 		expect(existsSync(join(folder, "2026-11-08-migrate-the-storage-layer-019a4602.html"))).toBe(
 			true,
 		);
+	});
+
+	test("an export line names the written file with the home folder as ~", async () => {
+		const dir = agentDir("exports-home");
+		writeInsightsCorpus(dir);
+		class HomeEngine extends InsightsEngine {
+			override readonly traces = new TraceStore({ redactor: createRedactor(dir) });
+		}
+		const engine = new HomeEngine(vanillaInsightsLocations(dir));
+		const text = await runInsights(engine, request(`--session ${corpusId(3)} --html`), {
+			cwd: ALPHA,
+			contextWindow: async () => 200_000,
+		});
+		expect(text).toContain(
+			"  HTML      ~/session-insights/2026-11-05-make-the-parser-tests-pass-round-3-019a4089.html",
+		);
+		expect(text).not.toContain(dir);
 	});
 
 	test("a custom tool's credentials appear in no report and no export", async () => {

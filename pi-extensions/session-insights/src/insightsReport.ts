@@ -436,14 +436,14 @@ function findingLines(findings: readonly Finding[], context: FindingContext): st
 
 const EXPORT_LABEL = { html: "HTML", trace: "Trace", fixture: "Fixture" } as const;
 
-function exportLines(exports: readonly ExportLine[]): string[] {
+function exportLines(exports: readonly ExportLine[], redactor: Redactor): string[] {
 	if (exports.length === 0) return [];
 	const lines = ["", "Exported"];
 	for (const { result, path } of exports) {
 		const label = EXPORT_LABEL[result.kind];
 		if (result.ok) {
 			const hint = result.kind === "trace" ? " (Perfetto UI, chrome://tracing or speedscope)" : "";
-			lines.push(field(label, `${path ?? result.path}${hint}`));
+			lines.push(field(label, `${redactor.redact(path ?? result.path)}${hint}`));
 		} else if (result.code === "CHECK_FAILED") {
 			lines.push(
 				field(
@@ -597,7 +597,7 @@ export function overviewReport(input: OverviewReportInput): string {
 			lines.push(
 				`${plural(input.indexed, "session")} in other folders: run /insights --all to include them.`,
 			);
-		return [...lines, ...exportLines(input.exports), ...footer(marks)].join("\n");
+		return [...lines, ...exportLines(input.exports, redactor), ...footer(marks)].join("\n");
 	}
 	const starts = rows.flatMap((row) => (row.start.value === null ? [] : [row.start.value]));
 	const range =
@@ -614,7 +614,7 @@ export function overviewReport(input: OverviewReportInput): string {
 		}),
 		...usageLines(input, marks),
 		...recentLines(input, marks),
-		...exportLines(input.exports),
+		...exportLines(input.exports, redactor),
 		...footer(marks),
 		scope.kind === "cwd"
 			? "More: /insights --all · /insights --session <id> · --html · --trace · --help"
@@ -778,7 +778,7 @@ export function sessionReport(input: SessionReportInput): string {
 	lines.push(field("Why", diagnosisText(cost)));
 	lines.push(...errorLines(input.analysis, redactor));
 	lines.push(...turnLines(input, marks));
-	lines.push(...exportLines(input.exports), ...footer(marks));
+	lines.push(...exportLines(input.exports, redactor), ...footer(marks));
 	return lines.join("\n");
 }
 
