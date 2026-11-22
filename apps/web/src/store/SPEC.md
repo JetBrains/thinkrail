@@ -868,12 +868,24 @@ extension's `pasteToEditor` request does, so both paste at the caret the same wa
 panel is diffing (read through **`selectDiffScope`**, which defaults to the shared, referentially stable
 `BRANCH_SCOPE`); keyed **per workspace**, not app-wide like `changesView`, because a scope belongs to that
 branch's review — a commit sha means nothing in another worktree — and dropped with the workspace in
-`applyWorkspaceRemoved`. The transient **`chatLocationRequest`** — the history-search jump and an
-  extension panel's *Open in chat* (`PanelHost.openChat` with an anchor)
+`applyWorkspaceRemoved`. **`chatPanesByWorkspace`** holds each chat's pane beside it (`ChatPane`: the
+extension panel and its params, `open`, and `width` — a percentage of the chat's tab, `null` until it lays
+out), one per chat keyed by workspace and session: **`openChatPane`** opens or replaces it keeping the
+width, **`closeChatPane`** closes it keeping the panel and width, **`setChatPaneWidth`** remembers the
+width; read through **`selectChatPane`**, and **`selectChatPlacedInCenter`** says whether a chat has a tab
+in the active workspace's center (where a pane can open, [[submodule-web-shell]] § Extension panels).
+**`panelViewStatesByWorkspace`** is the extension panels' view state, one JSON-like value per tab
+(its resource identity) or chat pane (`chatPaneViewKey`), written by **`savePanelViewState`** (an
+`undefined` value forgets the key) and read only through `getState()` (`selectPanelViewState`) when a
+panel mounts — no component subscribes, so a save re-renders nothing. Both are runtime only: `closeTab`
+drops an extension tab's value, deleting a chat (`withoutChat`) drops its pane and the pane's values, and
+`applyWorkspaceRemoved` drops the workspace's entries. The transient **`chatLocationRequest`** — the
+  history-search jump, an extension panel's *Open in chat* (`PanelHost.openChat` with an anchor) and a
+  chat pane's *Show in chat* (`focus: false`: reveal and highlight without moving focus)
   deep link; the requester activates the target project+workspace, the workbench shell integration
   opens/hydrates the target
   chat, `ChatView` consumes + clears — is **`ChatLocationRequest { workspaceId, projectId, sessionId,
-  messageIndex, anchorText, toolCallId?, approximate?, navigation? }`** (`toolCallId` asks for that call's
+  messageIndex, anchorText, toolCallId?, approximate?, focus?, navigation? }`** (`toolCallId` asks for that call's
   row, `approximate` marks an anchor that is the nearest shown ancestor), set by **`requestChatLocation(req)`** (which captures and
   advances an already-hydrated destination group's local clock *before* switching workspaces, and sets `selectedProjectId` +
   `activeWorkspaceId` **atomically**, the same invariant `activateWorkspace` upholds, since the target chat

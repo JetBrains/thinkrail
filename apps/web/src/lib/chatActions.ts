@@ -11,4 +11,6 @@ export interface ChatAction {
 	readonly menuLabel: string;
 	readonly icon: ComponentType<{ className?: string | undefined }>;
 	readonly run: (target: ChatActionTarget) => void;
+	/** Opens beside an open chat: the chat's header shows it as a toggle, pressed while its pane shows it. */
+	readonly pane?: true;
 }

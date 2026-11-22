@@ -1,6 +1,7 @@
 import type { ChatLocationRequest } from "@/store";
 import { turnAnchorText } from "./recentPrompts";
 import { type ChatRow, rowIndexForToolCall, rowIndexForTurn } from "./rows";
+import { transcriptItems } from "./transcriptNavigation";
 import type { ChatTurn } from "./types";
 
 export interface LocatedRow {
@@ -19,6 +20,30 @@ function firstToolCallRow(
 		if (index !== -1) return index;
 	}
 	return -1;
+}
+
+export interface LocatedToolItem {
+	/** The transcript item of the call inside its row. */
+	itemId: string;
+	/** The folds around it, outermost first, that must open for it to show. */
+	folds: string[];
+}
+
+/** Where a tool call sits inside a row that groups it; `null` when the row is the call's own. */
+export function locateToolItem(row: ChatRow, toolCallId: string): LocatedToolItem | null {
+	const items = transcriptItems([row], () => true);
+	const item = items.find(
+		({ id, source }) => id !== row.id && source.kind === "tool" && source.toolCallId === toolCallId,
+	);
+	if (!item) return null;
+	const folds: string[] = [];
+	let parentId = item.parentId;
+	while (parentId !== null) {
+		folds.unshift(parentId);
+		const parent = parentId;
+		parentId = items.find(({ id }) => id === parent)?.parentId ?? null;
+	}
+	return { itemId: item.id, folds };
 }
 
 /**

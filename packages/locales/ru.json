@@ -344,6 +344,7 @@
 	"chat.modelPicker.setDefault": "Установить по умолчанию",
 	"chat.modelPicker.unpin": "Открепить {{model}}",
 	"chat.modelPicker.updating": "Обновление…",
+	"chat.pane.resize": "Изменить ширину панели рядом с чатом",
 	"chat.plan.verificationClaimed": "Проверка по данным агента — хост её не выполнял",
 	"chat.plan.verificationMissing": "По данным агента, этот шаг не проверен",
 	"chat.planExport.committedOutside": "Закоммичено вне плана",

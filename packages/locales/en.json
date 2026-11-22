@@ -314,6 +314,7 @@
 	"chat.modelPicker.setDefault": "Set as default",
 	"chat.modelPicker.unpin": "Unpin {{model}}",
 	"chat.modelPicker.updating": "Updating…",
+	"chat.pane.resize": "Resize the panel beside the chat",
 	"chat.plan.verificationClaimed": "Verification as reported by the agent — not re-run by the host",
 	"chat.plan.verificationMissing": "The agent reports this step was not verified",
 	"chat.planExport.committedOutside": "Committed outside the plan",

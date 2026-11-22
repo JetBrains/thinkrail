@@ -4,20 +4,40 @@ import type {
 	PanelHost,
 	PanelProps,
 	PanelToolCall,
+	WebExtension,
 } from "@thinkrail/extension-api/web";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import { type ComponentType, type LazyExoticComponent, lazy, Suspense, useMemo } from "react";
+import {
+	type ComponentType,
+	type LazyExoticComponent,
+	lazy,
+	Suspense,
+	useMemo,
+	useState,
+} from "react";
+import type { ChatPaneSlot } from "../chat/ChatPaneSplit";
 import { ToolCallPreview } from "../chat/ToolCallPreview";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { findExtensionPanel, type RegisteredPanel } from "../extensions";
+import { layoutResourceIdentity } from "../lib";
 import { revealArtifactsListing } from "../panels/artifactActions";
 import { openFileAtLine, openFileInTab } from "../panels/openTabs";
-import { SettingsSection, selectWorkspaceById, useAppStore } from "../store";
-import { getTransport, supportsExtensionQuery } from "../transport";
 import {
+	type ChatPanePanel,
+	chatPaneViewKey,
+	SettingsSection,
+	selectChatPane,
+	selectPanelViewState,
+	selectWorkspaceById,
+	useAppStore,
+} from "../store";
+import { getTransport, supportsExtensionQuery } from "../transport";
+import { chatPanelActionId, moveChatPaneToTab } from "./extensionEntryPoints";
+import {
+	type ChatPaneHost,
 	createPanelHost,
 	type ExtensionCatalogRead,
 	openExtensionPanel,
@@ -152,28 +172,39 @@ export function PanelToolCallView({ call }: { call: PanelToolCall }) {
 	);
 }
 
-function LoadedExtensionPanel({
-	workspaceId,
-	projectId,
-	tab,
-	panel,
-	entry,
-	protocolVersion,
-}: {
+interface LoadedPanelProps {
 	workspaceId: string;
 	projectId: string;
-	tab: LayoutExtensionTab;
 	panel: RegisteredPanel;
 	entry: ExtensionCatalogEntry;
 	protocolVersion: number | null;
-}) {
+	params: Readonly<Record<string, string>>;
+	viewKey: string;
+	pane: ChatPaneHost | undefined;
+	resetKeys: readonly unknown[];
+}
+
+function LoadedExtensionPanel({
+	workspaceId,
+	projectId,
+	panel,
+	entry,
+	protocolVersion,
+	params,
+	viewKey,
+	pane,
+	resetKeys,
+}: LoadedPanelProps) {
 	const extension = panel.extension;
 	const apiVersion = entry.apiVersion;
+	const [viewState] = useState(() =>
+		selectPanelViewState(useAppStore.getState(), workspaceId, viewKey),
+	);
 	const host = useMemo(
 		() =>
 			createPanelHost({
 				extension,
-				request: (params) => getTransport().request("extension.query", params),
+				request: (query) => getTransport().request("extension.query", query),
 				navigate: (workspace, sessionId) =>
 					void paletteNavigator.navigateToWorkspace(workspace, sessionId),
 				locate: (location) =>
@@ -182,9 +213,9 @@ function LoadedExtensionPanel({
 						.then((ok) => {
 							if (ok) useAppStore.getState().requestChatLocation(location);
 						}),
-				openPanel: (id, params, title) => {
+				openPanel: (id, panelParams, title) => {
 					const target = findExtensionPanel(extension, id);
-					if (target) openExtensionPanel(workspaceId, target, params, title);
+					if (target) openExtensionPanel(workspaceId, target, panelParams, title);
 				},
 				renderToolCall: (call) => <PanelToolCallView call={call} />,
 				openFile: (target, path, line) => {
@@ -207,28 +238,41 @@ function LoadedExtensionPanel({
 				scope: { workspaceId, projectId },
 				hostProtocol: protocolVersion,
 				hostApiVersion: apiVersion,
+				pane,
+				viewState,
+				saveViewState: (state) =>
+					useAppStore.getState().savePanelViewState(workspaceId, viewKey, state),
 			}),
-		[apiVersion, extension, projectId, protocolVersion, workspaceId],
+		[apiVersion, extension, pane, projectId, protocolVersion, viewKey, viewState, workspaceId],
 	);
 	return (
 		<ExtensionPanelFrame
 			declaration={panel.declaration}
 			host={host}
-			params={tab.params}
-			resetKeys={[workspaceId, tab.id]}
+			params={params}
+			resetKeys={resetKeys}
 		/>
 	);
 }
 
-export function ExtensionPanelBody({
-	workspaceId,
-	tab,
-}: {
-	workspaceId: string;
-	tab: LayoutExtensionTab;
-}) {
-	const t = useT();
-	const panel = findExtensionPanel(tab.extension, tab.panel);
+export interface ExtensionPanelGate {
+	readonly state: ExtensionPanelState;
+	readonly projectId: string | null;
+	readonly protocolVersion: number | null;
+	readonly retry: () => void;
+}
+
+/** The tab body's and the chat pane's one gate: what to show for this panel right now. */
+export function useExtensionPanelGate(
+	workspaceId: string,
+	extension: string | undefined,
+	panelId: string | undefined,
+	extensions?: readonly WebExtension[],
+): ExtensionPanelGate {
+	const panel =
+		extension === undefined || panelId === undefined
+			? undefined
+			: findExtensionPanel(extension, panelId, extensions);
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
 	const disabled = useAppStore((state) => state.disabledExtensions);
 	const projectId = useAppStore(
@@ -237,16 +281,48 @@ export function ExtensionPanelBody({
 	const catalog = useExtensionCatalog(
 		panel !== undefined && supportsExtensionQuery(protocolVersion),
 	);
-	const state = extensionPanelState({ panel, protocolVersion, disabled, catalog: catalog.read });
+	return {
+		state: extensionPanelState({ panel, protocolVersion, disabled, catalog: catalog.read }),
+		projectId,
+		protocolVersion,
+		retry: catalog.retry,
+	};
+}
+
+/** A pane beside a chat shows only while its panel is openable; a tab shows every state. */
+export function chatPaneShown(state: ExtensionPanelState): boolean {
+	return state.kind === "ready" || state.kind === "loading" || state.kind === "failed";
+}
+
+export function GatedExtensionPanel({
+	workspaceId,
+	gate,
+	params,
+	viewKey,
+	pane,
+	resetKeys,
+}: {
+	workspaceId: string;
+	gate: ExtensionPanelGate;
+	params: Readonly<Record<string, string>>;
+	viewKey: string;
+	pane?: ChatPaneHost | undefined;
+	resetKeys: readonly unknown[];
+}) {
+	const t = useT();
+	const { state, projectId } = gate;
 	if (state.kind === "ready" && projectId !== null) {
 		return (
 			<LoadedExtensionPanel
 				workspaceId={workspaceId}
 				projectId={projectId}
-				tab={tab}
 				panel={state.panel}
 				entry={state.entry}
-				protocolVersion={protocolVersion}
+				protocolVersion={gate.protocolVersion}
+				params={params}
+				viewKey={viewKey}
+				pane={pane}
+				resetKeys={resetKeys}
 			/>
 		);
 	}
@@ -264,7 +340,104 @@ export function ExtensionPanelBody({
 		<ExtensionPanelPlaceholder
 			kind={state.kind}
 			onOpenSettings={() => useAppStore.getState().openSettings(SettingsSection.Extensions)}
-			onRetry={catalog.retry}
+			onRetry={gate.retry}
 		/>
+	);
+}
+
+export function ExtensionPanelBody({
+	workspaceId,
+	tab,
+}: {
+	workspaceId: string;
+	tab: LayoutExtensionTab;
+}) {
+	const gate = useExtensionPanelGate(workspaceId, tab.extension, tab.panel);
+	return (
+		<GatedExtensionPanel
+			workspaceId={workspaceId}
+			gate={gate}
+			params={tab.params}
+			viewKey={layoutResourceIdentity(tab)}
+			resetKeys={[workspaceId, tab.id]}
+		/>
+	);
+}
+
+export function ExtensionChatPaneBody({
+	workspaceId,
+	sessionId,
+	pane,
+	extensions,
+}: {
+	workspaceId: string;
+	sessionId: string;
+	pane: ChatPanePanel;
+	extensions?: readonly WebExtension[] | undefined;
+}) {
+	const gate = useExtensionPanelGate(workspaceId, pane.extension, pane.panel, extensions);
+	const projectId = gate.projectId;
+	const panel = gate.state.kind === "ready" ? gate.state.panel : undefined;
+	const paneHost = useMemo<ChatPaneHost | undefined>(
+		() =>
+			panel && projectId !== null
+				? {
+						chat: { projectId, workspaceId, sessionId },
+						reveal: (location) => useAppStore.getState().requestChatLocation(location),
+						openAsTab: () => moveChatPaneToTab(panel, { workspaceId, sessionId }),
+						closePane: () => useAppStore.getState().closeChatPane(workspaceId, sessionId),
+					}
+				: undefined,
+		[panel, projectId, sessionId, workspaceId],
+	);
+	return (
+		<GatedExtensionPanel
+			workspaceId={workspaceId}
+			gate={gate}
+			params={pane.params}
+			viewKey={chatPaneViewKey(sessionId, pane.extension, pane.panel)}
+			pane={paneHost}
+			resetKeys={[workspaceId, sessionId, pane.extension, pane.panel]}
+		/>
+	);
+}
+
+/** What `ChatView` shows beside this chat: its open pane while the panel is openable, else nothing. */
+export function useExtensionChatPane(
+	workspaceId: string,
+	sessionId: string,
+	extensions?: readonly WebExtension[],
+): ChatPaneSlot | undefined {
+	const t = useT();
+	const pane = useAppStore((state) => selectChatPane(state, workspaceId, sessionId));
+	const open = pane?.open === true ? pane : null;
+	const gate = useExtensionPanelGate(workspaceId, open?.extension, open?.panel, extensions);
+	const title = open
+		? findExtensionPanel(open.extension, open.panel, extensions)?.declaration.title
+		: undefined;
+	const label = title ? t(title) : "";
+	const shown = open !== null && chatPaneShown(gate.state);
+	return useMemo(
+		() =>
+			shown && open
+				? {
+						id: chatPanelActionId(open),
+						label,
+						width: open.width,
+						content: (
+							<ExtensionChatPaneBody
+								key={chatPaneViewKey(sessionId, open.extension, open.panel)}
+								workspaceId={workspaceId}
+								sessionId={sessionId}
+								pane={open}
+								extensions={extensions}
+							/>
+						),
+						onWidthChange: (width: number) =>
+							useAppStore.getState().setChatPaneWidth(workspaceId, sessionId, width),
+						onClose: () => useAppStore.getState().closeChatPane(workspaceId, sessionId),
+					}
+				: undefined,
+		[extensions, label, open, sessionId, shown, workspaceId],
 	);
 }

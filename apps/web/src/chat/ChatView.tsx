@@ -63,8 +63,9 @@ import {
 } from "@/transport";
 import { withRestoredDraft } from "./attachments";
 import type { ResultTarget } from "./ChatActions";
-import { ChatHeader } from "./ChatHeader";
+import { ChatHeader, chatHeaderLinks } from "./ChatHeader";
 import { ChatMediaContext } from "./ChatImage";
+import { type ChatPaneSlot, ChatPaneSplit } from "./ChatPaneSplit";
 import ChatTranscript, { type ChatTranscriptHandle } from "./ChatTranscript";
 import {
 	Composer,
@@ -131,6 +132,7 @@ export default function ChatView({
 	landingChord,
 	suggestionShortcuts,
 	chatActions = NO_CHAT_ACTIONS,
+	pane,
 }: {
 	sessionId: string;
 	workspaceId: string;
@@ -138,6 +140,7 @@ export default function ChatView({
 	landingChord: string;
 	suggestionShortcuts: readonly SuggestionShortcut[];
 	chatActions?: readonly ChatAction[];
+	pane?: ChatPaneSlot | undefined;
 }) {
 	const t = useT();
 	const sessionExists = useAppStore((s) => s.sessions[sessionId] !== undefined);
@@ -222,15 +225,8 @@ export default function ChatView({
 	const skillsStale = useAppStore((s) => selectSkillsStale(s, workspaceId, sessionId));
 	const persisted = useAppStore((s) => selectChatPersisted(s, workspaceId, sessionId));
 	const headerLinks = useMemo(
-		() =>
-			persisted
-				? chatActions.map(({ id, label, run }) => ({
-						id,
-						label,
-						onOpen: () => run({ workspaceId, sessionId }),
-					}))
-				: [],
-		[chatActions, persisted, sessionId, workspaceId],
+		() => (persisted ? chatHeaderLinks(chatActions, { workspaceId, sessionId }, pane) : []),
+		[chatActions, pane, persisted, sessionId, workspaceId],
 	);
 	const workspaceRoot = useAppStore(
 		(s) => selectWorkspaceById(s, workspaceId)?.worktreePath ?? undefined,
@@ -929,7 +925,7 @@ export default function ChatView({
 		[],
 	);
 
-	return (
+	const chatBody = (
 		<div
 			ref={chatViewRef}
 			data-testid="chat-view"
@@ -1223,4 +1219,5 @@ export default function ChatView({
 			) : null}
 		</div>
 	);
+	return <ChatPaneSplit pane={pane}>{chatBody}</ChatPaneSplit>;
 }

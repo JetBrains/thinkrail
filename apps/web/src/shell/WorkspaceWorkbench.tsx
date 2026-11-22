@@ -87,7 +87,7 @@ import {
 	useDeletedChatPlacementReconciliation,
 	useWorkspaceChatCatalogReconciliation,
 } from "./chatReconciliation";
-import { ExtensionPanelBody } from "./ExtensionPanelBody";
+import { ExtensionPanelBody, useExtensionChatPane } from "./ExtensionPanelBody";
 import { useChatActions, useChatTabActions, useLeftRailFooter } from "./extensionEntryPoints";
 import { useResolvedKeybindings } from "./keybindingState";
 import {
@@ -246,6 +246,7 @@ function ChatResourceBody({
 }) {
 	const t = useT();
 	const available = useAppStore((state) => state.sessions[tab.sessionId] !== undefined);
+	const pane = useExtensionChatPane(workspaceId, tab.sessionId);
 	const [stalled, setStalled] = useState(false);
 	useEffect(() => {
 		if (available) return;
@@ -268,6 +269,7 @@ function ChatResourceBody({
 						landingChord={landingChord}
 						suggestionShortcuts={suggestionShortcuts}
 						chatActions={chatActions}
+						pane={pane}
 					/>
 				</Suspense>
 			</ErrorBoundary>

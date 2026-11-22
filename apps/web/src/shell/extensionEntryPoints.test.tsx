@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { EXTENSION_QUERY_PROTOCOL_VERSION, type Workspace } from "@thinkrail/contracts";
 import type { PanelDeclaration } from "@thinkrail/extension-api/web";
 import { currentTranslator } from "@thinkrail/locales/react";
@@ -6,14 +6,28 @@ import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import { findExtensionPanel, type RegisteredPanel, webExtensionCommands } from "../extensions";
 import { keybindingKeys, resolveKeybindings } from "../keybindings";
-import { useAppStore } from "../store";
-import { chatActionsOf, openExtensionPanelForChat, railFooterItems } from "./extensionEntryPoints";
+import { layoutResourceIdentity } from "../lib";
+import {
+	chatPaneViewKey,
+	type LayoutIntent,
+	selectChatPane,
+	selectPanelViewState,
+	useAppStore,
+} from "../store";
+import * as chordActions from "./chordActions";
+import {
+	chatActionsOf,
+	moveChatPaneToTab,
+	openExtensionPanelForChat,
+	railFooterItems,
+} from "./extensionEntryPoints";
 import {
 	currentOpenableExtensionPanels,
 	openableExtensionPanels,
 	openExtensionPanelHere,
 	railCommandPanel,
 } from "./extensionPanelHost";
+import type { WorkspaceLayoutDocument } from "./layout";
 
 const t = currentTranslator();
 const load = async () => ({ default: () => null });
@@ -149,6 +163,208 @@ describe("chat actions", () => {
 		openExtensionPanelForChat(list, { workspaceId: "c1", sessionId: "s1" });
 		openExtensionPanelForChat(analysis, { workspaceId: "gone", sessionId: "s1" });
 		expect(useAppStore.getState().tabsByWorkspace.c1).toHaveLength(1);
+	});
+});
+
+describe("a chat panel beside its chat", () => {
+	const beside: RegisteredPanel = {
+		extension: "insights",
+		panel: "beside",
+		declaration: declaration({
+			title: "sessionInsights.session.title",
+			scopes: ["session"],
+			chatPane: true,
+			wide: true,
+			chatAction: {
+				menuLabel: "sessionInsights.session.analyze",
+				params: ({ sessionId }) => ({ sessionId }),
+			},
+		}),
+	};
+	const narrow: RegisteredPanel = {
+		extension: "notes",
+		panel: "outline",
+		declaration: declaration({
+			scopes: ["session"],
+			chatPane: true,
+			chatAction: { menuLabel: "common.retry", params: ({ sessionId }) => ({ sessionId }) },
+		}),
+	};
+	const chatTab = (sessionId: string) => ({
+		kind: "chat" as const,
+		id: `chat:${sessionId}`,
+		workspaceId: "w1",
+		name: "",
+		sessionId,
+	});
+	const layout = (sessionIds: readonly string[]): WorkspaceLayoutDocument => ({
+		version: 2,
+		center: {
+			kind: "group",
+			id: "center",
+			tabs: sessionIds.map((sessionId) => ({
+				kind: "chat",
+				id: `chat:${sessionId}`,
+				name: "",
+				sessionId,
+			})),
+		},
+		left: { visible: false, width: 0.2, groups: [] },
+		right: { visible: false, width: 0.2, groups: [] },
+		bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+		toolRestoreTargets: {},
+	});
+	const attend = (sessionId: string) => ({
+		selectedByGroup: { center: `chat:${sessionId}` },
+		lastFocusedCenterGroupId: "center",
+		lastFocusedSideGroupId: {},
+		navigationClockByGroup: { center: 0 },
+	});
+	const opened = (intents: readonly LayoutIntent[]) =>
+		intents.flatMap((intent) => (intent.kind === "open" ? [intent.tab.kind] : []));
+	let hide: ReturnType<typeof spyOn<typeof chordActions, "hideAllPanels">>;
+
+	beforeEach(() => {
+		hide = spyOn(chordActions, "hideAllPanels").mockImplementation(() => {});
+		useAppStore.setState({
+			activeWorkspaceId: "w1",
+			selectedProjectId: "p1",
+			projects: [],
+			workspaces: { p1: [workspace("w1", "p1")], chats: [workspace("c1", "chats", "chat")] },
+			tabsByWorkspace: { w1: [chatTab("s1"), chatTab("s2")] },
+			activeTabByWorkspace: {},
+			layoutIntents: [],
+			removedWorkspaceIds: {},
+			deletedSessionsByWorkspace: {},
+			obscuredChatSessions: {},
+			historyOpenRequest: null,
+			layoutDocumentsByWorkspace: { w1: layout(["s1", "s2"]) },
+			layoutAttentionByWorkspace: { w1: attend("s1") },
+			chatPanesByWorkspace: {},
+			panelViewStatesByWorkspace: {},
+			sessions: {},
+			closedChatsByWorkspace: {},
+			sessionStateByWorkspace: {},
+		});
+	});
+
+	afterEach(() => hide.mockRestore());
+
+	test("every chat surface marks the panel as one that opens beside its chat", () => {
+		const actions = chatActionsOf(t, [beside, analysis]);
+		expect(actions.map(({ id, pane }) => [id, pane])).toEqual([
+			["insights.beside", true],
+			["insights.analysis", undefined],
+		]);
+	});
+
+	test("the chat in view gets the pane in place: no tab, no tab switch, the side panes hidden once", () => {
+		openExtensionPanelForChat(beside, { workspaceId: "w1", sessionId: "s1" });
+		openExtensionPanelForChat(beside, { workspaceId: "w1", sessionId: "s1" });
+
+		const state = useAppStore.getState();
+		expect(selectChatPane(state, "w1", "s1")).toEqual({
+			extension: "insights",
+			panel: "beside",
+			params: { sessionId: "s1" },
+			open: true,
+			width: null,
+		});
+		expect(state.tabsByWorkspace.w1?.some((tab) => tab.kind === "extension")).toBe(false);
+		expect(state.layoutIntents).toEqual([]);
+		expect(hide.mock.calls).toEqual([["w1"]]);
+	});
+
+	test("a chat open in another tab of the center is brought forward with its pane", () => {
+		openExtensionPanelForChat(narrow, { workspaceId: "w1", sessionId: "s2" });
+
+		const state = useAppStore.getState();
+		expect(selectChatPane(state, "w1", "s2")?.open).toBe(true);
+		expect(opened(state.layoutIntents)).toEqual(["chat"]);
+		expect(hide).not.toHaveBeenCalled();
+	});
+
+	test("another panel for the same chat replaces the pane, keeping its width", () => {
+		openExtensionPanelForChat(narrow, { workspaceId: "w1", sessionId: "s1" });
+		useAppStore.getState().setChatPaneWidth("w1", "s1", 38);
+		openExtensionPanelForChat(beside, { workspaceId: "w1", sessionId: "s1" });
+
+		expect(selectChatPane(useAppStore.getState(), "w1", "s1")).toMatchObject({
+			extension: "insights",
+			panel: "beside",
+			width: 38,
+		});
+		expect(hide).toHaveBeenCalledTimes(1);
+	});
+
+	test("a chat not open in this workspace's center gets the tab, as does a panel without a pane", () => {
+		const extensionTabs = () =>
+			(useAppStore.getState().tabsByWorkspace.w1 ?? []).filter((tab) => tab.kind === "extension");
+		openExtensionPanelForChat(beside, { workspaceId: "w1", sessionId: "closed" });
+		openExtensionPanelForChat(beside, { workspaceId: "c1", sessionId: "s9" });
+		openExtensionPanelForChat(analysis, { workspaceId: "w1", sessionId: "s1" });
+
+		expect(useAppStore.getState().chatPanesByWorkspace).toEqual({});
+		expect(extensionTabs().map((tab) => tab.kind === "extension" && tab.params)).toEqual([
+			{ sessionId: "closed" },
+			{ sessionId: "s9" },
+			{ sessionId: "s1", projectId: "p1" },
+		]);
+		expect(hide.mock.calls).toEqual([["w1"], ["w1"]]);
+	});
+
+	test("on Project Home it opens the tab in the chat's workspace", () => {
+		useAppStore.setState({ activeWorkspaceId: null });
+		openExtensionPanelForChat(beside, { workspaceId: "w1", sessionId: "s1" });
+
+		const state = useAppStore.getState();
+		expect(state.activeWorkspaceId).toBe("w1");
+		expect(state.chatPanesByWorkspace).toEqual({});
+		expect(state.tabsByWorkspace.w1?.filter((tab) => tab.kind === "extension")).toHaveLength(1);
+	});
+
+	test("Open as tab moves the pane to the chat's tab with its view state and closes the pane", () => {
+		useAppStore.setState({
+			sessionStateByWorkspace: {
+				w1: {
+					s1: {
+						sessionId: "s1",
+						workspaceId: "w1",
+						projectId: "p1",
+						title: "Fix the login flow",
+						state: {
+							execution: "idle",
+							runId: null,
+							needsInput: null,
+							completion: null,
+							completionUnread: false,
+							queuedCount: 0,
+							backgroundWork: false,
+						},
+					},
+				},
+			},
+		});
+		openExtensionPanelForChat(beside, { workspaceId: "w1", sessionId: "s1" });
+		useAppStore
+			.getState()
+			.savePanelViewState("w1", chatPaneViewKey("s1", "insights", "beside"), { section: "errors" });
+
+		moveChatPaneToTab(beside, { workspaceId: "w1", sessionId: "s1" });
+
+		const state = useAppStore.getState();
+		expect(selectChatPane(state, "w1", "s1")?.open).toBe(false);
+		const tab = state.tabsByWorkspace.w1?.find((candidate) => candidate.kind === "extension");
+		expect(tab).toMatchObject({
+			name: "Fix the login flow",
+			extension: "insights",
+			panel: "beside",
+			params: { sessionId: "s1" },
+		});
+		if (tab?.kind !== "extension") throw new Error("expected the panel's tab");
+		expect(selectPanelViewState(state, "w1", layoutResourceIdentity(tab))).toEqual({
+			section: "errors",
+		});
 	});
 });
 

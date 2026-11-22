@@ -1,5 +1,11 @@
 import type { ExtensionCatalogEntry, ExtensionQueryParams } from "@thinkrail/contracts";
-import type { PanelHost, PanelHostScope, PanelToolCall } from "@thinkrail/extension-api/web";
+import type {
+	PanelChatAnchor,
+	PanelChatTarget,
+	PanelHost,
+	PanelHostScope,
+	PanelToolCall,
+} from "@thinkrail/extension-api/web";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { extensionPanels, type RegisteredPanel } from "../extensions";
 import { extensionParamsKey, tupleKey } from "../lib";
@@ -28,6 +34,47 @@ export interface PanelHostDeps {
 	readonly scope: PanelHostScope;
 	readonly hostProtocol: number | null;
 	readonly hostApiVersion: number | undefined;
+	/** Present when the panel shows beside its chat rather than in a tab of its own. */
+	readonly pane?: ChatPaneHost | undefined;
+	/** The view state last saved for this tab or pane, read as the panel mounts. */
+	readonly viewState: unknown;
+	readonly saveViewState: (state: unknown) => void;
+}
+
+export interface ChatPaneHost {
+	/** The chat the pane sits beside. */
+	readonly chat: Omit<PanelChatTarget, "at">;
+	/** Asks the chat beside the pane to reveal the location, without navigating. */
+	readonly reveal: (location: ChatLocationRequest) => void;
+	readonly openAsTab: () => void;
+	readonly closePane: () => void;
+}
+
+function chatLocation(
+	target: Omit<PanelChatTarget, "at">,
+	at: PanelChatAnchor,
+): ChatLocationRequest {
+	return {
+		workspaceId: target.workspaceId,
+		projectId: target.projectId,
+		sessionId: target.sessionId,
+		messageIndex: at.messageIndex,
+		anchorText: at.anchorText,
+		...(at.toolCallId ? { toolCallId: at.toolCallId } : {}),
+		...(at.approximate ? { approximate: true } : {}),
+	};
+}
+
+function paneMembers(
+	pane: ChatPaneHost | undefined,
+): Pick<PanelHost, "placement" | "showInChat" | "openAsTab" | "closePane"> {
+	if (!pane) return { placement: "tab" };
+	return {
+		placement: "chatPane",
+		showInChat: (at) => pane.reveal({ ...chatLocation(pane.chat, at), focus: false }),
+		openAsTab: () => pane.openAsTab(),
+		closePane: () => pane.closePane(),
+	};
 }
 
 function abortReason(signal: AbortSignal): unknown {
@@ -61,15 +108,7 @@ export function createPanelHost(deps: PanelHostDeps): PanelHost {
 				deps.navigate({ id: target.workspaceId, projectId: target.projectId }, target.sessionId);
 				return;
 			}
-			deps.locate({
-				workspaceId: target.workspaceId,
-				projectId: target.projectId,
-				sessionId: target.sessionId,
-				messageIndex: at.messageIndex,
-				anchorText: at.anchorText,
-				...(at.toolCallId ? { toolCallId: at.toolCallId } : {}),
-				...(at.approximate ? { approximate: true } : {}),
-			});
+			deps.locate(chatLocation(target, at));
 		},
 		openPanel(panel, params = {}, title) {
 			deps.openPanel(panel, params, title);
@@ -81,6 +120,9 @@ export function createPanelHost(deps: PanelHostDeps): PanelHost {
 		openArtifacts() {
 			deps.openArtifacts();
 		},
+		...paneMembers(deps.pane),
+		viewState: deps.viewState,
+		saveViewState: (state) => deps.saveViewState(state),
 		scope: deps.scope,
 		hostProtocol: deps.hostProtocol,
 		hostApiVersion: deps.hostApiVersion,

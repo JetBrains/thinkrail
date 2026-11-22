@@ -921,10 +921,16 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   alignment across stable frames; a transient mount during Virtuoso's estimate correction is not success.
   It never starts Virtuoso's internally retrying `scrollToIndex`, so reader takeover can cancel every
   outstanding write. Its lifecycle is keyed to request identity rather than streaming row-array churn, and
-  its live row-index resolver follows projections that change while the request is pending. A transient
-  `flashRowId` (rendered as `data-flash` + a `bg-primary-subtle` transition on the row wrapper, cleared after
-  1600ms) draws the eye only after the row mounts, and the same "found" result focuses the row (with
-  `preventScroll`, in whichever transcript mounted for the jump), so the keyboard lands where the reader looks.
+  its live row-index resolver follows projections that change while the request is pending. A request
+  naming a tool call that sits inside a group (an activity group, a thinking step's tools) opens those
+  folds first (`locateToolItem` finds the call's transcript item and the folds around it, `expandFolds`
+  opens them whether mounted or not) and, once the row is found, brings the call's own item into view
+  (`block: "nearest"`). A transient flashed item (`TranscriptProvider`'s flash context, rendered by
+  `TranscriptItem` as `data-flash` + a `bg-primary-subtle` transition, cleared after 1600ms) — that call's
+  item, else the row — draws the eye only after the row mounts, and the same "found" result focuses the row
+  (with `preventScroll`, in whichever transcript mounted for the jump), so the keyboard lands where the
+  reader looks — except for a request with `focus: false` (a chat pane's *Show in chat*, which reveals in
+  place while the reader works in the pane), which leaves focus where it is.
   A landing that stands in for the target — the request is `approximate` (the host anchored the nearest
   shown ancestor), the named tool call is not in the rows, or a text-less assistant message stands on its
   first tool call — also toasts "showing the nearest message" (`chat.transcript.locatedNearest`) once the
@@ -1310,7 +1316,9 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   the shell offers (an extension panel opened for this chat, "Session analysis ↗"): `ChatView` receives
   them as its `chatActions` prop (`lib`'s `ChatAction`, [[submodule-web-shell]] § Extension panels) and
   shows them once the chat has a session file (the store's `selectChatPersisted`), so chat never reads
-  the extension registry. Its **Skills** button is the presentational **`SkillsButton`**
+  the extension registry. An action marked `pane` (it opens beside the chat) renders as a toggle instead
+  (`chatHeaderLinks`: a ghost `Button` with the action's icon and `aria-pressed`), pressed while this
+  chat's pane shows it; pressing it then closes the pane (*Chat pane* below). Its **Skills** button is the presentational **`SkillsButton`**
   primitive — a `BookOpen` pill, badged when a skill dir changed on disk — also shared with
   `NewWorkspaceDialog` so the two triggers cannot drift), and **`SkillsDialog`** (the **Skills manager**: a catalog
   grouped by source with **sticky section headers** — the first-party **ThinkRail** and **Pi** groups lead
@@ -1990,6 +1998,22 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   needs-input no-ops, running queues, and idle prompts. Independently shipped clients retain the prior
   glance-based prompt/follow-up plus hydration fallback only for older hosts; the compatibility path skips
   an awaiting question rather than waking the agent past its blocker.
+
+## Chat pane
+
+A chat may show a pane beside it, inside its own center tab: the shell's extension panels opened for
+this chat ([[submodule-web-shell]] § Extension panels). `ChatView` takes it as an optional `pane` prop
+(`ChatPaneSlot`: the chat action's id, a label, the body element, the width and the resize and close
+callbacks) and renders through the props-only `ChatPaneSplit`: the whole chat (header, transcript,
+composer) on the left, the pane on the right, split by `@thinkrail/ui/resizable`'s keyboard-accessible
+handle (`chat-pane-resize`, arrow keys resize). The split's group and the chat's panel are always
+rendered, and only the handle and the pane come and go, so opening or closing a pane never remounts the
+transcript or the composer. Width is a percentage of the tab, stored per chat by the shell — half the
+tab by default, the chat at least 30 % and the pane at least 25 % — and reported once per resize
+gesture (at the drag's end; a keyboard step reports at once), so a drag does not re-render the chat.
+Each chat keeps its own pane and width; switching chats shows that chat's. The pane draws no chrome:
+the panel inside renders its own title, *Open as tab* and close controls. *Rejected:* a second center
+group (two tab strips, a stale analysis after a chat switch, a group left behind) and a new center tab.
 
 ## Chat Resources
 

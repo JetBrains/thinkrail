@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import type { TranscriptMessage } from "@thinkrail/contracts";
 import { EMPTY_RUNTIME, reduceSessionEvent, type SessionRuntime } from "@/store";
-import { locateChatRow } from "./chatLocation";
+import { locateChatRow, locateToolItem } from "./chatLocation";
 import { messagesToRuntime } from "./hydrate";
-import { deriveRows, rowIndexForToolCall } from "./rows";
+import { type ChatRow, deriveRows, type RoutineToolStep, rowIndexForToolCall } from "./rows";
 import { registerToolRenderer } from "./toolRegistry";
 import type { ChatTurn, ToolResultState } from "./types";
 
@@ -200,5 +200,41 @@ describe("locateChatRow for a message without text", () => {
 		);
 		expect(byCall.index).toBe(rowIndexForToolCall(quietRows, "call-lint"));
 		expect(byCall.nearest).toBe(false);
+	});
+});
+
+describe("locateToolItem", () => {
+	const call = (id: string): RoutineToolStep => ({
+		kind: "tool",
+		id: `step:${id}`,
+		toolCallId: id,
+		toolName: "bash",
+		args: {},
+		tool: undefined,
+		dead: false,
+		streaming: false,
+	});
+	const group: ChatRow = {
+		kind: "activity",
+		id: "activity:a",
+		live: false,
+		steps: [
+			call("a"),
+			{ kind: "thinking", id: "thinking:t", text: "hm", streaming: false, tools: [call("b")] },
+		],
+	};
+
+	test("finds a grouped call's own item and the folds around it, outermost first", () => {
+		expect(locateToolItem(group, "a")).toEqual({ itemId: "step:a", folds: ["activity:a"] });
+		expect(locateToolItem(group, "b")).toEqual({
+			itemId: "step:b",
+			folds: ["activity:a", "thinking:t"],
+		});
+		expect(locateToolItem(group, "gone")).toBeNull();
+	});
+
+	test("a call that is its row, or a group's only step, is the row itself", () => {
+		expect(locateToolItem({ ...call("c"), id: "tool:c" }, "c")).toBeNull();
+		expect(locateToolItem({ ...group, steps: [call("a")] }, "a")).toBeNull();
 	});
 });

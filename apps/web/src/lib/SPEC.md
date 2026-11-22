@@ -82,7 +82,8 @@ not this module; the theme-aware highlighter remains app-local.
   which may import nothing else in common), **`chatActions.ts`** (the `ChatAction` / `ChatActionTarget`
   shapes, types only: something the shell offers for one chat, such as an extension panel opened for it,
   that `chat`, `panels` and the shell's own surfaces render and run without resolving it — they may not
-  import `shell`, [[submodule-web-shell]] § Extension panels), and the
+  import `shell`, [[submodule-web-shell]] § Extension panels; `pane` marks one that opens beside its
+  chat, which the chat's header shows as a toggle), and the
   **`LayoutAttention`** device-local overlay shared by store, shell, and the headless layout child, with
   own-property-safe `readLayoutSelection()` / `readLayoutNavigationClock()`
   accessors for untrusted tuple-keyed maps and the key-order-independent `sameLayoutAttention()` equality

@@ -172,6 +172,34 @@ workspace's Artifacts tool on a view that lists the extension's write (`panels/a
 `revealArtifactsListing`: Outputs, which lists only what the agent published, becomes List); and
 `hostApiVersion` comes from the extension's catalog entry, read once per connection generation (a failed
 read is forgotten, so *Retry* asks again). A panel therefore never reaches the store or transport itself.
+The host is memoized per mount, so a re-render never reloads the panel.
+
+**A chat pane** is the second placement ([[module-extension-api]]'s `chatPane`): the panel sits beside
+its chat inside the chat's center tab. `ChatResourceBody` reads the chat's pane through
+`useExtensionChatPane` and injects it into `ChatView` as a `chat/ChatPaneSplit` slot (its id — the chat
+action's —, title, width and close and resize callbacks, and the body as an element), so `chat` imports
+neither `shell` nor `extensions` ([[submodule-web-chat]]). The pane body (`ExtensionChatPaneBody`) and
+the tab body share one gate (`useExtensionPanelGate` → `extensionPanelState`) and one renderer
+(`GatedExtensionPanel`: placeholders, loading region, lazy load, `ErrorBoundary`), keyed by chat and
+panel so replacing the panel remounts it. A pane shows only while its panel is openable
+(`chatPaneShown`: ready, loading, or a failed catalog read with *Retry*); while it is not — the
+extension switched off in Settings, a host too old, the catalog lacking it — the chat takes its full
+width, and the stored pane returns with the extension. Its `PanelHost` has `placement: "chatPane"` and
+the pane members: `showInChat(at)` sets `chatLocationRequest` for this chat with `focus: false` — the
+chat is already shown, so nothing navigates and focus stays in the pane; `openAsTab()`
+(`moveChatPaneToTab`) opens the tab the chat action's tab path opens (same params, the chat's title),
+copies the pane's saved view state to that tab's key first, then closes the pane; `closePane()` closes
+it. A tab's host has `placement: "tab"` and no pane members.
+
+**Panel view state** lives in the store, runtime only (not persisted across reloads): one JSON-like
+value per extension tab (keyed by the tab's resource identity — extension, panel and params, the tuple
+its doc id is minted from, so a placement alias cannot split it) and per chat pane (`chatPaneViewKey`:
+chat, extension, panel), both under the workspace. The host reads it once, in a `useState`
+initializer, when the panel mounts — a tab brought back remounts and restores it — and
+`saveViewState` writes through `savePanelViewState`, which no component subscribes to, so saving
+re-renders nothing. Closing an extension tab drops its value, deleting a chat drops its pane and the
+pane's values, and removing a workspace drops all of them; a closed chat keeps its pane, so reopening
+it shows the pane again.
 
 **Which panels an entry point offers is one rule**, `openableExtensionPanels` (`extensionPanelHost.ts`;
 `useOpenableExtensionPanels()` reads it from the store and the host's catalog): a panel is openable
@@ -203,7 +231,15 @@ and `rail`, and nothing here names an extension):
   pi writes the file with the first message, so an empty chat has nothing to read). `run` opens the panel
   with the action's `params` for that chat in the active workspace — on Project Home it enters the chat's
   workspace first — and names the tab after the chat (its known title, else its first prompt), so
-  opening the same chat's panel again focuses that tab. Chat and panels code never reads the registry;
+  opening the same chat's panel again focuses that tab. **One routing rule** covers every one of those
+  surfaces (`openExtensionPanelForChat`): a `chatPane` panel whose chat has a tab in the center of the
+  active workspace's view (`selectChatPlacedInCenter`) opens beside it instead — the chat's tab is
+  selected first when it is not the attended one (`openChatInTab`), then the store's per-chat pane opens
+  (`openChatPane`, replacing another panel's pane, keeping the width) and, for a `wide` panel, the
+  shell's `hideAllPanels` runs once; a pane already showing that panel stays as it is. Anywhere else —
+  the chat not open, open in another workspace, Project Home, a recently closed chat — and for a panel
+  without `chatPane`, the tab opens as above. Such an action carries `pane: true`, which `ChatView`'s
+  header shows as a toggle; the menus keep a plain item. Chat and panels code never reads the registry;
   a store action was not needed, since the shell mounts every surface that shows one.
 - **The rail.** `useLeftRailFooter()` puts an icon for every openable panel with a `rail` (its `icon`,
   its `rail.label` or `title` with the rail command's current chord as tooltip) above the keyboard icon,

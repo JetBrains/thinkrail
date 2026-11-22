@@ -37,12 +37,12 @@ import {
 import { errorText, getTransport, respondToTool } from "@/transport";
 import { ACTIVITY_BREADCRUMB_HEIGHT, ActivityBreadcrumbTrail } from "./activityBreadcrumbs";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
-import { locateChatRow } from "./chatLocation";
+import { locateChatRow, locateToolItem } from "./chatLocation";
 import type { ChatMessageOrder } from "./chatPreferences";
 import { refreshContinuation, requestContinuation } from "./continuations";
 import { PendingExtUiContext, PendingExtUiPrompt } from "./ExtUiPrompt";
 import { workspaceFileTarget } from "./fileTargets";
-import { FoldGeometryProvider } from "./foldState";
+import { expandFolds, FoldGeometryProvider } from "./foldState";
 import {
 	awaitingToolCallIdOf,
 	deriveInteractionStates,
@@ -64,7 +64,7 @@ import {
 	stabilizeRows,
 } from "./rows";
 import { type StreamStatus, StreamStatusSlot, streamStatus } from "./StreamIndicator";
-import { TranscriptItem, TranscriptNavigationContext } from "./TranscriptItem";
+import { TranscriptItem, TranscriptProvider } from "./TranscriptItem";
 import { useToolInteraction } from "./toolInteraction";
 import { getToolRenderer } from "./toolRegistry";
 import { newestContentRowId } from "./transcriptNavigation";
@@ -536,10 +536,27 @@ const ChatTranscript = forwardRef<
 	);
 	const [interactionFocusScope] = useState<object>(() => ({}));
 
+	const revealToolItem = useCallback(
+		(itemId: string) => {
+			const target = scrollerElement?.querySelector<HTMLElement>(
+				`[data-transcript-item="${CSS.escape(itemId)}"]`,
+			);
+			if (!target) return;
+			revealElement(target, {
+				block: "nearest",
+				provenance: "user-navigation",
+				runway: "preserve",
+				stability: "none",
+				topInset: ACTIVITY_BREADCRUMB_HEIGHT,
+			});
+		},
+		[revealElement, scrollerElement],
+	);
+
 	const chatLocationRequest = useAppStore((s) => s.chatLocationRequest);
 	const activeChatLocationReveal = useRef<typeof chatLocationRequest>(null);
 	const locationRowsReady = rows.length > 0;
-	const [flashRowId, setFlashRowId] = useState<string | null>(null);
+	const [flashItemId, setFlashItemId] = useState<string | null>(null);
 
 	useEffect(() => {
 		if (
@@ -564,11 +581,17 @@ const ChatTranscript = forwardRef<
 			useAppStore.getState().clearChatLocation();
 			return;
 		}
-		const rowId = currentRows[index]?.id;
-		if (!rowId) {
+		const row = currentRows[index];
+		if (!row) {
 			useAppStore.getState().clearChatLocation();
 			return;
 		}
+		const rowId = row.id;
+		const toolItem = chatLocationRequest.toolCallId
+			? locateToolItem(row, chatLocationRequest.toolCallId)
+			: null;
+		if (toolItem) expandFolds(toolItem.folds);
+		const keepsFocus = chatLocationRequest.focus === false;
 		const revealClaim = {};
 		chatLocationRevealClaims.set(chatLocationRequest, revealClaim);
 		activeChatLocationReveal.current = chatLocationRequest;
@@ -581,8 +604,9 @@ const ChatTranscript = forwardRef<
 				activeChatLocationReveal.current = null;
 				if (useAppStore.getState().chatLocationRequest !== chatLocationRequest) return;
 				if (result === "found") {
-					setFlashRowId(rowId);
-					navigation.focusRow(rowId);
+					setFlashItemId(toolItem?.itemId ?? rowId);
+					if (toolItem) revealToolItem(toolItem.itemId);
+					if (!keepsFocus) navigation.focusRow(rowId);
 					if (nearest) toast.info(translate("chat.transcript.locatedNearest"));
 				} else if (result === "missing") toast.error(translate("chat.transcript.locateFailed"));
 				useAppStore.getState().clearChatLocation();
@@ -600,13 +624,21 @@ const ChatTranscript = forwardRef<
 				if (state.chatLocationRequest === chatLocationRequest) state.clearChatLocation();
 			});
 		};
-	}, [chatLocationRequest, locationRowsReady, navigation, revealRow, sessionId, workspaceId]);
+	}, [
+		chatLocationRequest,
+		locationRowsReady,
+		navigation,
+		revealRow,
+		revealToolItem,
+		sessionId,
+		workspaceId,
+	]);
 
 	useEffect(() => {
-		if (flashRowId === null) return;
-		const timer = setTimeout(() => setFlashRowId(null), 1600);
+		if (flashItemId === null) return;
+		const timer = setTimeout(() => setFlashItemId(null), 1600);
 		return () => clearTimeout(timer);
-	}, [flashRowId]);
+	}, [flashItemId]);
 
 	const onOpenChange = useCallback(
 		(path: string) => {
@@ -788,7 +820,7 @@ const ChatTranscript = forwardRef<
 							{/* One provider above the list: its value is the single transcript-wide callback, so a
 						    per-row provider would only re-commit that identical value for every visible row. */}
 							<ResourceScopeProvider value={resourceScope}>
-								<TranscriptNavigationContext value={navigation}>
+								<TranscriptProvider navigation={navigation} flashedItemId={flashItemId}>
 									<FoldGeometryProvider onBeforeChange={prepareFoldChange}>
 										<Virtuoso<ChatRow, ChatListContext>
 											key={chatMessageOrder}
@@ -834,7 +866,6 @@ const ChatTranscript = forwardRef<
 													data-testid="chat-row"
 													data-chat-row-id={row.id}
 													data-chat-row-index={index - firstItemIndex}
-													data-flash={row.id === flashRowId || undefined}
 													className={cn(
 														measureClassName,
 														"rounded-sm px-chat-gutter py-4 transition-colors data-[flash]:bg-primary-subtle",
@@ -868,7 +899,7 @@ const ChatTranscript = forwardRef<
 											)}
 										/>
 									</FoldGeometryProvider>
-								</TranscriptNavigationContext>
+								</TranscriptProvider>
 							</ResourceScopeProvider>
 							<ActivityBreadcrumbTrail
 								scroller={scrollerElement}

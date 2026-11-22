@@ -10,6 +10,7 @@ import { layoutResourceIdentity } from "../lib";
 import { type ChatLocationRequest, useAppStore } from "../store";
 import { RequestError, wsErrorCode } from "../transport";
 import {
+	type ChatPaneHost,
 	cachedExtensionCatalog,
 	createPanelHost,
 	openableExtensionPanels,
@@ -41,6 +42,18 @@ function hostDeps(overrides: Partial<PanelHostDeps> = {}): PanelHostDeps {
 		scope: { workspaceId: "w1", projectId: "p1" },
 		hostProtocol: EXTENSION_QUERY_PROTOCOL_VERSION,
 		hostApiVersion: 3,
+		viewState: undefined,
+		saveViewState: () => {},
+		...overrides,
+	};
+}
+
+function paneHost(overrides: Partial<ChatPaneHost> = {}): ChatPaneHost {
+	return {
+		chat: { projectId: "p1", workspaceId: "w1", sessionId: "s1" },
+		reveal: () => {},
+		openAsTab: () => {},
+		closePane: () => {},
 		...overrides,
 	};
 }
@@ -216,6 +229,75 @@ describe("PanelHost", () => {
 			["w2", "src/a.ts", 12],
 			["w1", "README.md", undefined],
 		]);
+	});
+
+	test("a tab's host says so and offers no pane members", () => {
+		const host = createPanelHost(hostDeps());
+
+		expect(host.placement).toBe("tab");
+		expect(host.showInChat).toBeUndefined();
+		expect(host.openAsTab).toBeUndefined();
+		expect(host.closePane).toBeUndefined();
+	});
+
+	test("a pane's showInChat reveals the place in its own chat, in place, leaving focus alone", () => {
+		const reveal = mock((_location: ChatLocationRequest) => {});
+		const navigate = mock(() => {});
+		const locate = mock(() => {});
+		const host = createPanelHost(hostDeps({ navigate, locate, pane: paneHost({ reveal }) }));
+
+		expect(host.placement).toBe("chatPane");
+		host.showInChat?.({ messageIndex: 3, anchorText: "Editing it.", toolCallId: "call-2" });
+		host.showInChat?.({ messageIndex: 1, anchorText: "", approximate: true });
+
+		expect(navigate).not.toHaveBeenCalled();
+		expect(locate).not.toHaveBeenCalled();
+		expect(reveal.mock.calls).toEqual([
+			[
+				{
+					workspaceId: "w1",
+					projectId: "p1",
+					sessionId: "s1",
+					messageIndex: 3,
+					anchorText: "Editing it.",
+					toolCallId: "call-2",
+					focus: false,
+				},
+			],
+			[
+				{
+					workspaceId: "w1",
+					projectId: "p1",
+					sessionId: "s1",
+					messageIndex: 1,
+					anchorText: "",
+					approximate: true,
+					focus: false,
+				},
+			],
+		]);
+	});
+
+	test("a pane's openAsTab and closePane go to the shell", () => {
+		const openAsTab = mock(() => {});
+		const closePane = mock(() => {});
+		const host = createPanelHost(hostDeps({ pane: paneHost({ openAsTab, closePane }) }));
+
+		host.openAsTab?.();
+		host.closePane?.();
+
+		expect(openAsTab).toHaveBeenCalledTimes(1);
+		expect(closePane).toHaveBeenCalledTimes(1);
+	});
+
+	test("hands the panel the view state it last saved and keeps what it saves", () => {
+		const saveViewState = mock((_state: unknown) => {});
+		const host = createPanelHost(hostDeps({ viewState: { section: "errors" }, saveViewState }));
+
+		expect(host.viewState).toEqual({ section: "errors" });
+		host.saveViewState?.({ section: "files" });
+
+		expect(saveViewState.mock.calls).toEqual([[{ section: "files" }]]);
 	});
 
 	test("openArtifacts asks the shell to reveal the workspace's Artifacts tool", () => {
