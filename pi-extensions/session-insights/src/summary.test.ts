@@ -142,6 +142,36 @@ describe("counts, models and time", () => {
 		expect(summary?.activeMs).toBe(60_000 + 10_000);
 	});
 
+	test("settings a restored chat appends later never stretch the end or the active time", () => {
+		const builder = new TranscriptBuilder({ start: 0 });
+		builder.thinkingLevel("high");
+		builder.user("a");
+		builder.modelChange("anthropic", "claude-test");
+		builder.assistant();
+		const activeEnd = builder.now();
+		builder.advance(60_000).thinkingLevel("low");
+		const early = summarize(builder);
+		expect(early).toMatchObject({ start: 1000, end: activeEnd, activeMs: activeEnd - 1000 });
+		builder.advance(2 * 365 * 24 * 3600_000).thinkingLevel("medium");
+		builder.modelChange("anthropic", "claude-other");
+		builder.sessionInfo("Renamed");
+		builder.system({ sections: { tools: "bash" } });
+		builder.entry({ type: "label", targetId: "00000002", label: "keep" });
+		builder.entry({ type: "custom", customType: "state", data: {} });
+		expect(summarize(builder)).toMatchObject({ end: activeEnd, activeMs: activeEnd - 1000 });
+		builder.advance(30_000).user("back again");
+		const resumed = summarize(builder);
+		expect(resumed?.end).toBe(builder.now());
+		expect(resumed?.activeMs).toBe(activeEnd - 1000 + 61_000 + 5 * 1000 + 31_000);
+	});
+
+	test("a session of settings only ends where it starts", () => {
+		const builder = new TranscriptBuilder({ start: 0 });
+		builder.thinkingLevel("high");
+		builder.advance(60_000).modelChange("anthropic", "claude-test");
+		expect(summarize(builder)).toMatchObject({ start: 1000, end: 1000, activeMs: 0 });
+	});
+
 	test("a header-only session starts at the header timestamp", () => {
 		const builder = new TranscriptBuilder({ start: 5000 });
 		expect(summarize(builder)).toMatchObject({ start: 5000, end: 5000, activeMs: 0 });

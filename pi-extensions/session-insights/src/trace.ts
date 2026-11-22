@@ -35,6 +35,7 @@ import type { ByteRange } from "./lines.ts";
 import { type WorkspacePaths, workspacePaths } from "./paths.ts";
 import { isSecretName, labelOf, type Redactor, safeCut } from "./redact.ts";
 import { type PromptSentence, promptSentences, promptWords } from "./repeats.ts";
+import { recordsActivity } from "./summary.ts";
 import { bashHead, toolFamily } from "./toolFamily.ts";
 import { addSpend, emptySpend, isRecord, type Spend, type SpendTotals, spendOf } from "./totals.ts";
 import { idleGaps, waitBands } from "./waits.ts";
@@ -168,6 +169,8 @@ export interface EntryRecord {
 	context: EntryContext | null;
 	/** A `usage` entry's `kind`. */
 	usageKind?: string | null;
+	/** The entry records a setting, not work (`recordsActivity`): it never extends the session's end. */
+	setting?: true;
 	/** The skills a persisted system prompt lists (its `skills` section, or a compaction's checkpoint). */
 	skills?: readonly SkillListing[];
 }
@@ -706,6 +709,7 @@ export class EntryCollector {
 			context: entryContext(entry),
 		};
 		if (entry.type === "usage") record.usageKind = text(entry.kind);
+		if (!recordsActivity(entry)) record.setting = true;
 		const skills = systemSkills(entry, this.redactor);
 		if (skills) record.skills = skills;
 		this.records.push(record);
@@ -761,6 +765,7 @@ export function buildTrace(file: string, revision: string, collected: Collected)
 	const llmOrder: { seq: number; id: string }[] = [];
 	const ledger = new ContextLedger();
 	const contexts = new Map<string, CallContext>();
+	const settings = new Set<string>();
 	let seq = 0;
 	let turn: Node | null = null;
 	let turns = 0;
@@ -1073,6 +1078,7 @@ export function buildTrace(file: string, revision: string, collected: Collected)
 				};
 				attach(node, parent);
 				entries.set(record.id, { event: record.id });
+				if (record.setting) settings.add(record.id);
 				if (info.child) updateChild(info.child, ts, { eventId: record.id, via: "completion" });
 				break;
 			}
@@ -1119,9 +1125,10 @@ export function buildTrace(file: string, revision: string, collected: Collected)
 	let errors = 0;
 	for (const event of events) {
 		start = start === null ? event.t0 : Math.min(start, event.t0);
-		end = end === null ? event.t1 : Math.max(end, event.t1);
+		if (!settings.has(event.id)) end = end === null ? event.t1 : Math.max(end, event.t1);
 		if (event.error && (event.kind === "tool" || event.kind === "llm")) errors += 1;
 	}
+	end ??= start;
 	const bands = start !== null && end !== null ? waitBands(events, start, end) : [];
 	const meta: TraceMeta = {
 		revision,

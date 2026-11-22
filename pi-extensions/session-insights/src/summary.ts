@@ -23,7 +23,7 @@ import {
 	usageSpend,
 } from "./totals.ts";
 
-export const PARSER_VERSION = 1;
+export const PARSER_VERSION = 2;
 export const ACTIVE_GAP_MS = 5 * 60 * 1000;
 
 export interface SessionCounts {
@@ -94,6 +94,7 @@ export interface SummaryState {
 	end: number | null;
 	latest: number | null;
 	activeMs: number;
+	pendingMs: number;
 	counts: SessionCounts;
 	tools: Record<string, ToolUse>;
 	stopReasons: Record<string, number>;
@@ -112,6 +113,7 @@ function emptyState(): SummaryState {
 		end: null,
 		latest: null,
 		activeMs: 0,
+		pendingMs: 0,
 		counts: {
 			entries: 0,
 			userMessages: 0,
@@ -226,15 +228,36 @@ function foldRunDetails(state: SummaryState, details: unknown): void {
 	addSpend(ref.reported, spend);
 }
 
-function foldTime(state: SummaryState, time: number | null): void {
+const SETTING_ENTRIES: ReadonlySet<string> = new Set([
+	"model_change",
+	"thinking_level_change",
+	"session_info",
+	"label",
+	"custom",
+]);
+
+/**
+ * Whether an entry records work rather than a setting (a model or thinking-level change, a name, a
+ * label, an extension's private state, a system-prompt update). A session ends at its last entry that
+ * records work: a restored chat appends settings days later.
+ */
+export function recordsActivity(entry: Record<string, unknown>): boolean {
+	if (typeof entry.type !== "string" || SETTING_ENTRIES.has(entry.type)) return false;
+	return !(entry.type === "message" && isRecord(entry.message) && entry.message.role === "system");
+}
+
+function foldTime(state: SummaryState, time: number | null, activity: boolean): void {
 	if (time === null) return;
 	state.start = state.start === null ? time : Math.min(state.start, time);
-	state.end = state.end === null ? time : Math.max(state.end, time);
 	if (state.latest !== null && time > state.latest) {
 		const gap = time - state.latest;
-		if (gap < ACTIVE_GAP_MS) state.activeMs += gap;
+		if (gap < ACTIVE_GAP_MS) state.pendingMs += gap;
 	}
 	state.latest = state.latest === null ? time : Math.max(state.latest, time);
+	if (!activity) return;
+	state.end = state.end === null ? time : Math.max(state.end, time);
+	state.activeMs += state.pendingMs;
+	state.pendingMs = 0;
 }
 
 function foldAssistant(state: SummaryState, message: Record<string, unknown>, spend: Spend | null) {
@@ -303,7 +326,7 @@ function foldEntry(state: SummaryState, entry: unknown, range: ByteRange): void 
 	}
 	if (!isRecord(entry)) return;
 	state.counts.entries += 1;
-	foldTime(state, timeOf(entry.timestamp));
+	foldTime(state, timeOf(entry.timestamp), recordsActivity(entry));
 	const spend = spendOf(entry);
 	if (spend) addSpend(state.spend, spend);
 	switch (entry.type) {
@@ -399,7 +422,7 @@ export function toSummary(state: SummaryState, file: string): SessionSummary | n
 		title: state.title,
 		firstPrompt: state.firstPrompt,
 		start: state.start ?? header.timestamp,
-		end: state.end ?? header.timestamp,
+		end: state.end ?? state.start ?? header.timestamp,
 		activeMs: state.activeMs,
 		counts: state.counts,
 		tools: state.tools,
