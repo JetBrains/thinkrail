@@ -179,7 +179,10 @@ function ActivityNodeView({ data }: NodeProps<ActivityFlowNode>) {
 				) : null}
 			</span>
 			<span className="truncate tr-code-text-small text-text-muted">
-				{t("sessionInsights.sequences.map.calls", { calls: formatCount(locale, view.calls) })}
+				{t("sessionInsights.sequences.map.calls", {
+					count: view.calls,
+					calls: formatCount(locale, view.calls),
+				})}
 				{view.failed > 0 ? (
 					<span className="text-feedback-error"> · ✕{formatCount(locale, view.failed)}</span>
 				) : null}
@@ -211,6 +214,7 @@ export default function ProcessMap({
 		width: NODE_W,
 		height: NODE_H,
 		ariaLabel: t("sessionInsights.sequences.map.nodeAria", {
+			count: placed.node.calls,
 			activity: t(ACTIVITY_LABEL[placed.node.activity]),
 			calls: formatCount(locale, placed.node.calls),
 			failed: formatCount(locale, placed.node.failed),
@@ -226,7 +230,8 @@ export default function ProcessMap({
 			source: t(ACTIVITY_LABEL[edge.cell.source]),
 			target: t(ACTIVITY_LABEL[edge.cell.target]),
 			share: formatPercent(locale, edge.cell.share),
-			count: formatCount(locale, edge.cell.count),
+			count: edge.cell.count,
+			n: formatCount(locale, edge.cell.count),
 		}),
 	}));
 	return (

@@ -1,15 +1,40 @@
 import { describe, expect, test } from "bun:test";
 import type { PanelHost } from "@thinkrail/extension-api/web";
+import { currentTranslator } from "@thinkrail/locales/react";
 import type { Origin, SessionListRow } from "@thinkrail/pi-session-insights/core";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { FigureDetails } from "./FigureCell";
 import { figure, listResult, PROJECTS, SOURCES, START, sessionRow } from "./fixtures.test";
+import { type ListTab, requestListView, settleListView } from "./listIntent";
 import { API_VERSION } from "./load";
-import SessionsPanel, { type ListView, SessionsView } from "./SessionsPanel";
+import SessionsPanel, { type ListSelection, type ListView, SessionsView } from "./SessionsPanel";
+import { rowKeyAction } from "./SessionsTable";
+import {
+	comparedPair,
+	openPicked,
+	pickOf,
+	type SessionPick,
+	swapPicks,
+	togglePick,
+} from "./selection";
 
 const noop = () => {};
+
+function panelHost(overrides: Partial<PanelHost> = {}): PanelHost {
+	return {
+		query: () => new Promise(() => {}),
+		openChat: noop,
+		openPanel: noop,
+		renderToolCall: () => null,
+		openFile: () => {},
+		scope: { workspaceId: "w1", projectId: "p1" },
+		hostProtocol: 130,
+		hostApiVersion: API_VERSION,
+		...overrides,
+	};
+}
 
 const html = (node: ReactNode) => renderToStaticMarkup(<TooltipProvider>{node}</TooltipProvider>);
 
@@ -118,42 +143,72 @@ describe("SessionsView states", () => {
 	});
 });
 
-describe("the list's day view", () => {
-	test("a view switch beside the scope swaps the table for the day strip", () => {
-		const table = html(
-			<SessionsView
-				view={ready([sessionRow("s1")])}
-				scopeKind="project"
-				busy={false}
-				onScope={noop}
-				onRefresh={noop}
-				onOpen={noop}
-				onAnalyse={noop}
-				mode="table"
-				onMode={noop}
-				day={<div data-testid="day-slot" />}
-			/>,
+function tabbed(tab: ListTab, extra: Partial<Parameters<typeof SessionsView>[0]> = {}): string {
+	return html(
+		<SessionsView
+			view={ready([sessionRow("s1")])}
+			scopeKind="project"
+			busy={false}
+			onScope={noop}
+			onRefresh={noop}
+			onOpen={noop}
+			onAnalyse={noop}
+			tab={tab}
+			onTab={noop}
+			day={<div data-testid="day-slot" />}
+			stats={<div data-testid="stats-slot" />}
+			insightsBadge={<span data-testid="badge-slot" />}
+			{...extra}
+		/>,
+	);
+}
+
+function tabOf(markup: string, id: ListTab): string {
+	const match = markup.match(
+		new RegExp(
+			`<button[^>]*role="tab"[^>]*data-testid="session-insights-tab-${id}"[^>]*>[\\s\\S]*?</button>`,
+		),
+	);
+	if (!match) throw new Error(`no ${id} tab`);
+	return match[0];
+}
+
+describe("the list's tabs", () => {
+	test("Sessions, Days and Insights are a labelled tab list with one tab stop over one tab panel", () => {
+		const markup = tabbed("sessions");
+		expect(markup).toContain('role="tablist" aria-label="Views"');
+		expect(text(tabOf(markup, "sessions"))).toBe("Sessions");
+		expect(text(tabOf(markup, "days"))).toBe("Days");
+		expect(tabOf(markup, "sessions")).toContain('aria-selected="true"');
+		expect(tabOf(markup, "sessions")).toContain('tabindex="0"');
+		expect(tabOf(markup, "days")).toContain('aria-selected="false"');
+		expect(tabOf(markup, "days")).toContain('tabindex="-1"');
+		expect(tabOf(markup, "insights")).toContain('data-testid="badge-slot"');
+		expect(markup.match(/role="tabpanel"/g)).toHaveLength(1);
+		const tabId = tabOf(markup, "sessions").match(/id="([^"]+)"/)?.[1];
+		expect(markup).toContain(
+			`role="tabpanel" id="${tabId?.replace(/-tab-sessions$/, "-panel")}" aria-labelledby="${tabId}"`,
 		);
-		expect(table).toMatch(/data-testid="session-insights-mode-table" aria-pressed="true"/);
-		expect(table).toContain('data-testid="session-insights-table"');
-		expect(table).not.toContain('data-testid="day-slot"');
-		const day = html(
-			<SessionsView
-				view={ready([sessionRow("s1")])}
-				scopeKind="project"
-				busy={false}
-				onScope={noop}
-				onRefresh={noop}
-				onOpen={noop}
-				onAnalyse={noop}
-				mode="day"
-				onMode={noop}
-				day={<div data-testid="day-slot" />}
-			/>,
-		);
-		expect(day).toContain('data-testid="day-slot"');
-		expect(day).not.toContain('data-testid="session-insights-table"');
-		expect(day).toContain('data-testid="session-insights-scope-all"');
+		expect(markup).toContain('data-testid="session-insights-table"');
+	});
+
+	test("each tab swaps the body; the scope switch and the search field stay for every tab", () => {
+		const days = tabbed("days", { searchBox: <div data-testid="search-box-slot" /> });
+		expect(days).toContain('data-testid="day-slot"');
+		expect(days).not.toContain('data-testid="session-insights-table"');
+		expect(days).toContain('data-testid="session-insights-scope-all"');
+		expect(days).toContain('data-testid="search-box-slot"');
+		const insights = tabbed("insights", { searchBox: <div data-testid="search-box-slot" /> });
+		expect(insights).toContain('data-testid="stats-slot"');
+		expect(tabOf(insights, "insights")).toContain('aria-selected="true"');
+		expect(insights).toContain('data-testid="session-insights-scope-project"');
+		expect(insights).toContain('data-testid="search-box-slot"');
+	});
+
+	test("the panel opens on Sessions", () => {
+		const markup = html(<SessionsPanel host={panelHost()} params={{}} />);
+		expect(tabOf(markup, "sessions")).toContain('aria-selected="true"');
+		expect(tabOf(markup, "insights")).toContain('aria-selected="false"');
 	});
 });
 
@@ -167,20 +222,20 @@ describe("the list's search", () => {
 			onRefresh: noop,
 			onOpen: noop,
 			onAnalyse: noop,
-			onMode: noop,
+			onTab: noop,
 			searchBox: <div data-testid="search-box-slot" />,
 			search: <div data-testid="search-slot" />,
 			onSearchKey: noop,
 		};
-		const table = html(<SessionsView {...props} mode="table" />);
+		const table = html(<SessionsView {...props} tab="sessions" />);
 		expect(table).toMatch(/role="toolbar"[\s\S]*data-testid="search-box-slot"/);
 		expect(table).toContain('data-testid="session-insights-table"');
 		expect(table).not.toContain('data-testid="search-slot"');
-		const results = html(<SessionsView {...props} mode="search" />);
+		const results = html(<SessionsView {...props} tab="insights" showSearch />);
 		expect(results).toContain('data-testid="search-slot"');
 		expect(results).toContain('data-testid="search-box-slot"');
 		expect(results).not.toContain('data-testid="session-insights-table"');
-		expect(results).toMatch(/data-testid="session-insights-mode-table" aria-pressed="false"/);
+		expect(tabOf(results, "insights")).toContain('aria-selected="true"');
 	});
 });
 
@@ -344,17 +399,22 @@ describe("the session table", () => {
 		expect(text(cell(gone, "outcome"))).toBe("—");
 	});
 
-	test("one roving tab stop enters the table; the name, the analysis, the comparison and every figure are buttons the arrows reach", () => {
+	test("one roving tab stop enters the table; the checkbox, the name, the analysis and every figure are cells the arrows reach", () => {
 		const markup = view(ready([sessionRow("s1"), sessionRow("s2")]));
 		const body = markup.slice(markup.indexOf("<tbody>"));
 		expect(body.match(/tabindex="0"/g)).toHaveLength(1);
 		expect(body).toMatch(
-			/<button type="button" data-grid-key="session:s1" data-grid-row="0" data-grid-col="0" tabindex="0"/,
+			/<input type="checkbox" data-grid-key="session:s1" data-grid-row="0" data-grid-col="0" tabindex="0"/,
+		);
+		expect(body).toMatch(
+			/<button type="button" data-grid-key="session:s1" data-grid-row="0" data-grid-col="1" tabindex="-1"/,
 		);
 		const [first = "", second = ""] = rowsOf(markup);
 		expect(first.match(/<button type="button" data-grid-key="session:s1"/g)).toHaveLength(8);
+		expect(first).toContain('data-testid="session-insights-pick"');
+		expect(first).toContain('aria-label="Select “Session s1” to compare"');
 		expect(first).toContain('data-testid="session-insights-open-analysis"');
-		expect(first).toContain('data-testid="session-insights-compare"');
+		expect(first).not.toContain('data-testid="session-insights-compare"');
 		expect([...first.matchAll(/data-grid-col="(\d)"/g)].map((match) => match[1])).toEqual([
 			"0",
 			"1",
@@ -447,6 +507,196 @@ describe("SessionsPanel", () => {
 		for (const version of [undefined, 4]) {
 			const markup = html(<SessionsPanel host={host(version)} params={{}} />);
 			expect(markup).toContain('data-testid="session-insights-update-host"');
+		}
+	});
+});
+
+function picks(...ids: string[]): SessionPick[] {
+	return ids.map((id) => pickOf(sessionRow(id, { toolCalls: figure(9, "counted") }), []));
+}
+
+function selected(items: readonly SessionPick[], rows = [sessionRow("s1"), sessionRow("s2")]) {
+	const selection: ListSelection = {
+		picks: items,
+		labelsOf: (pick) => pick.labels,
+		now: START,
+		onToggle: noop,
+		onSwap: noop,
+		onClear: noop,
+		onCompare: noop,
+	};
+	return html(
+		<SessionsView
+			view={ready(rows)}
+			scopeKind="project"
+			busy={false}
+			onScope={noop}
+			onRefresh={noop}
+			onOpen={noop}
+			onAnalyse={noop}
+			selection={selection}
+		/>,
+	);
+}
+
+function bar(markup: string): string {
+	const at = markup.indexOf('data-testid="session-insights-selection-bar"');
+	if (at < 0) return "";
+	return markup.slice(markup.lastIndexOf("<", at), markup.indexOf("</section>", at));
+}
+
+describe("select and compare", () => {
+	test("ticks keep their order; unticking keeps the others; swap trades A and B; only two make a pair", () => {
+		const [a, b, c] = picks("a", "b", "c");
+		if (!a || !b || !c) throw new Error("no picks");
+		const two = togglePick(togglePick([], b), a);
+		expect(two.map((pick) => pick.sessionId)).toEqual(["b", "a"]);
+		expect(comparedPair(two)?.map((pick) => pick.sessionId)).toEqual(["b", "a"]);
+		expect(swapPicks(two).map((pick) => pick.sessionId)).toEqual(["a", "b"]);
+		const three = togglePick(two, c);
+		expect(comparedPair(three)).toBeNull();
+		expect(swapPicks(three)).toBe(three);
+		expect(togglePick(three, b).map((pick) => pick.sessionId)).toEqual(["a", "c"]);
+		expect(comparedPair([a])).toBeNull();
+	});
+
+	test("a pick keeps what the bar names: title, first prompt, start, calls and labels", () => {
+		const pick = pickOf(
+			sessionRow("s9", { title: null, firstPrompt: "fix it", toolCalls: figure(4, "counted") }),
+			["good"],
+		);
+		expect(pick).toEqual({
+			sessionId: "s9",
+			title: null,
+			firstPrompt: "fix it",
+			start: START,
+			calls: 4,
+			labels: ["good"],
+		});
+	});
+
+	test("Space ticks a row from any of its cells, Enter on the checkbox compares two, Enter on a figure opens", () => {
+		expect(rowKeyAction(" ", 1, false, false)).toBe("toggle");
+		expect(rowKeyAction(" ", 5, true, true)).toBe("toggle");
+		expect(rowKeyAction(" ", 0, false, false)).toBeNull();
+		expect(rowKeyAction("Enter", 0, false, true)).toBe("compare");
+		expect(rowKeyAction("Enter", 0, false, false)).toBeNull();
+		expect(rowKeyAction("Enter", 3, false, false)).toBe("open");
+		expect(rowKeyAction("Enter", 3, true, false)).toBeNull();
+		expect(rowKeyAction("Enter", 4, true, false)).toBe("open");
+		expect(rowKeyAction("Enter", 1, false, true)).toBeNull();
+		expect(rowKeyAction("a", 1, false, true)).toBeNull();
+	});
+
+	test("ticked rows are checked; nothing ticked shows no bar", () => {
+		const none = selected([]);
+		expect(bar(none)).toBe("");
+		expect(none).not.toContain('checked=""');
+		const markup = selected(picks("s2"));
+		const [first = "", second = ""] = rowsOf(markup);
+		expect(first).toContain('data-picked="false"');
+		expect(second).toContain('data-picked="true"');
+		expect(second).toMatch(/data-testid="session-insights-pick"[^>]*checked=""/);
+		expect(first).not.toMatch(/data-testid="session-insights-pick"[^>]*checked=""/);
+	});
+
+	test("one tick shows the bar with that pick and asks for one more; Compare waits", () => {
+		const one = bar(selected(picks("s1")));
+		expect(one).toContain('data-count="1"');
+		expect(text(one)).toContain("1 session selected");
+		expect(one.match(/data-testid="session-insights-selection-chip" data-side="a"/g)).toHaveLength(
+			1,
+		);
+		expect(text(one)).toContain("Tick one more session to compare");
+		expect(one).toMatch(/data-testid="session-insights-selection-compare" disabled=""/);
+		expect(one).not.toContain('data-testid="session-insights-selection-swap"');
+	});
+
+	test("two ticks name A and B in tick order with a swap; Compare is on", () => {
+		const two = bar(selected(picks("s2", "s1")));
+		expect(text(two)).toContain("2 sessions selected");
+		const chips = [
+			...two.matchAll(
+				/data-testid="session-insights-selection-chip" data-side="([ab])" data-session-id="([^"]+)"/g,
+			),
+		].map((match) => `${match[1]}:${match[2]}`);
+		expect(chips).toEqual(["a:s2", "b:s1"]);
+		expect(text(two)).toContain("Session s2");
+		expect(text(two)).toContain("9 calls");
+		expect(two).toContain('data-testid="session-insights-selection-swap"');
+		expect(two).not.toContain('data-testid="session-insights-selection-hint"');
+		expect(two).not.toContain('data-testid="session-insights-selection-compare" disabled=""');
+		expect(text(two)).toContain("Clear");
+		expect(text(two)).toContain("Esc");
+	});
+
+	test("three or more disable Compare and ask for exactly two", () => {
+		const three = bar(selected(picks("s1", "s2", "s3")));
+		expect(text(three)).toContain("3 sessions selected");
+		expect(text(three)).toContain("Pick exactly two");
+		expect(three).not.toContain('data-testid="session-insights-selection-chip"');
+		expect(three).toMatch(/data-testid="session-insights-selection-compare" disabled=""/);
+	});
+
+	test("the bar names picks the current filter, search or scope hides", () => {
+		const markup = selected(picks("gone", "s1"), [sessionRow("s1")]);
+		expect(rowsOf(markup)).toHaveLength(1);
+		expect(text(bar(markup))).toContain("Session gone");
+	});
+
+	test("Compare opens the A ↔ B tab of exactly two picks, A first, named after both", () => {
+		const opened: unknown[] = [];
+		const host = panelHost({
+			openPanel: (panel, params, title) => opened.push([panel, params, title]),
+		});
+		const t = currentTranslator();
+		expect(openPicked(host, t, picks("s2", "s1"))).toBe(true);
+		expect(openPicked(host, t, picks("s1"))).toBe(false);
+		expect(openPicked(host, t, picks("s1", "s2", "s3"))).toBe(false);
+		expect(opened).toEqual([["compare", { a: "s2", b: "s1" }, "Session s2 ↔ Session s1"]]);
+	});
+});
+
+describe("the list's view state", () => {
+	test("a tab brought back reopens on its saved tab, Insights section and scope", () => {
+		const markup = html(
+			<SessionsPanel
+				host={panelHost({
+					viewState: { tab: "insights", scope: "all", stats: { section: "usage" } },
+				})}
+				params={{}}
+			/>,
+		);
+		expect(tabOf(markup, "insights")).toContain('aria-selected="true"');
+		expect(markup).toMatch(
+			/role="tab"[^>]*aria-selected="true"[^>]*data-testid="stats-section-usage"/,
+		);
+		expect(markup).toMatch(/data-testid="session-insights-scope-all" data-active="true"/);
+	});
+
+	test("ticks come back with the tab", () => {
+		const markup = html(
+			<SessionsPanel host={panelHost({ viewState: { picks: picks("s1", "s2") } })} params={{}} />,
+		);
+		expect(text(bar(markup))).toContain("2 sessions selected");
+	});
+
+	test("another panel's request picks the tab and section over the saved view", () => {
+		const intent = { tab: "insights", section: "findings" } as const;
+		requestListView(intent);
+		try {
+			const markup = html(
+				<SessionsPanel
+					host={panelHost({ viewState: { tab: "days", stats: { section: "hotspots" } } })}
+					params={{}}
+				/>,
+			);
+			expect(tabOf(markup, "insights")).toContain('aria-selected="true"');
+			expect(markup).toMatch(
+				/role="tab"[^>]*aria-selected="true"[^>]*data-testid="stats-section-findings"/,
+			);
+		} finally {
+			settleListView(intent);
 		}
 	});
 });

@@ -14,7 +14,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { SOURCES } from "../fixtures.test";
 import { VersionSkew } from "../session/api";
 import { loadCompare, loadSequences } from "./api";
-import { CompareView } from "./CompareView";
+import { CompareView, pickerItems, swappedChoice } from "./CompareView";
 import { ErrorFlow, placeColumns } from "./ErrorFlow";
 import { processLayout } from "./processLayout";
 import { SequencesView } from "./SequencesView";
@@ -424,7 +424,7 @@ function compareResult(): SlicesCompareResult {
 	};
 }
 
-describe("slice comparison", () => {
+describe("the A/B slices", () => {
 	test("verdicts: a grey indistinguishable row, a better one with its interval, no data and too few", () => {
 		const markup = html(
 			<CompareView
@@ -490,6 +490,79 @@ describe("slice comparison", () => {
 		);
 		expect(empty).toContain('data-testid="compare-no-labels"');
 		expect(empty).not.toContain('data-testid="compare-pick-a"');
+	});
+
+	test("the slice kinds read Model, Before / after, Project, Label and Text filter", () => {
+		const markup = html(
+			<CompareView
+				result={compareResult()}
+				choice={{ by: "model", a: null, b: null }}
+				onChoice={noop}
+				actions={actions}
+			/>,
+		);
+		const kinds = [...markup.matchAll(/data-testid="compare-by-[a-z]+"[^>]*>([^<]+)</g)].map(
+			(match) => match[1],
+		);
+		expect(kinds).toEqual(["Model", "Before / after", "Project", "Label", "Text filter"]);
+		expect(markup).not.toContain("Model A / B");
+	});
+
+	test("a side's pick is shown but not pickable on the other side, and ⇄ swaps the sides in one click", () => {
+		const base = compareResult();
+		const labels = [
+			{ key: "good", name: null, sessions: 2 },
+			{ key: "bad", name: null, sessions: 1 },
+		];
+		expect(pickerItems(labels, "good").map((item) => [item.option.key, item.taken])).toEqual([
+			["good", true],
+			["bad", false],
+		]);
+		expect(swappedChoice(base.compare)).toEqual({
+			by: "model",
+			a: "anthropic/claude-b",
+			b: "anthropic/claude-a",
+		});
+		const byLabel = (b: string) => ({
+			...base.compare,
+			by: "label" as const,
+			a: { ...base.compare.a, key: "good" },
+			b: { ...base.compare.b, key: b },
+		});
+		expect(swappedChoice(byLabel("bad"))).toEqual({ by: "label", a: "bad", b: "good" });
+		expect(swappedChoice(byLabel(""))).toBeNull();
+		expect(swappedChoice({ ...base.compare, by: "period" })).toBeNull();
+		const project = {
+			...base.compare,
+			by: "project" as const,
+			a: { ...base.compare.a, key: "p1" },
+			b: { ...base.compare.b, key: "p2" },
+		};
+		expect(swappedChoice(project)).toEqual({ by: "project", a: "p2", b: "p1" });
+		const pickers = (compare: SlicesCompareResult["compare"]) =>
+			html(
+				<CompareView
+					result={{ ...base, compare }}
+					choice={{ by: compare.by, a: null, b: null }}
+					onChoice={noop}
+					actions={actions}
+				/>,
+			);
+		const model = pickers(base.compare);
+		expect(model).toMatch(/compare-pick-a[\s\S]*data-testid="compare-swap"[\s\S]*compare-pick-b/);
+		expect(model).not.toContain('data-testid="compare-swap" disabled=""');
+		expect(pickers(byLabel("bad"))).toContain('data-testid="compare-swap"');
+		expect(pickers(byLabel(""))).toContain('data-testid="compare-swap" disabled=""');
+		const filter = pickers({
+			...base.compare,
+			by: "filter",
+			a: { ...base.compare.a, key: "parser" },
+			b: { ...base.compare.b, key: "release" },
+		});
+		expect(filter).toMatch(
+			/compare-filter-a[\s\S]*data-testid="compare-swap"[\s\S]*compare-filter-b/,
+		);
+		expect(filter).toContain(">Apply<");
 	});
 
 	test("queries send the slices and refuse another payload version", async () => {

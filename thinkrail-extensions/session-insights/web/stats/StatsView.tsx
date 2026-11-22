@@ -1,37 +1,49 @@
+import {
+	type RemixiconComponentType,
+	RiCoinsFill,
+	RiCoinsLine,
+	RiFireFill,
+	RiFireLine,
+	RiLightbulbFill,
+	RiLightbulbLine,
+	RiRouteFill,
+	RiRouteLine,
+	RiScales3Fill,
+	RiScales3Line,
+} from "@remixicon/react";
 import type { PanelHost } from "@thinkrail/extension-api/web";
 import { localeOf, useT } from "@thinkrail/locales/react";
-import type {
-	DigestProgress,
-	FindingsListResult,
-	HotspotSort,
-	IndexState,
-	SessionRef,
-} from "@thinkrail/pi-session-insights/core";
+import type { DigestProgress, IndexState, SessionRef } from "@thinkrail/pi-session-insights/core";
 import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useId, useState } from "react";
 import { formatCount } from "../format";
+import type { InsightsSection } from "../listIntent";
 import { listScope, type ScopeKind } from "../load";
+import { Tabs, tabPanel } from "../Tabs";
 import { type Polled, usePolled } from "../usePolled";
-import {
-	hideFinding,
-	loadCompare,
-	loadFindings,
-	loadHotspots,
-	loadSequences,
-	loadUsage,
-	type SliceChoice,
-	stillReading,
-} from "./api";
+import type { StatsViewState } from "../viewState";
+import { loadCompare, loadHotspots, loadSequences, loadUsage, stillReading } from "./api";
 import { CompareView } from "./CompareView";
-import { SECTION_LABEL, type StatsSection } from "./copy";
+import { SECTION_LABEL } from "./copy";
+import { FindingsBadge } from "./FindingsBadge";
 import { FindingsView } from "./FindingsView";
-import { type HotspotsLayout, HotspotsView } from "./HotspotsView";
+import { HotspotsView } from "./HotspotsView";
 import { SequencesView } from "./SequencesView";
 import { UsageView } from "./UsageView";
+import { type FindingsControls, tallyFindings } from "./useFindings";
 
-const SECTIONS: readonly StatsSection[] = ["findings", "usage", "hotspots", "sequences", "compare"];
+const SECTIONS: readonly {
+	id: InsightsSection;
+	icon: RemixiconComponentType;
+	active: RemixiconComponentType;
+}[] = [
+	{ id: "findings", icon: RiLightbulbLine, active: RiLightbulbFill },
+	{ id: "usage", icon: RiCoinsLine, active: RiCoinsFill },
+	{ id: "hotspots", icon: RiFireLine, active: RiFireFill },
+	{ id: "sequences", icon: RiRouteLine, active: RiRouteFill },
+	{ id: "ab", icon: RiScales3Line, active: RiScales3Fill },
+];
 
 const FAILURE_TEXT = {
 	disabled: "sessionInsights.error.disabled",
@@ -152,35 +164,34 @@ function Body<T extends { state: IndexState; digests: DigestProgress }>({
 }
 
 /**
- * The statistics area of the list panel: findings, usage and cost, and file hotspots over the scope's
- * sessions. Every figure is the server's; the panel polls while the sessions' facts are being read.
+ * The Insights tab of the list panel: findings, usage and cost, file hotspots, action sequences and the
+ * A/B slices over the scope's sessions, one section at a time behind a tab list. Every figure is the
+ * server's; the panel polls while the sessions' facts are being read.
  */
 export function StatsView({
 	host,
 	scopeKind,
 	attempt,
 	actions,
+	findings,
+	view,
+	onView,
 }: {
 	host: PanelHost;
 	scopeKind: ScopeKind;
 	attempt: number;
 	actions: StatsActions;
+	/** The findings the panel asks for its Insights badge, shown here too. */
+	findings: FindingsControls;
+	view: StatsViewState;
+	onView: (view: StatsViewState) => void;
 }) {
 	const t = useT();
-	const [section, setSection] = useState<StatsSection>("findings");
-	const [sort, setSort] = useState<HotspotSort>("touches");
-	const [layout, setLayout] = useState<HotspotsLayout>("list");
+	const tabsId = useId();
 	const [retry, setRetry] = useState(0);
-	const [hidden, setHidden] = useState<{ base: string; ids: ReadonlySet<string> } | null>(null);
-	const [choice, setChoice] = useState<SliceChoice>({ by: "model", a: null, b: null });
+	const { section, hotspotSort: sort, slices: choice } = view;
 	const scope = listScope(host, scopeKind);
 	const base = `${scopeKind}:${host.scope.projectId}:${attempt}:${retry}`;
-	const findings = usePolled(
-		`findings:${base}`,
-		section === "findings",
-		(signal) => loadFindings(host, scope, signal),
-		stillReading,
-	);
 	const usage = usePolled(
 		`usage:${base}`,
 		section === "usage",
@@ -202,74 +213,81 @@ export function StatsView({
 	const compareKey = `${choice.by}\u0000${choice.a ?? ""}\u0000${choice.b ?? ""}`;
 	const compare = usePolled(
 		`compare:${base}:${compareKey}`,
-		section === "compare",
+		section === "ab",
 		(signal) => loadCompare(host, scope, choice, signal),
 		stillReading,
 	);
-	const onHide = (id: string, hide: boolean) => {
-		const controller = new AbortController();
-		hideFinding(host, id, hide, controller.signal).then(
-			(ids) => setHidden({ base, ids: new Set(ids) }),
-			() => setRetry((current) => current + 1),
-		);
-	};
-	const withHidden = (result: FindingsListResult): FindingsListResult => {
-		if (hidden?.base !== base) return result;
-		return {
-			...result,
-			findings: result.findings.map((finding) =>
-				finding.hidden === hidden.ids.has(finding.id)
-					? finding
-					: { ...finding, hidden: hidden.ids.has(finding.id) },
-			),
-		};
-	};
 	const again = () => setRetry((current) => current + 1);
+	const tally =
+		findings.polled.view.kind === "ready" ? tallyFindings(findings.polled.view.value) : null;
 	return (
 		<div data-testid="stats-view" className="flex min-h-0 flex-1 flex-col">
-			<div
-				role="toolbar"
-				aria-label={t("sessionInsights.stats.sections")}
-				className="flex shrink-0 items-center gap-4 border-border-default border-b px-12 py-4"
-			>
-				{SECTIONS.map((item) => (
-					<ToggleSegment
-						key={item}
-						testid={`stats-section-${item}`}
-						label={t(SECTION_LABEL[item])}
-						active={section === item}
-						onClick={() => setSection(item)}
-					/>
-				))}
-			</div>
-			<div className="@container min-h-0 flex-1 overflow-auto">
+			<Tabs
+				id={tabsId}
+				label={t("sessionInsights.stats.sections")}
+				tabs={SECTIONS.map((item) => {
+					const Icon = item.id === section ? item.active : item.icon;
+					return {
+						id: item.id,
+						testId: `stats-section-${item.id}`,
+						label: (
+							<>
+								<Icon aria-hidden className="size-14" />
+								{t(SECTION_LABEL[item.id])}
+								{item.id === "findings" && tally ? (
+									<FindingsBadge tally={tally} testId="stats-findings-badge" />
+								) : null}
+							</>
+						),
+					};
+				})}
+				value={section}
+				onChange={(next) => onView({ ...view, section: next })}
+				className="flex h-panel-header-row shrink-0 items-center gap-4 border-border-default border-b px-12"
+				tabClassName="flex h-full items-center gap-4 px-4"
+			/>
+			<div {...tabPanel(tabsId, section)} className="@container min-h-0 flex-1 overflow-auto">
 				{section === "findings" ? (
-					<Body polled={findings} onRetry={again}>
+					<Body polled={findings.polled} onRetry={findings.retry}>
 						{(value) => (
 							<FindingsView
-								result={withHidden(value)}
+								result={value}
 								onShowSessions={actions.onShowSessions}
 								onOpenSession={actions.onOpenSession}
-								onHide={onHide}
+								onHide={findings.onHide}
 							/>
 						)}
 					</Body>
 				) : section === "usage" ? (
 					<Body polled={usage} onRetry={again}>
-						{(value) => <UsageView result={value} onShowSessions={actions.onShowSessions} />}
+						{(value) => (
+							<UsageView
+								result={value}
+								onShowSessions={actions.onShowSessions}
+								initialOptions={view.usage}
+								onOptions={(usage) => onView({ ...view, usage })}
+							/>
+						)}
 					</Body>
 				) : section === "sequences" ? (
 					<Body polled={sequences} onRetry={again}>
-						{(value) => <SequencesView result={value} actions={actions} />}
+						{(value) => (
+							<SequencesView
+								result={value}
+								actions={actions}
+								initialView={view.sequences}
+								onView={(sequences) => onView({ ...view, sequences })}
+							/>
+						)}
 					</Body>
-				) : section === "compare" ? (
+				) : section === "ab" ? (
 					<Body polled={compare} onRetry={again}>
 						{(value, busy) => (
 							<CompareView
 								result={value}
 								busy={busy}
 								choice={choice}
-								onChoice={setChoice}
+								onChoice={(slices) => onView({ ...view, slices })}
 								actions={actions}
 							/>
 						)}
@@ -281,9 +299,9 @@ export function StatsView({
 								result={value}
 								busy={busy}
 								sort={sort}
-								onSort={setSort}
-								view={layout}
-								onView={setLayout}
+								onSort={(hotspotSort) => onView({ ...view, hotspotSort })}
+								view={view.hotspotLayout}
+								onView={(hotspotLayout) => onView({ ...view, hotspotLayout })}
 								onShowSessions={actions.onShowSessions}
 								onOpenSession={actions.onOpenSession}
 								onOpenFile={actions.onOpenFile}

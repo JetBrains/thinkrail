@@ -73,22 +73,31 @@ function signal(t: Translator, locale: string, file: HotspotFile): string {
 	const count = (value: number) => formatCount(locale, value);
 	switch (file.action) {
 		case "spec":
+			return t(ACTION_SIGNAL.spec, {
+				count: file.sessions.length,
+				changed: count(file.changedSessions),
+				sessions: count(file.sessions.length),
+			});
 		case "template":
 		case "hub":
 			return t(ACTION_SIGNAL[file.action], {
+				count: file.changedSessions,
 				changed: count(file.changedSessions),
-				sessions: count(file.sessions.length),
 			});
 		case "test":
 		case "plan":
 		case "split":
 		case "review":
-			return t(ACTION_SIGNAL[file.action], { changes: count(file.rework) });
+			return t(ACTION_SIGNAL[file.action], { count: file.rework, changes: count(file.rework) });
 		case "upfront":
 			return t("sessionInsights.hotspots.signal.upfront", {
+				count: file.touches.value ?? 0,
 				reads: count(file.reads),
 				touches: count(file.touches.value ?? 0),
-				sessions: count(file.sessions.length),
+				inSessions: t("sessionInsights.hotspots.inSessions", {
+					count: file.sessions.length,
+					n: count(file.sessions.length),
+				}),
 			});
 		case "none":
 			return file.changedSessions > 0
@@ -132,13 +141,26 @@ export function HotspotDetail({
 				</span>
 				<p className="tr-text-ui text-text-muted">
 					{t("sessionInsights.hotspots.whyFacts", {
-						edits: formatCount(locale, file.edits),
-						writes: formatCount(locale, file.writes),
-						reads: formatCount(locale, file.reads),
-						sessions: formatCount(locale, file.sessions.length),
+						edits: t("sessionInsights.hotspots.edits", {
+							count: file.edits,
+							n: formatCount(locale, file.edits),
+						}),
+						writes: t("sessionInsights.hotspots.writes", {
+							count: file.writes,
+							n: formatCount(locale, file.writes),
+						}),
+						reads: t("sessionInsights.hotspots.reads", {
+							count: file.reads,
+							n: formatCount(locale, file.reads),
+						}),
+						inSessions: t("sessionInsights.hotspots.inSessions", {
+							count: file.sessions.length,
+							n: formatCount(locale, file.sessions.length),
+						}),
 					})}{" "}
 					{top && file.rework > 0
 						? t("sessionInsights.hotspots.whyTop", {
+								count: file.rework,
 								changes: formatCount(locale, file.rework),
 								session: sessionName(t, top),
 								day: top.start === null ? "" : formatDay(locale, top.start),
@@ -382,9 +404,18 @@ export function HotspotsView({
 			<div className="flex flex-wrap items-center gap-8 border-border-default border-b px-12 py-4">
 				<span className="tr-text-metadata text-text-muted">
 					{t("sessionInsights.hotspots.scope", {
-						sessions: formatCount(locale, result.sessions.length),
-						files: formatCount(locale, hotspots.totalFiles),
-						touches: formatCount(locale, hotspots.touches),
+						sessions: t("sessionInsights.hotspots.scopeSessions", {
+							count: result.sessions.length,
+							n: formatCount(locale, result.sessions.length),
+						}),
+						files: t("sessionInsights.hotspots.scopeFiles", {
+							count: hotspots.totalFiles,
+							n: formatCount(locale, hotspots.totalFiles),
+						}),
+						touches: t("sessionInsights.hotspots.scopeTouches", {
+							count: hotspots.touches,
+							n: formatCount(locale, hotspots.touches),
+						}),
 					})}
 				</span>
 				<span className="ml-auto flex flex-wrap items-center gap-4">
@@ -552,6 +583,7 @@ export function HotspotsView({
 					rework: hotspots.reworkChanges,
 				})}{" "}
 				{t("sessionInsights.hotspots.hidden", {
+					count: hotspots.outside,
 					outside: formatCount(locale, hotspots.outside),
 					nodeModules: formatCount(locale, hotspots.nodeModules),
 				})}

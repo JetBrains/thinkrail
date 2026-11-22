@@ -190,6 +190,7 @@ function FlowChart({ sequences }: { sequences: StatsSequences }) {
 			viewBox={`0 0 ${W} ${H}`}
 			role="img"
 			aria-label={t("sessionInsights.sequences.flow.label", {
+				count: total,
 				failures: formatCount(locale, total),
 			})}
 			className="block h-auto w-full max-w-900"
@@ -315,10 +316,19 @@ export function ErrorFlow({
 			<div className="flex flex-wrap items-center gap-x-12 gap-y-4 tr-text-metadata text-text-muted">
 				<span data-testid="sequence-flow-summary">
 					{t("sessionInsights.sequences.flow.summary", {
-						failures: formatCount(locale, flow.failures),
-						sessions: formatCount(locale, flow.sessions),
+						failures: t("sessionInsights.sequences.flow.failedCalls", {
+							count: flow.failures,
+							n: formatCount(locale, flow.failures),
+						}),
+						inSessions: t("sessionInsights.sequences.inSessions", {
+							count: flow.sessions,
+							n: formatCount(locale, flow.sessions),
+						}),
 						share: formatPercent(locale, sequences.failed / Math.max(1, sequences.calls), 1),
-						calls: formatCount(locale, sequences.calls),
+						ofCalls: t("sessionInsights.sequences.ofCalls", {
+							count: sequences.calls,
+							n: formatCount(locale, sequences.calls),
+						}),
 					})}
 				</span>
 				<span className="ml-auto inline-flex items-center gap-4">

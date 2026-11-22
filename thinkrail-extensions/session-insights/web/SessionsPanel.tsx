@@ -1,15 +1,19 @@
 import {
+	type RemixiconComponentType,
 	RiArrowDownSLine,
-	RiArrowLeftRightLine,
-	RiBarChartGroupedLine,
+	RiCalendarFill,
 	RiCalendarLine,
 	RiCloseLine,
 	RiFilter3Line,
+	RiLightbulbFill,
+	RiLightbulbLine,
 	RiPriceTag3Line,
 	RiRefreshLine,
+	RiTableFill,
 	RiTableLine,
 } from "@remixicon/react";
 import type { PanelHost, PanelProps } from "@thinkrail/extension-api/web";
+import type { MessageKey } from "@thinkrail/locales";
 import { localeOf, useT } from "@thinkrail/locales/react";
 import type {
 	IndexState,
@@ -33,7 +37,8 @@ import {
 import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { cn } from "@thinkrail/ui/utils";
+import { type ReactNode, useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { ORIGIN_LABEL, sessionName } from "./copy";
 import { DayView } from "./day/DayView";
 import { FigureBadge } from "./FigureCell";
@@ -42,6 +47,7 @@ import { formatCount } from "./format";
 import { PANEL_COMMANDS, PANEL_KEYS, PANEL_SCOPE } from "./keys";
 import { useLabels } from "./labels/api";
 import { LabelsButton } from "./labels/LabelsEditor";
+import { type ListTab, onListView, pendingListView, settleListView } from "./listIntent";
 import {
 	hostServesThisVersion,
 	type ListFailure,
@@ -49,27 +55,64 @@ import {
 	listScope,
 	loadSessions,
 	openAnalysis,
-	openComparison,
 	openSession,
 	type ScopeKind,
 	SESSION_PANEL,
 } from "./load";
-import { type CompareState, type RowLabels, SessionsTable } from "./SessionsTable";
+import { SelectionBar } from "./SelectionBar";
+import { type RowLabels, type RowSelection, SessionsTable, type TableView } from "./SessionsTable";
 import { ALL_FILTER_KEYS, FILTER_KEYS } from "./search/query";
 import { SearchBox } from "./search/SearchBox";
 import { SearchView } from "./search/SearchView";
 import { useSearch } from "./search/useSearch";
+import {
+	comparedPair,
+	openPicked,
+	pickOf,
+	type SessionPick,
+	swapPicks,
+	togglePick,
+} from "./selection";
+import { FindingsBadge } from "./stats/FindingsBadge";
 import { StatsView } from "./stats/StatsView";
+import { tallyFindings, useFindings } from "./stats/useFindings";
+import { Tabs, tabPanel } from "./Tabs";
+import { type ListViewState, readListViewState, showTab, withListIntent } from "./viewState";
 
 const POLL_MS = 1000;
 
-/** The list as a sortable table, one day's sessions on a shared time strip, statistics, or search results. */
-export type ListMode = "table" | "day" | "stats" | "search";
+const TABS: readonly {
+	id: ListTab;
+	icon: RemixiconComponentType;
+	active: RemixiconComponentType;
+}[] = [
+	{ id: "sessions", icon: RiTableLine, active: RiTableFill },
+	{ id: "days", icon: RiCalendarLine, active: RiCalendarFill },
+	{ id: "insights", icon: RiLightbulbLine, active: RiLightbulbFill },
+];
+
+const TAB_LABEL = {
+	sessions: "sessionInsights.tab.sessions",
+	days: "sessionInsights.tab.days",
+	insights: "sessionInsights.tab.insights",
+} as const satisfies Record<ListTab, MessageKey>;
 
 /** A set of sessions another view picked ("Show sessions"); the table shows only those. */
 export interface SessionFilter {
 	label: string;
 	ids: ReadonlySet<string>;
+}
+
+/** The sessions ticked for a comparison and what the selection bar does with them. */
+export interface ListSelection {
+	picks: readonly SessionPick[];
+	/** The labels a pick's chip shows (the current ones once labels are loaded). */
+	labelsOf: (pick: SessionPick) => readonly string[];
+	now: number;
+	onToggle: (row: SessionListRow) => void;
+	onSwap: () => void;
+	onClear: () => void;
+	onCompare: () => void;
 }
 
 export type ListView =
@@ -240,7 +283,25 @@ function Legend({ count }: { count: number }) {
 	);
 }
 
-const NO_COMPARE: CompareState = { from: null, onCompare: () => {}, onCancel: () => {} };
+const NO_SELECTION: ListSelection = {
+	picks: [],
+	labelsOf: (pick) => pick.labels,
+	now: 0,
+	onToggle: () => {},
+	onSwap: () => {},
+	onClear: () => {},
+	onCompare: () => {},
+};
+
+function typingIn(target: EventTarget): boolean {
+	return (
+		target instanceof HTMLElement &&
+		(target.isContentEditable ||
+			target instanceof HTMLTextAreaElement ||
+			target instanceof HTMLSelectElement ||
+			(target instanceof HTMLInputElement && target.type !== "checkbox" && target.type !== "radio"))
+	);
+}
 
 /** The toolbar's label filter: every label in use with its sessions, or all sessions. */
 function LabelFilter({
@@ -322,8 +383,10 @@ function ListBody({
 	onRetry,
 	onOpen,
 	onAnalyse,
-	compare,
+	selection,
 	labels,
+	tableView,
+	onTableView,
 }: {
 	view: ListView;
 	scopeKind: ScopeKind;
@@ -333,8 +396,10 @@ function ListBody({
 	onRetry: () => void;
 	onOpen: (row: SessionListRow) => void;
 	onAnalyse: (row: SessionListRow) => void;
-	compare: CompareState;
+	selection: RowSelection;
 	labels: RowLabels | null;
+	tableView: TableView | undefined;
+	onTableView: ((view: TableView) => void) | undefined;
 }) {
 	const t = useT();
 	switch (view.kind) {
@@ -398,32 +463,14 @@ function ListBody({
 					now={view.receivedAt}
 					onOpen={onOpen}
 					onAnalyse={onAnalyse}
-					compare={compare}
+					selection={selection}
 					labels={labels}
+					{...(tableView ? { initialView: tableView } : {})}
+					{...(onTableView ? { onView: onTableView } : {})}
 				/>
 			);
 		}
 	}
-}
-
-function CompareBar({ name, onCancel }: { name: string; onCancel: () => void }) {
-	const t = useT();
-	return (
-		<div
-			data-testid="session-insights-compare-bar"
-			className="flex shrink-0 items-center gap-8 border-border-default border-b bg-control-bg px-12 py-4 tr-text-metadata text-text-muted"
-		>
-			<RiArrowLeftRightLine aria-hidden className="size-14 shrink-0" />
-			<span className="min-w-0 truncate">{t("sessionInsights.compare.picking", { name })}</span>
-			<IconButton
-				icon={RiCloseLine}
-				size="s"
-				label={t("sessionInsights.compare.cancel")}
-				data-testid="session-insights-compare-cancel"
-				onClick={onCancel}
-			/>
-		</div>
-	);
 }
 
 export function SessionsView({
@@ -434,19 +481,22 @@ export function SessionsView({
 	onRefresh,
 	onOpen,
 	onAnalyse,
-	mode = "table",
-	onMode,
+	tab = "sessions",
+	showSearch = false,
+	onTab,
+	insightsBadge,
 	day,
 	stats,
 	filter = null,
 	onClearFilter,
-	compare = NO_COMPARE,
-	compareName = null,
+	selection = NO_SELECTION,
 	searchBox,
 	search,
 	onSearchKey,
 	labels = null,
 	labelFilter,
+	tableView,
+	onTableView,
 }: {
 	view: ListView;
 	scopeKind: ScopeKind;
@@ -455,15 +505,17 @@ export function SessionsView({
 	onRefresh: () => void;
 	onOpen: (row: SessionListRow) => void;
 	onAnalyse: (row: SessionListRow) => void;
-	mode?: ListMode;
-	onMode?: (mode: ListMode) => void;
+	tab?: ListTab;
+	/** The search results are shown in place of the tab's body. */
+	showSearch?: boolean;
+	onTab?: (tab: ListTab) => void;
+	/** The Insights tab's count of findings. */
+	insightsBadge?: ReactNode;
 	day?: ReactNode;
 	stats?: ReactNode;
 	filter?: SessionFilter | null;
 	onClearFilter?: () => void;
-	compare?: CompareState;
-	/** The first side's name while the user picks the second. */
-	compareName?: string | null;
+	selection?: ListSelection;
 	/** The toolbar's search field. */
 	searchBox?: ReactNode;
 	search?: ReactNode;
@@ -471,10 +523,14 @@ export function SessionsView({
 	onSearchKey?: (() => void) | undefined;
 	/** The user's labels in the rows (chips and the editor). */
 	labels?: RowLabels | null;
-	/** The toolbar's label filter, shown with the table. */
+	/** The toolbar's label filter, shown with the Sessions tab. */
 	labelFilter?: ReactNode;
+	/** The table's sort and open groups to start from, and where their changes go. */
+	tableView?: TableView;
+	onTableView?: (view: TableView) => void;
 }) {
 	const t = useT();
+	const tabsId = useId();
 	const local = useLocalKeys(PANEL_SCOPE, PANEL_COMMANDS);
 	const [root, setRoot] = useState<HTMLDivElement | null>(null);
 	useEffect(() => {
@@ -487,6 +543,58 @@ export function SessionsView({
 		root.addEventListener("keydown", onKey);
 		return () => root.removeEventListener("keydown", onKey);
 	}, [local, onSearchKey, root]);
+	const pair = comparedPair(selection.picks);
+	const rowSelection: RowSelection = {
+		picked: (sessionId) => selection.picks.some((pick) => pick.sessionId === sessionId),
+		onToggle: selection.onToggle,
+		onCompare: pair ? selection.onCompare : null,
+	};
+	const [list, setList] = useState<HTMLDivElement | null>(null);
+	const onListKey = useEffectEvent((event: KeyboardEvent) => {
+		if (event.key !== "Escape" || event.defaultPrevented || selection.picks.length === 0) return;
+		if (event.target === null || typingIn(event.target)) return;
+		event.preventDefault();
+		selection.onClear();
+	});
+	useEffect(() => {
+		if (!list) return;
+		const onKey = (event: KeyboardEvent) => onListKey(event);
+		list.addEventListener("keydown", onKey);
+		return () => list.removeEventListener("keydown", onKey);
+	}, [list]);
+	const sessions = (
+		<div ref={setList} className="flex min-h-0 flex-1 flex-col">
+			{filter ? <FilterBar filter={filter} onClear={() => onClearFilter?.()} /> : null}
+			<div className="@container min-h-0 flex-1 overflow-auto">
+				<ListBody
+					view={view}
+					scopeKind={scopeKind}
+					busy={busy}
+					filter={filter}
+					onScope={onScope}
+					onRetry={onRefresh}
+					onOpen={onOpen}
+					onAnalyse={onAnalyse}
+					selection={rowSelection}
+					labels={labels}
+					tableView={tableView}
+					onTableView={onTableView}
+				/>
+			</div>
+			<SelectionBar
+				picks={selection.picks}
+				labelsOf={selection.labelsOf}
+				now={selection.now}
+				onSwap={selection.onSwap}
+				onCompare={selection.onCompare}
+				onClear={selection.onClear}
+			/>
+			{view.kind === "ready" && view.result.rows.length > 0 ? (
+				<Legend count={filtered(view.result, filter).rows.length} />
+			) : null}
+		</div>
+	);
+	const body = tab === "days" && day ? day : tab === "insights" && stats ? stats : sessions;
 	return (
 		<div
 			ref={setRoot}
@@ -494,105 +602,76 @@ export function SessionsView({
 			data-key-scope={PANEL_SCOPE}
 			className="flex h-full min-h-0 flex-col"
 		>
-			<div
-				role="toolbar"
-				aria-label={t("sessionInsights.panel.title")}
-				className="flex h-panel-header-row shrink-0 items-center gap-4 overflow-clip border-border-default border-b px-12"
-			>
-				<ToggleSegment
-					testid="session-insights-scope-project"
-					label={t("sessionInsights.scope.project")}
-					active={scopeKind === "project"}
-					onClick={() => onScope("project")}
-				/>
-				<ToggleSegment
-					testid="session-insights-scope-all"
-					label={t("sessionInsights.scope.all")}
-					active={scopeKind === "all"}
-					onClick={() => onScope("all")}
-				/>
-				{onMode ? (
-					<fieldset
-						aria-label={t("sessionInsights.mode.label")}
-						className="ml-8 flex items-center gap-2 border-border-default border-l pl-8"
-					>
-						<IconButton
-							icon={RiTableLine}
-							size="s"
-							label={t("sessionInsights.mode.table")}
-							data-testid="session-insights-mode-table"
-							aria-pressed={mode === "table"}
-							selected={mode === "table"}
-							onClick={() => onMode("table")}
-						/>
-						<IconButton
-							icon={RiCalendarLine}
-							size="s"
-							label={t("sessionInsights.mode.day")}
-							data-testid="session-insights-mode-day"
-							aria-pressed={mode === "day"}
-							selected={mode === "day"}
-							onClick={() => onMode("day")}
-						/>
-						<IconButton
-							icon={RiBarChartGroupedLine}
-							size="s"
-							label={t("sessionInsights.mode.stats")}
-							data-testid="session-insights-mode-stats"
-							aria-pressed={mode === "stats"}
-							selected={mode === "stats"}
-							onClick={() => onMode("stats")}
-						/>
-					</fieldset>
-				) : null}
-				{labelFilter && mode === "table" ? (
-					<div className="ml-8 flex shrink-0 items-center">{labelFilter}</div>
-				) : null}
-				{searchBox ? (
-					<div className="ml-8 flex min-w-0 flex-1 items-center">{searchBox}</div>
-				) : null}
-				<div className="ml-auto flex min-w-0 items-center gap-8">
-					{view.kind === "ready" ? <IndexStatus state={view.result.state} /> : null}
-					<IconButton
-						icon={RiRefreshLine}
-						label={t("sessionInsights.refresh")}
-						data-testid="session-insights-refresh"
-						loading={busy}
-						disabled={view.kind === "version"}
-						onClick={onRefresh}
+			<div className="flex h-panel-header-row shrink-0 items-center gap-8 overflow-clip border-border-default border-b px-12">
+				{onTab ? (
+					<Tabs
+						id={tabsId}
+						label={t("sessionInsights.tab.label")}
+						tabs={TABS.map((item) => {
+							const Icon = item.id === tab ? item.active : item.icon;
+							return {
+								id: item.id,
+								testId: `session-insights-tab-${item.id}`,
+								label: (
+									<>
+										<Icon aria-hidden className="size-14" />
+										{t(TAB_LABEL[item.id])}
+										{item.id === "insights" ? insightsBadge : null}
+									</>
+								),
+							};
+						})}
+						value={tab}
+						onChange={onTab}
+						className="flex h-full shrink-0 items-center gap-4"
+						tabClassName="flex h-full items-center gap-4 px-4"
 					/>
-				</div>
-			</div>
-			{mode === "search" && search ? (
-				<div className="flex min-h-0 flex-1 flex-col">{search}</div>
-			) : mode === "day" && day ? (
-				<div className="flex min-h-0 flex-1 flex-col">{day}</div>
-			) : mode === "stats" && stats ? (
-				<div className="flex min-h-0 flex-1 flex-col">{stats}</div>
-			) : (
-				<>
-					{filter ? <FilterBar filter={filter} onClear={() => onClearFilter?.()} /> : null}
-					{compare.from && compareName ? (
-						<CompareBar name={compareName} onCancel={compare.onCancel} />
+				) : null}
+				<div
+					role="toolbar"
+					aria-label={t("sessionInsights.panel.title")}
+					className={cn(
+						"flex h-full min-w-0 flex-1 items-center gap-4",
+						onTab && "border-border-default border-l pl-8",
+					)}
+				>
+					<ToggleSegment
+						testid="session-insights-scope-project"
+						label={t("sessionInsights.scope.project")}
+						active={scopeKind === "project"}
+						onClick={() => onScope("project")}
+					/>
+					<ToggleSegment
+						testid="session-insights-scope-all"
+						label={t("sessionInsights.scope.all")}
+						active={scopeKind === "all"}
+						onClick={() => onScope("all")}
+					/>
+					{labelFilter && tab === "sessions" && !showSearch ? (
+						<div className="ml-8 flex shrink-0 items-center">{labelFilter}</div>
 					) : null}
-					<div className="@container min-h-0 flex-1 overflow-auto">
-						<ListBody
-							view={view}
-							scopeKind={scopeKind}
-							busy={busy}
-							filter={filter}
-							onScope={onScope}
-							onRetry={onRefresh}
-							onOpen={onOpen}
-							onAnalyse={onAnalyse}
-							compare={compare}
-							labels={labels}
+					{searchBox ? (
+						<div className="ml-8 flex min-w-0 flex-1 items-center">{searchBox}</div>
+					) : null}
+					<div className="ml-auto flex min-w-0 items-center gap-8">
+						{view.kind === "ready" ? <IndexStatus state={view.result.state} /> : null}
+						<IconButton
+							icon={RiRefreshLine}
+							label={t("sessionInsights.refresh")}
+							data-testid="session-insights-refresh"
+							loading={busy}
+							disabled={view.kind === "version"}
+							onClick={onRefresh}
 						/>
 					</div>
-					{view.kind === "ready" && view.result.rows.length > 0 ? (
-						<Legend count={filtered(view.result, filter).rows.length} />
-					) : null}
-				</>
+				</div>
+			</div>
+			{showSearch && search ? (
+				<div className="flex min-h-0 flex-1 flex-col">{search}</div>
+			) : (
+				<div {...(onTab ? tabPanel(tabsId, tab) : {})} className="flex min-h-0 flex-1 flex-col">
+					{body}
+				</div>
 			)}
 		</div>
 	);
@@ -602,63 +681,79 @@ function panelClient(): string {
 	return `panel-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function initialView(host: PanelHost): ListViewState {
+	const restored = readListViewState(host.viewState);
+	const intent = pendingListView();
+	return intent ? withListIntent(restored, intent) : restored;
+}
+
 export default function SessionsPanel({ host }: PanelProps) {
 	const t = useT();
-	const [scopeKind, setScopeKind] = useState<ScopeKind>("project");
-	const [mode, setMode] = useState<ListMode>("table");
-	const [listMode, setListMode] = useState<Exclude<ListMode, "search">>("table");
-	const [searchText, setSearchText] = useState("");
+	const [view, setView] = useState<ListViewState>(() => initialView(host));
 	const [searching, setSearching] = useState(false);
 	const [client] = useState(panelClient);
 	const [now] = useState(() => Date.now());
+	const [dayAttempt, setDayAttempt] = useState(0);
 	const searchInput = useRef<HTMLInputElement>(null);
 	const searchResults = useRef<HTMLDivElement>(null);
 	const enabled = hostServesThisVersion(host);
+	const scopeKind = view.scope;
+	const update = (patch: Partial<ListViewState>) =>
+		setView((current) => ({ ...current, ...patch }));
+	const save = useEffectEvent((state: ListViewState) => host.saveViewState?.(state));
+	useEffect(() => {
+		save(view);
+	}, [view]);
+	useEffect(() => {
+		const pending = pendingListView();
+		if (pending) settleListView(pending);
+		return onListView((intent) => {
+			setView((current) => withListIntent(current, intent));
+			settleListView(intent);
+		});
+	}, []);
 	const search = useSearch(
 		host,
 		client,
 		listScope(host, scopeKind),
-		searchText,
-		enabled && searching,
+		view.search,
+		enabled && (searching || view.results),
 	);
+	const findings = useFindings(host, scopeKind, dayAttempt, enabled);
 	const keys = scopeKind === "all" ? ALL_FILTER_KEYS : FILTER_KEYS;
 	const focusSearch = () => searchInput.current?.focus();
 	const onSearchText = (text: string) => {
-		setSearchText(text);
 		setSearching(true);
-		if (text.trim() && mode !== "search") setMode("search");
+		setView((current) => ({
+			...current,
+			search: text,
+			results: current.results || text.trim() !== "",
+		}));
 	};
-	const leaveSearch = () => {
-		setSearchText("");
-		setMode(listMode);
-	};
+	const leaveSearch = () => update({ search: "", results: false });
 	const openAt = (session: SessionRef, eventId: string | null) => {
 		if (eventId) requestSessionFocus(session.sessionId, eventId);
 		host.openPanel(SESSION_PANEL, { sessionId: session.sessionId }, sessionName(t, session));
 	};
-	const [dayAttempt, setDayAttempt] = useState(0);
-	const [shown, setFilter] = useState<SessionFilter | null>(null);
-	const [labelFilter, setLabelFilter] = useState<string | null>(null);
 	const labels = useLabels(host, null, enabled);
-	const filter: SessionFilter | null = labelFilter
+	const filter: SessionFilter | null = view.label
 		? {
-				label: t("sessionInsights.labels.filterBar", { label: labelFilter }),
-				ids: sessionsLabelled(labels, labelFilter),
+				label: t("sessionInsights.labels.filterBar", { label: view.label }),
+				ids: sessionsLabelled(labels, view.label),
 			}
-		: shown;
-	const clearFilters = () => {
-		setFilter(null);
-		setLabelFilter(null);
-	};
+		: view.filter
+			? { label: view.filter.label, ids: new Set(view.filter.ids) }
+			: null;
 	const labelsByRow = new Map((labels?.sessions ?? []).map((entry) => [entry.sessionId, entry]));
+	const labelsOf = (sessionId: string) => labelsByRow.get(sessionId)?.labels ?? [];
 	const rowLabels: RowLabels | null = labels
 		? {
-				of: (sessionId) => labelsByRow.get(sessionId)?.labels ?? [],
+				of: labelsOf,
 				edit: (row, cell) => (
 					<LabelsButton
 						host={host}
 						sessionId={row.sessionId}
-						labels={labelsByRow.get(row.sessionId)?.labels ?? []}
+						labels={labelsOf(row.sessionId)}
 						noted={labelsByRow.get(row.sessionId)?.noted ?? false}
 						vocabulary={labels.vocabulary}
 						data-grid-key={cell.key}
@@ -669,80 +764,84 @@ export default function SessionsPanel({ host }: PanelProps) {
 				),
 			}
 		: null;
-	const [compareFrom, setCompareFrom] = useState<{ id: string; name: string } | null>(null);
-	const { view, busy, refresh } = useSessionsList(host, scopeKind);
-	const onCompare = (row: SessionListRow) => {
-		if (!compareFrom) {
-			setCompareFrom({ id: row.sessionId, name: sessionName(t, row) });
-			return;
-		}
-		setCompareFrom(null);
-		if (compareFrom.id === row.sessionId) return;
-		openComparison(
-			host,
-			compareFrom.id,
-			row.sessionId,
-			t("sessionInsights.compare.tabTitle", { a: compareFrom.name, b: sessionName(t, row) }),
-		);
+	const { view: list, busy, refresh } = useSessionsList(host, scopeKind);
+	const selection: ListSelection = {
+		picks: view.picks,
+		labelsOf: (pick) => (labels ? labelsOf(pick.sessionId) : pick.labels),
+		now,
+		onToggle: (row) =>
+			setView((current) => ({
+				...current,
+				picks: togglePick(current.picks, pickOf(row, labelsOf(row.sessionId))),
+			})),
+		onSwap: () => setView((current) => ({ ...current, picks: swapPicks(current.picks) })),
+		onClear: () => update({ picks: [] }),
+		onCompare: () => {
+			openPicked(host, t, view.picks);
+		},
 	};
+	const findingsView = findings.polled.view;
+	const tally =
+		findingsView.kind === "ready" && !findings.polled.busy
+			? tallyFindings(findingsView.value)
+			: null;
 	return (
 		<SessionsView
-			view={view}
+			view={list}
 			scopeKind={scopeKind}
 			busy={busy}
-			onScope={(kind) => {
-				setScopeKind(kind);
-				clearFilters();
-				setCompareFrom(null);
-			}}
+			onScope={(kind) => update({ scope: kind, label: null, filter: null })}
 			onRefresh={() => {
 				refresh();
 				setDayAttempt(dayAttempt + 1);
-				if (mode === "search") search.retry();
+				if (view.results) search.retry();
 			}}
 			filter={filter}
-			onClearFilter={clearFilters}
+			onClearFilter={() => update({ label: null, filter: null })}
 			labels={rowLabels}
 			labelFilter={
 				labels ? (
 					<LabelFilter
 						vocabulary={labels.vocabulary}
-						value={labelFilter}
-						onChange={(label) => {
-							setFilter(null);
-							setLabelFilter(label);
-						}}
+						value={view.label}
+						onChange={(label) => update({ filter: null, label })}
 					/>
 				) : null
 			}
-			compare={{ from: compareFrom?.id ?? null, onCompare, onCancel: () => setCompareFrom(null) }}
-			compareName={compareFrom?.name ?? null}
+			selection={selection}
+			tableView={{ sort: view.sort, toggled: view.toggled }}
+			onTableView={(table) => update({ sort: table.sort, toggled: table.toggled })}
 			onOpen={(row) => {
 				openSession(host, row);
 			}}
 			onAnalyse={(row) => openAnalysis(host, row, sessionName(t, row))}
-			mode={mode}
-			onMode={(next) => {
-				setMode(next);
-				if (next !== "search") {
-					setListMode(next);
-					setSearchText("");
-				}
-				if (next !== "table") clearFilters();
-			}}
+			tab={view.tab}
+			showSearch={view.results}
+			onTab={(next) =>
+				setView((current) =>
+					current.results && next === current.tab
+						? { ...current, search: "", results: false }
+						: showTab(current, next),
+				)
+			}
+			insightsBadge={
+				tally ? (
+					<FindingsBadge tally={tally} testId="session-insights-insights-badge" tooltip />
+				) : null
+			}
 			onSearchKey={enabled ? focusSearch : undefined}
 			searchBox={
 				enabled ? (
 					<SearchBox
-						value={searchText}
+						value={view.search}
 						onChange={onSearchText}
 						onFocus={() => setSearching(true)}
 						onEscape={() => {
-							if (searchText || mode === "search") leaveSearch();
+							if (view.search || view.results) leaveSearch();
 							else searchInput.current?.blur();
 						}}
 						onToResults={() => {
-							if (mode !== "search") setMode("search");
+							if (!view.results) update({ results: true });
 							searchResults.current?.querySelector<HTMLElement>("[data-search-row]")?.focus();
 						}}
 						vocabulary={search.state.vocabulary}
@@ -755,7 +854,7 @@ export default function SessionsPanel({ host }: PanelProps) {
 				enabled ? (
 					<SearchView
 						controls={search}
-						text={searchText}
+						text={view.search}
 						onText={onSearchText}
 						keys={keys}
 						scopeAll={scopeKind === "all"}
@@ -763,7 +862,7 @@ export default function SessionsPanel({ host }: PanelProps) {
 						onOpen={openAt}
 						onToInput={focusSearch}
 						onFilterKey={(key: SearchFilterKey) => {
-							const text = searchText.trimEnd();
+							const text = view.search.trimEnd();
 							const next = text ? `${text} ${key}:` : `${key}:`;
 							onSearchText(next);
 							requestAnimationFrame(() => {
@@ -778,18 +877,22 @@ export default function SessionsPanel({ host }: PanelProps) {
 				) : null
 			}
 			stats={
-				hostServesThisVersion(host) ? (
+				enabled ? (
 					<StatsView
 						host={host}
 						scopeKind={scopeKind}
 						attempt={dayAttempt}
+						findings={findings}
+						view={view.stats}
+						onView={(stats) => update({ stats })}
 						actions={{
-							onShowSessions: (label, ids) => {
-								setLabelFilter(null);
-								setFilter({ label, ids: new Set(ids) });
-								setMode("table");
-								setListMode("table");
-							},
+							onShowSessions: (label, ids) =>
+								update({
+									label: null,
+									filter: { label, ids: [...ids] },
+									tab: "sessions",
+									results: false,
+								}),
 							onOpenSession: openAt,
 							onOpenFile: (workspaceId, path) => host.openFile(workspaceId, path),
 						}}
@@ -797,7 +900,7 @@ export default function SessionsPanel({ host }: PanelProps) {
 				) : null
 			}
 			day={
-				hostServesThisVersion(host) ? (
+				enabled ? (
 					<DayView
 						host={host}
 						scopeKind={scopeKind}

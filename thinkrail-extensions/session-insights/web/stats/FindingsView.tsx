@@ -52,6 +52,15 @@ import {
 } from "./copy";
 
 const GROUPS: readonly FindingGroup[] = ["skills", "commands", "context", "files"];
+
+const WHY_COUNTS_TOTAL: ReadonlySet<FindingRule> = new Set([
+	"cacheMisses",
+	"commandFailing",
+	"costOutlier",
+	"falseError",
+	"poorRecovery",
+	"tokenOutlier",
+]);
 const SEVERITIES: readonly FindingSeverity[] = ["error", "warning", "info"];
 const LINKS_SHOWN = 4;
 
@@ -384,7 +393,10 @@ function FindingCard({
 					) : null}
 				</div>
 				<p data-testid="finding-why" className="tr-text-ui text-text-muted">
-					{t(RULE_WHY[finding.rule], params)}
+					{t(RULE_WHY[finding.rule], {
+						...params,
+						count: WHY_COUNTS_TOTAL.has(finding.rule) ? (finding.total ?? 0) : finding.count,
+					})}
 					{known.map((exit) => (
 						<span key={exit.exit}>
 							{" "}
@@ -428,7 +440,8 @@ function FindingCard({
 						</code>
 						<span>
 							{t("sessionInsights.findings.quoteCount", {
-								count: formatCount(locale, finding.quote.count),
+								count: finding.count,
+								quoted: formatCount(locale, finding.quote.count),
 								total: formatCount(locale, finding.count),
 							})}
 						</span>

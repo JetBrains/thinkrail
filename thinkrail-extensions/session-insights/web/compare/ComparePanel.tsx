@@ -270,9 +270,9 @@ export function TurnStrip({ alignment }: { alignment: SessionAlignment }) {
 				data-testid="compare-turn-strip"
 				role="img"
 				aria-label={t("sessionInsights.compare.stripTurns", {
-					a: alignment.a.turns.length,
-					b: alignment.b.turns.length,
-					pairs: alignment.pairs.length,
+					a: t("sessionInsights.compare.turns", { count: alignment.a.turns.length }),
+					b: t("sessionInsights.compare.turns", { count: alignment.b.turns.length }),
+					pairs: t("sessionInsights.compare.pairs", { count: alignment.pairs.length }),
 				})}
 				className="relative h-80 min-w-0 overflow-hidden"
 			>
@@ -656,6 +656,7 @@ export default function ComparePanel({ host, params }: PanelProps) {
 							<div className="flex shrink-0 flex-wrap items-center gap-x-12 gap-y-4 border-border-default border-b px-12 py-4 tr-text-metadata text-text-muted">
 								<span data-testid="compare-similarity">
 									{t("sessionInsights.compare.similarity", {
+										count: loaded.alignment.b.calls,
 										share: formatPercent(locale, loaded.alignment.similarity),
 										matched: formatCount(
 											locale,

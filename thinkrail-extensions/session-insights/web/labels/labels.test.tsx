@@ -72,7 +72,7 @@ describe("labels in the list", () => {
 				now={START}
 				onOpen={noop}
 				onAnalyse={noop}
-				compare={{ from: null, onCompare: noop, onCancel: noop }}
+				selection={{ picked: () => false, onToggle: noop, onCompare: null }}
 				labels={{
 					of: (sessionId) => labelsOf.get(sessionId) ?? [],
 					edit: (row, cell) => (
@@ -113,13 +113,13 @@ describe("labels in the list", () => {
 		expect(second).not.toContain('data-testid="session-insights-label"');
 	});
 
-	test("the label filter sits in the toolbar with the table only, and keeps sessions by label", () => {
+	test("the label filter sits in the toolbar with the Sessions tab only, and keeps sessions by label", () => {
 		const ready = {
 			kind: "ready",
 			result: listResult([sessionRow("s1")]),
 			receivedAt: START,
 		} as const;
-		const shown = (mode: "table" | "day") =>
+		const shown = (tab: "sessions" | "days") =>
 			html(
 				<SessionsView
 					view={ready}
@@ -129,14 +129,14 @@ describe("labels in the list", () => {
 					onRefresh={noop}
 					onOpen={noop}
 					onAnalyse={noop}
-					mode={mode}
-					onMode={noop}
+					tab={tab}
+					onTab={noop}
 					day={<span />}
 					labelFilter={<span data-testid="label-filter-slot" />}
 				/>,
 			);
-		expect(shown("table")).toContain('data-testid="label-filter-slot"');
-		expect(shown("day")).not.toContain('data-testid="label-filter-slot"');
+		expect(shown("sessions")).toContain('data-testid="label-filter-slot"');
+		expect(shown("days")).not.toContain('data-testid="label-filter-slot"');
 		expect([...sessionsLabelled(LABELS, "GOOD")].sort()).toEqual(["s1", "s2"]);
 		expect([...sessionsLabelled(LABELS, "login")]).toEqual(["s1"]);
 		expect(sessionsLabelled(null, "good").size).toBe(0);

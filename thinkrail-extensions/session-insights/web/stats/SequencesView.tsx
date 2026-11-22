@@ -104,6 +104,7 @@ function MapSection({ result }: { result: StatsSequencesResult }) {
 					{t("sessionInsights.sequences.chains.title")}
 					<span className="font-normal tr-text-metadata text-text-muted">
 						{t("sessionInsights.sequences.chains.note", {
+							count: sequences.chainTotal,
 							steps: sequences.rules.chainSteps,
 							total: formatCount(locale, sequences.chainTotal),
 						})}
@@ -149,23 +150,38 @@ export function SequencesView({
 	result,
 	actions,
 	initialView = "matrix",
+	onView,
 }: {
 	result: StatsSequencesResult;
 	actions: SequenceActions;
 	initialView?: SequenceView;
+	onView?: (view: SequenceView) => void;
 }) {
 	const t = useT();
 	const locale = localeOf(t);
 	const [view, setView] = useState<SequenceView>(initialView);
+	const show = (next: SequenceView) => {
+		setView(next);
+		onView?.(next);
+	};
 	const { sequences } = result;
 	return (
 		<div data-testid="sequences-view" data-view={view} className="@container flex min-h-0 flex-col">
 			<div className="flex flex-wrap items-center gap-8 border-border-default border-b px-12 py-4">
 				<span data-testid="sequences-scope" className="tr-text-metadata text-text-muted">
 					{t("sessionInsights.sequences.scope", {
-						sessions: formatCount(locale, sequences.sessionsWithCalls),
-						calls: formatCount(locale, sequences.calls),
-						transitions: formatCount(locale, sequences.transitions),
+						sessions: t("sessionInsights.sequences.scopeSessions", {
+							count: sequences.sessionsWithCalls,
+							n: formatCount(locale, sequences.sessionsWithCalls),
+						}),
+						calls: t("sessionInsights.sequences.scopeCalls", {
+							count: sequences.calls,
+							n: formatCount(locale, sequences.calls),
+						}),
+						transitions: t("sessionInsights.sequences.scopeTransitions", {
+							count: sequences.transitions,
+							n: formatCount(locale, sequences.transitions),
+						}),
 					})}
 				</span>
 				<fieldset
@@ -178,7 +194,7 @@ export function SequencesView({
 							testid={`sequences-view-${item.id}`}
 							label={t(item.label)}
 							active={view === item.id}
-							onClick={() => setView(item.id)}
+							onClick={() => show(item.id)}
 						/>
 					))}
 				</fieldset>
