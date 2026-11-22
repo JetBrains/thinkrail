@@ -215,6 +215,14 @@ and `rail`, and nothing here names an extension):
   modal is open, else the press is left alone — so the command lists, rebinds and shows under the
   extension's own area like any other ([[submodule-web-keybindings]]).
 
+**Wide panels hide the panes once per open.** `openExtensionPanel`, which every entry point above goes
+through as a tab — the palette row, the rail icon and its chord, a chat action's tab path and
+`PanelHost.openPanel` —, calls `hideAllPanels` after opening or focusing the tab of a panel declaring
+`wide` ([[module-extension-api]]), on every open: panes the user brought back hide again when another wide
+panel opens. Nothing restores them on its own; *Hide all panels* (*Global chords*) brings back what that
+hide took. Switching tabs in the strip, restoring tabs on reload and Project Home's own navigator never
+hide anything.
+
 ## Layout settings
 
 Built-in presets remain web-owned. The Layout section presents built-ins plus the host-synchronized custom preset catalog, while default preset selection and independent side/bottom limits are local to this frontend surface. The selected default is the explicit Reset frame target; it is not reapplied on workspace switches because every workspace shares the current frame. Capture/rename/delete changes only the shared custom definition. Which preset is applied is never stored: a row reads as **Current** while the live frame matches that preset's geometry (`frameMatchesPreset`), so a manual resize simply clears the mark. Apply or Reset (each behind one confirm) replaces this window's frame and reflows all retained workspace views, preserving resource identities, then persists locally; another frontend is unaffected. A preset row keeps its buttons inside the row: a longer translated label wraps them instead of overflowing.

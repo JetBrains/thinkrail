@@ -6,6 +6,7 @@ import { extensionParamsKey, tupleKey } from "../lib";
 import { enterDefaultWorkspace } from "../panels/defaultWorkspace";
 import { type ChatLocationRequest, selectContextRepoProject, useAppStore } from "../store";
 import { getTransport, RequestError, supportsExtensionQuery } from "../transport";
+import { hideAllPanels } from "./chordActions";
 import { paletteNavigator } from "./paletteNavigation";
 
 export interface PanelHostDeps {
@@ -251,4 +252,5 @@ export function openExtensionPanel(
 		titleKey: panel.declaration.title,
 		params: { ...params },
 	});
+	if (panel.declaration.wide) hideAllPanels(workspaceId);
 }

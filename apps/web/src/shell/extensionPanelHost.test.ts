@@ -371,6 +371,22 @@ describe("openExtensionPanel", () => {
 		]);
 	});
 
+	test("a wide panel hides the panes after every open of its tab, focusing an existing one included", () => {
+		const wide: RegisteredPanel = {
+			extension: "insights",
+			panel: "compare",
+			declaration: { ...declaration, wide: true },
+		};
+		openExtensionPanel("w1", panel);
+		openExtensionPanel("w1", wide, { a: "1" }, "Compare");
+		openExtensionPanel("w1", wide, { a: "1" }, "Compare");
+
+		expect(useAppStore.getState().tabsByWorkspace.w1).toHaveLength(2);
+		expect(
+			useAppStore.getState().layoutIntents.map(({ kind, workspaceId }) => `${kind}:${workspaceId}`),
+		).toEqual(["open:w1", "open:w1", "hide-all-panels:w1", "open:w1", "hide-all-panels:w1"]);
+	});
+
 	test("names the tab with the title it is opened with, keeping one tab per params", () => {
 		openExtensionPanel("w1", panel, { sessionId: "s1" }, "Fix the login flow");
 		openExtensionPanel("w1", panel, { sessionId: "s1" }, "Fix the login flow");
