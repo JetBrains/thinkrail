@@ -54,7 +54,7 @@ afterAll(async () => {
 
 test("a client that stops reading past the buffer limit is closed while a healthy one gets every push", async () => {
 	const healthy = new WebSocket(
-		`ws://127.0.0.1:${server.port}/ws?client=healthy&protocol=${PROTOCOL_VERSION}`,
+		`ws://127.0.0.1:${server.port}/ws?client=healthy&protocol=${PROTOCOL_VERSION}&token=${server.authToken}`,
 	);
 	let healthyPushes = 0;
 	let healthyClosed = false;
@@ -68,7 +68,7 @@ test("a client that stops reading past the buffer limit is closed while a health
 		healthyClosed = true;
 	});
 	await new Promise((resolve) => healthy.addEventListener("open", resolve, { once: true }));
-	const stalled = await stalledClient(server.port, "stalled");
+	const stalled = await stalledClient(server.port, "stalled", server.authToken);
 
 	const update = (id: string, settings: Record<string, boolean>) =>
 		healthy.send(

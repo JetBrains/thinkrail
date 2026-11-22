@@ -11,7 +11,7 @@ import type { MessageKey } from "@thinkrail/locales";
 import { t as translate } from "@thinkrail/locales/react";
 import type { PromptFile } from "../store";
 import { errorText } from "./errorText";
-import { hostUrl } from "./fonts";
+import { authorizedHostUrl } from "./instanceToken";
 import { getTransport } from "./wireTransport";
 
 export function supportsChatAttachments(protocolVersion: number | null): boolean {
@@ -52,7 +52,7 @@ async function uploadBlob(
 	let response: Response;
 	try {
 		response = await fetch(
-			hostUrl(`${CHAT_ATTACHMENTS_ROUTE}${encodeURIComponent(name)}${query}`),
+			authorizedHostUrl(`${CHAT_ATTACHMENTS_ROUTE}${encodeURIComponent(name)}${query}`),
 			{
 				method: "PUT",
 				headers: { [CHAT_ATTACHMENT_UPLOAD_HEADER.name]: CHAT_ATTACHMENT_UPLOAD_HEADER.value },

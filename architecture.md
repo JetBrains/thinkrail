@@ -95,7 +95,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
 4. **Transport endpoint is a parameter.** Defaults to same-origin (`location.host`); a remote browser,
    desktop, or mobile client points it at the selected host's Tailscale MagicDNS name. Native resume state
    is keyed by backend profile so ids from one host are never interpreted against another. The host gates
-   its sockets and `/files`/`/blob` on a persisted per-instance token it embeds only in the page it serves,
+   its sockets and byte routes (`/files`, `/blob`, `/images`, `/attachments`) on a persisted per-instance token it embeds only in the page it serves,
    refuses a foreign `Host` (DNS rebinding) and a foreign `Origin` on socket upgrades — both derived from
    the configured endpoint; a wildcard `--host` bind cannot enumerate its names and so leaves trust to the
    token. A client that does not load the host-served page (a native shell with its own bundle) must

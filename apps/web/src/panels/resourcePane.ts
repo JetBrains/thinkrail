@@ -1,18 +1,13 @@
-import { INSTANCE_TOKEN_PARAM, WORKSPACE_VIEW_ROUTE } from "@thinkrail/contracts";
+import { WORKSPACE_VIEW_ROUTE } from "@thinkrail/contracts";
 import { useEffect, useRef } from "react";
 import { useAppStore } from "../store";
-import { getTransport, instanceToken } from "../transport";
+import { getTransport, withInstanceToken } from "../transport";
 
 export const FILES_ROUTE = "/files";
 export const BLOB_ROUTE = "/blob";
 
 function encodeResourcePath(path: string): string {
 	return path.split("/").map(encodeURIComponent).join("/");
-}
-
-function withInstanceToken(url: string): string {
-	const token = instanceToken();
-	return token === null ? url : `${url}?${INSTANCE_TOKEN_PARAM}=${encodeURIComponent(token)}`;
 }
 
 export function resourceBytesUrl(workspaceId: string, path: string, oid?: string | null): string {

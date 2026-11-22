@@ -1024,7 +1024,8 @@ enabled/confirmed choice before entering analytics attribution.
   2. **`Origin` check on the `/ws` and `/speech` upgrades** (`isTrustedOrigin`, same hostname rule): a
      cross-site page is refused before the token is considered; a missing `Origin` (native clients) passes
      on to the token.
-  3. **Per-instance token** on `/ws`, `/speech`, `/files` and `/blob` (`token` query param): a 256-bit
+  3. **Per-instance token** on `/ws`, `/speech`, `/files`, `/blob`, `/images` and `/attachments` (`token`
+     query param, one `TOKEN_GATED_PREFIXES` list): a 256-bit
      value `persistence.ensureInstanceToken()` keeps in the data dir (`instance-token.json`, mode `0600`)
      so it survives host restarts and updates — a fresh token per boot would leave every open tab
      reconnecting forever, since a browser cannot read a WebSocket handshake's 401. `createServer` serves
@@ -1035,7 +1036,9 @@ enabled/confirmed choice before entering analytics attribution.
   Decision 4), so it skips the `Host` and `Origin` checks and relies on the token alone; DNS rebinding
   against an explicitly network-exposed host is a known residual. `/health` stays open for liveness;
   `/fonts` stays token-free (CSS `url()` loads it; its one write is guarded by a non-simple header) but
-  still passes the `Host` check.
+  still passes the `Host` check. `/view` stays token-free too: "Open in browser" hands its URL to the
+  system browser, where a token would land in history, and its page runs in a sandboxed opaque origin
+  with `connect-src 'none'`, so it can neither read the app's page nor reach the gated routes.
 - Every registered WS command is debug-traced by **method name only** (`ws <method>` / `ws <method>
   failed`); a name absent from the closed handler registry is traced as fixed `ws unknown method` instead.
   Never trace raw unregistered method names, params, or handler error text, which can reflect credentials

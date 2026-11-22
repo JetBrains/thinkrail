@@ -3,7 +3,7 @@ import { useT } from "@thinkrail/locales/react";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { useEffect, useMemo, useState } from "react";
 import { isConnectedGeneration, useAppStore } from "@/store";
-import { errorText, getTransport, hostUrl, wsErrorCode } from "@/transport";
+import { authorizedHostUrl, errorText, getTransport, wsErrorCode } from "@/transport";
 import { ChatActionsContext } from "./ChatActions";
 import { ChatMediaContext } from "./ChatImage";
 import { startDetailPolling } from "./detailPolling";
@@ -91,7 +91,7 @@ export function SubagentTranscriptPane(scope: TranscriptScope) {
 	const { messages, polls, live, error, rows, messageActions, interactionContext } =
 		useSubagentTranscript(scope);
 	return (
-		<ChatMediaContext.Provider value={{ resolveUrl: hostUrl, retryEpoch: polls }}>
+		<ChatMediaContext.Provider value={{ resolveUrl: authorizedHostUrl, retryEpoch: polls }}>
 			<ChatActionsContext.Provider value={null}>
 				<InteractionStatesContext.Provider value={interactionContext}>
 					<div

@@ -11,7 +11,12 @@ export {
 } from "./errorReports";
 export { errorText } from "./errorText";
 export { hostUrl, uploadUserFont } from "./fonts";
-export { instanceToken, setInstanceTokenForTests } from "./instanceToken";
+export {
+	authorizedHostUrl,
+	instanceToken,
+	setInstanceTokenForTests,
+	withInstanceToken,
+} from "./instanceToken";
 export {
 	requestMcpList,
 	requestUserMcpList,

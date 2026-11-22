@@ -357,6 +357,12 @@ function clientProtocolVersion(value: string | null): number {
 	return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
 }
 
+const TOKEN_GATED_PREFIXES = [IMAGES_ROUTE, FILES_PREFIX, BLOB_PREFIX, CHAT_ATTACHMENTS_ROUTE];
+
+function isTokenGated(pathname: string, isSocket: boolean): boolean {
+	return isSocket || TOKEN_GATED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
+
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 const WILDCARD_HOSTS = new Set(["0.0.0.0", "::"]);
 
@@ -505,7 +511,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			if (isSocket && !isTrustedOrigin(req.headers.get("origin"), host)) {
 				return new Response("forbidden origin", { status: 403 });
 			}
-			if (isSocket && !hasInstanceToken(url)) {
+			if (isTokenGated(url.pathname, isSocket) && !hasInstanceToken(url)) {
 				return new Response("unauthorized", { status: 401 });
 			}
 			if (url.pathname === "/ws") {
@@ -535,11 +541,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					: new Response("method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
 			}
 			if (url.pathname.startsWith(FILES_PREFIX)) {
-				if (!hasInstanceToken(url)) return new Response("unauthorized", { status: 401 });
 				return serveWorktreeFile(url.pathname, url.searchParams.get("maxBytes"));
 			}
 			if (url.pathname.startsWith(BLOB_PREFIX)) {
-				if (!hasInstanceToken(url)) return new Response("unauthorized", { status: 401 });
 				return serveBlob(url.pathname, req.signal);
 			}
 			if (url.pathname.startsWith(USER_FONTS_ROUTE)) {

@@ -615,7 +615,7 @@ test.if(process.platform === "linux")(
 			]),
 		);
 		const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
-		const collector = await collectSocket(b.port, "skills");
+		const collector = await collectSocket(b.port, "skills", b.authToken);
 		collector.socket.send(
 			JSON.stringify({
 				id: "ready",
@@ -667,7 +667,7 @@ test.if(process.platform === "linux")(
 			]),
 		);
 		const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
-		const collector = await collectSocket(b.port, "scratch");
+		const collector = await collectSocket(b.port, "scratch", b.authToken);
 		collector.socket.send(
 			JSON.stringify({
 				id: "ready",
@@ -692,7 +692,7 @@ test.each([
 	["one byte over the frame cap closes the socket", WS_MAX_FRAME_BYTES + 1, "closed"],
 ])("a request frame %s", async (_name, bytes, expected) => {
 	const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
-	const collector = await collectSocket(b.port, "frame-cap");
+	const collector = await collectSocket(b.port, "frame-cap", b.authToken);
 	const closed = new Promise<string>((resolve) =>
 		collector.socket.addEventListener("close", () => resolve("closed")),
 	);
@@ -1081,6 +1081,23 @@ test("the file and blob routes require the per-instance token", async () => {
 	expect((await fetch(blob)).status).toBe(401);
 	expect((await fetch(`${files}?token=${b.authToken}`)).status).toBe(404);
 	expect((await fetch(`${blob}?token=${b.authToken}`)).status).toBe(404);
+});
+
+test("the image and attachment routes require the per-instance token; /view stays open", async () => {
+	const b = await boot({ port: 0, host: "127.0.0.1", portMode: "exact" });
+	const base = `http://127.0.0.1:${b.port}`;
+	const image = `${base}/images/session/${"0".repeat(64)}`;
+	const upload = (query: string) =>
+		fetch(`${base}/attachments/a.txt${query}`, {
+			method: "PUT",
+			headers: { "X-ThinkRail-Request": "attachment-upload" },
+			body: "x",
+		});
+	expect((await fetch(image)).status).toBe(401);
+	expect((await fetch(`${image}?token=${b.authToken}`)).status).not.toBe(401);
+	expect((await upload("")).status).toBe(401);
+	expect((await upload(`?token=${b.authToken}`)).status).not.toBe(401);
+	expect((await fetch(`${base}/view/ws/missing.html`)).status).toBe(404);
 });
 
 test("the served client carries the token meta so the same-origin UI can authenticate", async () => {

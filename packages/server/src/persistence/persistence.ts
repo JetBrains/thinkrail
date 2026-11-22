@@ -793,9 +793,12 @@ const INSTANCE_TOKEN_FILE = "instance-token.json";
 const INSTANCE_TOKEN_SHAPE = /^[A-Za-z0-9_-]{43,}$/;
 
 export function ensureInstanceToken(): string {
-	const stored = readJson<unknown>(INSTANCE_TOKEN_FILE, null);
-	const token = isRecord(stored) ? stored.token : undefined;
-	if (typeof token === "string" && INSTANCE_TOKEN_SHAPE.test(token)) return token;
+	const stored = readJson<{ token: string } | null>(
+		INSTANCE_TOKEN_FILE,
+		null,
+		(raw) => isRecord(raw) && typeof raw.token === "string" && INSTANCE_TOKEN_SHAPE.test(raw.token),
+	);
+	if (stored) return stored.token;
 	const minted = randomBytes(32).toString("base64url");
 	writeJsonAtomic(INSTANCE_TOKEN_FILE, { token: minted }, 0o600);
 	return minted;

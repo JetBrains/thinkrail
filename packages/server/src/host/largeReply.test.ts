@@ -69,7 +69,7 @@ function gitRepo(path: string): string {
 
 test("replies queued behind one larger than Bun's default 16 MiB buffer still arrive on an open socket", async () => {
 	const socket = new WebSocket(
-		`ws://127.0.0.1:${server.port}/ws?client=large-reply&protocol=${PROTOCOL_VERSION}`,
+		`ws://127.0.0.1:${server.port}/ws?client=large-reply&protocol=${PROTOCOL_VERSION}&token=${server.authToken}`,
 	);
 	const replies = new Map<string, Frame>();
 	let closed = false;
