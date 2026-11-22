@@ -407,8 +407,10 @@ dependency. This keeps test process drivers outside both launchers and the serve
     drops the table so its background work stops and its memory goes), versioned by the extension's
     `apiVersion` rather than the protocol; a web half's `panels` render in a generic `extension` center
     tab with one palette command each, and may declare generic entry points — a `chatAction` (opened for a
-    chat from its header, tab menu and the chat lists) and a `rail` icon whose chord is one of the
-    extension's own rebindable commands — all offered only while openable (declared, switched on, a host
+    chat from its header, tab menu and the chat lists; with `chatPane`, beside that chat inside its tab
+    while it is open) and a `rail` icon whose chord is one of the extension's own rebindable commands —
+    and `wide` (opening hides the side and bottom panes once through the shell's hide-all action), all
+    offered only while openable (declared, switched on, a host
     that answers queries), so the core names no extension; a placeholder shows while the extension is
     off, missing or the host too old. The server never
     lists panels — the web registry is their one authority. Install UX,
