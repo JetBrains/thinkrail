@@ -18,7 +18,7 @@ nothing leaves the machine. It is the first consumer of extension queries and pa
 
 - `./server` is the descriptor `session-insights` with `extensions: []` (no tools, skills or session
   factories), `supersedesPackages: ["@thinkrail/pi-session-insights"]` (see *Decisions*), `apiVersion`
-  from the core and thirty queries: `sessions.list`, `session.summary`,
+  from the core and thirty-one queries: `sessions.list`, `session.summary`, `session.overview`,
   `session.trace`, `event.get`, `event.anchor`, `trace.search`, `session.timeline`, `day.timeline`,
   `session.analysis`, `error.detail`, `session.subagents`, `subagent.get`, `session.context`,
   `request.diff`, `session.cost`, `session.files`, `file.detail`, `stats.usage`, `stats.hotspots`,
@@ -32,7 +32,8 @@ nothing leaves the machine. It is the first consumer of extension queries and pa
   while the core retains it, with `newerRevision` ([[module-pi-session-insights]] § Paging pins a
   revision); the web half sends `fresh` on the list's mount and *Refresh* and pins every later page.
   While the index is not `ready`, a session it has not reached yet answers `pending` from
-  `session.summary`, `session.trace` (a subagent transcript not indexed yet too) and `sessions.align`
+  `session.summary`, `session.overview`, `session.trace` (a subagent transcript not indexed yet too) and
+  `sessions.align`
   instead of a final not-found; the queries a panel asks once the trace arrived keep `found` alone. Beside the descriptor, `./server` re-exports the core's
   record literals and shapes (`SUBAGENT_*`, `TODO_*`, `WAKE_DELIVERY`, …) for the host's tripwire tests,
   since the host reaches the core only through this entry.
@@ -57,16 +58,18 @@ nothing leaves the machine. It is the first consumer of extension queries and pa
 - `./web` declares three panels. `sessions` ("Session insights", «Разбор сессий», scope `project`, with
   translated `keywords` — cost, tokens, stats, usage, session history, analysis / стоимость, токены,
   статистика, расход, история сессий, разбор, анализ — so the palette finds it by what it shows): the
-  session list as a sortable table grouped by project, the day view, the statistics (findings, usage
-  and cost, hotspots, sequences, slice comparison) or search results across sessions, with a
-  this-project / all-projects switch. It polls while the index is still building and offers *Open chat* for rows whose
-  workspace is open and *Open analysis* for every row. `session` ("Session analysis", «Разбор сессии»,
-  scope `session`, params `{ sessionId }`): one session's header (with its labels, note and *Export*
-  menu) and eight sections — the trace
-  explorer, the turn cards, the timeline, the subagent waves, the errors, context and cache, why it was
-  expensive, and its files — sharing one selection and the call details. `compare` ("Session
-  comparison", «Сравнение сессий», scope `session`, params `{ a, b }`): two sessions' calls aligned step
-  by step (see *Session comparison*). The entry points are the SDK's generic ones (*Entry points*).
+  tabs *Sessions* (the session list as a sortable table grouped by project, with select-and-compare),
+  *Days* (the day view) and *Insights* (findings, usage and cost, hotspots, sequences, the A/B slice
+  comparison), or search results across sessions, with a this-project / all-projects switch. It polls
+  while the index is still building and offers *Open chat* for rows whose workspace is open and *Open
+  analysis* for every row. `session` ("Session analysis", «Разбор сессии», scope `session`, params `{
+  sessionId }`, `chatPane`): one session's one-line header (with its labels, note, *Compare with…* and
+  *Export*) and six sections — the Overview, the trace (tree, turn cards or timeline), the subagent waves,
+  the errors, cost and context, and its files — sharing one selection and the call details, in a center
+  tab or beside its chat. `compare` ("Session comparison", «Сравнение сессий», scope `session`, params
+  `{ a, b }`): two sessions' calls aligned step by step (see *Session comparison*). All three are `wide`:
+  opening one hides the side and bottom panes once ([[submodule-web-shell]] § Extension panels). The entry
+  points are the SDK's generic ones (*Entry points*).
 
 ## Entry points
 
@@ -75,12 +78,15 @@ shortcut and the chat lists' menus — not a Project Home card or small hints. E
 shell renders ([[submodule-web-shell]] § Extension panels), so each is hidden while the extension is off,
 the host too old to answer queries or its catalog lacks the extension, like the palette row.
 - **From a chat.** `session` declares a `chatAction` (`params: { sessionId }`, the menu item "Analyze
-  session" / «Разобрать сессию»): the chat header shows "Session analysis ↗" / «Разбор сессии ↗» after the
-  token and cost figures, before *Resources*, and the chat tab's menu, a Chats list row's ⋯ menu and each
-  recently closed chat offer *Analyze session*. All open that chat's analysis tab, named after the chat —
-  the one tab per session the list's *Open analysis* opens too —, for a closed chat as well; a chat with no
-  message yet has no session file and offers none. pi's session id is ThinkRail's, so no lookup is needed,
-  and a chat the index has not reached yet reads `pending` until it has.
+  session" / «Разобрать сессию») and `chatPane: true`: the chat header shows the toggle "Session
+  analysis" / «Разбор сессии» after the token and cost figures, before *Resources*, and the chat tab's
+  menu, a Chats list row's ⋯ menu and each recently closed chat offer *Analyze session*. While the chat is
+  open in the center, every one of them opens the analysis beside it, inside the chat's tab (user decision
+  2026-11-22, option 4A); pressing the toggle again closes it. For a chat that is not open (another
+  workspace, Project Home, a recently closed chat) they open that chat's analysis tab, named after the chat
+  — the one tab per session the list's *Open analysis* opens too. A chat with no message yet has no
+  session file and offers none. pi's session id is ThinkRail's, so no lookup is needed, and a chat the
+  index has not reached yet reads `pending` until it has.
 - **The rail and its shortcut.** `sessions` declares a `rail` whose command is the extension's one global
   command, `session-insights.openSessions` ("Open Session insights", default `Ctrl+Alt+I`, ⌃⌥I on macOS —
   ⌘⌥I opens the browser's developer tools; the registry tests pin that the chord is free in the app
@@ -111,7 +117,8 @@ the host too old to answer queries or its catalog lacks the extension, like the 
   process map's dagre layout and edge widths, and the flow's band heights; in the slice comparison the
   intervals' and dot strip's scales; in the list, keeping the rows whose server labels carry the picked
   label; in the session comparison folding one-sided runs and hiding the
-  same actions; in the search, merging the server's groups as they arrive, filtering the server's
+  same actions; in the Overview the per-call bars' heights and splitting a path into folder and file name;
+  where a chart's compaction or model-switch labels go (rows, a short form, or none — `chartLabels.ts`); in the search, merging the server's groups as they arrive, filtering the server's
   vocabulary by what is typed for suggestions and finding the token under the caret — input editing; the
   server parses the query that is searched);
   writes outside `dataDir` and the asking workspace's artifacts folder (`<artifacts>/session-insights/`,
@@ -137,12 +144,27 @@ only through host-injected locators.
   index at once instead of on its own schedule. States: loading, empty (this project offers *Show all projects*), coded error
   (`EXTENSION_DISABLED`, `UNKNOWN_EXTENSION_QUERY` → update notice, anything else → *Retry*), version
   notice.
+- **Tabs.** *Sessions · Days · Insights* (the extension's `Tabs`), opening on Sessions; the scope switch
+  and the search field stay in the toolbar for all three, the label filter for Sessions only. *Insights*
+  carries a badge with the scope's visible findings (coloured by the most severe, the tooltip counting
+  them by severity, none at 0 or while unknown): the panel asks `findings.list` itself (mount, scope,
+  *Refresh*, with the statistics' backoff) and hands the one answer to *What to do*, so a *Hide* lowers
+  the badge without asking again. Labelled tabs replaced the table / calendar / chart icon buttons (user
+  decision 2026-11-22, option 2A).
+- **View state.** The panel saves its tab, search, scope, sort, open groups, label and *Show sessions*
+  filters, ticks and every Insights option through `PanelHost.saveViewState` on each change and reads
+  `viewState` back field by field on mount, so a tab brought back keeps its place and one malformed field
+  falls back alone. Another panel can ask it for a tab and Insights section (`listIntent.ts`: a pending
+  request on mount, else a subscription); the request wins over the saved state.
 - **Table.** A native `<table>`: one project reads as a flat list, all projects group by project in the
   server's order with sessions outside every project last; the first three groups start open. Each group
   shows 25 rows and a *Show N more* line instead of virtualization, so the DOM stays bounded while table
   semantics and per-figure tooltips stay cheap. Seven figure columns sort (descending first, missing
-  values last, the server's order between ties); the sort applies within groups.
-- **Width.** Every column shows without sideways scrolling down to a 900 px panel (the default center
+  values last, the server's order between ties); the sort applies within groups. Figure tooltips close as
+  the pointer leaves the figure and never take the pointer (`disableHoverableContent`, and the tooltip and
+  Radix's positioning wrapper pass it through), so a tooltip never covers a click on the next row;
+  keyboard focus still opens them.
+- **Width.** A 28 px checkbox column comes first. Every column shows without sideways scrolling down to a 900 px panel (the default center
   area at 1920 px with both side panels open is about 955 px); only below 880 px does the table scroll. The
   Session column takes what the fixed columns leave and truncates (the full title stays in its `title`).
   Start reads day and time within the current year and the date alone before it; the figure's tooltip
@@ -151,11 +173,12 @@ only through host-injected locators.
   figure or header too wide for its column ends in "…" rather than being clipped or overlapping.
 - **Labels in the rows.** The user's labels show as chips under the name (three, then "+N") and a tag
   button after the compare button opens the labels editor (filled when the session has labels or a note).
-  The toolbar's label filter (beside the mode buttons, with the table only) lists the labels in use with
+  The toolbar's label filter (Sessions only) lists the labels in use with
   their sessions; picking one filters the table through the filter bar ("Label: good · N sessions").
-- **Keyboard.** One roving tab stop enters the body; arrows, Home/End (with ⌘/Ctrl: the grid's ends) and
-  PageUp/PageDown move between the session name, *Open analysis*, the compare and labels buttons and the
-  figure buttons. Focusing a figure
+- **Keyboard.** One roving tab stop enters the body (the first row's checkbox); arrows, Home/End (with
+  ⌘/Ctrl: the grid's ends) and PageUp/PageDown move between the checkbox, the session name, *Open
+  analysis*, the labels button and the figure buttons. Unmodified Space ticks the row from any cell (Enter
+  still acts); Enter on a checkbox opens the comparison when exactly two are ticked. Focusing a figure
   opens its tooltip. The session name is the row's *Open chat* button (inert, `aria-disabled`, for a
   removed workspace or a session outside every project), and Enter on any figure of an openable row opens
   it too. *Open analysis* (an icon button beside the name) opens the `session` panel for any row, removed
@@ -175,21 +198,21 @@ only through host-injected locators.
 
 ## Statistics
 
-- **A third list mode.** The toolbar's chart button switches the list panel to *Statistics* with five
-  sections (*What to do*, *Usage and cost*, *Hotspots*, *Sequences*, *Compare*) over the same scope switch.
-  Only the shown section asks its query (`findings.list`, `stats.usage`, `stats.hotspots {sort}`,
+- **The Insights tab.** Five sections as tabs (*What to do*, *Usage and cost*, *Hotspots*, *Sequences*,
+  *A/B*), opening on What to do, over the same scope switch. *A/B* is the slice comparison, renamed so
+  "Compare" means only two sessions (option 1A; the query stays `slices.compare`). Besides the badge's
+  `findings.list` (*Panel*), only the shown section asks its query (`stats.usage`, `stats.hotspots {sort}`,
   `stats.sequences`, `slices.compare {by, a, b}`), re-asked after 1 s, 2 s, then every 5 s while the index
   is not `ready` or some session has no digest at all (`ready < total`; a progress line names how many),
   and never while the document is hidden (a due poll waits for its return). Sessions only being updated
   (`stale`: a live session counted from its previous revision) read "updating N sessions" beside the
   figures and keep nothing polling. A scope, option or refresh change keeps the last answer on screen
   (`busy`): the section's own controls stay, and only its results show a skeleton (the hotspots' table
-  under another sort, the comparison under another slice). The switch between the five sections is a
-  toolbar of toggle buttons, not tabs.
+  under another sort, the comparison under another slice).
 - **Show sessions.** A finding's *Show sessions*, a usage row's name, a hotspot's *Show sessions*, a
   transition cell's or failing call's sessions and a compared metric's sessions switch
-  to the table filtered to those sessions (by the server's session indices), named in a filter bar with
-  *Show all sessions*; switching scope or mode drops the filter. A row stays a list row: the filter only
+  to the Sessions tab filtered to those sessions (by the server's session indices), named in a filter bar with
+  *Show all sessions*; switching scope or to another tab drops the filter. A row stays a list row: the filter only
   hides others.
 - **Jump to a call.** A finding's session chip opens that session's analysis at its first linked call:
   the list panel records the event in a module the two panels share (`focus.ts`) and opens the session
@@ -245,10 +268,13 @@ only through host-injected locators.
   recovery in the success colour, into a failure in the error colour, else the source's colour), the
   outcome labels with counts and shares, the counting note, the most failing tools and commands with an
   outcome bar and recovered share (a click shows their sessions), and the server's real recovery example.
-- **Compare** (`CompareView`): slice A and B by model (two pickers over the sessions' main models), before
+- **A/B** (`CompareView`): slice A and B by model (two pickers over the sessions' main models), before
   / after a day (a date field committed on blur or Enter, so typing a date asks nothing; B starts on it), by project, by the user's label (two pickers over the
   scope's labels, B also "the rest"; with no labels yet a line says where to add them), or by a text
-  filter, kept as the fallback (two fields; an empty B is the rest); the server picks defaults on first open. The A / B chips with their session counts and the
+  filter, kept as the fallback (two fields; an empty B is the rest; *Apply* asks); the server picks defaults on first open.
+  Each picker shows the other side's choice disabled, so a slice is never compared with itself, and a ⇄
+  between the pickers swaps model, project, label and text sides in one click (not "the rest", not
+  before / after). The A / B chips with their session counts and the
   method line, then a table per metric — A, B (provenance tooltips; heuristic retries and approximated
   active time badged), Δ with its relative change and the 95 % interval, the interval against zero as a
   mini chart, and the verdict pill: *B better* / *B worse* (success / error), *B higher* / *B lower* for
@@ -261,10 +287,10 @@ only through host-injected locators.
 
 ## Search
 
-- **A field in the toolbar, not a fourth mode button.** The list panel's toolbar holds the search field
-  (`SearchBox`) after the mode buttons; `/` focuses it from anywhere in the panel outside a text field.
-  Typing switches the body to the search results (`SearchView`); Esc clears the field and returns to the
-  previous mode, a mode button leaves the search. The field is a `combobox`: for the filter under the
+- **A field in the toolbar, not a fourth tab.** The list panel's toolbar holds the search field
+  (`SearchBox`) after the tabs and the scope switch; `/` focuses it from anywhere in the panel outside a
+  text field. Typing replaces the tab's body with the search results (`SearchView`) while the tab stays
+  selected; Esc clears the field and returns to the tab, and clicking a tab leaves the search. The field is a `combobox`: for the filter under the
   caret it lists the scope's values from the server's vocabulary with their event counts (`model:` → the
   models, `error:` → yes, no and the error clusters, `file:` → workspace-relative paths, `label:` → the
   user's labels), a bare word
@@ -293,10 +319,19 @@ only through host-injected locators.
 
 ## Session comparison
 
-- **Picking two sessions.** Each list row has a compare button beside *Open analysis* (a grid column of
-  its own): the first click marks that session and shows a bar naming it with *Cancel*, a click on another
-  row opens `PanelHost.openPanel("compare", { a, b }, "A ↔ B")` — one tab per ordered pair. Switching scope
-  cancels.
+- **Select and compare** (user decision 2026-11-22, option 1A). A checkbox starts each row, shown on
+  hover, on focus within the row and while checked. Ticks are kept by session id with a snapshot of the row
+  (title or first prompt, start, calls, labels), so they survive filters, search and scope switches and the
+  bar still names a pick filtered out of view; only *Clear* or Esc (focus in the list or bar, not in a
+  field) drops them. A sticky bar under the table reads "1 session selected · tick one more", "2 sessions
+  selected · A ⇄ B · Compare · Clear" (A and B in tick order, ⇄ swaps them) or, with three or more, a
+  disabled *Compare* and "Pick exactly two". *Compare* or Enter opens `PanelHost.openPanel("compare",
+  { a, b }, "A ↔ B")` — one tab per ordered pair. The row's compare button and the two-click picking bar
+  were removed: picking took two clicks on a small button and shared its name with the slice comparison.
+- ***Compare with…*** in a session tab's header (`ComparePicker`): a searchable popover over `sessions.list`
+  for this project or all projects, newest first, the current session excluded and named as A; typing
+  filters the rows by title, first prompt or label (presentation), ↑/↓, Enter and Esc work, and the pick
+  opens the same comparison tab with this session as A.
 - **The tab** (`ComparePanel`): both sessions' header cards (`session.summary`; start, turns, calls,
   failures, tokens, recorded cost, active time, subagents, outcome, every figure with its provenance), a
   strip of both sessions' turns sized by calls with the turn pairs as bands labelled *first turns* or the
@@ -318,18 +353,27 @@ only through host-injected locators.
   the shell keeps one tab per (extension, panel, params) and names it after the session, so two sessions
   compare side by side and a reload restores them. An in-panel route was rejected: it would lose the list
   state, show one session at a time and persist nothing.
-- **Header** from `session.summary`: the title (else the quoted first prompt), project › workspace with
-  the live and removed badges, start, wall time (first to last entry, `counted`), active time
-  (`approximated`), tokens, cost by the headline rule with the "+$X subagents outside pi's total" line, the
-  models and the outcome, every figure with the list's provenance tooltip, the user's labels as chips and
-  their note (three lines, the rest in its title), and *Labels* (the editor), *Export* and *Open chat*
-  (disabled with a reason when the workspace is not open).
-- **Sections.** A tab strip below the header: *Trace*, *Turns*, *Timeline*, *Subagents*, *Errors*,
-  *Context*, *Why expensive*, *Files* — the extension's one `Tabs` component (one tab stop, ←/→ wrapping,
-  Home/End, the tab panel labelled by the selected tab), as are the call details' tabs and the usage
-  tables. The panel loads the
-  trace once for every section, `session.analysis` once its last page arrived (bands, filters, badges and
-  the errors section), `session.timeline` once a card or timeline section first opens,
+- **Header** from `session.summary`, one 40 px row (user decision 2026-11-22, option 5A): the title (else
+  the quoted first prompt; truncated, the full text in its title), the user's labels as chips, the note
+  as an icon whose tooltip holds it (a click opens the editor), project › workspace with the live and
+  removed badges, then figure chips — start, wall time (to the last work, `counted`), active time
+  (`approximated`), tokens, cost by the headline rule (the subagents outside pi's total in its tooltip and
+  a small chip beside it), the outcome and the main model's short name with "+N" (every id in its tooltip)
+  — each with the list's provenance tooltip, and *Compare with…*, *Labels*, *Export* and *Open chat*
+  (disabled with a reason when the workspace is not open). The row measures itself (a `ResizeObserver`,
+  not a container query, because the "⋯" popover renders outside it and must list exactly what the row
+  hides): narrower, start and the model go first, then tokens, wall, active and the outcome, then the
+  crumb and the actions; cost and one label chip always stay. In a chat pane *Open chat* is gone and the
+  row ends with ⤢ *Open as tab* and × (`PanelHost.openAsTab` / `closePane`), each saving the view first.
+- **Sections** (user decision 2026-11-22, option 3A). A tab strip below the header: *Overview*, *Trace*,
+  *Subagents*, *Errors*, *Cost & context*, *Files* — the extension's one `Tabs` component (one tab stop,
+  ←/→ wrapping, Home/End, the tab panel labelled by the selected tab), as are the call details' tabs, the
+  list's tabs and the usage tables. The tab opens on Overview. *Trace* has view modes *Tree | Turns |
+  Timeline* at the start of its toolbar — three views of one chronology sharing the selection; *Cost &
+  context* is one scroll, Why expensive first, then Context with its chart / request-diff switch (the
+  diff in a fixed-height box). Overview needs only `session.overview`; the panel loads the trace on mount
+  for every other section, `session.analysis` once its last page arrived (bands, filters, badges and
+  the errors section), `session.timeline` once the Turns or Timeline mode first shows,
   `session.subagents` once the subagents section does, and `session.context`, `session.cost` and
   `session.files` once their section does, and keeps them across switches. The selection is
   the panel's — an event id — so a step picked in a card is the trace's selected row and the timeline's
@@ -340,7 +384,32 @@ only through host-injected locators.
   again on the next expand, and loads still running when the tab closes are aborted. The panel's async
   loads share one keyed hook (`useKeyedQuery`: a new key aborts the previous load; a `pending` answer is
   asked again with the backoff), its header and data
-  hooks live beside it (`Header.tsx`, `hooks.ts`).
+  hooks live beside it (`Header.tsx`, `hooks.ts`), with the section routing in `navigation.ts`.
+- **Overview** (`OverviewView`, `overview/`): six cards from one `session.overview` answer, two columns
+  from 48rem and one below (a container query, so the same view fits a chat pane) — what happened (the
+  outcome sentence with turns, calls, failures and recoveries and the wait for the user, the activity
+  strip, plan steps with status, failures and spend, skills loaded), why it cost what it did (the cost
+  section's one-line diagnosis template, shared from `cost/diagnosis.ts`, its evidence chips and a
+  per-call bar chart, then this session's findings as one sentence each), errors (the highlighted chain's
+  attempts and error line), context and cache, files (up to five changed or failed), and subagents and
+  turns. Every figure keeps its provenance tooltip; each card has an empty state. A card's link opens its
+  section through `OverviewLink` — a plan step or the activity selects its calls in the trace (a removable
+  "N calls from the overview" chip), a chain opens that chain's detail, a file that file, Context lands on
+  the context half of *Cost & context* — and *What to do* asks the list for Insights → What to do
+  (`listIntent.ts`) before `openPanel("sessions")`. It is asked again (1 s, 2 s, then every 5 s) while the
+  session is `pending` or the findings are still being counted.
+- **View state.** Each tab and chat pane keeps the section, trace mode, selection, folds, the trace's top
+  row, the context's chart or diff, the details' tab, the picked chain and file through
+  `PanelHost.saveViewState` (250 ms after the last change, on unmount and before ⤢ / ×) and restores them
+  from `viewState` on mount, so a tab brought back reopens where it was left; a pending focus request
+  (`focus.ts`) wins over a restored selection, and a selection made outside the tree clears the saved top
+  row.
+- **Beside the chat** (`host.placement === "chatPane"`, about 500 px wide): the call details stack under
+  the tree and its Gantt (Turns, Timeline and Errors stack too). A pick the user makes in the tree, the
+  turn cards or the timeline asks `event.anchor` and calls `PanelHost.showInChat`, so the chat on the left
+  opens the folds around that call, scrolls it into view and highlights it without taking focus; a later
+  pick aborts an earlier ask, the fallback selection on mount is no pick, and subagent events have no place
+  in the parent chat. The details' *Open in chat* reads *Show in chat* there, then "shown at left".
 
 ## Labels and notes
 
@@ -392,7 +461,10 @@ only through host-injected locators.
   (`retryWithBackoff`, shared with `usePolled`) — as are the comparison tab's cards and alignment).
   Turns start collapsed when the whole trace (`meta.total` of the first page) holds over 2,500 events, so
   neither later pages nor a nested subagent transcript collapse an open tree; a jump to an event on a
-  page still to come stays pending and opens its ancestors once it arrives. Bodies come one event at a time from `event.get` when a row is
+  page still to come stays pending and opens its ancestors once it arrives; a focus jump (a finding chip,
+  a search hit, a comparison call, an Overview link) lands in the Tree mode and retries the scroll each
+  frame for about a second until the selected row is fully in view, so a row on a later page or under
+  ancestors still opening is not left out of sight. Bodies come one event at a time from `event.get` when a row is
   selected; the search box asks `trace.search` (debounced, two characters at least) and highlights the
   returned ids.
 - **Tree column.** react-virtuoso with fixed 24 px rows: turn (a prompt, or a completion that woke the
@@ -498,8 +570,7 @@ only through host-injected locators.
 
 ## Day view
 
-- The list's toolbar switches between the table and the day (icon buttons beside the scope switch).
-  `day.timeline` answers the scope's sessions started on one day of the host's time zone, the latest day
+- The list's *Days* tab: `day.timeline` answers the scope's sessions started on one day of the host's time zone, the latest day
   with a session first; previous and next jump between days that have sessions, and the zone is named.
   It is re-asked with the statistics' backoff while the index is not `ready` (never in a hidden tab), and
   keeps the shown day while another loads.
@@ -550,13 +621,17 @@ only through host-injected locators.
 
 ## Context and cache
 
+The second half of *Cost & context*.
+
 - `session.context` drives figures (peak with its share of the window, average, cache-read share, misses
   with the tokens written again, compactions), the estimate note (badged; it names the sessions whose
   system prompt was not persisted) and a chart: per call, the categories stacked bottom up in prompt order
   (tools, system prompt, skills list, summaries, your and extension messages, replies, tool results,
   thinking), the cache-read level as a dashed line, each model's context window as a grey dashed line
   (dotted when it is the largest observed rather than the host's), compaction and model-switch rules
-  with their labels as SVG text (`compaction 977k → 68k (−93%)`), a miss row of triangles (the only
+  with their labels as SVG text (`compaction 977k → 68k (−93%)`) on up to three rows — a label that would
+  overlap its neighbour moves to a free row, then shortens (`977k→68k`, then `−93%`), and one that still
+  does not fit is dropped while its rule stays (`chartLabels.ts`, shared with Why expensive's two rows), a miss row of triangles (the only
   error colour) and a cache strip (read / written / uncached on the sequential ramp, its own *Cache*
   legend group; the request diff's share bars use the same steps). It is canvas with a pixel-column LOD (each column draws its largest call; a miss inside
   always marks it), an overview strip whose drag picks a range, Ctrl/⌘/Alt+wheel zoom, Shift+wheel and
@@ -577,6 +652,8 @@ only through host-injected locators.
   read-only reconstruction that sent nothing (C11).
 
 ## Why expensive
+
+The first half of *Cost & context*.
 
 - `session.cost` drives a one-line diagnosis — a fixed template per kind (`longContext`, `cacheRewrites`,
   `manyCalls`, `spread`, `none`) filled with the server's figures and a focus clause (the two costliest
@@ -627,7 +704,7 @@ only through host-injected locators.
 - **Cut text** keeps the server's cut visible where it happened (70 % head, 30 % tail for tool output)
   with the omitted lines and characters and the original length.
 - **What happened next:** the next three calls after the row's own subtree, as links.
-- **Open in chat** asks `event.anchor` for the host's position of the event's message and calls
+- **Open in chat** (in a tab; *Show in chat* beside the chat, *Session view*) asks `event.anchor` for the host's position of the event's message and calls
   `openChat` with it and, for a tool call, its `toolCallId`; the chat lands on the tool's row (or the
   activity row grouping it) and says so when it can only show the nearest message.
 
@@ -685,6 +762,16 @@ only through host-injected locators.
   attribution stays (xyflow asks that only Pro subscribers hide it), restyled with token utilities on the
   map's frame (`[&_.react-flow\_\_attribution]:…`); it is a link that leaves only when clicked. "What follows an error" stays hand-laid
   SVG (no unmaintained sankey dependency); the matrix publishes the sequential ramp's first four steps.
+- **Beside the chat is a pane inside the chat's tab, not a second center group** (user decision
+  2026-11-22). A second group would show two tab strips, keep a stale analysis when the user switches
+  chats and leave the group behind; the SDK's generic `chatPane` keeps one pane per chat, with its own open
+  state and width, and the list and closed chats still open a tab because there is no chat to sit beside.
+- **The panels are wide and hide the panes once, on open** (option 6B): every open of a Session insights
+  tab or pane hides the side and bottom panes through the shell's `hideAllPanels`; nothing restores them on
+  its own, and *Hide all panels* (Ctrl+Shift+F12 / ⌘⇧F12) brings back exactly what was hidden.
+- **The Overview is one query, not six.** `session.overview` composes the sections' own builders from one
+  trace snapshot ([[module-pi-session-insights]] § Decisions); fanning out six existing queries from the
+  web would take six round trips and could show cards from different revisions.
 - **A two-session diff is its own panel, not a section.** It reads two sessions, so it fits neither
   session tab; `compare {a, b}` keeps one tab per ordered pair through the generic extension tab and
   restores on reload.
@@ -720,7 +807,10 @@ label filter, `label:` and the comparison by label, and the HTML, Chrome-trace a
 Artifacts with the post-export secret check. S11 (shipped): the
 vanilla-pi `/insights` command in the core package, which left `private` and passes the parity gate with
 its first changeset — publishing it is a human release step — and the host keeping a user's install of it
-out of ThinkRail sessions.
+out of ThinkRail sessions. S12 (the UX follow-up to #1417): select-and-compare and *Compare with…*, the
+list's Sessions · Days · Insights tabs with the A/B rename, the Overview and six sections, the one-line
+header, the analysis beside its chat (the SDK's `chatPane`), wide panels with the shell's *Hide all
+panels*, per-tab view state, and the ten defects found while recording the tutorial videos.
 
 Accepted view choices for the remaining slices (product walkthrough, all deterministic, no LLM):
 - Trace: a tree column + Gantt with todo and skill bands, switchable with per-turn summary cards; call

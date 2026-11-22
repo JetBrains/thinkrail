@@ -35,13 +35,14 @@ post-export secret check, redaction, and the provenance of every figure it repor
 
 - **`./core`** is the result contract. It has **no runtime imports**, only types and constants, because
   the ThinkRail web half type-imports it and a type graph that reaches `node:` breaks the browser's type
-  check. It holds the payload version (`SESSION_INSIGHTS_API_VERSION`, 10 since the payloads carry the
+  check. It holds the payload version (`SESSION_INSIGHTS_API_VERSION`, 11 since `session.overview`
+  joined; 10 since the payloads carry the
   figures the web used to derive — a call's `CallUsage.context`, the timeline's `peak`, `waitsTotal` and
   `llmCalls`, the analysis' `toolFailures`, a run's `readDelayMs`, a day row's `cacheMisses` — and
   `newerRevision`, `DigestProgress.stale` and the summary's, trace's and alignment's `pending` are always
   present; the list's `fresh` and the pinned
   `revision` / `revisions` are optional params),
-  the query names (`SESSIONS_LIST_QUERY`, `SESSION_SUMMARY_QUERY`,
+  the query names (`SESSIONS_LIST_QUERY`, `SESSION_SUMMARY_QUERY`, `SESSION_OVERVIEW_QUERY`,
   `SESSION_TRACE_QUERY`, `EVENT_GET_QUERY`, `EVENT_ANCHOR_QUERY`, `TRACE_SEARCH_QUERY`,
   `SESSION_TIMELINE_QUERY`, `DAY_TIMELINE_QUERY`, `SESSION_ANALYSIS_QUERY`, `ERROR_DETAIL_QUERY`,
   `SESSION_SUBAGENTS_QUERY`, `SUBAGENT_GET_QUERY`, `SESSION_CONTEXT_QUERY`, `REQUEST_DIFF_QUERY`,
@@ -52,7 +53,7 @@ post-export secret check, redaction, and the provenance of every figure it repor
   (`TRACE_PAGE_EVENTS`, `TRACE_LABEL_CHARS`, `TRACE_SEARCH_MAX_IDS`, `TRACE_GAP_MIN_MS`, `CACHE_TTL_MS`,
   `TIMELINE_TOOL_TRACKS`, `TIMELINE_SUBAGENT_TRACKS`, `DAY_TICK_MS`, `RETRY_WINDOW_CALLS`,
   `RETRY_SHARED_WORDS`, `ACTIVITY_TICKS`, `EXCERPT_CHARS`, `CHILD_EVENT_PREFIX`, `CONTEXT_CATEGORIES`,
-  `REWORK_CHANGES`, `COST_MOMENTS`, `USAGE_CHART_SERIES`, `SPARK_POINTS`, `USAGE_COMMANDS`,
+  `REWORK_CHANGES`, `COST_MOMENTS`, `OVERVIEW_RULES`, `USAGE_CHART_SERIES`, `SPARK_POINTS`, `USAGE_COMMANDS`,
   `HOTSPOT_FILES`, `HOTSPOT_RULES`, `FINDING_RULES`, `KNOWN_EXIT_CODES`, `ACTIVITIES`,
   `SEQUENCE_RULES`, `COMPARE_RULES`, `ALIGN_RULES`, `SEARCH_FILTER_KEYS`, `SEARCH_RULES`, `LABEL_RULES`,
   `EXPORT_RULES`), the figure model (`Origin`,
@@ -62,7 +63,11 @@ post-export secret check, redaction, and the provenance of every figure it repor
   `BACKGROUND_COMPLETION_MESSAGE`, `WAKE_DELIVERY`, `SUBAGENT_USAGE_KIND`, `UNFINISHED_RUN_STATUSES`,
   `FAILED_RUN_STATUSES`, `SubagentRunRecord`, `TODO_TOOLS`, `TODO_STATUSES`, `TODO_TEXT_GROUP`,
   `TODO_TEXT_ITEM`, `TodoRecord`, `TodoGroupRecord`, `TodoPlanRecord`; *Structural shapes* below), and
-  every query's params and result shapes (the list, `SessionOverview`,
+  every query's params and result shapes (the list, `SessionOverview` (the header row),
+  `SessionOverviewResult` with `SessionOverviewCards` — `OverviewHappened` / `OverviewPlan` /
+  `OverviewPlanStep`, `OverviewCost`, `OverviewErrors` / `OverviewChain` / `OverviewAttempt`,
+  `OverviewContext`, `OverviewFiles` / `OverviewFile`, `OverviewSubagents`, `OverviewTurns`,
+  `OverviewFinding` / `OverviewFindingLink` —,
   the `TraceEvent` union with `TurnTrigger`, `TraceMeta`, `TraceGap`, `EventBody` with `CappedText` /
   `CappedJson`, `ChatAnchor`, `SessionTimeline` with `TurnSummary` / `WaitBand` / `TimelineLanes` /
   `ContextPoint` / `ContextLimit` / `SpendPoint`, `DayTimelineResult` with `DaySession` / `DayTurn` /
@@ -101,7 +106,7 @@ post-export secret check, redaction, and the provenance of every figure it repor
   subagent waves (`buildSessionSubagents`, `buildSubagentDetail`, `parseSubagentParams`,
   `childActivity`, `SubagentActivityCache`, `childTranscriptsOf`), context and cache
   (`buildContextView`), the request diff (`buildRequestDiff`, `parseRequestDiffParams`), why expensive
-  (`buildSessionCost`), the files matrix (`buildSessionFiles`, `buildFileDetail`, `parseFileDetailParams`,
+  (`buildSessionCost`), the Overview (`buildSessionOverview` with `SessionOverviewInput`), the files matrix (`buildSessionFiles`, `buildFileDetail`, `parseFileDetailParams`,
   with an embedder's `ChangeReceipt`s), the statistics (`DigestStore`, `digestOf` / `digestInStages`,
   `buildStatsUsage`, `buildStatsHotspots`, `buildFindingsList`, `parseStatsParams`,
   `parseHotspotsParams`, `parseFindingsHideParams`, `setFindingHidden`, `buildStatsSequences`,
@@ -255,7 +260,13 @@ post-export secret check, redaction, and the provenance of every figure it repor
   outcomes never enter the core: the list builder takes `place(cwd)` and `status(sessionId)` callbacks.
 - **Active time is approximated** as the sum of gaps under five minutes between each entry and the
   latest earlier timestamp, and the start time is counted from entry timestamps (the header's when there
-  are none). The summary reads neither `durationMs` nor message timestamps; the trace does (below).
+  are none). **A session ends at its last work** (`recordsActivity`): model and thinking-level changes,
+  names, labels, extensions' private `custom` entries and system-prompt messages record settings, not
+  work, so the end is the last other entry and a settings entry's gap counts as active only once work
+  follows it; a session of settings alone ends at its start. A restored chat appends a
+  `thinking_level_change` stamped with the day it was reopened, which read as a 725-day wall time
+  (followup #2 of #1417); the host writing it is a separate host issue. The trace's `meta.end` follows the
+  same rule, while the settings marks themselves stay in the trace and may lie after it. The summary reads neither `durationMs` nor message timestamps; the trace does (below).
 - **The trace is the active branch, in pre-order.** The leaf is the file's last entry, as pi loads it;
   abandoned branches are counted (`offBranch`), not shown. Events are a prompt's (or a waking completion's) `turn`, an assistant
   message's `llm` call, one `tool` per issued call (id `tool:<assistant entry>:<call index>`, a call
@@ -480,7 +491,8 @@ post-export secret check, redaction, and the provenance of every figure it repor
   each child ran, never stacked into the headline. The axis is every calendar day of the range; tables'
   sparklines fold days into at most `SPARK_POINTS` points. Markers: the first day of a model that never
   records cost after priced spend (`unpricedModel`), the day a priced model starts recording $0 for good
-  (`costStopped`), the first day with subagent spend. Rates carry a 95 % Wilson score interval (a tool's
+  (`costStopped`), the first day with subagent spend — none before the second day with spend, since a
+  change needs a day before it to change from. Rates carry a 95 % Wilson score interval (a tool's
   failure rate over the calls that ran, its calls without a result counted apart as `notRun`); durations
   are medians and means of pi's `durationMs` where recorded (`notMeasured` otherwise); a model's window is
   the host's, or the largest context seen (`approximated`) when the host knows none or a smaller one; a
@@ -524,8 +536,9 @@ post-export secret check, redaction, and the provenance of every figure it repor
   skill; `mcp__*` / `mcp_*` → mcp; anything else → other. A shell call goes by its head: words such as
   `test`, `vitest`, `jest`, `pytest`, `playwright`, `e2e` → test; `lint`, `eslint`, `biome`, `prettier`,
   `ruff`, `clippy`, `fmt`, `format` → lint; `build`, `tsc`, `typecheck`, `compile`, `make`, `gradle`,
-  `mvn` → build; any other `git` / `gh` command → git; then the head's reading family (search, read, edit)
-  or run. A transition is a call and the next one in the same session (across turns); a cell is marked
+  `mvn` → build; any other `git` / `gh` command → git; a command that writes into a file — an output
+  redirect to a real file, `tee`, in-place `sed` / `perl`, quoted text and heredoc bodies ignored
+  (`shellWrites`) — → edit; then the head's reading family (search, read, edit) or run. A transition is a call and the next one in the same session (across turns); a cell is marked
   when ≥ `errorMarkShare` of it starts at a failed call. Each cell names the sessions where it occurs most
   with their first occurrence, and its example is the first occurrence in the leading session with a call
   on each side. The process map's thresholds (`edgeShares`) keep edges with at least `ceil(share ×
@@ -554,9 +567,11 @@ post-export secret check, redaction, and the provenance of every figure it repor
   total variation (unless cut by them). Each metric carries every session behind it and its value.
 - **Two sessions align turn pair by turn pair** (`sessions.align`). The first turns pair; later turns pair
   by a weighted LCS over prompt-word Jaccard (≥ `turnSimilarity`, words hashed while the trace is
-  collected). Inside a pair, calls match only within one class (`skill:<name>`, `file` for reads and
-  reading commands, `search`, `git checkout` for checkouts, switches and worktrees, a git / gh / package
-  manager command by its head, any other command by its head, else the tool) and score 1 + 3 × Jaccard of
+  collected). Inside a pair, calls match only within one class, following the call's activity
+  (`skill:<name>`, `file` for reads and reading commands, `edit` for edits, writes and shell commands that
+  write into a file, `search`, `git checkout` for checkouts, switches and worktrees, a git / gh / package
+  manager command by its head, any other command by its head, else the tool), so a `cat >> tests/x.py`
+  never pairs with a `read README.md` as similar (followup #10 of #1417) and score 1 + 3 × Jaccard of
   their objects — file names, `sed` ranges and camelCase / CONST_CASE names hashed from the full arguments
   while the trace is collected, minus objects in more than `commonObjects` of both sessions' calls. A
   match is `same` when its objects overlap ≥ `sameObjects`, the two calls are identical (tool and
@@ -721,6 +736,16 @@ post-export secret check, redaction, and the provenance of every figure it repor
   busy CI runner does not, and a test over the large session has a 60 s timeout so that ceiling, not the
   runner's default, bounds it. A perf run passes on the development machine (Bun 1.4); the export and
   redaction figures it measured are above.
+- **The Overview is one composition from one trace snapshot** (`session.overview`,
+  `buildSessionOverview`). It reuses the sections' own builders — summary, timeline, analysis, cost,
+  context, files and subagents — on one revision, so its cards never disagree, and carries only what the
+  cards show (`OVERVIEW_RULES`: twelve plan steps, five files, 120 per-call bars — past that each bar is
+  the costliest of its run of calls). Recovered failures count the failed attempts of chains that
+  recovered and their time sums those chains; the highlighted chain is a tool chain first, then the one
+  with most attempts, then the earliest. Plan steps leave out removed ones and keep the plan's numbering.
+  Its findings are `findings.list` over the session's project, keeping those that link this session and
+  are not hidden; until the index and the project's digests are ready they are `null` with the
+  `DigestProgress`, so the cards never wait on the statistics.
 - **`/insights` is a text report over the same queries, nothing of its own** (S11). The command builds
   the list, `stats.usage` and `findings.list` for a scope — sessions whose header `cwd` is pi's current
   folder (resolved; case-folded on Windows), or every folder with `--all`, each folder a list "project"
@@ -731,7 +756,7 @@ post-export secret check, redaction, and the provenance of every figure it repor
   at most; ids show as the shortest unique prefix of at least eight characters. Provenance becomes text
   marks with a legend of the marks used: `≈` approximated, `≥` partially recorded (a lower bound), `?`
   not recorded or not measured; heuristic findings say "(heuristic)". Titles, prompts, quotes and paths
-  go through the redactor.
+  go through the redactor, the written exports' paths included.
 - **Vanilla locations under the agent dir, nothing under `~/.thinkrail`** (Decision 20). Sessions from
   `<agentDir>/sessions`, subagent transcripts from `<agentDir>/delegation/default/<parent>/`, the summary
   cache and the (read-only) hidden-findings document in `<agentDir>/session-insights/cache/`, exports
