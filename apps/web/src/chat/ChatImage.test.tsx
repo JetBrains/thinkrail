@@ -69,6 +69,11 @@ describe("image load state", () => {
 			`http://host.test${REF}?retry=epoch-4`,
 		);
 
+		const tokened: ChatMedia = { ...media, resolveUrl: (ref) => `http://host.test${ref}?token=t` };
+		expect(chatImageUrl(refImage, tokened, afterResync.query)).toBe(
+			`http://host.test${REF}?token=t&retry=epoch-4`,
+		);
+
 		const loaded = imageLoadSucceeded(failed, 4);
 		expect(imageLoadView(loaded, 4)).toEqual({ query: "epoch-4", unavailable: false });
 		expect(imageLoadView(loaded, 5)).toEqual({ query: "epoch-4", unavailable: false });

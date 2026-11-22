@@ -15,7 +15,7 @@ const IMAGE_DATA =
 	"iVBORw0KGgoAAAANSUhEUgAAAKAAAABaBAMAAADN6EBhAAAALVBMVEURExgcJx1KfzF52UaN/0952kZKfzEcJx09Zyw9ZyxrvUAuSiUuSiVqvUBGeC8W2BlUAAAA4UlEQVRYw2NgGAWjYLAARmUXioFrOpKBLS7UABPg5nFSxTwXD7iBJdQx0EUAZmAKlQxUgBkYQiUDDWAGgjirKUsnPFeAZjggGehHacrjQzPwAsVpeQmqgQcoNnALqoGU5zaWUQOHhoHkZjmHUQNHDRzMBo4WDqMGDrECdtTAUQOHjoGjhcOogUO0BTtq4KiBg9/A0cJhmBu4gWIDj6AauIBiA6/QeOzL5Q5l5nEvQTbQhErjhwEwA1WoZGACzEARKhlYADOQgzrmeSKCdApVDGxAGMieSrlxzoqjMxajgFwAAJtSvgebw8WoAAAAAElFTkSuQmCC";
 
 const repoCwd = () => realpathSync(E2E_FIXTURE_REPO);
-const IMAGE_REF_URL = /\/images\/[A-Za-z0-9._-]+\/[0-9a-f]{64}$/;
+const IMAGE_REF_URL = /\/images\/[A-Za-z0-9._-]+\/[0-9a-f]{64}\?token=[A-Za-z0-9_-]+$/;
 
 async function expectDecoded(image: Locator): Promise<void> {
 	await expect
