@@ -56,7 +56,7 @@ export function OverviewCards({
 			aria-label={t("sessionInsights.overview.region")}
 			className="@container min-h-0 flex-1 overflow-y-auto"
 		>
-			<div className="grid grid-cols-1 items-start gap-12 p-12 @3xl:grid-cols-2">
+			<div className="grid grid-cols-1 gap-12 p-12 @3xl:grid-cols-2">
 				<HappenedCard {...props} />
 				<CostCard {...props} />
 				<ErrorsCard {...props} />

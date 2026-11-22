@@ -328,7 +328,7 @@ function ActivityStrip({ cards, onOpen }: { cards: SessionOverviewCards; onOpen:
 					}
 				/>
 			</CardLink>
-			<span className="flex justify-between gap-8 tr-text-caption text-text-subtle tabular-nums">
+			<span className="flex justify-between gap-8 tr-text-metadata text-text-subtle tabular-nums">
 				<span>{formatClock(locale, start.value, true)}</span>
 				<span>{span.value === null ? null : formatDuration(t, span.value, true)}</span>
 				<span>{formatClock(locale, end.value, true)}</span>
@@ -454,7 +454,7 @@ export function HappenedCard({ cards, sources, onOpen }: CardProps) {
 							view("plan", plan.total, exact(plan.total)),
 						]}
 						sources={sources}
-						className="tr-text-caption text-text-subtle uppercase"
+						className="tr-text-caption text-text-subtle"
 					>
 						{t("sessionInsights.overview.plan.title", {
 							done: formatCount(locale, plan.done.value ?? 0),
@@ -467,7 +467,7 @@ export function HappenedCard({ cards, sources, onOpen }: CardProps) {
 						))}
 					</ol>
 					{plan.more > 0 ? (
-						<span className="tr-text-caption text-text-subtle">
+						<span className="tr-text-metadata text-text-subtle">
 							{t("sessionInsights.overview.plan.more", {
 								count: plan.more,
 								n: formatCount(locale, plan.more),
@@ -522,7 +522,7 @@ function CostBars({ cards }: { cards: SessionOverviewCards }) {
 			>
 				<path d={path} className="fill-series-3" />
 			</svg>
-			<figcaption className="flex flex-wrap gap-x-8 tr-text-caption text-text-subtle tabular-nums">
+			<figcaption className="flex flex-wrap gap-x-8 tr-text-metadata text-text-subtle tabular-nums">
 				<span>
 					{t(
 						headline === "tokens"
@@ -767,7 +767,7 @@ export function ErrorsCard({ cards, sources, onOpen }: CardProps) {
 								{chain.attempts.map((attempt, at) => (
 									<span key={attempt.eventId} className="inline-flex min-w-0 items-center gap-4">
 										{at > 0 ? (
-											<span className="inline-flex items-center gap-2 tr-text-caption text-text-subtle">
+											<span className="inline-flex items-center gap-2 tr-text-metadata text-text-subtle">
 												{(chain.between[at - 1] ?? 0) > 0 ? (
 													<span>
 														{t("sessionInsights.errors.between", {
@@ -995,8 +995,12 @@ export function FilesCard({ cards, sources, onOpen }: CardProps) {
 							count: totals.changed,
 							n: formatCount(locale, totals.changed),
 						})}
-						{" · "}
-						<DiffStatBadge added={totals.added} removed={totals.removed} />
+						{totals.added + totals.removed > 0 ? (
+							<>
+								{" · "}
+								<DiffStatBadge added={totals.added} removed={totals.removed} />
+							</>
+						) : null}
 						{totals.failed > 0 ? (
 							<span className="text-feedback-error">
 								{" · "}
@@ -1044,7 +1048,7 @@ export function FilesCard({ cards, sources, onOpen }: CardProps) {
 						})}
 					</ul>
 					{files.more > 0 ? (
-						<span className="tr-text-caption text-text-subtle">
+						<span className="tr-text-metadata text-text-subtle">
 							{t("sessionInsights.overview.files.more", {
 								count: files.more,
 								n: formatCount(locale, files.more),
@@ -1113,14 +1117,14 @@ export function SubagentsCard({ cards, sources, onOpen }: CardProps) {
 						{overview.roles.map((role) => (
 							<span
 								key={role.role ?? ""}
-								className="rounded-sm border border-border-default px-4 tr-text-caption text-text-muted"
+								className="rounded-sm border border-border-default px-4 tr-text-metadata text-text-muted"
 							>
 								{`${role.role ?? t("sessionInsights.overview.subagents.noRole")} ×${formatCount(locale, role.n)}`}
 							</span>
 						))}
 					</span>
 					{overview.failed > 0 ? (
-						<span className="tr-text-caption text-feedback-error">
+						<span className="tr-text-metadata text-feedback-error">
 							{t("sessionInsights.overview.subagents.failed", {
 								count: overview.failed,
 								n: formatCount(locale, overview.failed),
