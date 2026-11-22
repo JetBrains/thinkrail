@@ -800,71 +800,73 @@ export function NewWorkspaceDialog({
 				</div>
 
 				<div className="relative shrink-0">
-					{promptTint ? (
-						<div
-							ref={backdropRef}
-							data-testid="ws-prompt-tint"
-							aria-hidden
-							className="pointer-events-none absolute inset-0 overflow-hidden rounded-sm border border-transparent bg-control-bg"
-						>
-							<div className="w-full whitespace-pre-wrap break-words px-12 py-8 tr-text-ui">
-								{promptTint.map((segment) => (
-									<span
-										key={segment.start}
-										data-tint={segment.tone === "plain" ? undefined : segment.tone}
-										className={cn("text-transparent", promptTintClass(segment.tone))}
-									>
-										{segment.text}
-									</span>
-								))}
+					<div className="relative">
+						{promptTint ? (
+							<div
+								ref={backdropRef}
+								data-testid="ws-prompt-tint"
+								aria-hidden
+								className="pointer-events-none absolute inset-0 overflow-hidden rounded-sm border border-transparent bg-control-bg"
+							>
+								<div className="w-full whitespace-pre-wrap break-words px-12 py-8 tr-text-ui">
+									{promptTint.map((segment) => (
+										<span
+											key={segment.start}
+											data-tint={segment.tone === "plain" ? undefined : segment.tone}
+											className={cn("text-transparent", promptTintClass(segment.tone))}
+										>
+											{segment.text}
+										</span>
+									))}
+								</div>
 							</div>
-						</div>
-					) : null}
-					<Textarea
-						ref={promptRef}
-						data-testid="ws-prompt"
-						value={prompt}
-						disabled={creating}
-						onScroll={(event) => {
-							if (backdropRef.current)
-								backdropRef.current.scrollTop = event.currentTarget.scrollTop;
-						}}
-						{...attachmentPasteDropHandlers(attachedImages, toast.info)}
-						onChange={(e) => {
-							const next = e.target.value;
-							const nextSlotSession = slotSession
-								? applyTemplateSlotEdit(prompt, next, e.target.selectionStart, slotSession)
-								: null;
-							updatePromptDraft(next, nextSlotSession);
-						}}
-						placeholder={t("panels.newWorkspace.promptPlaceholder")}
-						spellCheck={false}
-						rows={6}
-						className={cn("relative min-h-[160px]", promptTint && "bg-transparent")}
-						onKeyDown={(e) => {
-							if (isImeComposing(e.nativeEvent)) return;
-							if (slotSession && !slashCompletion.open) {
-								if (e.key === "Tab") {
-									e.preventDefault();
-									e.stopPropagation();
-									stepPromptSlot(e.shiftKey ? -1 : 1);
-									return;
+						) : null}
+						<Textarea
+							ref={promptRef}
+							data-testid="ws-prompt"
+							value={prompt}
+							disabled={creating}
+							onScroll={(event) => {
+								if (backdropRef.current)
+									backdropRef.current.scrollTop = event.currentTarget.scrollTop;
+							}}
+							{...attachmentPasteDropHandlers(attachedImages, toast.info)}
+							onChange={(e) => {
+								const next = e.target.value;
+								const nextSlotSession = slotSession
+									? applyTemplateSlotEdit(prompt, next, e.target.selectionStart, slotSession)
+									: null;
+								updatePromptDraft(next, nextSlotSession);
+							}}
+							placeholder={t("panels.newWorkspace.promptPlaceholder")}
+							spellCheck={false}
+							rows={6}
+							className={cn("relative min-h-[160px]", promptTint && "bg-transparent")}
+							onKeyDown={(e) => {
+								if (isImeComposing(e.nativeEvent)) return;
+								if (slotSession && !slashCompletion.open) {
+									if (e.key === "Tab") {
+										e.preventDefault();
+										e.stopPropagation();
+										stepPromptSlot(e.shiftKey ? -1 : 1);
+										return;
+									}
+									if (e.key === "Escape") {
+										e.preventDefault();
+										e.stopPropagation();
+										updatePromptDraft(prompt, null);
+										return;
+									}
 								}
-								if (e.key === "Escape") {
+								if (prMenuOpen && prCompletion.handleKeyDown(e)) return;
+								if (slashCompletion.handleKeyDown(e)) return;
+								if (e.key === "Enter" && !e.shiftKey) {
 									e.preventDefault();
-									e.stopPropagation();
-									updatePromptDraft(prompt, null);
-									return;
+									if (submitEnabled && !e.repeat) void create();
 								}
-							}
-							if (prMenuOpen && prCompletion.handleKeyDown(e)) return;
-							if (slashCompletion.handleKeyDown(e)) return;
-							if (e.key === "Enter" && !e.shiftKey) {
-								e.preventDefault();
-								if (submitEnabled && !e.repeat) void create();
-							}
-						}}
-					/>
+							}}
+						/>
+					</div>
 					{prMenuOpen && pullRequests ? (
 						<PullRequestCompletionMenu
 							completion={pullRequests}
