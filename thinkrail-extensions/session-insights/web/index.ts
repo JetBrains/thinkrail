@@ -12,6 +12,7 @@ export default defineWebExtension({
 			icon: RiBarChartBoxLine,
 			scopes: ["project"],
 			rail: { command: OPEN_SESSIONS },
+			wide: true,
 			load: () => import("./SessionsPanel"),
 		},
 		session: {
@@ -22,12 +23,15 @@ export default defineWebExtension({
 				menuLabel: "sessionInsights.session.analyze",
 				params: ({ sessionId }) => ({ sessionId }),
 			},
+			chatPane: true,
+			wide: true,
 			load: () => import("./session/SessionPanel"),
 		},
 		compare: {
 			title: "sessionInsights.compare.title",
 			icon: RiArrowLeftRightLine,
 			scopes: ["session"],
+			wide: true,
 			load: () => import("./compare/ComparePanel"),
 		},
 	},
