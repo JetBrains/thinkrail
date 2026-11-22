@@ -2247,8 +2247,9 @@ export interface FindingsHideResult {
 
 /**
  * What a tool call does, for the action sequences: a fixed vocabulary in display order. Shell commands
- * split by their head (tests, builds, linters, git and gh, other runs; reading, searching and file
- * commands join `read`, `search` and `edit`); a `SKILL.md` read is `skill`; `mcp__*` tools are `mcp`.
+ * split by their head (tests, builds, linters, git and gh, other runs; a command writing into a file
+ * joins `edit`, then reading, searching and file commands join `read`, `search` and `edit`); a
+ * `SKILL.md` read is `skill`; `mcp__*` tools are `mcp`.
  */
 export const ACTIVITIES = [
 	"search",

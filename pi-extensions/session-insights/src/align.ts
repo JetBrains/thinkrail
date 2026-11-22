@@ -16,13 +16,11 @@ import {
 } from "./core.ts";
 import type { CallFacts } from "./facts.ts";
 import { jaccard } from "./repeats.ts";
-import { toolFamily } from "./toolFamily.ts";
 import { isRecord } from "./totals.ts";
 import type { BuiltTrace } from "./trace.ts";
 import { parseRevision } from "./traceQueries.ts";
 
 const SHELL_TOOLS: ReadonlySet<string> = new Set(["bash", "background_command"]);
-const SEARCH_TOOLS: ReadonlySet<string> = new Set(["grep", "find", "ls"]);
 const KEPT_HEADS: ReadonlySet<string> = new Set([
 	"git",
 	"gh",
@@ -67,22 +65,22 @@ export function parseAlignParams(value: unknown): SessionsAlignParams {
 }
 
 /**
- * What matching compares: `skill:<name>` for a `SKILL.md` read, `file` for reads and reading commands,
- * `search` for searches, `git checkout` for checkouts, switches and worktrees, a git / gh / package
+ * What matching compares, so only calls of one activity match: `skill:<name>` for a `SKILL.md` read,
+ * `file` for reads and reading commands, `search` for searches, `edit` for edits, writes and commands
+ * that write into a file, `git checkout` for checkouts, switches and worktrees, a git / gh / package
  * manager command by its head, any other command by its head, else the tool.
  */
 export function alignClass(event: ToolEvent, call: CallFacts | null | undefined): string {
 	if (call?.skill) return `skill:${call.skill}`;
-	if (event.tool === "read") return "file";
-	if (SEARCH_TOOLS.has(event.tool)) return "search";
-	if (!SHELL_TOOLS.has(event.tool)) return event.tool;
+	const shell = SHELL_TOOLS.has(event.tool);
 	const head = event.head ?? "bash";
-	if (/^git (?:checkout|switch|worktree)\b/.test(head)) return "git checkout";
-	if (KEPT_HEADS.has(head.split(" ")[0] ?? "")) return head;
-	const family = toolFamily("bash", head);
-	if (family === "reading") return "file";
-	if (family === "discovery") return "search";
-	return head;
+	if (shell && /^git (?:checkout|switch|worktree)\b/.test(head)) return "git checkout";
+	if (shell && KEPT_HEADS.has(head.split(" ")[0] ?? "")) return head;
+	const activity = activityOf(event, call);
+	if (activity === "read") return "file";
+	if (activity === "search") return "search";
+	if (activity === "edit" && (!shell || call?.writes)) return "edit";
+	return shell ? head : event.tool;
 }
 
 interface SideModel {

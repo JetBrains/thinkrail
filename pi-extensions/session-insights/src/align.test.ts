@@ -42,7 +42,7 @@ function tool(name: string, head?: string): ToolEvent {
 	};
 }
 
-const facts = (skill: string | null): CallFacts => ({
+const facts = (skill: string | null, writes = false): CallFacts => ({
 	key: "",
 	path: null,
 	words: [],
@@ -50,6 +50,7 @@ const facts = (skill: string | null): CallFacts => ({
 	skill,
 	todo: null,
 	edit: false,
+	writes,
 	file: null,
 });
 
@@ -101,6 +102,10 @@ describe("alignment classes", () => {
 		[tool("read"), facts("review-pr"), "skill:review-pr"],
 		[tool("grep"), null, "search"],
 		[tool("edit"), null, "edit"],
+		[tool("write"), null, "edit"],
+		[tool("bash", "cat"), facts(null, true), "edit"],
+		[tool("bash", "rm"), null, "rm"],
+		[tool("bash", "bun test"), facts(null, true), "bun test"],
 		[tool("bash", "git diff"), null, "git diff"],
 		[tool("bash", "git worktree add"), null, "git checkout"],
 		[tool("bash", "gh pr view"), null, "gh pr view"],
@@ -341,6 +346,27 @@ describe("sessions.align", () => {
 			turn: 0,
 		});
 		expect(full.a.side.turns.map((turn) => turn.calls)).toEqual([5, 1, 1]);
+	});
+
+	test("a command that writes into a file pairs with edits, never with a read", async () => {
+		const append = "cat >> tests/test_cli.py <<'EOF'\ndef test_streak():\n    assert True\nEOF";
+		const prompt = "add the streak test";
+		const a = await traceOf("writes-a", [{ prompt, calls: [sh(append)] }]);
+		const read = await traceOf("writes-read", [{ prompt, calls: [rd("README.md")] }]);
+		const edit = await traceOf("writes-edit", [{ prompt, calls: [ed("tests/test_cli.py")] }]);
+		const rows = async (b: Awaited<ReturnType<typeof traceOf>>) => {
+			const full = await alignSessions(a, b);
+			return full.rows.map((row) => [
+				row.op,
+				row.a === null ? null : full.a.steps[row.a]?.klass,
+				row.b === null ? null : full.b.steps[row.b]?.klass,
+			]);
+		};
+		expect(await rows(read)).toEqual([
+			["onlyA", "edit", null],
+			["onlyB", null, "file"],
+		]);
+		expect(await rows(edit)).toEqual([["similar", "edit", "edit"]]);
 	});
 
 	test(

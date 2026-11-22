@@ -19,14 +19,18 @@ const LINT_HEAD =
 const BUILD_HEAD =
 	/(?:^|[\s:])(?:build|tsc|typecheck|compile|make|webpack|gradle|mvn|cmake)(?:[\s:]|$)/;
 
-/** A shell command by its head: tests, linters, builds, git and gh, then the head's reading family. */
-export function shellActivity(head: string | null): Activity {
-	if (!head) return "run";
-	if (TEST_HEAD.test(head)) return "test";
-	if (LINT_HEAD.test(head)) return "lint";
-	if (BUILD_HEAD.test(head)) return "build";
-	const first = head.split(" ")[0] ?? "";
+/**
+ * A shell command by its head: tests, linters, builds, git and gh, then an edit when it writes into a
+ * file, then the head's reading family.
+ */
+export function shellActivity(head: string | null, writes = false): Activity {
+	if (head && TEST_HEAD.test(head)) return "test";
+	if (head && LINT_HEAD.test(head)) return "lint";
+	if (head && BUILD_HEAD.test(head)) return "build";
+	const first = head?.split(" ")[0] ?? "";
 	if (first === "git" || first === "gh") return "git";
+	if (writes) return "edit";
+	if (!head) return "run";
 	switch (toolFamily("bash", head)) {
 		case "discovery":
 			return "search";
@@ -42,7 +46,7 @@ export function shellActivity(head: string | null): Activity {
 /** The activity of a tool call ([[module-pi-session-insights]] § Action sequences documents the map). */
 export function activityOf(event: ToolEvent, call: CallFacts | null | undefined): Activity {
 	const tool = event.tool;
-	if (SHELL_TOOLS.has(tool)) return shellActivity(event.head ?? null);
+	if (SHELL_TOOLS.has(tool)) return shellActivity(event.head ?? null, call?.writes === true);
 	if (call?.skill) return "skill";
 	if (tool === "read") return "read";
 	if (SEARCH_TOOLS.has(tool)) return "search";

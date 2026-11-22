@@ -245,6 +245,30 @@ export function bashHead(command: unknown): string | null {
 	return null;
 }
 
+const QUOTED = /'[^']*'|"(?:[^"\\]|\\.)*"/g;
+const HEREDOC = /(?<!<)<<(?!<)-?\s*(['"]?)(\w+)\1/;
+const REDIRECT = /(?:^|[\s;&|(])(?:\d*|&)>>?(?!&)\s*([^\s;&|<>()]+)/g;
+const TEE = /(?:^|[;&|(\s])tee(?:\s+-\S+)*\s+([^\s;&|<>()-]\S*)/;
+const IN_PLACE = /(?:^|[\s;&|(])(?:sed|perl)\s(?:[^;&|]*\s)?(?:-[A-Za-z]*i(?=[\s.]|$)|--in-place)/;
+
+/** Whether a shell command writes into a file: an output redirection, `tee` or an in-place `sed` / `perl`. */
+export function shellWrites(command: string): boolean {
+	let delimiter: string | null = null;
+	for (const raw of command.split("\n")) {
+		if (delimiter !== null) {
+			if (raw.trim() === delimiter) delimiter = null;
+			continue;
+		}
+		delimiter = HEREDOC.exec(raw)?.[2] ?? null;
+		const line = raw.replace(QUOTED, "q").replace(/["']/g, "");
+		for (const match of line.matchAll(REDIRECT))
+			if (!(match[1] ?? "").startsWith("/dev/")) return true;
+		const tee = TEE.exec(line)?.[1];
+		if ((tee && !tee.startsWith("/dev/")) || IN_PLACE.test(line)) return true;
+	}
+	return false;
+}
+
 function shellFamily(head: string | null): ToolFamily {
 	if (!head) return "execution";
 	const first = head.split(" ")[0] ?? head;
