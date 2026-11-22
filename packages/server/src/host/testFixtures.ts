@@ -52,13 +52,14 @@ export async function until(
 export async function stalledClient(
 	port: number,
 	clientKey: string,
+	token: string,
 ): Promise<{ socket: Socket; received: () => Buffer }> {
 	const chunks: Buffer[] = [];
 	const socket = connect(port, "127.0.0.1");
 	socket.on("data", (chunk: Buffer) => chunks.push(chunk));
 	socket.write(
 		[
-			`GET /ws?client=${clientKey}&protocol=${PROTOCOL_VERSION} HTTP/1.1`,
+			`GET /ws?client=${clientKey}&protocol=${PROTOCOL_VERSION}&token=${token} HTTP/1.1`,
 			`Host: 127.0.0.1:${port}`,
 			"Upgrade: websocket",
 			"Connection: Upgrade",

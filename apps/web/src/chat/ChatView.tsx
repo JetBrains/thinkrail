@@ -51,9 +51,9 @@ import {
 } from "@/store";
 import {
 	attachmentFailureText,
+	authorizedHostUrl,
 	errorText,
 	getTransport,
-	hostUrl,
 	supportsChatAttachments,
 	uploadPromptFiles,
 	watchMcpWorkspace,
@@ -951,7 +951,7 @@ export default function ChatView({
 				/>
 			</div>
 			<ChatMediaContext.Provider
-				value={{ resolveUrl: hostUrl, retryEpoch: syncedConnectionGeneration }}
+				value={{ resolveUrl: authorizedHostUrl, retryEpoch: syncedConnectionGeneration }}
 			>
 				<ChatTranscript
 					ref={transcriptRef}

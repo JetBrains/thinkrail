@@ -1,7 +1,13 @@
 import type { WsMethodName, WsParams, WsResult, WsServerMessage } from "@thinkrail/contracts";
-import { PROTOCOL_VERSION, WS_CHANNELS, WS_MAX_FRAME_BYTES } from "@thinkrail/contracts";
+import {
+	INSTANCE_TOKEN_PARAM,
+	PROTOCOL_VERSION,
+	WS_CHANNELS,
+	WS_MAX_FRAME_BYTES,
+} from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { randomId } from "../lib";
+import { instanceToken } from "./instanceToken";
 import { RequestError, RequestTimeoutError } from "./requestError";
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
@@ -56,6 +62,8 @@ function withClientId(url: string): string {
 	const u = new URL(url);
 	u.searchParams.set("client", pageClientId());
 	u.searchParams.set("protocol", String(PROTOCOL_VERSION));
+	const token = instanceToken();
+	if (token !== null) u.searchParams.set(INSTANCE_TOKEN_PARAM, token);
 	return u.toString();
 }
 

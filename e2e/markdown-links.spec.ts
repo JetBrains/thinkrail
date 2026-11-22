@@ -47,14 +47,14 @@ test("relative links, images, and heading anchors work in the rendered markdown 
 	await expect(preview.locator("#user-content-section-two")).toHaveCount(1);
 
 	const img = preview.locator("img").first();
-	await expect(img).toHaveAttribute("src", /\/files\/[^/]+\/logo\.png$/);
+	await expect(img).toHaveAttribute("src", /\/files\/[^/]+\/logo\.png(\?|$)/);
 	await expect
 		.poll(async () => img.evaluate((el: HTMLImageElement) => el.naturalWidth))
 		.toBeGreaterThan(0);
 
 	const rawImage = preview.locator('p[align="center"] img[alt="raw-logo"]');
 	await expect(rawImage).toHaveAttribute("width", "24");
-	await expect(rawImage).toHaveAttribute("src", /\/files\/[^/]+\/logo\.png$/);
+	await expect(rawImage).toHaveAttribute("src", /\/files\/[^/]+\/logo\.png(\?|$)/);
 	await expect(preview.locator("details summary")).toHaveText("Folded");
 	await expect(preview.locator("details em")).toHaveText("body");
 	await expect(preview.locator("script")).toHaveCount(0);

@@ -56,7 +56,8 @@ export function chatImageUrl(
 	if (!isRefImage(image)) return `data:${image.mimeType};base64,${image.data}`;
 	if (!media) return null;
 	const url = media.resolveUrl(image.ref);
-	return query === null ? url : `${url}?retry=${encodeURIComponent(query)}`;
+	if (query === null) return url;
+	return `${url}${url.includes("?") ? "&" : "?"}retry=${encodeURIComponent(query)}`;
 }
 
 const FIT_CLASS = {

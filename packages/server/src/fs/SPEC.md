@@ -36,10 +36,17 @@ classification every content read in the host shares. Agent and review writes ar
   serving relative images in the markdown viewer, the `/blob` route's containment check) and for the
   `changes` module's atomic writes. Lexical escapes, `.git`, and an existing symlink chain whose resolved
   target leaves the worktree are refused; missing leaf paths are allowed so a deleted file can be
-  restored. **`resolveWorktreeEntry(workspaceId, path)`** validates an entry itself rather than what it
-  points at: containment runs through the parent, so the caller's own `lstat` can reject even an escaping
-  leaf symlink without following it, and it also answers that parent's validated real path — what a
-  trash claim is verified against (`changes` uses it for its writes and claims). **`readableFileSize(root,
+  restored. Following the leaf, the existing target is re-resolved through `realpath` and re-checked
+  against the canonical root; I/O uses that canonical path while `readDir` still reports paths relative to
+  the logical root, so a symlinked worktree or directory keeps its worktree-relative node paths. `readFile`
+  then opens the canonical path with `O_NOFOLLOW` and reads through that descriptor, so a leaf swapped for a
+  symlink after the check fails (`ELOOP` → "Path escapes the worktree") instead of being read (#920
+  Finding-3). Residual: a directory component swapped between `realpath` and `open` is not covered, and
+  Windows has no `O_NOFOLLOW`, where only the re-check applies. **`resolveWorktreeEntry(workspaceId, path)`**
+  validates an entry itself rather than what it points at: containment runs through the parent, so the
+  caller's own `lstat` can reject even an escaping leaf symlink without following it, and it also answers
+  that parent's validated real path — what a trash claim is verified against (`changes` uses it for its
+  writes and claims). **`readableFileSize(root,
   path)`** applies the same rule under a root without a workspace lookup: the byte size of the regular
   file `readFile` would serve, `"missing"` for anything it would refuse or cannot read as a file (an
   escape, `.git`, a directory, a gone, dangling or looping path), `null` when the stat failed otherwise

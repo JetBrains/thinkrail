@@ -99,7 +99,7 @@ function toolFrames(frames: readonly { text: string }[], toolCallId: string): st
 
 test("a backpressured socket gets only the newest stream snapshot, even when nothing follows it", async () => {
 	const healthy = new WebSocket(
-		`ws://127.0.0.1:${server.port}/ws?client=healthy&protocol=${PROTOCOL_VERSION}`,
+		`ws://127.0.0.1:${server.port}/ws?client=healthy&protocol=${PROTOCOL_VERSION}&token=${server.authToken}`,
 	);
 	const healthyFrames: { text: string }[] = [];
 	const replies = new Set<string>();
@@ -110,7 +110,7 @@ test("a backpressured socket gets only the newest stream snapshot, even when not
 		if (frame.channel === WS_CHANNELS.piEvent) healthyFrames.push({ text });
 	});
 	await new Promise((resolve) => healthy.addEventListener("open", resolve, { once: true }));
-	const stalled = await stalledClient(server.port, "stalled");
+	const stalled = await stalledClient(server.port, "stalled", server.authToken);
 	let updates = 0;
 	const backlog = async () => {
 		for (let round = 0; round < 128; round += 1) {

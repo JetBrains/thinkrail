@@ -247,7 +247,7 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
     of `contracts`' shared raster media types (PNG/JPEG/GIF/WebP). Malformed shapes and unsupported media
     types are ignored.
   - **`ChatImage` renders every chat image** (tool thumbnails, full screen, and the attachment dialog) and
-    stays presentational. A small `ChatMediaContext` supplies `resolveUrl` (the transport's `hostUrl`) and a
+    stays presentational. A small `ChatMediaContext` supplies `resolveUrl` (the transport's `authorizedHostUrl`, which appends the instance token) and a
     `retryEpoch`. `ChatView` provides it, and its epoch advances when that chat's reconnect transcript resync
     lands. `SubagentTranscriptDialog` provides it too, and its epoch advances per poll.
   - **The box is reserved.** The `<img>` carries the host-sniffed `width`/`height`. `ChatImage` owns its

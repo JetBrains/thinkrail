@@ -1,7 +1,7 @@
 import { WORKSPACE_VIEW_ROUTE } from "@thinkrail/contracts";
 import { useEffect, useRef } from "react";
 import { useAppStore } from "../store";
-import { getTransport } from "../transport";
+import { getTransport, withInstanceToken } from "../transport";
 
 export const FILES_ROUTE = "/files";
 export const BLOB_ROUTE = "/blob";
@@ -13,9 +13,11 @@ function encodeResourcePath(path: string): string {
 export function resourceBytesUrl(workspaceId: string, path: string, oid?: string | null): string {
 	const base = getTransport().httpBase();
 	const workspace = encodeURIComponent(workspaceId);
-	return oid
-		? `${base}${BLOB_ROUTE}/${workspace}/${encodeURIComponent(oid)}/${encodeResourcePath(path)}`
-		: `${base}${FILES_ROUTE}/${workspace}/${encodeResourcePath(path)}`;
+	return withInstanceToken(
+		oid
+			? `${base}${BLOB_ROUTE}/${workspace}/${encodeURIComponent(oid)}/${encodeResourcePath(path)}`
+			: `${base}${FILES_ROUTE}/${workspace}/${encodeResourcePath(path)}`,
+	);
 }
 
 export function resourceViewUrl(workspaceId: string, path: string): string {

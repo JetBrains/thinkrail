@@ -115,7 +115,7 @@ function gitRepo(path: string): string {
 
 async function connect() {
 	const socket = new WebSocket(
-		`ws://127.0.0.1:${server.port}/ws?client=image-refs-${crypto.randomUUID()}&protocol=${PROTOCOL_VERSION}`,
+		`ws://127.0.0.1:${server.port}/ws?client=image-refs-${crypto.randomUUID()}&protocol=${PROTOCOL_VERSION}&token=${server.authToken}`,
 	);
 	const raw = new Map<string, string>();
 	const welcomed = new Promise<void>((resolve) => {
@@ -194,16 +194,23 @@ test("a transcript's images leave as references the route serves until the chat 
 		expect(image.ref.startsWith(`${IMAGES_ROUTE}${sessionId}/`)).toBe(true);
 		expect({ width: image.width, height: image.height }).toEqual({ width: 800, height: 600 });
 
-		const served = await fetch(`http://127.0.0.1:${server.port}${image.ref}`);
+		const served = await fetch(
+			`http://127.0.0.1:${server.port}${image.ref}?token=${server.authToken}`,
+		);
 		expect(served.status).toBe(200);
 		expect(served.headers.get("Content-Type")).toBe("image/png");
 		expect(Buffer.from(await served.arrayBuffer()).equals(SCREENSHOT)).toBe(true);
 
-		const posted = await fetch(`http://127.0.0.1:${server.port}${image.ref}`, { method: "POST" });
+		const posted = await fetch(
+			`http://127.0.0.1:${server.port}${image.ref}?token=${server.authToken}`,
+			{ method: "POST" },
+		);
 		expect(posted.status).toBe(405);
 
 		await client.request("session.delete", { workspaceId: workspace.id, sessionId });
-		const gone = await fetch(`http://127.0.0.1:${server.port}${image.ref}`);
+		const gone = await fetch(
+			`http://127.0.0.1:${server.port}${image.ref}?token=${server.authToken}`,
+		);
 		expect(gone.status).toBe(404);
 	} finally {
 		client.close();
@@ -215,7 +222,7 @@ test("tearing down a workspace's sessions stops serving their images", async () 
 	try {
 		const workspace = await openWorkspace(client, "teardown-repo");
 		const { image } = await seededImageRef(client, workspace);
-		const url = `http://127.0.0.1:${server.port}${image.ref}`;
+		const url = `http://127.0.0.1:${server.port}${image.ref}?token=${server.authToken}`;
 		expect((await fetch(url)).status).toBe(200);
 		await removeWorkspaceSessions(workspace.id);
 		expect((await fetch(url)).status).toBe(404);
@@ -256,7 +263,9 @@ test("a subagent transcript's images are servable at once, its parent chat attac
 		);
 		if (!image) throw new Error("the child transcript has no image reference");
 		expect(image.ref.startsWith(`${IMAGES_ROUTE}${parentSessionId}/`)).toBe(true);
-		const served = await fetch(`http://127.0.0.1:${server.port}${image.ref}`);
+		const served = await fetch(
+			`http://127.0.0.1:${server.port}${image.ref}?token=${server.authToken}`,
+		);
 		expect(served.status).toBe(200);
 		expect(Buffer.from(await served.arrayBuffer()).equals(SCREENSHOT)).toBe(true);
 	} finally {
