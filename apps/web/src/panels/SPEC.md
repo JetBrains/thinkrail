@@ -733,7 +733,8 @@ a project picker, the prompt hero, and the reused
   failed chat start toasts instead. `retryDraft` (Edit & retry) reopens the dialog prefilled with the failed
   creation's prompt, images, model + effort and base branch.
   **`WorkspaceCreation.tsx`** renders a creation in the two places the user waits: `WorkspaceCreationRow`
-  under its project in `ProjectTree` (spinner + `Creating… N%` + a `<progress>` bar while running; failed:
+  under its project in `ProjectTree` — inside the live list right after the Default row(s), newest first,
+  i.e. exactly where its workspace lands, so the handoff never moves the row (spinner + `Creating… N%` + a `<progress>` bar while running; failed:
   `Couldn't create` in the error colour, interrupted: `Interrupted at N%` in the warning colour, the reason in a
   tooltip, with Retry, Edit & retry (failed only) and Dismiss/Discard; **a running creation has no
   actions** — there is no cancel), and `WorkspaceCreationView`, the shell's main pane for the selected creation
