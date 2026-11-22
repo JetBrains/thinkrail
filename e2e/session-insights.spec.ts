@@ -187,7 +187,7 @@ async function expectHeadersInPanel(panel: Locator): Promise<void> {
 				.map((th) => th.textContent),
 		};
 	});
-	expect(layout.count, "one header per column").toBe(9);
+	expect(layout.count, "one header per column").toBe(10);
 	expect(layout.sideways, "the table scrolls sideways").toBeLessThanOrEqual(0);
 	expect(layout.outside, "headers outside the panel").toEqual([]);
 	expect(layout.cut, "headers cut off").toEqual([]);
@@ -278,8 +278,13 @@ test("the palette opens Session insights, which lists the project's sessions wit
 			await expectBadges(row.getByTestId("session-insights-calls"), []);
 			await expectFiguresUncut(row);
 		}
+		await expect(page.getByTestId("left-stack")).toHaveCount(0);
+		await expect(page.getByTestId("right-stack")).toHaveCount(0);
+		await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
+		await page.keyboard.press("Control+Shift+F12");
 		await expect(page.getByTestId("left-stack")).toBeVisible();
 		await expect(page.getByTestId("right-stack")).toBeVisible();
+		await expect(page.getByTestId("bottom-panel")).toBeVisible();
 		await expectHeadersInPanel(panel);
 		await shot(page, "session-insights", "ready");
 
@@ -409,6 +414,9 @@ test("on Project Home the palette finds Session insights by what it shows, enter
 	await expect(command).toContainText("Open Session insights");
 	await command.click();
 	await expect(page.getByTestId("search-palette")).toBeHidden();
+	await expect(page.getByTestId("session-insights-panel")).toBeVisible();
+	await expect(page.getByTestId("left-stack")).toHaveCount(0);
+	await page.keyboard.press("Control+Shift+F12");
 	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
 	await expect(
 		page.locator('[data-testid="editor-tab"][data-kind="extension"]', {
@@ -461,7 +469,7 @@ async function seedProjectlessChat(page: Page, prompt: string): Promise<string> 
 	return sessionId;
 }
 
-test("a chat opens its own analysis from its header's link, its tab's menu and the recently closed list", async ({
+test("an open chat shows its analysis beside it from its header's toggle and its tab's menu; a closed one opens a tab", async ({
 	page,
 }) => {
 	await page.setViewportSize({ width: 1920, height: 1080 });
@@ -475,24 +483,37 @@ test("a chat opens its own analysis from its header's link, its tab's menu and t
 		await chatTab.click();
 		const toolbar = page.getByTestId("chat-toolbar");
 		await expect(toolbar.getByTestId("session-stats")).toContainText("$");
-		const link = toolbar.getByTestId("chat-header-link");
-		await expect(link).toHaveText("Session analysis");
-		await expect(link).toHaveAttribute("data-action", "session-insights.session");
-		await link.hover();
+		const toggle = toolbar.getByTestId("chat-header-toggle");
+		await expect(toggle).toHaveText("Session analysis");
+		await expect(toggle).toHaveAttribute("data-action", "session-insights.session");
+		await expect(toggle).toHaveAttribute("aria-pressed", "false");
+		await toggle.hover();
 		await shot(toolbar, ENTRY_SHOTS, "chat-header");
-		await shot(page, ENTRY_SHOTS, "chat-header-page");
-		await link.click();
-		await expectAnalysisOf(page, priced.id, priced.title);
-		await expect(
-			page.getByTestId("session-insights-session").getByTestId("session-insights-session-title"),
-		).toHaveText(priced.title);
+		await toggle.click();
+		const pane = page.getByTestId("chat-pane");
+		await expect(pane).toHaveAttribute("data-pane", "session-insights.session");
+		await expect(toggle).toHaveAttribute("aria-pressed", "true");
+		await expect(chatTab).toHaveAttribute("data-active", "true");
+		const beside = pane.getByTestId("session-insights-session");
+		await expect(beside).toHaveAttribute("data-session-id", priced.id);
+		await expect(beside.getByTestId("session-insights-session-title")).toHaveText(priced.title);
+		await expect(beside.getByTestId("session-insights-session-open-chat")).toHaveCount(0);
+		await expect(page.locator('[data-testid="editor-tab"][data-kind="extension"]')).toHaveCount(0);
+		await shot(page, ENTRY_SHOTS, "chat-pane");
 
-		await chatTab.click();
+		await toggle.click();
+		await expect(pane).toHaveCount(0);
 		await chatTab.click({ button: "right" });
 		const analyze = page.getByTestId("tab-chat-action");
 		await expect(analyze).toHaveText("Analyze session");
 		await shot(page, ENTRY_SHOTS, "tab-menu");
 		await analyze.click();
+		await expect(pane).toBeVisible();
+		await expect(toggle).toHaveAttribute("aria-pressed", "true");
+		await expect(page.locator('[data-testid="editor-tab"][data-kind="extension"]')).toHaveCount(0);
+
+		await pane.getByTestId("session-insights-open-as-tab").click();
+		await expect(pane).toHaveCount(0);
 		await expectAnalysisOf(page, priced.id, priced.title);
 		await expect(page.locator('[data-testid="editor-tab"][data-kind="extension"]')).toHaveCount(1);
 
@@ -528,6 +549,8 @@ test("a chat in the Chats list offers its analysis from its ⋯ menu, and an emp
 	await shot(page, ENTRY_SHOTS, "chats-list");
 	await analyze.click();
 	await expectAnalysisOf(page, sessionId, "book the flights to Lisbon");
+	await expect(page.getByTestId("left-stack")).toHaveCount(0);
+	await page.keyboard.press("Control+Shift+F12");
 	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
 	await expect(row).toHaveAttribute("data-active", "false");
 
@@ -535,7 +558,7 @@ test("a chat in the Chats list offers its analysis from its ⋯ menu, and an emp
 	await expect(page.getByTestId("chat-item")).toHaveCount(2);
 	const empty = page.locator('[data-testid="chat-item"][data-active="true"]');
 	await expect(empty.getByTestId("chat-title")).toHaveAttribute("data-title-source", "default");
-	await expect(page.getByTestId("chat-toolbar").getByTestId("chat-header-link")).toHaveCount(0);
+	await expect(page.getByTestId("chat-toolbar").getByTestId("chat-header-toggle")).toHaveCount(0);
 	await empty.getByTestId("chat-menu").click();
 	await expect(page.getByTestId("chat-actions")).toBeVisible();
 	await expect(page.getByTestId("chat-row-action")).toHaveCount(0);
@@ -556,8 +579,9 @@ test("the left rail's Session insights icon and its chord open the list, on Proj
 	await expect(page.getByRole("tooltip")).toHaveText(/Session insights\s*Ctrl\s*Alt\s*I/);
 	await shot(page, ENTRY_SHOTS, "rail-home");
 	await icon.click();
-	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
 	await expect(listTab(page)).toHaveAttribute("data-active", "true");
+	await page.keyboard.press("Control+Shift+F12");
+	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("session-insights-panel")).toBeVisible();
 
 	await listTab(page).getByTestId("editor-tab-close").click();
@@ -613,7 +637,7 @@ test("while Session insights is off, no chat, menu, rail icon or chord offers it
 	await enterDefaultWorkspace(page);
 	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]').first();
 	await expect(chatTab).toBeVisible();
-	const link = page.getByTestId("chat-toolbar").getByTestId("chat-header-link");
+	const link = page.getByTestId("chat-toolbar").getByTestId("chat-header-toggle");
 	const icon = page.getByTestId("left-layout-rail").getByTestId(RAIL_ICON);
 	await expect(link).toBeVisible();
 	await expect(icon).toBeVisible();
@@ -672,10 +696,19 @@ test("a session's analysis traces its calls on a shared axis, explains a failing
 		);
 		await expect(session.getByTestId("session-insights-session-tokens")).toContainText("45.5K");
 		await expect(session.getByTestId("session-insights-session-cost")).toContainText("$0.42");
-		await expect(session.getByTestId("session-insights-session-models")).toContainText(
-			"anthropic/claude-sonnet-4-5",
+		await expect(session.getByTestId("session-insights-session-models")).toHaveText(
+			"claude-sonnet-4-5",
+		);
+		await expect(session.getByTestId("session-insights-session-models")).toHaveAttribute(
+			"aria-label",
+			/anthropic\/claude-sonnet-4-5/,
+		);
+		await expect(session.getByTestId("session-insights-section-overview")).toHaveAttribute(
+			"aria-selected",
+			"true",
 		);
 
+		await session.getByTestId("session-insights-section-trace").click();
 		const trace = session.getByTestId("trace-explorer");
 		const rows = trace.getByTestId("trace-row");
 		await expect(rows).toHaveCount(5);
@@ -750,10 +783,9 @@ test("a session's analysis traces its calls on a shared axis, explains a failing
 		await details.getByTestId("details-open-chat").click();
 		const chatTab = restoredChatTab(page, INSIGHTS_SESSIONS.priced.id);
 		await expect(chatTab).toHaveAttribute("data-active", "true");
-		const flashed = page.locator("[data-flash]");
+		const flashed = page.locator('[data-chat-row-id="activity:bash-1"] [data-flash]');
 		await expect(flashed).toBeVisible();
-		await expect(flashed).toHaveAttribute("data-chat-row-id", "activity:bash-1");
-		await expect(flashed).toContainText("bash");
+		await expect(flashed).toContainText("bun test retry");
 		await shot(page, "session-insights-s3", "open-in-chat");
 
 		await page
@@ -764,6 +796,7 @@ test("a session's analysis traces its calls on a shared axis, explains a failing
 			.click();
 		const delegating = page.getByTestId("session-insights-session");
 		await expect(delegating).toHaveAttribute("data-session-id", INSIGHTS_SESSIONS.delegating.id);
+		await delegating.getByTestId("session-insights-section-trace").click();
 		const spawned = delegating.locator('[data-testid="trace-row"][data-kind="subagent"]');
 		await expect(spawned).toContainText("scout");
 		await expect(spawned).toContainText("audit the retry paths");
@@ -846,7 +879,8 @@ test("turn cards, the actor timeline and the day view read one session's turns a
 		.click();
 	const session = page.getByTestId("session-insights-session");
 	await expect(session).toHaveAttribute("data-session-id", TIMELINE_SESSIONS.busy.id);
-	await session.getByTestId("session-insights-section-turns").click();
+	await session.getByTestId("session-insights-section-trace").click();
+	await session.getByTestId("session-insights-trace-mode-turns").click();
 	const cards = session.getByTestId("turn-card");
 	await expect(cards).toHaveCount(3);
 	await expect(cards.nth(0)).toContainText("plan the timeline view");
@@ -872,12 +906,12 @@ test("turn cards, the actor timeline and the day view read one session's turns a
 	await expect(details.getByTestId("details-result")).toContainText("1 test failed");
 	await shot(page, "session-insights/s4", "turns-step-details");
 
-	await session.getByTestId("session-insights-section-trace").click();
+	await session.getByTestId("session-insights-trace-mode-tree").click();
 	const selectedRow = session.locator('[data-testid="trace-row"][data-selected="true"]');
 	await expect(selectedRow).toHaveAttribute("data-kind", "tool");
 	await expect(selectedRow).toContainText("bun test timeline");
 
-	await session.getByTestId("session-insights-section-timeline").click();
+	await session.getByTestId("session-insights-trace-mode-timeline").click();
 	const timeline = session.getByTestId("timeline-view");
 	await expect(timeline.getByTestId("timeline-canvas")).toBeVisible();
 	await expect(timeline.getByTestId("timeline-axis")).toBeVisible();
@@ -901,7 +935,7 @@ test("turn cards, the actor timeline and the day view read one session's turns a
 	await page
 		.locator('[data-testid="editor-tab"][data-kind="extension"]', { hasText: "Session insights" })
 		.click();
-	await panel.getByTestId("session-insights-mode-day").click();
+	await panel.getByTestId("session-insights-tab-days").click();
 	const day = panel.getByTestId("day-view");
 	await expect(day).toHaveAttribute("data-day", TIMELINE_DAY.key);
 	const dayRows = day.getByTestId("day-row");
@@ -938,6 +972,7 @@ test("subagent waves, the plan and skill bands, and errors as recovery chains ex
 			.click();
 		const session = page.getByTestId("session-insights-session");
 		await expect(session).toHaveAttribute("data-session-id", PLAN_SESSIONS.release.id);
+		await session.getByTestId("session-insights-section-trace").click();
 		const trace = session.getByTestId("trace-explorer");
 
 		const planBand = trace.getByTestId("trace-band-plan");
@@ -1052,13 +1087,14 @@ test("subagent waves, the plan and skill bands, and errors as recovery chains ex
 			"bunx biome check src/version.ts",
 		);
 
-		await session.getByTestId("session-insights-section-turns").click();
+		await session.getByTestId("session-insights-section-trace").click();
+		await session.getByTestId("session-insights-trace-mode-turns").click();
 		const card = session.getByTestId("turn-card").first();
 		await expect(card.getByTestId("turn-plan-badge")).toContainText("3 steps · 2 done");
 		await expect(card.getByTestId("turn-skill-badge")).toHaveText("todos");
 		await shot(page, "session-insights/s5", "turns-badges");
 
-		await session.getByTestId("session-insights-section-timeline").click();
+		await session.getByTestId("session-insights-trace-mode-timeline").click();
 		const timeline = session.getByTestId("timeline-view");
 		await expect(timeline.getByTestId("timeline-plan")).toHaveAttribute("aria-pressed", "true");
 		await timeline.getByTestId("timeline-plan-pick").click();
@@ -1092,8 +1128,9 @@ test("context and cache, why a session was expensive and its files explain one s
 	const session = page.getByTestId("session-insights-session");
 	await expect(session).toHaveAttribute("data-session-id", CONTEXT_SESSIONS.refactor.id);
 
-	await session.getByTestId("session-insights-section-context").click();
-	const context = session.getByTestId("context-view");
+	await session.getByTestId("session-insights-section-cost").click();
+	await expect(session.getByTestId("cost-context-cost").getByTestId("cost-view")).toBeVisible();
+	const context = session.getByTestId("cost-context-context").getByTestId("context-view");
 	await expect(context.getByTestId("context-chart")).toHaveAttribute("data-calls", "15");
 	await expect(context.getByTestId("context-chart")).toHaveAttribute("data-misses", "4");
 	await expect(context.getByTestId("context-cliff")).toHaveText(
@@ -1136,7 +1173,7 @@ test("context and cache, why a session was expensive and its files explain one s
 	);
 	await shot(page, "session-insights/s6", "request-diff");
 
-	await session.getByTestId("session-insights-section-cost").click();
+	await session.getByTestId("cost-context-cost").scrollIntoViewIfNeeded();
 	const cost = session.getByTestId("cost-view");
 	await expect(cost.getByTestId("cost-diagnosis")).toHaveAttribute("data-kind", "cacheRewrites");
 	await expect(cost.getByTestId("cost-diagnosis")).toContainText(
@@ -1193,7 +1230,7 @@ test("statistics find a failing command and unused skills, chart usage by day an
 	const panel = await openInsightsPanel(page, { rows: STATS_ROWS });
 	await hideAuxiliaryWorkbench(page);
 
-	await panel.getByTestId("session-insights-mode-stats").click();
+	await panel.getByTestId("session-insights-tab-insights").click();
 	const stats = panel.getByTestId("stats-view");
 	const findings = stats.getByTestId("findings-view");
 	await expect(findings).toBeVisible();
@@ -1238,7 +1275,7 @@ test("statistics find a failing command and unused skills, chart usage by day an
 	await panel.getByTestId("session-insights-filter-clear").click();
 	await expect(panel.getByTestId("session-insights-row")).toHaveCount(3);
 
-	await panel.getByTestId("session-insights-mode-stats").click();
+	await panel.getByTestId("session-insights-tab-insights").click();
 	await stats.getByTestId("stats-section-usage").click();
 	const usage = stats.getByTestId("usage-view");
 	await expect(usage.getByTestId("usage-chart")).toHaveAttribute("data-days", "3");
@@ -1258,7 +1295,7 @@ test("statistics find a failing command and unused skills, chart usage by day an
 	await expect(panel.getByTestId("session-insights-row")).toHaveCount(2);
 	await panel.getByTestId("session-insights-filter-clear").click();
 
-	await panel.getByTestId("session-insights-mode-stats").click();
+	await panel.getByTestId("session-insights-tab-insights").click();
 	await stats.getByTestId("stats-section-hotspots").click();
 	const hotspots = stats.getByTestId("hotspots-view");
 	const parser = hotspots.locator('[data-testid="hotspot-row"][data-path="src/parser.ts"]');
@@ -1316,7 +1353,7 @@ test("action sequences, a slice comparison by model and a step-aligned diff of t
 	});
 	await hideAuxiliaryWorkbench(page);
 
-	await panel.getByTestId("session-insights-mode-stats").click();
+	await panel.getByTestId("session-insights-tab-insights").click();
 	const stats = panel.getByTestId("stats-view");
 	await stats.getByTestId("stats-section-sequences").click();
 	const sequences = stats.getByTestId("sequences-view");
@@ -1356,7 +1393,7 @@ test("action sequences, a slice comparison by model and a step-aligned diff of t
 	await expect(errors.getByTestId("sequence-flow-example")).toContainText("bun test date");
 	await shot(panel, "session-insights/s8", "sequences-errors");
 
-	await stats.getByTestId("stats-section-compare").click();
+	await stats.getByTestId("stats-section-ab").click();
 	const compare = stats.getByTestId("compare-view");
 	await expect(compare).toHaveAttribute("data-by", "model");
 	await expect(compare.getByTestId("compare-side-a")).toContainText(SEQUENCE_MODELS.sonnet);
@@ -1374,11 +1411,11 @@ test("action sequences, a slice comparison by model and a step-aligned diff of t
 	);
 	await shot(panel, "session-insights/s8", "compare");
 
-	await panel.getByTestId("session-insights-mode-table").click();
-	await insightsRow(panel, first.id).getByTestId("session-insights-compare").click();
-	await expect(panel.getByTestId("session-insights-compare-bar")).toContainText(first.title);
-	await insightsRow(panel, other.id).getByTestId("session-insights-compare").click();
-	await expect(panel.getByTestId("session-insights-compare-bar")).toHaveCount(0);
+	await panel.getByTestId("session-insights-tab-sessions").click();
+	await insightsRow(panel, first.id).getByTestId("session-insights-pick").click();
+	await expect(panel.getByTestId("session-insights-selection-bar")).toContainText(first.title);
+	await insightsRow(panel, other.id).getByTestId("session-insights-pick").click();
+	await panel.getByTestId("session-insights-selection-compare").click();
 	const diff = page.getByTestId("compare-panel");
 	await expect(diff).toHaveAttribute("data-a", first.id);
 	await expect(diff).toHaveAttribute("data-b", other.id);
@@ -1419,7 +1456,7 @@ test("faceted search finds a failing lint call across sessions and opens the ses
 	await hideAuxiliaryWorkbench(page);
 
 	const search = panel.getByTestId("session-insights-search");
-	await panel.getByTestId("session-insights-mode-table").focus();
+	await panel.getByTestId("session-insights-tab-sessions").focus();
 	await page.keyboard.press("/");
 	await expect(search).toBeFocused();
 	await search.pressSequentially("model:");
@@ -1576,9 +1613,9 @@ test("labels filter the list and cut the comparison; exports write a masked page
 	await panel.getByTestId("session-insights-filter-clear").click();
 	await expect(insightsRow(panel, docs.id)).toBeVisible();
 
-	await panel.getByTestId("session-insights-mode-stats").click();
+	await panel.getByTestId("session-insights-tab-insights").click();
 	const stats = panel.getByTestId("stats-view");
-	await stats.getByTestId("stats-section-compare").click();
+	await stats.getByTestId("stats-section-ab").click();
 	const compare = stats.getByTestId("compare-view");
 	await compare.getByTestId("compare-by-label").click();
 	await expect(compare).toHaveAttribute("data-by", "label");
@@ -1587,14 +1624,13 @@ test("labels filter the list and cut the comparison; exports write a masked page
 	await expect(compare.getByTestId("compare-side-b")).toContainText("B · the rest");
 	await shot(panel, "session-insights/s10", "compare-by-label");
 
-	await panel.getByTestId("session-insights-mode-table").click();
+	await panel.getByTestId("session-insights-tab-sessions").click();
 	await insightsRow(panel, deploy.id).getByTestId("session-insights-open-analysis").click();
 	const session = page.getByTestId("session-insights-session");
 	await expect(session).toHaveAttribute("data-session-id", deploy.id);
 	await expect(session.getByTestId("session-insights-session-label")).toHaveText(["good"]);
-	await expect(session.getByTestId("session-insights-session-note")).toHaveText(
-		"Clean deploy; reuse as a fixture.",
-	);
+	await session.getByTestId("session-insights-session-note").hover();
+	await expect(page.getByRole("tooltip")).toHaveText("Clean deploy; reuse as a fixture.");
 	await shot(
 		session.getByTestId("session-insights-header"),
 		"session-insights/s10",
@@ -1643,4 +1679,304 @@ test("labels filter the list and cut the comparison; exports write a masked page
 	await expect(
 		artifacts.locator(`[data-testid="artifact-row"][data-path="${fixturePath}session.jsonl"]`),
 	).toBeVisible();
+});
+
+test("the list's tabs read Sessions, Days and Insights; Insights counts its findings and keeps its section", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1920, height: 1080 });
+	await openFixtureProject(page);
+	const workspace = await defaultWorkspace();
+	seedStatsSessions(workspace);
+	await enterDefaultWorkspace(page);
+	await expect(restoredChatTab(page, STATS_SESSIONS.bridge.id)).toBeVisible();
+	const panel = await openInsightsPanel(page, { rows: STATS_ROWS });
+	await expect(panel.getByTestId("session-insights-tab-sessions")).toHaveAttribute(
+		"aria-selected",
+		"true",
+	);
+	const badge = panel.getByTestId("session-insights-insights-badge");
+	await expect(badge).toBeVisible();
+	await badge.hover();
+	await expect(page.getByRole("tooltip")).toContainText(/\d+ findings · /);
+
+	await panel.getByTestId("session-insights-tab-insights").click();
+	const stats = panel.getByTestId("stats-view");
+	const findings = stats.getByTestId("findings-view");
+	await expect(findings).toBeVisible();
+	await expect(stats.getByTestId("stats-progress")).toHaveCount(0);
+	const cards = findings.locator('[data-testid="finding-card"][data-hidden="false"]');
+	const before = await cards.count();
+	await expect(badge.locator('[aria-hidden="true"]')).toHaveText(String(before));
+	await findings
+		.locator('[data-testid="finding-card"][data-rule="rework"]')
+		.getByTestId("finding-hide")
+		.click();
+	await expect(badge.locator('[aria-hidden="true"]')).toHaveText(String(before - 1));
+	await expect(stats.getByTestId("stats-section-findings")).toHaveAttribute(
+		"aria-selected",
+		"true",
+	);
+	await stats.getByTestId("stats-section-findings").focus();
+	await page.keyboard.press("ArrowRight");
+	await expect(stats.getByTestId("stats-section-usage")).toHaveAttribute("aria-selected", "true");
+	await expect(stats.getByTestId("usage-view")).toBeVisible();
+	await shot(panel, "session-insights/list", "insights-tabs");
+
+	await panel.getByTestId("session-insights-tab-sessions").click();
+	await expect(panel.getByTestId("session-insights-table")).toBeVisible();
+	await panel.getByTestId("session-insights-tab-insights").click();
+	await expect(stats.getByTestId("stats-section-usage")).toHaveAttribute("aria-selected", "true");
+
+	await panel.getByTestId("session-insights-tab-sessions").click();
+	await insightsRow(panel, STATS_SESSIONS.first.id)
+		.getByTestId("session-insights-open-analysis")
+		.click();
+	await expect(page.getByTestId("session-insights-session")).toBeVisible();
+	await listTab(page).click();
+	await expect(panel.getByTestId("session-insights-tab-sessions")).toHaveAttribute(
+		"aria-selected",
+		"true",
+	);
+	await panel.getByTestId("session-insights-tab-insights").click();
+	await expect(stats.getByTestId("stats-section-usage")).toHaveAttribute("aria-selected", "true");
+});
+
+test("ticked sessions compare as A and B, survive a scope switch, and figure tooltips let clicks through", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1920, height: 1080 });
+	await openFixtureProject(page);
+	const workspace = await defaultWorkspace();
+	seedSequenceSessions(workspace);
+	await enterDefaultWorkspace(page);
+	const [first, second] = SEQUENCE_SESSIONS.sonnet;
+	const [other] = SEQUENCE_SESSIONS.gpt;
+	await expect(restoredChatTab(page, SEQUENCE_SESSIONS.sonnet[3].id)).toBeVisible();
+	const panel = await openInsightsPanel(page, {
+		rows: [...SEQUENCE_SESSIONS.sonnet, ...SEQUENCE_SESSIONS.gpt].map((session) => session.id),
+	});
+
+	await panel.getByTestId("session-insights-tab-insights").click();
+	const stats = panel.getByTestId("stats-view");
+	await stats.getByTestId("stats-section-ab").click();
+	const compare = stats.getByTestId("compare-view");
+	await expect(compare.getByTestId("compare-side-a")).toContainText(SEQUENCE_MODELS.sonnet);
+	await compare.getByTestId("compare-swap").click();
+	await expect(compare.getByTestId("compare-side-a")).toContainText(SEQUENCE_MODELS.gpt);
+	await expect(compare.getByTestId("compare-side-b")).toContainText(SEQUENCE_MODELS.sonnet);
+	await compare.getByTestId("compare-pick-a").click();
+	await expect(
+		page.locator(`[data-testid="compare-option"][data-key="${SEQUENCE_MODELS.sonnet}"]`),
+	).toHaveAttribute("data-disabled", "");
+	await page.keyboard.press("Escape");
+
+	await panel.getByTestId("session-insights-tab-sessions").click();
+	const firstRow = insightsRow(panel, first.id);
+	const otherRow = insightsRow(panel, other.id);
+	const secondRow = insightsRow(panel, second.id);
+	await expect(firstRow.getByTestId("session-insights-pick")).toHaveCSS("opacity", "0");
+	await firstRow.hover();
+	await expect(firstRow.getByTestId("session-insights-pick")).toHaveCSS("opacity", "1");
+	await firstRow.getByTestId("session-insights-pick").click();
+	const bar = panel.getByTestId("session-insights-selection-bar");
+	await expect(bar).toContainText("1 session selected");
+	await expect(bar.getByTestId("session-insights-selection-compare")).toBeDisabled();
+	await otherRow.getByTestId("session-insights-calls").locator("button").focus();
+	await page.keyboard.press(" ");
+	await expect(bar).toContainText("2 sessions selected");
+	const chips = bar.getByTestId("session-insights-selection-chip");
+	await expect(chips.nth(0)).toHaveAttribute("data-session-id", first.id);
+	await expect(chips.nth(1)).toHaveAttribute("data-session-id", other.id);
+	await bar.getByTestId("session-insights-selection-swap").click();
+	await expect(chips.nth(0)).toHaveAttribute("data-session-id", other.id);
+	await bar.getByTestId("session-insights-selection-swap").click();
+	await expect(chips.nth(0)).toHaveAttribute("data-session-id", first.id);
+
+	await secondRow.getByTestId("session-insights-pick").click();
+	await expect(bar).toContainText("3 sessions selected");
+	await expect(bar).toContainText("Pick exactly two");
+	await expect(bar.getByTestId("session-insights-selection-compare")).toBeDisabled();
+	await secondRow.getByTestId("session-insights-pick").click();
+
+	await panel.getByTestId("session-insights-scope-all").click();
+	await expect(bar).toContainText("2 sessions selected");
+	await panel.getByTestId("session-insights-scope-project").click();
+	await expect(bar).toContainText("2 sessions selected");
+	await shot(panel, "session-insights/list", "selection-bar");
+
+	const rowsInOrder = panel.getByTestId("session-insights-row");
+	await rowsInOrder.nth(2).getByTestId("session-insights-cost").hover();
+	await expect(page.getByRole("tooltip")).toBeVisible();
+	const below = rowsInOrder.nth(3);
+	await below.getByTestId("session-insights-pick").click({ force: true });
+	await expect(page.getByRole("tooltip")).toHaveCount(0);
+	await expect(below.getByTestId("session-insights-pick")).toBeChecked();
+	await below.getByTestId("session-insights-pick").click();
+
+	await rowsInOrder.nth(2).getByTestId("session-insights-cost").locator("button").focus();
+	await expect(page.getByRole("tooltip")).toBeVisible();
+	const covered = rowsInOrder.nth(1).getByTestId("session-insights-tokens").locator("button");
+	await covered.click();
+	await expect(covered).toBeFocused();
+
+	await firstRow.getByTestId("session-insights-pick").focus();
+	await page.keyboard.press("Escape");
+	await expect(bar).toHaveCount(0);
+	await firstRow.getByTestId("session-insights-pick").click();
+	await otherRow.getByTestId("session-insights-pick").click();
+	await otherRow.getByTestId("session-insights-pick").focus();
+	await page.keyboard.press("Enter");
+	const diff = page.getByTestId("compare-panel");
+	await expect(diff).toHaveAttribute("data-a", first.id);
+	await expect(diff).toHaveAttribute("data-b", other.id);
+	await expect(diff.getByTestId("compare-card-a")).toContainText(first.title);
+});
+
+test("a session opens on an Overview whose cards lead into its sections; a tab brought back keeps its place and Compare with… picks B", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1920, height: 1080 });
+	await openFixtureProject(page);
+	const workspace = await defaultWorkspace();
+	const { delegationDir } = seedInsightsSessions(workspace);
+	const { priced, unpriced } = INSIGHTS_SESSIONS;
+	try {
+		await enterDefaultWorkspace(page);
+		await expect(restoredChatTab(page, priced.id)).toBeVisible();
+		const panel = await openInsightsPanel(page, { rows: INSIGHTS_ROWS });
+		await insightsRow(panel, priced.id).getByTestId("session-insights-open-analysis").click();
+		const session = page.getByTestId("session-insights-session");
+		await expect(session).toHaveAttribute("data-session-id", priced.id);
+
+		const header = session.getByTestId("session-insights-header");
+		const headerBox = await header.boundingBox();
+		expect(headerBox && headerBox.height <= 41).toBe(true);
+		await session.getByTestId("session-insights-session-cost").hover();
+		await expect(
+			page.locator('[data-testid="session-insights-figure"][data-metric="cost"]').first(),
+		).toContainText("Recorded by pi");
+
+		const overview = session.getByTestId("session-insights-overview");
+		await expect(overview.getByTestId("overview-happened")).toBeVisible();
+		await expect(overview.getByTestId("overview-cost")).toContainText("$0.42");
+		await expect(overview.getByTestId("overview-errors-summary")).toContainText("1 failure");
+		await expect(overview.getByTestId("overview-context")).toBeVisible();
+		await expect(overview.getByTestId("overview-files")).toBeVisible();
+		await expect(overview.getByTestId("overview-subagents")).toBeVisible();
+		await shot(page, "session-insights/overview", "overview");
+
+		await overview.getByTestId("overview-link-errors").click();
+		await expect(session.getByTestId("session-insights-section-errors")).toHaveAttribute(
+			"aria-selected",
+			"true",
+		);
+		await expect(session.getByTestId("errors-chain").first()).toBeVisible();
+		await session.getByTestId("session-insights-section-overview").click();
+		await overview.getByTestId("overview-link-cost").click();
+		await expect(session.getByTestId("session-insights-section-cost")).toHaveAttribute(
+			"aria-selected",
+			"true",
+		);
+		await expect(session.getByTestId("cost-view")).toBeVisible();
+
+		await session.getByTestId("session-insights-section-trace").click();
+		const failing = session.locator(
+			'[data-testid="trace-row"][data-kind="tool"][data-error="true"]',
+		);
+		await failing.click();
+		await expect(failing).toHaveAttribute("data-selected", "true");
+		await listTab(page).click();
+		await expect(panel).toBeVisible();
+		await analysisTab(page, priced.title).click();
+		await expect(session.getByTestId("session-insights-section-trace")).toHaveAttribute(
+			"aria-selected",
+			"true",
+		);
+		await expect(failing).toHaveAttribute("data-selected", "true");
+
+		await session.getByTestId("session-insights-section-overview").click();
+		await overview.getByTestId("overview-link-findings").click();
+		await expect(listTab(page)).toHaveAttribute("data-active", "true");
+		await expect(panel.getByTestId("session-insights-tab-insights")).toHaveAttribute(
+			"aria-selected",
+			"true",
+		);
+		await expect(
+			panel.getByTestId("stats-view").getByTestId("stats-section-findings"),
+		).toHaveAttribute("aria-selected", "true");
+
+		await analysisTab(page, priced.title).click();
+		await session.getByTestId("session-insights-compare-with").click();
+		const picker = page.getByTestId("compare-picker");
+		await expect(picker).toBeVisible();
+		await expect(picker.getByTestId("compare-picker-option")).toHaveCount(2);
+		await picker.getByTestId("compare-picker-search").fill("changelog");
+		await expect(picker.getByTestId("compare-picker-option")).toHaveCount(1);
+		await page.keyboard.press("Enter");
+		const diff = page.getByTestId("compare-panel");
+		await expect(diff).toHaveAttribute("data-a", priced.id);
+		await expect(diff).toHaveAttribute("data-b", unpriced.id);
+	} finally {
+		rmSync(delegationDir, { recursive: true, force: true });
+	}
+});
+
+test("beside its chat the analysis shows a picked call in the chat in place, and its own controls move or close it", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1600, height: 1000 });
+	await openFixtureProject(page);
+	const workspace = await defaultWorkspace();
+	const { delegationDir } = seedInsightsSessions(workspace);
+	const { priced } = INSIGHTS_SESSIONS;
+	try {
+		await enterDefaultWorkspace(page);
+		const chatTab = restoredChatTab(page, priced.id);
+		await chatTab.click();
+		await expect(page.getByTestId("left-stack")).toBeVisible();
+		const toggle = page.getByTestId("chat-toolbar").getByTestId("chat-header-toggle");
+		await toggle.click();
+		const pane = page.getByTestId("chat-pane");
+		await expect(pane).toBeVisible();
+		await expect(page.getByTestId("left-stack")).toHaveCount(0);
+		await expect(page.getByTestId("right-stack")).toHaveCount(0);
+		await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
+
+		const session = pane.getByTestId("session-insights-session");
+		await expect(session.getByTestId("session-insights-session-open-chat")).toHaveCount(0);
+		await expect(session.getByTestId("session-insights-open-as-tab")).toBeVisible();
+		await session.getByTestId("session-insights-section-trace").click();
+		const failing = session.locator(
+			'[data-testid="trace-row"][data-kind="tool"][data-error="true"]',
+		);
+		await failing.click();
+		const flashed = page.locator('[data-chat-row-id="activity:bash-1"] [data-flash]');
+		await expect(flashed).toBeVisible();
+		await expect(flashed).toContainText("bun test retry");
+		await expect(chatTab).toHaveAttribute("data-active", "true");
+		const show = session.getByTestId("trace-details").getByTestId("details-open-chat");
+		await expect(show).toContainText("Show in chat");
+		await expect(show).toContainText("shown at left");
+		await shot(page, "session-insights/pane", "show-in-chat");
+
+		await page.keyboard.press("Control+Shift+F12");
+		await expect(page.getByTestId("left-stack")).toBeVisible();
+		await session.getByTestId("session-insights-close-pane").click();
+		await expect(pane).toHaveCount(0);
+		await expect(toggle).toHaveAttribute("aria-pressed", "false");
+		await toggle.click();
+		await expect(pane.getByTestId("session-insights-section-trace")).toHaveAttribute(
+			"aria-selected",
+			"true",
+		);
+		await pane.getByTestId("session-insights-open-as-tab").click();
+		await expect(pane).toHaveCount(0);
+		await expectAnalysisOf(page, priced.id, priced.title);
+		await expect(
+			page.getByTestId("session-insights-session").getByTestId("session-insights-section-trace"),
+		).toHaveAttribute("aria-selected", "true");
+	} finally {
+		rmSync(delegationDir, { recursive: true, force: true });
+	}
 });
