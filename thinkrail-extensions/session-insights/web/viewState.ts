@@ -236,5 +236,8 @@ export function showTab(view: ListViewState, tab: ListTab): ListViewState {
 /** The view another panel asked for (`requestListView`): its tab, and its Insights section if named. */
 export function withListIntent(view: ListViewState, intent: ListIntent): ListViewState {
 	const shown = showTab(view, intent.tab);
-	return intent.section ? { ...shown, stats: { ...shown.stats, section: intent.section } } : shown;
+	const scoped = intent.scope ? { ...shown, scope: intent.scope } : shown;
+	return intent.section
+		? { ...scoped, stats: { ...scoped.stats, section: intent.section } }
+		: scoped;
 }

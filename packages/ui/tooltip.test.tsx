@@ -58,6 +58,16 @@ function sourceFiles(dir: string): string[] {
 	return out;
 }
 
+test("a pass-through tooltip's wrapper is let through by the app's one stylesheet rule", () => {
+	const marker = "data-pass-through";
+	expect(readFileSync(fileURLToPath(new URL("./tooltip.tsx", import.meta.url)), "utf8")).toContain(
+		`"${marker}"`,
+	);
+	expect(readFileSync(join(ROOT, "apps/web/src/styles/global.css"), "utf8")).toContain(
+		`[data-radix-popper-content-wrapper]:has(> [${marker}])`,
+	);
+});
+
 test("no call site hand-rolls the wrapper span", () => {
 	const offenders = SOURCE_ROOTS.flatMap(sourceFiles).filter((path) =>
 		/<IconTooltip[^>]*>\s*<span className="flex">/.test(readFileSync(path, "utf8")),

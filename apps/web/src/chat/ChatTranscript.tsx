@@ -866,10 +866,7 @@ const ChatTranscript = forwardRef<
 													data-testid="chat-row"
 													data-chat-row-id={row.id}
 													data-chat-row-index={index - firstItemIndex}
-													className={cn(
-														measureClassName,
-														"rounded-sm px-chat-gutter py-4 transition-colors data-[flash]:bg-primary-subtle",
-													)}
+													className={cn(measureClassName, "rounded-sm px-chat-gutter py-4")}
 												>
 													<ChatTurnView
 														row={row}

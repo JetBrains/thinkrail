@@ -112,6 +112,8 @@ describe("switching the list's tab", () => {
 		expect(findings.stats).toEqual({ ...DEFAULT_STATS_VIEW, section: "sequences" });
 		const kept = withListIntent(SAVED, { tab: "insights" });
 		expect(kept.stats.section).toBe("ab");
+		expect(kept.scope).toBe(SAVED.scope);
+		expect(withListIntent(DEFAULT_LIST_VIEW, { tab: "insights", scope: "all" }).scope).toBe("all");
 		expect(kept.results).toBe(false);
 		expect(kept.picks).toEqual([PICK]);
 	});

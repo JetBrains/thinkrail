@@ -89,8 +89,12 @@ export function routeOverviewLink(link: OverviewLink, route: OverviewRoute): voi
 
 const LIST_PANEL = "sessions";
 
-/** Shows this session's findings where they live: the list tab's Insights → What to do. */
-export function openFindings(host: PanelHost): void {
-	requestListView({ tab: "insights", section: "findings" });
+/**
+ * Shows this session's findings where they live: the list tab's Insights → What to do, over the session's
+ * own project (the Overview counts them there), so a session of another project asks for all projects.
+ */
+export function openFindings(host: PanelHost, projectId: string | null): void {
+	const scope = projectId !== null && projectId === host.scope.projectId ? "project" : "all";
+	requestListView({ tab: "insights", section: "findings", scope });
 	host.openPanel(LIST_PANEL);
 }

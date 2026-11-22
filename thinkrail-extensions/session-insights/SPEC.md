@@ -161,9 +161,8 @@ only through host-injected locators.
   shows 25 rows and a *Show N more* line instead of virtualization, so the DOM stays bounded while table
   semantics and per-figure tooltips stay cheap. Seven figure columns sort (descending first, missing
   values last, the server's order between ties); the sort applies within groups. Figure tooltips close as
-  the pointer leaves the figure and never take the pointer (`disableHoverableContent`, and the tooltip and
-  Radix's positioning wrapper pass it through), so a tooltip never covers a click on the next row;
-  keyboard focus still opens them.
+  the pointer leaves the figure and never take the pointer (`IconTooltip passThrough`, [[module-ui]]), so a
+  tooltip never covers a click on the next row; keyboard focus still opens them.
 - **Width.** A 28 px checkbox column comes first. Every column shows without sideways scrolling down to a 900 px panel (the default center
   area at 1920 px with both side panels open is about 955 px); only below 880 px does the table scroll. The
   Session column takes what the fixed columns leave and truncates (the full title stays in its `title`).
@@ -396,7 +395,8 @@ only through host-injected locators.
   section through `OverviewLink` — a plan step or the activity selects its calls in the trace (a removable
   "N calls from the overview" chip), a chain opens that chain's detail, a file that file, Context lands on
   the context half of *Cost & context* — and *What to do* asks the list for Insights → What to do
-  (`listIntent.ts`) before `openPanel("sessions")`. It is asked again (1 s, 2 s, then every 5 s) while the
+  (`listIntent.ts`) over the session's own project — this project, or all projects for a session of
+  another one, since the card counted the findings there — before `openPanel("sessions")`. It is asked again (1 s, 2 s, then every 5 s) while the
   session is `pending` or the findings are still being counted.
 - **View state.** Each tab and chat pane keeps the section, trace mode, selection, folds, the trace's top
   row, the context's chart or diff, the details' tab, the picked chain and file through

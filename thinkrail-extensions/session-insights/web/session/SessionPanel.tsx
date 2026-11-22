@@ -712,7 +712,7 @@ export default function SessionPanel({ host, params }: PanelProps) {
 			section: (to) => navigate({ section: to }),
 			chain: setChain,
 			file: setFile,
-			findings: () => openFindings(host),
+			findings: () => openFindings(host, overview?.projectId ?? null),
 		});
 	return (
 		<DetailsContext value={details}>

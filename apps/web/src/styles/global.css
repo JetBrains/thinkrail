@@ -31,6 +31,10 @@ body {
 	}
 }
 
+[data-radix-popper-content-wrapper]:has(> [data-pass-through]) {
+	pointer-events: none;
+}
+
 * {
 	--scrollbar-thumb: transparent;
 	--scrollbar-thumb-inset: 0px;

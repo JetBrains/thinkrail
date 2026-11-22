@@ -348,11 +348,16 @@ describe("the sections", () => {
 			["findings"],
 		]);
 		const opened: unknown[] = [];
-		openFindings(host({ openPanel: (...args) => opened.push(args) }));
+		const listHost = host({ openPanel: (...args) => opened.push(args) });
+		openFindings(listHost, listHost.scope.projectId);
 		const intent = pendingListView();
-		expect(intent).toEqual({ tab: "insights", section: "findings" });
+		expect(intent).toEqual({ tab: "insights", section: "findings", scope: "project" });
 		if (intent) settleListView(intent);
-		expect(opened).toEqual([["sessions"]]);
+		openFindings(listHost, "another-project");
+		const across = pendingListView();
+		expect(across).toEqual({ tab: "insights", section: "findings", scope: "all" });
+		if (across) settleListView(across);
+		expect(opened).toEqual([["sessions"], ["sessions"]]);
 	});
 
 	test("a section's data is asked for the first time it shows and kept after", () => {

@@ -1814,7 +1814,14 @@ test("ticked sessions compare as A and B, survive a scope switch, and figure too
 	await expect(below.getByTestId("session-insights-pick")).toBeChecked();
 	await below.getByTestId("session-insights-pick").click();
 
-	await rowsInOrder.nth(2).getByTestId("session-insights-cost").locator("button").focus();
+	await rowsInOrder.nth(2).getByTestId("session-insights-pick").focus();
+	await page.keyboard.press("End");
+	await page.keyboard.press("ArrowLeft");
+	await page.keyboard.press("ArrowLeft");
+	await page.keyboard.press("ArrowLeft");
+	await expect(
+		rowsInOrder.nth(2).getByTestId("session-insights-cost").locator("button"),
+	).toBeFocused();
 	await expect(page.getByRole("tooltip")).toBeVisible();
 	const covered = rowsInOrder.nth(1).getByTestId("session-insights-tokens").locator("button");
 	await covered.click();

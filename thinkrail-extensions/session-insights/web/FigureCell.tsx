@@ -1,6 +1,6 @@
 import { useT } from "@thinkrail/locales/react";
 import type { MetricId, Origin } from "@thinkrail/pi-session-insights/core";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@thinkrail/ui/tooltip";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
 import {
@@ -123,11 +123,6 @@ export function FigureDetails({
 	);
 }
 
-/** Lets the pointer through the tooltip's positioning wrapper, so a tooltip never covers a click. */
-function passPointerThrough(content: HTMLDivElement | null) {
-	content?.parentElement?.style.setProperty("pointer-events", "none");
-}
-
 /** A list row's figure; its provenance tooltip never takes the pointer, and keyboard focus opens it. */
 export function FigureCell({
 	figures,
@@ -146,23 +141,22 @@ export function FigureCell({
 }) {
 	return (
 		<td data-testid={testId} className={cn("overflow-hidden p-0 align-top", className)}>
-			<Tooltip disableHoverableContent>
-				<TooltipTrigger asChild>
-					<button
-						type="button"
-						{...gridAttributes(cell)}
-						className={cn(
-							"flex w-full min-w-0 flex-col items-end py-4 text-right tr-text-ui focus-visible:focus-ring-inset",
-							FIGURE_X,
-						)}
-					>
-						{children}
-					</button>
-				</TooltipTrigger>
-				<TooltipContent ref={passPointerThrough} align="end" className="pointer-events-none">
-					<FigureDetails figures={figures} sources={sources} />
-				</TooltipContent>
-			</Tooltip>
+			<IconTooltip
+				label={<FigureDetails figures={figures} sources={sources} />}
+				align="end"
+				passThrough
+			>
+				<button
+					type="button"
+					{...gridAttributes(cell)}
+					className={cn(
+						"flex w-full min-w-0 flex-col items-end py-4 text-right tr-text-ui focus-visible:focus-ring-inset",
+						FIGURE_X,
+					)}
+				>
+					{children}
+				</button>
+			</IconTooltip>
 		</td>
 	);
 }

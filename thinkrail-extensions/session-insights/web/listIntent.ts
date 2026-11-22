@@ -5,6 +5,8 @@ export type InsightsSection = "findings" | "usage" | "hotspots" | "sequences" | 
 export interface ListIntent {
 	tab: ListTab;
 	section?: InsightsSection;
+	/** This project or all projects; the list keeps its own scope where absent. */
+	scope?: "project" | "all";
 }
 
 type Listener = (intent: ListIntent) => void;
