@@ -481,12 +481,11 @@ function Overflow({
 							</dl>
 						) : null}
 						{layout.actions ? null : (
-							<div className="flex flex-col items-stretch gap-2 border-border-default border-t pt-8">
+							<div className="flex flex-col items-start gap-2 border-border-default border-t pt-8">
 								<Button
 									variant="ghost"
 									size="s"
 									iconLeft={RiArrowLeftRightLine}
-									className="justify-start"
 									data-testid="session-insights-compare-with"
 									onClick={() => setView("compare")}
 								>
@@ -497,7 +496,6 @@ function Overflow({
 										variant="ghost"
 										size="s"
 										iconLeft={RiPriceTag3Line}
-										className="justify-start"
 										data-testid="session-insights-session-labels"
 										onClick={() => setView("labels")}
 									>
@@ -509,7 +507,6 @@ function Overflow({
 										key={kind}
 										variant="ghost"
 										size="s"
-										className="justify-start"
 										data-testid="session-insights-export-item"
 										data-kind={kind}
 										onClick={() => {
@@ -525,7 +522,6 @@ function Overflow({
 										variant="ghost"
 										size="s"
 										iconLeft={RiChat3Line}
-										className="justify-start"
 										data-testid="session-insights-session-open-chat"
 										disabled={!target}
 										tooltip={target ? undefined : t("sessionInsights.details.chatUnavailable")}
@@ -558,6 +554,7 @@ function NoteIcon({
 	note: string;
 }) {
 	const t = useT();
+	const tooltip = <span className="line-clamp-10 block max-w-320 whitespace-pre-wrap">{note}</span>;
 	return (
 		<LabelsButton
 			host={host}
@@ -570,9 +567,7 @@ function NoteIcon({
 					icon={RiStickyNoteLine}
 					size="s"
 					label={t("sessionInsights.labels.note")}
-					tooltip={
-						<span className="line-clamp-10 block max-w-320 whitespace-pre-wrap">{note}</span>
-					}
+					tooltip={tooltip}
 					data-testid="session-insights-session-note"
 					aria-haspopup="dialog"
 				/>

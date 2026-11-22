@@ -11,6 +11,7 @@ import type { MessageKey } from "@thinkrail/locales";
 import { localeOf, type Translator, useT } from "@thinkrail/locales/react";
 import type { SessionListRow, SessionsListResult } from "@thinkrail/pi-session-insights/core";
 import { Button, IconButton } from "@thinkrail/ui/button";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import { type FocusEvent, type KeyboardEvent, type ReactNode, useState } from "react";
 import { isBadged, OUTCOME_LABEL, OUTCOME_TONE, sessionName } from "./copy";
@@ -628,7 +629,7 @@ export function SessionsTable({
 		setLimits((current) => ({ ...current, [group.key]: (current[group.key] ?? PAGE) + PAGE }));
 
 	const onKeyDown = (event: KeyboardEvent<HTMLTableElement>) => {
-		if (!(event.target instanceof HTMLElement)) return;
+		if (isImeComposing(event.nativeEvent) || !(event.target instanceof HTMLElement)) return;
 		const position = gridPosition(event.target);
 		if (!position) return;
 		const line = lines[position.row];
