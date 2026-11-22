@@ -54,10 +54,41 @@ product contract (it then guards upstream's behavior instead).
 - **Preload passed as source text.** Owner [[module-desktop]], `index.ts`. **Removal gate:** a
   `views://` preload URL loads as a script on Linux (Electrobun 1.18.1 injected it as code). Verify the
   Linux packaged preload smoke.
+- **Linux main window shown after its webview attaches.** Owner [[module-desktop]], `webviewFocus.ts`.
+  Electrobun 2.0.5 shows the window (`gtk_widget_show_all` + `gtk_window_present`) before attaching the
+  WebKitWebView and has no `gtk_widget_grab_focus`. On a real display (WebKitGTK 2.52.6, i3, 2026-11-20)
+  the window opened with `document.hasFocus()=false` and the first ↓ never reached the page, while
+  MiniBrowser on the same host got every key. Created hidden and shown after attach, it opened with
+  `hasFocus=true` and every key arrived. There is no webview focus API yet
+  ([electrobun#142](https://github.com/blackboardsh/electrobun/issues/142), open on 2026-11-20), so focus
+  lost mid-session is not restored. **Removal gate:** Electrobun focuses the webview when it attaches it,
+  or #142 ships a webview focus call. Verify on a Linux display, without the helper, that a fresh window
+  reports `hasFocus=true` and the first key (xdotool ↓) reaches the page; `webviewFocus.test.ts` goes with
+  the helper.
 - **Edge-triggered menu commands and Command-Q key state.** Owner [[module-desktop]], `repeatGate.ts`,
   `quitShortcut.ts`, `keyState.ts`. **Removal gate:** menu actions carry a key-repeat flag and their
   trigger (key or pointer). Verify `repeatGate.test.ts`, `quitShortcut.test.ts`, `keyState.test.ts`.
 
+- **Linux paste and drop of files (WebKitGTK, CVE-2025-13947).** Owners [[module-desktop]]
+  (`nativeClipboard.ts`, `clipboardBridge.ts`, preload, `readClipboard` RPC) and [[submodule-web-chat]]
+  (`attachmentPasteDropHandlers`). WebKitGTK ≥ 2.50.3 empties pasted and dropped files, so a Linux paste
+  without files reads the system clipboard natively, and a drop that arrives emptied only explains itself.
+  **Removal gate:** the system WebKitGTK hands pasted files to the page (the paste fix ships in WebKitGTK
+  2.54) — then drop the bridge, its RPC and the helpers; a drop fix (not merged upstream yet) retires the
+  drop notice. Verify with a file-manager copy and a screenshot paste into the composer on the packaged
+  Linux app.
+- **Electrobun's Linux clipboard reads block the host and leak.** Owner [[module-desktop]]
+  (`nativeClipboard.ts`, *Native clipboard*). In 2.0.5 `Utils.clipboardAvailableFormats/ReadText/ReadImage`
+  are synchronous FFI calls that `dispatch_sync_main` onto GTK while the Bun thread, which runs the
+  in-process host, waits — up to GTK's ~30 s selection timeout per wait when the clipboard owner hangs;
+  `clipboardReadImage` decodes and re-encodes the image inside that wait, returns a `malloc`'d PNG that
+  `proc/native.ts` copies and never frees (one leak per image paste), and there is no `text/uri-list` read.
+  So the desktop reads through `wl-paste` / `xclip` first (asynchronous, killed at a timeout) and calls
+  Electrobun only when no helper runs. **Removal gate:** Electrobun offers an asynchronous (or off-main)
+  clipboard read that frees its buffer, a URI-list or arbitrary-target read, and a target listing — then
+  read through it and drop the helpers; until then a GTK main-thread wait the host does not block on (no
+  `dispatch_sync` from the Bun thread) at least lets the fallback stay. Verify against the installed
+  `api/sdks/main/proc/native.ts` (`clipboardReadImage`'s "We should free it" note) and its native wrapper.
 - **Static agent mockups inside the desktop window.** Owner [[module-resource-renderers]] (the
   interactive-HTML rule), `apps/web/src/shell/nativeBridges.ts` + `AppResourceHost.tsx`. Electrobun 2.0.5
   registers its WebKit message handlers (`bunBridge`, `internalBridge`) for every frame, and the internal RPC

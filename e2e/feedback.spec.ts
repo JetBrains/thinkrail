@@ -292,6 +292,8 @@ test("Settings search offers the survey only while one is launched", async ({ pa
 	await page.getByTestId("open-settings").click();
 	await search.fill("Take the survey");
 	await hit.click();
+	await expect(page.locator('[data-setting-id="feedback-survey"]')).toBeFocused();
+	await page.keyboard.press("ArrowRight");
 	await expect(page.getByTestId("feedback-take-survey")).toBeFocused();
 	await closeSettings(page);
 

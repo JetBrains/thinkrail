@@ -303,9 +303,12 @@ roster's catalog reads ([[submodule-web-panels]]).
   that survives the chat tab's unmount; written only by `chat` through `setChatReadingAnchor`) /
   **`composerFocusWonOver`** (browser-local: the tool call the session's host was waiting on when its last
   composer-focus request was served, else `null`; written only by `serveComposerFocusRequest`) /
-  **`promptImages`** (the composer's transient ready images, pending decodes, errors and a fresh generation
-  token; the pure model `PromptImagesState` + `newPromptImagesState` is the store's own
-  `promptImageState.ts`, so runtime creation runs no `chat` code). `updateChatPromptImages(sessionId, update)` changes
+  **`promptImages`** (the composer's transient ready images, file attachments with the path each was
+  already copied to, pending decodes and native clipboard reads, errors, the in-flight upload's `AbortController` and a fresh generation
+  token; the pure model `PromptImagesState` + `newPromptImagesState` and its transitions
+  `withoutPromptChips` / `withCopiedPromptFile` / `withPendingWork` (pending work counts only on the
+  generation it started on) are the store's own `promptImageState.ts`, so runtime
+  creation runs no `chat` code). `updateChatPromptImages(sessionId, update)` changes
   that draft atomically through the same existing-runtime-only boundary as text drafts. Remounts and
   transcript reconciliation retain it; closing the runtime or clearing its workspace releases it.
   A new runtime gets a different generation even when its session id is reused, so old decodes cannot
@@ -569,7 +572,7 @@ roster's catalog reads ([[submodule-web-panels]]).
   `panels/settingsCatalog` id, or `shortcut:<command>`) is stored as **`settingsTarget`** in the same update;
   the dialog takes it once with **`consumeSettingsTarget()`**, which returns and clears it, and a close or an
   open without one clears it too. The client-local preference defaults the store starts from
-  (`artifactsSmart`, `doubleShiftSearch`, `markdownOutlineSide`) are one constant,
+  (`doubleShiftSearch`, `markdownOutlineSide`) are one constant,
   **`CLIENT_PREFERENCE_DEFAULTS`**, which Settings' Reset reads too. The optional Update key is navigation only. Native
   updater snapshots/actions remain in `updates`' shell-local hook state; the optional **`hostUpdate`** lifecycle
   snapshot is host domain state, installed atomically from `server.welcome` or replaced by the one
@@ -840,12 +843,14 @@ host's `artifacts.list` snapshot), **`artifactsTickByWorkspace`** (`noteArtifact
 (`markArtifactsSeen`, a watermark that only moves forward; the first snapshot of a workspace seeds it) and
 **`artifactsTreeExpandedByWorkspace`** (`setArtifactsTreeExpanded(workspaceId, paths, expanded)`,
 `collapseAllArtifacts`; the Tree view's open folders), all dropped in `applyWorkspaceRemoved`, plus the
-app-wide **`artifactsShowIgnored`** toggle, **`artifactsView`** (`setArtifactsView`, `"list" | "tree" |
-"smart"`, `null` until the user picks one) and **`artifactsSmart`** (`setArtifactsSmart`, the Settings switch
-for the Smart view, on by default); the seen watermarks, the open folders (Smart's group and chip ids
-included), the toggle, the view and the switch hydrate from per-client preferences
+app-wide **`artifactsShowIgnored`** toggle and **`artifactsView`** (`setArtifactsView`, `"outputs" |
+"smart" | "list" | "tree"`, `null` until the user picks one); the seen watermarks, the open folders (Smart's
+group and chip ids included), the toggle and the view hydrate from per-client preferences
 (`hydrateArtifactsPreferences`). **`selectArtifactsView`** resolves the view the panel shows (an explicit
-choice, else Smart when it is switched on and **`supportsArtifactRoles`** holds, else List).
+choice while it is offered, else Outputs when **`selectArtifactOutputsOffered`** — host v128 and the
+`outputs` extension, `OUTPUTS_EXTENSION`, not in `disabledExtensions` — else Smart when
+**`supportsArtifactRoles`** holds, else List), and **`selectArtifactsRoundFilter`** maps it to what the
+chat divider's artifacts chip lists (`published`, `results` or `all`).
 **`pasteIntoComposer(sessionId, text)`** (Artifacts' Mention in chat) applies the same composer edit an
 extension's `pasteToEditor` request does, so both paste at the caret the same way.
 **`selectActiveFilePath`** is the path of the active file or diff tab, else `null`.

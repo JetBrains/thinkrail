@@ -10,10 +10,12 @@ import {
 	type SubagentCompletionDetails,
 	type TurnChangeSet,
 	type WireUserMessage,
+	type WorkspaceArtifact,
 	type WorkspaceArtifactsSnapshot,
 } from "@thinkrail/contracts";
 import { strArg } from "@thinkrail/extension-api/web";
 import { projectRelativePath } from "../lib";
+import type { ArtifactsRoundFilter } from "../store";
 import { type AssistantFailure, assistantFailure } from "./assistantFailure";
 import type { ChatMessageOrder } from "./chatPreferences";
 import { endingSuggestionsCall } from "./composerSuggestions";
@@ -169,15 +171,21 @@ export interface RoundArtifact extends DividerArtifact {
 	rounds: readonly number[];
 }
 
+function roundShows(artifact: WorkspaceArtifact, filter: ArtifactsRoundFilter): boolean {
+	if (artifact.state !== "live") return false;
+	if (filter === "published") return artifact.published === true;
+	return filter === "all" || artifact.role === "result";
+}
+
 export function sessionRoundArtifacts(
 	snapshot: WorkspaceArtifactsSnapshot | undefined,
 	sessionId: string,
-	resultsOnly: boolean,
+	filter: ArtifactsRoundFilter,
 ): RoundArtifact[] {
 	if (!snapshot) return [];
 	const prefix = `${snapshot.dir}/`;
 	return snapshot.artifacts.flatMap((artifact) => {
-		if (artifact.state !== "live" || (resultsOnly && artifact.role !== "result")) return [];
+		if (!roundShows(artifact, filter)) return [];
 		const rounds = (artifact.rounds ?? [])
 			.filter((round) => round.sessionId === sessionId)
 			.map((round) => round.startedAt);

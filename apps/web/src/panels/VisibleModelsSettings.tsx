@@ -65,7 +65,7 @@ function ProviderShownToggle({
 			aria-pressed={PRESSED[state]}
 			aria-label={label}
 			tabIndex={tabIndex}
-			data-setting-side=""
+			data-setting-toggle=""
 			data-testid="visible-models-provider-toggle"
 			data-provider={provider}
 			data-state={state}
@@ -150,7 +150,6 @@ function ModelVisibilityItem({
 					label={t("settings.visibleModels.show", { name: model.name })}
 					testId={`model-visibility-${model.provider}-${model.id}`}
 					tabIndex={tabIndex ?? 0}
-					data-setting-side=""
 					onClick={stopRowClick}
 					onCheckedChange={(visible) => setVisible(model, visible)}
 				/>
@@ -257,7 +256,10 @@ export function VisibleModelsTree({
 			testId="visible-models-group"
 		>
 			{groups.length === 0 ? (
-				<p data-setting-id={SETTING.visibleModels.id} className="py-12 text-text-muted tr-text-ui">
+				<p
+					data-setting-id={SETTING.visibleModels.id}
+					className="px-8 py-12 text-text-muted tr-text-ui"
+				>
 					{t("settings.visibleModels.noModels")}
 				</p>
 			) : (

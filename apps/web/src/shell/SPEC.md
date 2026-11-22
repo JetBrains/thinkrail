@@ -124,6 +124,18 @@ the layout engine; New terminal remains the only creation action, and the layout
 (into a terminal pane, or into a new pane below a tool pane) — the shell injects no side-menu actions. The
 workbench receives workspace identity explicitly to fence pending drag/focus work without remounting.
 
+**Where focus goes on an open** (user, 2026-11-20; VS Code's rule). An open asks the layout to focus
+the opened tab's button by default. A keyboard open from a tree — Enter on a row (its click has
+`detail === 0`) or Mod+Enter — and a search-palette file pick open with `focus: "content"`
+(`panels`' `KEYBOARD_OPEN` / `treeOpenFocus`, through `openFileInTab`'s options, `LayoutOpenOptions.focus`
+and the `open` intent into a content focus request, [[submodule-web-shell-layout]]): focus lands on
+the tab's `[data-focus-default]` target once it renders — a reading surface, the Markdown block cursor or
+the read-only editor ([[module-resource-renderers]]); a view with none keeps the tab button (an image,
+and HTML, whose frame would swallow every key). A pointer click from a tree opens with
+`focus: "none"`, so focus stays on the row; a double click keeps today's tab-button focus. The trees
+that share it: Files, Specs and Artifacts (their Outputs too); Changes opens diffs and keeps the
+tab-button focus.
+
 Resource opens route to that workspace's last-focused surviving center group. Reopening a canonical resource selects its local placement rather than duplicating it. Resource close does not remove the frame group when it becomes empty. Explicit split/add/remove/merge commands own topology; group removal deterministically rehomes resources from every locally retained workspace view before one state commit. Applying a preset follows the same all-views rule. Moving a singleton tool or resizing/folding/showing a region changes the one frame; moving a file/chat/diff/document/terminal among existing groups changes only the active workspace view. Pointer/resize drafts stay runtime-local and publish one local transition on completion.
 
 The layout persistence boundary is `layoutState`, not the store. Browsers qualify state by backend endpoint and frontend-surface identity; native windows use the injected stable string adapter's profile/window scope with a fixed key independent of the host's dynamic port. Both paths persist and decode the same bounded document. State is schema-validated on load and restored on reload or supported window-session restoration. Simultaneous windows do not observe each other's storage writes. A surface with no valid local document starts from the Balanced frame; old host snapshots and old browser attention keys are never read.
@@ -136,9 +148,9 @@ Default-terminal creation no longer depends on a host layout revision. The works
 
 ## Layout settings
 
-Built-in presets remain web-owned. The Layout section presents built-ins plus the host-synchronized custom preset catalog, while default preset selection and independent side/bottom limits are local to this frontend surface. The selected default is the explicit Reset frame target; it is not reapplied on workspace switches because every workspace shares the current frame. Capture/rename/delete changes only the shared custom definition. Which preset is applied is never stored: a row reads as **Current** while the live frame matches that preset's geometry (`frameMatchesPreset`), so a manual resize simply clears the mark. Apply or Reset (each behind one confirm) replaces this window's frame and reflows all retained workspace views, preserving resource identities, then persists locally; another frontend is unaffected. A preset row keeps its sides inside the row: a longer translated label wraps them instead of overflowing.
+Built-in presets remain web-owned. The Layout section presents built-ins plus the host-synchronized custom preset catalog, while default preset selection and independent side/bottom limits are local to this frontend surface. The selected default is the explicit Reset frame target; it is not reapplied on workspace switches because every workspace shares the current frame. Capture/rename/delete changes only the shared custom definition. Which preset is applied is never stored: a row reads as **Current** while the live frame matches that preset's geometry (`frameMatchesPreset`), so a manual resize simply clears the mark. Apply or Reset (each behind one confirm) replaces this window's frame and reflows all retained workspace views, preserving resource identities, then persists locally; another frontend is unaffected. A preset row keeps its buttons inside the row: a longer translated label wraps them instead of overflowing.
 
-`LayoutSettings` is built on the Settings kit ([[submodule-web-settingskit]]) in three groups: **Presets** (the presets list, Add new layout, Reset to default and the Advanced group limits), **Artifacts** (Smart view, the retired Artifacts section's switch) and **Documents** (the Markdown outline position, moved from Appearance). [[submodule-web-panels]]' Settings paragraph describes each row once.
+`LayoutSettings` is built on the Settings kit ([[submodule-web-settingskit]]) in two groups: **Presets** (the presets list, Add new layout, Reset to default and the Advanced group limits) and **Documents** (the Markdown outline position, moved from Appearance). [[submodule-web-panels]]' Settings paragraph describes each row once.
 
 ## Long-operation feedback
 
@@ -210,6 +222,14 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
 
 `useGlobalHotkeys` remains the one capture-phase owner of app-wide chords. The chords are declared once in the [[submodule-web-keybindings]] table and resolved with the user's overrides and the web extensions' commands; `keybindingState.ts` is the one place that resolves — once per change of the store's `keybindingOverrides` (ignored below `supportsKeybindings`, so an older host runs the defaults) or `disabledExtensions` — and hands the result to the binder (`currentKeybindings()` at event time) and to every reader (`useResolvedKeybindings`, `useKeybindingKeys`, `useKeybindingLabel`). It resolves the local key sets too — `LOCAL_SETS`: the app's `APP_LOCAL_SET` and the resource renderers' `REVIEW_SURFACE_COMMANDS` as a ThinkRail set in scope `review.surface`, with the extensions' scoped commands in the same input — and `selectLocalKeymap`, memoized on the resolved table, is the value `Shell` provides through `@thinkrail/ui/local-keys`' `LocalKeymapProvider` around its whole tree (portals included), so every element's `useLocalKeys` sees a rebind at once. **The binder yields to a focused element's local keys:** `routeHotkey` asks `matchLocal(resolved, localScopesOf(target), event, { textEntry })` first and, on a hit, dispatches no app chord, extension command or history — the element's own handler acts. `shortcutSurface.ts`' `localScopesOf` walks from the focused element outward collecting the app's scope selectors (rail entry, transcript, composer, history overlay, Changes review, review surfaces, palette, Find in Files) and any `[data-key-scope]`, innermost first. The workbench tab strip and the app's tree declare theirs (`data-key-scope="tabs"` on `layout`'s tablist, `"trees"` on `panels`' `Tree`) instead of being matched by ARIA role: the question card's tab chips are ARIA tabs that handle no `tabs.*` command, so a role match made a `tabs.close` rebound onto Mod+L swallow Focus composer there (#1416's review); the cheatsheet's surface map reads the same markers. A scope whose handlers read a shifted press of an unshifted arrow twin as the extending arrow declares `extendsWithShift` ([[submodule-web-keybindings]]), and `matchLocal` yields that variant too, so a global chord on the Shift variant (Shift+Mod+J toggling the bottom panel once `arrows.down` is Mod+J) cannot take a review cursor's or the swipe divider's extension. `useGlobalHotkeys` matches through it (`matchKeybinding`, then an id → handler map whose missing handler means unavailable) and the palette shows each chord with `keybindingShortcut` over the same result, so a rebind applies and shows at once. It routes commands through the workbench command surface rather than imperative feature-panel refs:
 
+- `Alt+1…9` / `Shift+Alt+1…9` (`suggestions.send1…9` / `edit1…9`) send or edit chip N of a chat's next-step
+  row ([[submodule-web-chat]], *Composer suggestions*) from anywhere — a tree, a tab strip, the question
+  card, the input — except inside xterm (readline keeps Alt+digit), inside Monaco (`isInCodeEditor`), behind
+  a modal layer and while a claim holds the keyboard (hint mode). The target is the registered chat whose
+  root contains `event.target`, else the one `selectHistoryTarget` names (the target `Ctrl+R` and Mod+L
+  use, not a second notion of "the last chat"); `routeHotkey` routes the press only when that chat shows
+  chip N (`hasSuggestion`), so otherwise it reaches the element untouched (macOS Option+digit types its
+  character). A focused element's local key on the same chord still wins there. Focus stays put.
 - `Ctrl+R` opens chat history for the locally selected chat, or the workspace's most-recent chat fallback; the literal `Ctrl+R` acts even during IME composition (it would reload the browser), while a chord the user rebinds history to waits composition out like every other chord;
 - `Mod+B` toggles the left side, restoring local group/tab attention or an eligible singleton tool;
 - `Mod+J` does the same for the right side;
@@ -255,8 +275,9 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   Extension (and Off, its rows muted but editable, while switched off). An area is a level-1 row
   (`keybinding-group`), **collapsed by default**, showing:
   - "N shortcuts" ("n of N" while filtering);
-  - "● N changed" while any row is overridden, with a Reset side that drops every changed override in the
-    area (Delete on the area does the same, without a confirm);
+  - "● N changed" while any row is overridden, with a Reset button that drops every changed override in
+    the area (Delete on the area does the same, without a confirm; → on an area expands it, so Delete is the
+    keyboard's way to that Reset);
   - the "local · when focus is in a sidebar tree" caption when every row shares one local scope; an area
     with mixed scopes captions each local run inside instead (an extension scope reads "when focus is in
     {extension}").
@@ -267,8 +288,10 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   chords show a lock and read `aria-disabled`. A direction row shows its arrow locked, "always works", then
   its twin's letter as the editable alias (recording there edits the shared twin, so it applies in every
   element; the four General `arrows.*` rows edit the same commands).
-  - **Filter and jumps.** "Filter by name" matches the title or a key label. Search by keys (reached with
-    Tab from the filter) turns the field into a recorder whose next chord — a plain letter or a locked
+  - **Filter and jumps.** "Filter by name" matches the title or a key label. The filter is a row
+    (`keyboard-filter`): Enter or Space enters the field, Enter or Esc on a clean field returns to the row.
+    Search by keys (the row's button, reached with → from the row or Tab from the field) turns the field
+    into a recorder whose next chord — a plain letter or a locked
     arrow included — filters to rows showing it; Esc leaves. A filter opens every area with a match and
     hides the rest; Esc in a filter with text clears it before the walk takes Esc. A Settings jump to
     `shortcut:<id>` opens the area holding it on every jump (`useSettingsJump`'s `seq`, at mount too) and
@@ -276,14 +299,17 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
     it. Shell passes `useShortcutSearchEntries` (one `SettingsSearchEntry` per row: title, chords or "Not
     assigned", the area and chord labels as keywords) to `SettingsDialog`'s `searchEntries`, so Settings
     search finds individual shortcuts.
-  - **Recording.** Enter or a click on a row (or its **Change** side) records (`chordFromEvent`, the
+  - **Recording.** Enter (or Space) or a click on a row (or its **Change** button) records (`chordFromEvent`, the
     command's `plain` — true for every local command — as `allowPlain`). The row's chord reads "Press a new
     shortcut… Esc cancels" ("Press a key or a chord…" on a local row, "Press a new key for the alias…" on
-    a direction row), and the row keeps focus. A modifier alone keeps waiting, AltGraph is ignored, and Esc
+    a direction row), framed by the kit's editing frame (`focus-ring-editing`, as an entered control is) so
+    a recording row reads apart from a merely focused one, and the row keeps focus. A modifier alone keeps waiting, AltGraph is ignored, and Esc
     cancels; Settings stays open, because the recorder's Esc is an element step the dialog holds for
     (`holdSettingsEscape`). Tab is not captured: leaving cancels. While recording — and while the filter
     has focus in Search by keys — the editor holds the keyboard claim (`claimKeyboard`, below), so no app
-    chord, extension command or double Shift acts on the press being recorded.
+    chord, extension command or double Shift acts on the press being recorded. An outcome's buttons
+    (Replace, Cancel, Assign anyway, Dismiss) belong to the shortcut's row: → walks Change, Reset, then
+    them, in screen order.
   - **Outcomes,** in order: a plain key on a non-plain command → "A shortcut needs…" (dismiss); a
     desktop-native chord, or a press either desktop platform's `shortcutCommands` matcher owns on this
     layout (`isDesktopShortcut`: AZERTY's `KeyZ` Ctrl+W, Russian `Shift+Slash` Ctrl+,) → refused with
@@ -303,11 +329,11 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
     anyway; browser-reserved → Assign anyway; else it assigns, and a key other elements also use adds an
     info note "C also acts in the chat transcript — a different element, so no conflict".
   - **Rows.** An overridden row shows a **Changed** tag (the kit's word, as everywhere in Settings),
-    "Default: …" and a Reset side; Delete on the row resets it. A lost chord is struck through with
-    "{chord} is taken by {winner} — inactive" and an Assign another side. A mark appears per element that
+    "Default: …" and a Reset button; Delete on the row resets it. A lost chord is struck through with
+    "{chord} is taken by {winner} — inactive" and an Assign another button. A mark appears per element that
     takes the row's chord over ("Inside sidebar trees, F runs “Search the visible rows”"; `commandTitle`
     also names a reserved chord's catalog-row winner, such as a desktop row a browser does not list). →
-    reaches the sides Change / Assign another / Reset; each is a real tab stop that follows the tree's
+    reaches the row's buttons Change / Assign another / Reset; each is a real tab stop that follows the tree's
     roving cursor, never `treeRowControlProps`. Rows carry `data-focus-row` in the tree's `data-focus-list`,
     and after an assignment, Replace, Cancel or Reset focus returns to the row.
   - **Writes** go through `transport`'s `updateKeybindings` (one call per edit, Reset all `{}`) and show
@@ -534,7 +560,19 @@ auxiliary rail, which sits outside every region and carries `data-esc-ladder` in
 bottom tool rails; their F6 ring is unchanged). The center's own tab
 strip and actions climb too, into the tab's content (unconfirmed with the user, the recommended answer);
 the center root and anything inside its tabpanel never do, so the parked feed's and an editor's Esc stay
-theirs. The terminal and Monaco keep their Esc; from there F6 or Mod+L.
+theirs. The terminal and an editable Monaco keep their Esc; from there F6 or Mod+L.
+
+**Esc in a file returns to the Files tree** (user, 2026-11-20). The same listener's third step
+(`leavesFile`): a bare Esc no owner took (not `defaultPrevented`, no claim, no layer) whose target is
+inside a file tab (`FilePane`'s `[data-file-pane]`) and is a non-text element — a reading surface, the
+Markdown block cursor, the toolbar — or the text of a read-only editor (`[data-text-entry="false"]`,
+[[module-resource-renderers]]) runs `showFiles("all", { activeRow: true })`: Files in All mode, the active
+file revealed (`revealInFiles` reopens its collapsed folders) and focus on its row (`aria-current`) rather
+than the row last focused there, so Esc and Enter toggle file ↔ row. `focusToolBody` waits for such a
+preferred target within its busy budget (the row mounts a few frames after its folders open), then takes
+the tool's usual landing. Element-level steps still win because they prevent first: a Markdown range
+clears, a review composer cancels, Monaco closes its find widget or message. A text field in the file
+leaves to its region as above.
 
 **The main area** is the last center group focus entered (the region tracker records it), else the
 first shown center group in ring order, else Project Home's main pane (`[data-main-area]`, which is no

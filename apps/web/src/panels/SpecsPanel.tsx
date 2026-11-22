@@ -21,7 +21,7 @@ import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useMemo, useState } from "react";
 import { firstClickOnly } from "../lib";
 import { selectActiveEditorTab, useAppStore } from "../store";
-import { openFileInTab } from "./openTabs";
+import { KEYBOARD_OPEN, openFileInTab, treeOpenFocus } from "./openTabs";
 import {
 	buildSpecTree,
 	type SpecTreeNode,
@@ -76,7 +76,7 @@ export function SpecsPanel({
 				className="flex flex-col motion-safe:animate-reveal"
 				onOpenKept={(id) => {
 					const node = nodes.find((each) => each.id === id);
-					if (node) void openFileInTab(workspaceId, node.path, "keep");
+					if (node) void openFileInTab(workspaceId, node.path, "keep", undefined, KEYBOARD_OPEN);
 				}}
 			>
 				{roots.map((root) => (
@@ -207,7 +207,16 @@ function SpecNodeRow({
 						role: isMainSpec ? t("panels.specs.mainSpec") : role,
 					})}
 					title={`${node.title}\n${node.id} · ${node.type}`}
-					onClick={firstClickOnly(() => void openFileInTab(workspaceId, node.path, "preview"))}
+					onClick={firstClickOnly(
+						(event) =>
+							void openFileInTab(
+								workspaceId,
+								node.path,
+								"preview",
+								undefined,
+								treeOpenFocus(event),
+							),
+					)}
 					onDoubleClick={() => void openFileInTab(workspaceId, node.path, "keep")}
 					className="flex min-w-0 flex-1 items-center gap-4 rounded-sm text-left focus-visible:focus-ring-inset"
 				>

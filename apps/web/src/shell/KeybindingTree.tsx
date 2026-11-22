@@ -14,14 +14,16 @@ import { cn } from "@thinkrail/ui/utils";
 import type { FocusEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
 import type { KeybindingEntry } from "../keybindings";
 import { useTreeItem } from "../panels/treeNavigation";
-import { SETTINGS_TAG } from "../settingsKit";
+import { SETTINGS_ROW_FOCUS, SETTINGS_TAG } from "../settingsKit";
 import { chordName, type KeybindingArea, shortcutSettingId } from "./keybindingAreas";
 import { entryTitle, scopeText } from "./keybindingState";
 
 const RESET_SLOT = "flex min-w-64 shrink-0 justify-end";
 
-const TREE_ROW =
-	"flex w-full rounded-sm px-8 py-4 text-left transition-colors focus-visible:focus-ring-inset";
+const TREE_ROW = cn(
+	"flex w-full rounded-sm px-8 py-4 text-left transition-colors",
+	SETTINGS_ROW_FOCUS,
+);
 
 function fromControl(event: MouseEvent<HTMLElement>): boolean {
 	return event.target instanceof Element && event.target.closest("button, [role='alert']") !== null;
@@ -126,7 +128,6 @@ export function KeybindingAreaRow({
 							variant="ghost"
 							size="s"
 							tabIndex={treeItem.tabIndex ?? -1}
-							data-setting-side=""
 							data-setting-reset=""
 							data-testid="keybinding-group-reset"
 							aria-label={t("settings.keyboard.editor.resetArea", {
@@ -328,7 +329,10 @@ export function KeybindingShortcutRow({
 					<FixedChords entry={entry} />
 					<span
 						data-testid="keybinding-chord"
-						className="flex min-h-24 shrink-0 flex-wrap items-center justify-end gap-x-8 gap-y-4"
+						className={cn(
+							"flex min-h-24 shrink-0 flex-wrap items-center justify-end gap-x-8 gap-y-4",
+							recording && "rounded-sm focus-ring-editing",
+						)}
 					>
 						<EntryChords entry={entry} recording={recording} />
 					</span>
@@ -338,7 +342,6 @@ export function KeybindingShortcutRow({
 								variant="outline"
 								size="s"
 								tabIndex={sideTab}
-								data-setting-side=""
 								data-testid="keybinding-change"
 								aria-label={t("settings.keyboard.editor.changeNamed", { command: title })}
 								onClick={onRecord}
@@ -350,7 +353,6 @@ export function KeybindingShortcutRow({
 									variant="outline"
 									size="s"
 									tabIndex={sideTab}
-									data-setting-side=""
 									data-testid="keybinding-assign-another"
 									onClick={onRecord}
 								>
@@ -363,7 +365,6 @@ export function KeybindingShortcutRow({
 										variant="ghost"
 										size="s"
 										tabIndex={sideTab}
-										data-setting-side=""
 										data-setting-reset=""
 										data-testid="keybinding-reset"
 										aria-label={t("settings.kit.resetLabel", { label: title })}

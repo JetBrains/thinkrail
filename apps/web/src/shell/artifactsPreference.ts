@@ -6,7 +6,6 @@ import { preferenceStorage, readPreference, writePreference } from "./preference
 const SEEN_KEY = "artifacts-seen";
 const SHOW_IGNORED_KEY = "artifacts-show-ignored";
 const VIEW_KEY = "artifacts-view";
-const SMART_KEY = "artifacts-smart";
 const TREE_EXPANDED_KEY = "artifacts-tree-expanded";
 const MAX_EXPANDED_PATHS = 5000;
 
@@ -42,7 +41,7 @@ function parseTreeExpanded(raw: string | null): Record<string, readonly string[]
 }
 
 function parseView(raw: string | null): ArtifactsView | null {
-	return raw === "list" || raw === "tree" || raw === "smart" ? raw : null;
+	return raw === "outputs" || raw === "smart" || raw === "list" || raw === "tree" ? raw : null;
 }
 
 export function initArtifactsPersistence(
@@ -53,7 +52,6 @@ export function initArtifactsPersistence(
 		seen: parseSeen(readPreference(storage, SEEN_KEY)),
 		showIgnored: readPreference(storage, SHOW_IGNORED_KEY) !== "false",
 		view: parseView(readPreference(storage, VIEW_KEY)),
-		smart: readPreference(storage, SMART_KEY) !== "false",
 		treeExpanded: parseTreeExpanded(readPreference(storage, TREE_EXPANDED_KEY)),
 	});
 	return useAppStore.subscribe((state, previous) => {
@@ -63,8 +61,6 @@ export function initArtifactsPersistence(
 			writePreference(storage, SHOW_IGNORED_KEY, String(state.artifactsShowIgnored));
 		if (state.artifactsView !== previous.artifactsView && state.artifactsView)
 			writePreference(storage, VIEW_KEY, state.artifactsView);
-		if (state.artifactsSmart !== previous.artifactsSmart)
-			writePreference(storage, SMART_KEY, String(state.artifactsSmart));
 		if (state.artifactsTreeExpandedByWorkspace !== previous.artifactsTreeExpandedByWorkspace)
 			writePreference(
 				storage,

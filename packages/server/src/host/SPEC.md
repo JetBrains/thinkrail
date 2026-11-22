@@ -23,6 +23,36 @@ to settings' `setSubagentEnabled` ([[submodule-server-settings]]). The host inje
 `getConfig().disabledSubagents` as agent's live per-name resolver and resets it on stop. Wire shape and
 gate: [[module-contracts]].
 
+## Chat attachments
+
+`attachments.ts` writes the files a prompt attaches into `<worktree>/.thinkrail/context/attachments/`
+(`ATTACHMENTS_DIR`), or `<dataDir>/attachments/` when no workspace is named (New Workspace, whose worktree
+does not exist yet), and answers `ChatAttachmentResult`: the worktree-relative path, or the absolute one
+under the data dir. Two doors, from `CHAT_ATTACHMENTS_PROTOCOL_VERSION`:
+
+- **`PUT /attachments/<name>[?workspace=<id>]`** (`CHAT_ATTACHMENTS_ROUTE`), behind the
+  `CHAT_ATTACHMENT_UPLOAD_HEADER` preflight guard, the fonts route's pattern: file bytes travel over HTTP,
+  never the socket. 413 `too-large` past `CHAT_ATTACHMENT_MAX_BYTES` (checked on `Content-Length` and while
+  streaming; a partial file is removed), 404 `unknown-workspace` (also a chat being deleted), 400
+  `invalid-name`, 500 `unwritable`; any other method 405.
+- **`attachments.copyLocal { workspaceId?, path }`** copies a local file a desktop paste named (a file
+  manager's copied path, [[module-desktop]]) at send time. **Trust:** it reads any absolute path the host
+  user can read. The wire is unauthenticated by design: Tailscale ACLs and device identity are the auth
+  ([[architecture]] Decision 7), so every client they admit — the local desktop or browser, and a phone or
+  remote browser on the user's tailnet — can ask it, and every such client already has the same reach
+  through terminals and the agent's shell, so the door adds no capability. It refuses a
+  relative path, anything but a regular file (opened `O_NONBLOCK` and checked on the open handle, so a FIFO
+  or device swapped in cannot hang the host) and a file over the limit.
+
+The folder is flat: a base name is flattened (no separators, Windows-reserved characters replaced, control
+characters refused), cut to 250 UTF-8 bytes at a code point (the extension kept, at most 32 bytes), so the
+largest suffix still fits the file system's 255-byte name limit, and a taken name becomes `name-2.ext`,
+`name-3.ext`, … `name-1000.ext` through `O_CREAT | O_EXCL | O_NOFOLLOW`, so nothing is overwritten and a
+symlink holding a name is skipped. `.thinkrail/context` is
+seeded by shared's `seedArtifactsDir`; it and `attachments/` must be real directories (a symlink anywhere
+below the worktree root is `unwritable`) whose real path stays inside the worktree. A workspace write
+nudges `fsChanged`. Nothing cleans the folder: sent messages keep naming its files, and Artifacts shows them.
+
 ## Boundary
 
 - **Owns:** `server.ts` (async `createServer` first asks auth to start Central artifact watching and publish
@@ -58,7 +88,8 @@ gate: [[module-contracts]].
   any method but `GET`/`HEAD` with 405; the host injects its
   source (agent's live lookup plus the tombstone check), calls `forgetImageSession` on every `session.deleted`,
   and calls `resetImages` on stop. Then the **`/fonts/<file>`** route (`fontRoutes.ts`, ahead of the static fallback) over the
-  [[submodule-server-fonts]] folder — the host's one HTTP write route, and besides `/images` (GET/HEAD only)
+  [[submodule-server-fonts]] folder — one of the host's two HTTP write routes (the other is `PUT /attachments/`,
+  § Chat attachments, which takes `PUT` only), and besides those and `/images` (GET/HEAD only)
   the only route that checks its method: `GET` serves a font by its extension's type (`font/ttf|otf|woff|woff2`) with
   `Cache-Control: no-cache` (list URLs carry a content version) and 404s any name `fontFileKind` refuses,
   a collection, or a missing file; `PUT` (behind the upload guard below) answers 400 for a refused name,
@@ -902,7 +933,7 @@ the session-event tee maps pi events through `createArtifactEventMapper` (`host/
 args), every assistant `message_end` as `assistant_message` (its text, empty for a tool-call-only turn),
 every `message_end` that `opensChatRound` (contracts) says opens a chat round as `round_start` (its
 timestamp: queued and steered ones included),
-and `tool_execution_end` with the `presented` / `picked` paths that the enabled extensions'
+and `tool_execution_end` with the `presented` / `picked` / `published` paths that the enabled extensions'
 `artifactTools` declarations ([[submodule-server-extensions]]) read from the call's args and result
 `details` — only for a successful call, a throwing declaration logged and skipped; a call's args are
 held per session and call id, since providers may reuse ids across chats — so the host names no tool; an `agent_start` also
@@ -1086,15 +1117,17 @@ enabled/confirmed choice before entering analytics attribution.
   - **Bound.** One frame per pending stream key; there is no byte budget. Quarantine stays the safety
     net for everything else.
 - The host is the single place features are wired together — features never reach back into it.
-- **A font upload must carry `X-ThinkRail-Request: font-upload`** (`USER_FONT_UPLOAD_HEADER`), else 403.
-  The host has no auth, no Origin check and no CORS ([[architecture]] Decision 7). A cross-origin upload
-  needs a CORS preflight — by the `PUT` method, and by this non-simple header whatever the method — which
-  the route answers 405 with no `Access-Control-*` headers, so another website's write never leaves the
-  browser; the same-origin client needs no preflight. Never add CORS headers to `/fonts/`, and keep the
-  header check should the route ever accept a simple method such as `POST`. It is the host's only HTTP
-  write because the alternatives fail the feature: base64 over the WebSocket hits the 16 MiB frame cap
-  (CJK fonts run past 20 MB) and a pending frame is replayed on every reconnect, and the host's native
-  file dialog cannot take a drag-and-drop and opens on the host's screen, not a remote browser's.
+- **An upload must carry its guard header, else 403:** a font `X-ThinkRail-Request: font-upload`
+  (`USER_FONT_UPLOAD_HEADER`), a chat attachment `X-ThinkRail-Request: attachment-upload`
+  (`CHAT_ATTACHMENT_UPLOAD_HEADER`). The host has no auth, no Origin check and no CORS ([[architecture]]
+  Decision 7). A cross-origin upload needs a CORS preflight — by the `PUT` method, and by the non-simple
+  header whatever the method — which both routes answer 405 with no `Access-Control-*` headers, so another
+  website's write never leaves the browser; the same-origin client needs no preflight. Never add CORS
+  headers to `/fonts/` or `/attachments/`, and keep the header check should either route ever accept a
+  simple method such as `POST`. They are the host's only HTTP writes because the alternatives fail the
+  features: base64 over the WebSocket hits the 16 MiB frame cap (CJK fonts run past 20 MB, attachments
+  to 100 MB) and a pending frame is replayed on every reconnect, and the host's native file dialog cannot
+  take a drag-and-drop or a paste and opens on the host's screen, not a remote browser's.
 - **Login-shell environment import is opt-in at boot** (`resolveShellEnv: true`, passed by the dev,
   CLI and desktop launchers). Post-mortem: with it on by default, `boot.test.ts` copied the developer's
   login environment — provider API keys included — into the shared `bun test` process (`bun test`

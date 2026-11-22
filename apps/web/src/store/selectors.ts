@@ -1,5 +1,6 @@
 import {
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	ARTIFACT_OUTPUTS_PROTOCOL_VERSION,
 	ARTIFACT_ROLES_PROTOCOL_VERSION,
 	ARTIFACTS_PROTOCOL_VERSION,
 	type BackgroundCommandSummary,
@@ -1341,21 +1342,42 @@ export function supportsArtifactRoles(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= ARTIFACT_ROLES_PROTOCOL_VERSION;
 }
 
-export function selectArtifactsSmartOffered(state: {
-	artifactsSmart: boolean;
+const OUTPUTS_EXTENSION = "outputs";
+
+export function selectArtifactOutputsOffered(state: {
 	protocolVersion: number | null;
+	disabledExtensions: readonly string[];
 }): boolean {
-	return state.artifactsSmart && supportsArtifactRoles(state.protocolVersion);
+	return (
+		state.protocolVersion !== null &&
+		state.protocolVersion >= ARTIFACT_OUTPUTS_PROTOCOL_VERSION &&
+		!state.disabledExtensions.includes(OUTPUTS_EXTENSION)
+	);
 }
 
 export function selectArtifactsView(state: {
 	artifactsView: ArtifactsView | null;
-	artifactsSmart: boolean;
 	protocolVersion: number | null;
+	disabledExtensions: readonly string[];
 }): ArtifactsView {
-	const smart = selectArtifactsSmartOffered(state);
-	if (state.artifactsView === "smart") return smart ? "smart" : "list";
-	return state.artifactsView ?? (smart ? "smart" : "list");
+	const outputs = selectArtifactOutputsOffered(state);
+	const smart = supportsArtifactRoles(state.protocolVersion);
+	const fallback = outputs ? "outputs" : smart ? "smart" : "list";
+	const view = state.artifactsView ?? fallback;
+	if (view === "outputs") return outputs ? view : fallback;
+	if (view === "smart") return smart ? view : fallback;
+	return view;
+}
+
+export type ArtifactsRoundFilter = "published" | "results" | "all";
+
+export function selectArtifactsRoundFilter(state: {
+	artifactsView: ArtifactsView | null;
+	protocolVersion: number | null;
+	disabledExtensions: readonly string[];
+}): ArtifactsRoundFilter {
+	const view = selectArtifactsView(state);
+	return view === "outputs" ? "published" : view === "smart" ? "results" : "all";
 }
 
 export function supportsArtifacts(protocolVersion: number | null): boolean {

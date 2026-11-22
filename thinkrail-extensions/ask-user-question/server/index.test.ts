@@ -54,6 +54,7 @@ function compose(
 		},
 		workspaceFiles: {
 			check,
+			checkArtifacts: async (paths) => paths.map((path) => ({ path })),
 			scratchDir: ".thinkrail/context/mockups/",
 			artifactsDir: ".thinkrail/context/",
 			ensureArtifactsDir: async () => {},

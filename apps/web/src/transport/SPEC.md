@@ -190,7 +190,8 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`,
   `supportsUserThemes`, `supportsFonts`, `supportsExtensionSettings`, `supportsKeybindings`,
   `updateKeybindings`, `supportsSpeech`, `openSpeechSocket`,
-  `hostUrl`, `uploadUserFont`, `supportsToolResponses`, `respondToTool`,
+  `hostUrl`, `uploadUserFont`, `supportsChatAttachments`, `uploadPromptFiles`, `attachmentFailureText`,
+  `supportsToolResponses`, `respondToTool`,
   `supportsTextSearch` (v112 — Find in Files asks `search.text` and listens on `search.textResults` only of a
   host that serves them; against an older host the palette hides the command and the window opened by the
   chord says the host needs an update),
@@ -201,9 +202,20 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   and `supportsHostUpdateRun` lets `Shell` inject it only for protocol v70+; `supportsUserThemes` (v92) is
   exported because `Shell` must drop user themes (cached or from an earlier host) once a host that cannot
   serve theme files has welcomed it; `supportsFonts` (v102) gates the same way for the font settings and the
-  custom-font snapshot (`fonts.list`, refreshed on every welcome and `fonts.changed`), and `uploadUserFont`
-  is the one binary upload — a `PUT` of the raw file to the host's `/fonts/` route with the upload guard
-  header, answered by that file's `UserFontFile` entry — while `hostUrl` resolves a host-relative path
+  custom-font snapshot (`fonts.list`, refreshed on every welcome and `fonts.changed`). There are two binary
+  uploads, each a `PUT` of the raw file under its route's guard header ([[submodule-server-host]]):
+  `uploadUserFont` to `/fonts/`, answered by that file's `UserFontFile` entry, and
+  `uploadPromptFiles(workspaceId | null, files, { signal?, onCopied? })`, which hands a prompt's file
+  attachments to the host in order (`CHAT_ATTACHMENTS_PROTOCOL_VERSION`, v129, gated by
+  `supportsChatAttachments`): picked bytes to `/attachments/`, a pasted local path through
+  `attachments.copyLocal`. It reports each written path through `onCopied`, reuses a file's `copied` path
+  instead of sending it again (a retry after a partial failure makes no `name-2.ext`), stops between files
+  and aborts the `fetch` on `signal`. A socket request can't be withdrawn, so on `signal` the
+  `copyLocal` wait ends at once while the host's copy runs on: its late answer still reports the path
+  (and a blob answer read before the abort reports too), and a retry of that file meanwhile joins the
+  running copy (keyed by workspace and file id) instead of starting another. It answers the paths or throws `AttachmentUploadError` — a host
+  refusal code, a non-JSON answer's HTTP status, an unreachable host or a failed socket request — which
+  `attachmentFailureText` words from the catalog, always naming the file — while `hostUrl` resolves a host-relative path
   (custom face URLs, and chat image references through `chat`'s `ChatMediaContext`) against the endpoint; `supportsExtensionSettings` (v105) lets `ExtensionsSettings`
   offer per-extension setting switches only to a host that stores `extensionSettings`;
   `supportsKeybindings` (`KEYBINDINGS_PROTOCOL_VERSION`, v123) gates the user's keybindings both ways —

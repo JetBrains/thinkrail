@@ -1,4 +1,10 @@
 export {
+	attachmentFailureText,
+	type PromptFileUploadOptions,
+	supportsChatAttachments,
+	uploadPromptFiles,
+} from "./attachments";
+export {
 	clientErrorReport,
 	installClientErrorReporting,
 	reportClientError,

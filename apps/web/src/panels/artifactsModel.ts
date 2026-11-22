@@ -5,6 +5,7 @@ import type {
 	WorkspaceIgnoredOutput,
 } from "@thinkrail/contracts";
 import { localeOf, type Translator } from "@thinkrail/locales/react";
+import { outputFileLabel } from "@thinkrail/resource-renderers";
 import { ancestorPaths } from "../lib";
 import { extendFolderChain, startFolderChain } from "./folderChains";
 
@@ -277,6 +278,26 @@ export function smartGroups(rows: readonly ArtifactRow[]): SmartView {
 		unattached,
 		results: finished.reduce((sum, node) => sum + node.resultCount, 0),
 	};
+}
+
+export interface OutputEntry {
+	row: ArtifactRow;
+	name: string;
+	type: string | null;
+	folder: string | null;
+}
+
+export function outputEntries(rows: readonly ArtifactRow[]): OutputEntry[] {
+	const labeled = rows
+		.filter((row) => row.artifact.published && row.artifact.state === "live")
+		.map((row) => ({ row, ...outputFileLabel(row.artifact.path) }));
+	const key = (entry: { name: string; type: string | null }) => `${entry.type}\u0000${entry.name}`;
+	const counts = new Map<string, number>();
+	for (const entry of labeled) counts.set(key(entry), (counts.get(key(entry)) ?? 0) + 1);
+	return labeled.map((entry) => ({
+		...entry,
+		folder: (counts.get(key(entry)) ?? 0) > 1 && entry.row.folder ? entry.row.folder : null,
+	}));
 }
 
 export function artifactTimeLabel(t: Translator, changedAt: number): string {

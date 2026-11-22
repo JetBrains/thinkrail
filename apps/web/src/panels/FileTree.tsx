@@ -36,7 +36,7 @@ import { holdEditorWarm, useEditorWarm, warmOnHover } from "./editorWarm";
 import { deleteEntry, pasteDestination, pasteInto, supportsFileMutations } from "./fileTreeActions";
 import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
 import { OpenInBrowserMenuItem } from "./OpenInBrowserButton";
-import { openFileInTab } from "./openTabs";
+import { KEYBOARD_OPEN, type OpenTabOptions, openFileInTab, treeOpenFocus } from "./openTabs";
 import { TreeRow } from "./TreeRow";
 import { Tree, treeRowKey, useTreeKeys } from "./treeNavigation";
 import { useWorkspaceRead } from "./useWorkspaceRead";
@@ -95,7 +95,9 @@ export function FileTree({
 				label={t("panels.fileTree.label")}
 				focusList="files"
 				className="flex flex-col motion-safe:animate-reveal"
-				onOpenKept={(path) => void openFileInTab(workspaceId, path, "keep")}
+				onOpenKept={(path) =>
+					void openFileInTab(workspaceId, path, "keep", undefined, KEYBOARD_OPEN)
+				}
 			>
 				{nodes.map((node) => (
 					<FileNodeRow
@@ -237,7 +239,8 @@ function FileNodeRow({
 		setPathsExpanded(representedPaths, nextExpanded);
 		if (nextExpanded) reload();
 	};
-	const open = (intent: TabIntent) => void openFileInTab(workspaceId, node.path, intent);
+	const open = (intent: TabIntent, options?: OpenTabOptions) =>
+		void openFileInTab(workspaceId, node.path, intent, undefined, options);
 	const fileStatus = isDir ? undefined : marks.files.get(node.path);
 	const dirChanged = isDir && marks.dirs.has(directory?.path ?? node.path);
 	const ignored = (directory?.deepest ?? node).gitignored === true;
@@ -294,7 +297,11 @@ function FileNodeRow({
 								/>
 							) : undefined
 						}
-						onClick={isDir ? toggleDirectory : firstClickOnly(() => open("preview"))}
+						onClick={
+							isDir
+								? toggleDirectory
+								: firstClickOnly((event) => open("preview", treeOpenFocus(event)))
+						}
 						onDoubleClick={isDir ? undefined : () => open("keep")}
 						onWarm={
 							isDir || !warmFile

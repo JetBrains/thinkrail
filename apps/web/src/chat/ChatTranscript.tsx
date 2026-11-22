@@ -25,7 +25,7 @@ import { type ListProps, Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { useShallow } from "zustand/react/shallow";
 import {
 	EMPTY_RUNTIME,
-	selectArtifactsSmartOffered,
+	selectArtifactsRoundFilter,
 	selectChatAttended,
 	selectChatsContainer,
 	selectReadyCompletionAck,
@@ -313,10 +313,10 @@ const ChatTranscript = forwardRef<
 		[sessionId, workspaceTurns],
 	);
 	const artifactsSnapshot = useAppStore((state) => state.artifactsByWorkspace[workspaceId]);
-	const smartArtifacts = useAppStore(selectArtifactsSmartOffered);
+	const artifactsFilter = useAppStore(selectArtifactsRoundFilter);
 	const roundArtifacts = useMemo(
-		() => sessionRoundArtifacts(artifactsSnapshot, sessionId, smartArtifacts),
-		[artifactsSnapshot, sessionId, smartArtifacts],
+		() => sessionRoundArtifacts(artifactsSnapshot, sessionId, artifactsFilter),
+		[artifactsSnapshot, sessionId, artifactsFilter],
 	);
 	const derivedRows = useMemo(
 		() =>
@@ -420,6 +420,7 @@ const ChatTranscript = forwardRef<
 		scrollMoving,
 		scrollToLatest,
 		scrollPage,
+		keyboardScrollBy,
 		armImmediateTurn,
 		cancelImmediateTurn,
 		cancelAutomaticReveal,
@@ -492,6 +493,8 @@ const ChatTranscript = forwardRef<
 		revealRow,
 		revealElement,
 		leaveFollow,
+		scrollBy: keyboardScrollBy,
+		scrollPage,
 		scrollToLatest,
 		focusComposer,
 		waitingQuestion,

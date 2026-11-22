@@ -284,9 +284,10 @@ test("installed packages and loose files are one keyboard list: expand as the pr
 	expect(markup).toContain('data-setting-id="installed-packages"');
 	expect(markup).toContain('data-focus-row="user:npm:@acme/pi-jira"');
 	expect(markup).toContain(`data-focus-row="file:${GUARD.path}"`);
-	expect(markup).toMatch(/data-focus-row-primary=""[^>]*data-testid="package-expand"/);
-	expect(markup).toMatch(/data-setting-side=""[^>]*data-testid="package-menu"/);
-	expect(markup).toMatch(/data-setting-side=""[^>]*role="switch"[^>]*data-testid="package-toggle"/);
+	expect(markup).toMatch(/data-setting-primary=""[^>]*data-testid="package-expand"/);
+	expect(markup).toMatch(/<li[^>]*data-setting-row="packages\/[^"]+"[^>]*tabindex="-1"/);
+	expect(markup).toMatch(/tabindex="(0|-1)"[^>]*data-testid="package-menu"/);
+	expect(markup).toMatch(/tabindex="(0|-1)"[^>]*role="switch"[^>]*data-testid="package-toggle"/);
 	expect(markup).not.toContain("truncate");
 	expect(markup).not.toContain(`title="${JIRA.installedPath}"`);
 });

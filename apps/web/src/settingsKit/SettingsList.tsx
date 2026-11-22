@@ -1,11 +1,16 @@
 import { isContextMenuKey } from "@thinkrail/ui/context-menu";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { useLocalKeys } from "@thinkrail/ui/local-keys";
+import { cn } from "@thinkrail/ui/utils";
 import { createContext, type KeyboardEvent, type ReactNode, use, useMemo, useState } from "react";
 import { LOCAL_KEY_DEFAULTS } from "../keybindings";
+import { SETTINGS_ROW_FOCUS, SETTINGS_ROW_INSET, useSettingsRowRoving } from "./settingsRowCursor";
 
-export const SETTINGS_LIST_ROW =
-	"flex min-h-40 items-center gap-8 border-border-muted border-b py-6 last:border-b-0";
+export const SETTINGS_LIST_ROW = cn(
+	"flex min-h-40 items-center gap-8 border-border-muted border-b py-6 last:border-b-0",
+	SETTINGS_ROW_INSET,
+	SETTINGS_ROW_FOCUS,
+);
 
 export const SETTINGS_LIST_PRIMARY =
 	"flex min-w-0 flex-1 flex-col items-start gap-2 rounded-sm px-4 py-2 text-left transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring";
@@ -66,18 +71,9 @@ export function SettingsList({
 			onMenu(rowId);
 			return;
 		}
-		if (keys.match(event.nativeEvent) === "settings.list.remove") {
-			if (!onRemove) return;
-			event.preventDefault();
-			onRemove(rowId);
-			return;
-		}
-		const plain = !(event.altKey || event.ctrlKey || event.metaKey || event.shiftKey);
-		if (event.key !== " " || !plain || !target.hasAttribute("data-focus-row-primary")) return;
-		const toggle = row.querySelector<HTMLElement>('[role="switch"]');
-		if (!toggle) return;
+		if (keys.match(event.nativeEvent) !== "settings.list.remove" || !onRemove) return;
 		event.preventDefault();
-		toggle.click();
+		onRemove(rowId);
 	};
 
 	return (
@@ -99,14 +95,18 @@ export function SettingsList({
 
 export function useSettingsListRow(id: string) {
 	const scope = use(SettingsListContext);
+	const rowId = scope ? `${scope.list}/${id}` : id;
+	const roving = useSettingsRowRoving(rowId);
 	const tabIndex = scope?.active === id ? 0 : -1;
 	return {
 		rowProps: {
-			"data-setting-row": scope ? `${scope.list}/${id}` : id,
+			"data-setting-row": rowId,
 			"data-focus-row": id,
+			tabIndex: roving.tabIndex,
+			ref: roving.ref,
 			onFocus: () => scope?.setActive(id),
 		},
-		primaryProps: { tabIndex, "data-focus-row-primary": "", "data-setting-stop": "" },
-		sideProps: { tabIndex, "data-setting-side": "" },
+		primaryProps: { tabIndex, "data-setting-primary": "" },
+		sideProps: { tabIndex },
 	} as const;
 }

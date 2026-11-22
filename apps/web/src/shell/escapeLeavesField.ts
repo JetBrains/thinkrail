@@ -1,5 +1,7 @@
 import { focusAndReveal } from "@thinkrail/ui/focus";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { READ_ONLY_TEXT_SELECTOR } from "../lib";
+import { showFiles } from "./chordActions";
 import { keyboardClaimed } from "./extensionCommands";
 import { FOCUS_CLAIM_SELECTOR, fieldExitTarget, mainAreaTarget, REGION_SELECTOR } from "./regions";
 import { isInLayer } from "./shortcutLayers";
@@ -17,6 +19,7 @@ const KEEPS_ESCAPE_SELECTOR = ".monaco-editor, .xterm";
 const CENTER_SELECTOR = '[data-region-kind="center"]';
 const LADDER_ORIGIN_SELECTOR = "[data-esc-ladder]";
 const CENTER_CONTENT_SELECTOR = '[data-region-kind="center"] > [role="tabpanel"]';
+const FILE_PANE_SELECTOR = "[data-file-pane]";
 
 export interface FieldTarget {
 	readonly tagName: string;
@@ -79,6 +82,13 @@ export function climbsToMain(press: EscapePress, target: EscapeTarget, claimed: 
 	);
 }
 
+export function leavesFile(press: EscapePress, target: EscapeTarget, claimed: boolean): boolean {
+	if (!isBareEscape(press, claimed) || isInLayer(target)) return false;
+	if (target.closest(FILE_PANE_SELECTOR) === null) return false;
+	if (target.closest(READ_ONLY_TEXT_SELECTOR) !== null) return true;
+	return !isTextField(target) && target.tagName !== "SELECT" && !keepsEscape(target);
+}
+
 function escapeLanding(event: KeyboardEvent, target: HTMLElement): HTMLElement | null {
 	const claimed = keyboardClaimed();
 	if (leavesField(event, target, claimed)) {
@@ -93,7 +103,12 @@ export function installEscapeLeavesField(): () => void {
 		const target = event.key === "Escape" ? event.composedPath()[0] : null;
 		if (!(target instanceof HTMLElement)) return;
 		const landing = escapeLanding(event, target);
-		if (!landing) return;
+		if (!landing) {
+			if (!leavesFile(event, target, keyboardClaimed())) return;
+			event.preventDefault();
+			showFiles("all", { activeRow: true });
+			return;
+		}
 		event.preventDefault();
 		if (landing.matches(FOCUS_CLAIM_SELECTOR)) focusAndReveal(landing);
 		else landing.focus({ preventScroll: true });

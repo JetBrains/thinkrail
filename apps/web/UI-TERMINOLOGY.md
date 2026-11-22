@@ -507,7 +507,7 @@ are the Top Bar's Connection Status and the Chat Header's Session Stats Bar.
 | Appearance | `panels/AppearanceSettings.tsx` → `AppearanceSettings` | Theme mode, theme lists, contrast, custom themes |
 | Text & fonts | `panels/TextFontsSettings.tsx` → `TextFontsSettings` | Interface and code fonts, both line widths, custom fonts |
 | Chat | `panels/ChatSettings.tsx` → `ChatSettings` | Message order, composer size, question panel height |
-| Layout | `shell/LayoutSettings.tsx` → `LayoutSettings` (injected into the dialog) | Presets list, Smart view, Markdown outline position |
+| Layout | `shell/LayoutSettings.tsx` → `LayoutSettings` (injected into the dialog) | Presets list, Markdown outline position |
 | Keyboard | `shell/KeyboardSettings.tsx` → `KeyboardSettings` (injected) | Double Shift and the shortcut editor, a tree by area |
 | Language | `panels/LanguageSettings.tsx` → `LanguageSettings` | Interface language and the language files folder |
 | Voice input | `panels/VoiceSettings.tsx` → `VoiceSettings` | Dictation switch, model download, language, shortcut |

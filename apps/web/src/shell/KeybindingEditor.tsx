@@ -37,7 +37,13 @@ import {
 import { ConfirmDialog } from "../panels/ConfirmDialog";
 import { SETTING } from "../panels/settingsCatalog";
 import { Tree } from "../panels/treeNavigation";
-import { SETTINGS_ROWS, SettingsNotice, SettingsRow, useSettingsJump } from "../settingsKit";
+import {
+	SETTINGS_ROWS,
+	SettingsLine,
+	SettingsNotice,
+	SettingsRow,
+	useSettingsJump,
+} from "../settingsKit";
 import { toast, useAppStore } from "../store";
 import { errorText, supportsKeybindings, updateKeybindings } from "../transport";
 import { claimKeyboard } from "./extensionCommands";
@@ -720,8 +726,8 @@ export function KeybindingEditor() {
 					</SettingsNotice>
 				</div>
 			)}
-			<div
-				data-setting-row="keyboard-filter"
+			<SettingsLine
+				rowId="keyboard-filter"
 				className="flex flex-wrap items-center gap-8 border-border-muted border-b py-12"
 			>
 				<div className="relative min-w-[14rem] flex-1">
@@ -746,7 +752,6 @@ export function KeybindingEditor() {
 						}
 						aria-label={t("shortcuts.filter")}
 						data-testid="keybinding-filter"
-						data-setting-stop=""
 						className="h-32 w-full rounded-sm border border-control-border-default bg-control-bg pr-8 pl-24 tr-text-ui text-text-default transition-colors placeholder:text-text-muted focus:border-control-border-active focus-visible:focus-ring"
 					/>
 				</div>
@@ -770,7 +775,7 @@ export function KeybindingEditor() {
 						? t("shortcuts.countFiltered", { shown: shownCount, total: list.entries.length })
 						: t("shortcuts.count", { count: list.entries.length })}
 				</span>
-			</div>
+			</SettingsLine>
 			<div
 				data-setting-row="keyboard-shortcuts"
 				data-setting-id={SETTING.keyboardShortcuts.id}
@@ -859,7 +864,6 @@ export function KeybindingEditor() {
 								size="m"
 								iconLeft={RiUploadLine}
 								tabIndex={0}
-								data-setting-side=""
 								data-testid="keybinding-import"
 								onClick={() => fileInput.current?.click()}
 							>
@@ -882,7 +886,6 @@ export function KeybindingEditor() {
 								variant="outline"
 								size="m"
 								tabIndex={0}
-								data-setting-side=""
 								data-testid="keybinding-reset-all"
 								disabled={Object.keys(overrides).length === 0}
 								onClick={() => setConfirmingReset(true)}

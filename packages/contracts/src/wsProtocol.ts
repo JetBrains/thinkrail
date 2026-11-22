@@ -1,3 +1,4 @@
+import type { ChatAttachmentResult } from "./attachments";
 import type {
 	AppConfig,
 	AppConfigUpdate,
@@ -144,7 +145,9 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 127;
+export const PROTOCOL_VERSION = 129;
+export const CHAT_ATTACHMENTS_PROTOCOL_VERSION = 129;
+export const ARTIFACT_OUTPUTS_PROTOCOL_VERSION = 128;
 export const SUBAGENT_CATALOG_PROTOCOL_VERSION = 127;
 export const SERVER_FALLBACK_PROTOCOL_VERSION = 126;
 export const MCP_USER_SERVERS_PROTOCOL_VERSION = 125;
@@ -507,6 +510,7 @@ export const WS_METHODS = {
 	themesList: "themes.list",
 	themesReveal: "themes.reveal",
 	fontsList: "fonts.list",
+	attachmentsCopyLocal: "attachments.copyLocal",
 	fontsInstalled: "fonts.installed",
 	fontsReveal: "fonts.reveal",
 	speechInstall: "speech.install",
@@ -1304,6 +1308,10 @@ export interface WsMethodMap {
 	"themes.list": { params: Record<string, never>; result: UserThemesSnapshot };
 	"themes.reveal": { params: Record<string, never>; result: Ack };
 	"fonts.list": { params: Record<string, never>; result: UserFontsSnapshot };
+	"attachments.copyLocal": {
+		params: { workspaceId?: string; path: string };
+		result: ChatAttachmentResult;
+	};
 	"fonts.installed": { params: Record<string, never>; result: InstalledFontsResult };
 	"fonts.reveal": { params: Record<string, never>; result: Ack };
 	"speech.install": { params: { model: SpeechModel }; result: Ack };

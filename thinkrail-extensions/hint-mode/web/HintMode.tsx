@@ -23,6 +23,7 @@ interface HintSession {
 }
 
 const LABEL_OFFSET = { left: 4, top: 6, edge: 2 };
+const REVEAL_ATTRIBUTE = "data-hint-mode";
 
 function createSessionStore() {
 	let session: HintSession | null = null;
@@ -111,23 +112,33 @@ export function HintMode(props: GlobalOverlayProps) {
 			clips: clipsOverflow,
 			viewport: { width: window.innerWidth, height: window.innerHeight },
 		});
-		const exit = () => {
+		const root = document.documentElement;
+		const leave = () => {
 			store.set(null);
 			host.current.claimKeyboard(false);
 		};
+		const exit = () => {
+			root.removeAttribute(REVEAL_ATTRIBUTE);
+			leave();
+		};
 		const start = () => {
+			root.setAttribute(REVEAL_ATTRIBUTE, "");
 			const { targets, boxes } = collectTargets<HTMLElement>(host.current.activeLayer(), env());
-			if (targets.length === 0) return;
+			if (targets.length === 0) {
+				root.removeAttribute(REVEAL_ATTRIBUTE);
+				return;
+			}
 			host.current.claimKeyboard(true);
 			store.set({ targets, boxes, labels: hintLabels(targets.length), typed: "" });
 		};
 		const choose = (current: HintSession, index: number, focusOnly: boolean) => {
-			exit();
+			leave();
 			const target = current.targets[index];
 			const box = current.boxes[index];
 			if (target?.element.isConnected && box) {
 				activate(target.element, target.action, focusOnly, box);
 			}
+			root.removeAttribute(REVEAL_ATTRIBUTE);
 		};
 		const onCommand = (id: string) => {
 			if (id !== SHOW_HINTS.id) return;

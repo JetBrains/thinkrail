@@ -77,6 +77,7 @@ describe("registryInlineExtensions with per-session factories", () => {
 			awaitToolResponse: async () => ({ kind: "deferred" }),
 			workspaceFiles: {
 				check: async () => {},
+				checkArtifacts: async (paths) => paths.map((path) => ({ path })),
 				ensureArtifactsDir: async () => {},
 				scratchDir: "",
 				artifactsDir: "",
@@ -251,6 +252,7 @@ describe("extensionSessionServices", () => {
 		awaitToolResponse: async () => ({ kind: "deferred" }),
 		workspaceFiles: {
 			check: async () => {},
+			checkArtifacts: async (paths) => paths.map((path) => ({ path })),
 			ensureArtifactsDir: async () => {},
 			scratchDir: "",
 			artifactsDir: "",

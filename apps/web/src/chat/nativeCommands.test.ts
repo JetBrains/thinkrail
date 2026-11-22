@@ -60,6 +60,9 @@ describe("native chat command parsing", () => {
 		expect(prepareNameChatCommand("Fix auth", true)).toEqual({
 			reason: "Remove images to use /name",
 		});
+		expect(prepareNameChatCommand("Fix auth", false, true)).toEqual({
+			reason: "Remove attached files to use /name",
+		});
 	});
 
 	it("leaves every near-miss for the ordinary prompt path", () => {
@@ -80,6 +83,7 @@ describe("native chat command parsing", () => {
 		expect(compactSubmissionError(false, true)).toBe(
 			"Wait for queued image messages to send before using /compact",
 		);
+		expect(compactSubmissionError(false, true, true)).toBe("Remove attached files to use /compact");
 	});
 });
 

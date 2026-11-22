@@ -1,17 +1,26 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	realpathSync,
+	rmSync,
+	utimesSync,
+	writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
+import type { WorkspaceArtifact, WorkspaceArtifactsSnapshot } from "@thinkrail/contracts";
 import {
-	closeSettings,
 	createWorkspaceViaDialog,
 	enterDefaultWorkspace,
 	loadPersistedWorkspaces,
 	openFixtureProject,
-	openSettingsSection,
+	openPersistedChat,
 	openWorkspaceChat,
 	revealWorkbenchTool,
 } from "./fixtures/app";
-import { E2E_DATA_DIR } from "./fixtures/paths";
+import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./fixtures/paths";
+import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const CONTEXT = ".thinkrail/context";
 
@@ -25,11 +34,69 @@ function writeArtifact(root: string, path: string, content: string): void {
 	writeFileSync(file, content);
 }
 
+type View = "outputs" | "smart" | "list" | "tree";
+
+async function chooseView(page: Page, view: View): Promise<void> {
+	await page.getByTestId("artifacts-view").click();
+	await page.getByTestId(`artifacts-view-${view}`).click();
+	await expectView(page, view);
+}
+
+async function expectView(page: Page, view: View): Promise<void> {
+	await expect(page.getByTestId("artifacts-view")).toHaveAttribute("data-view", view);
+}
+
 async function showArtifacts(page: Page, view: "list" | "remembered" = "list"): Promise<void> {
 	await revealWorkbenchTool(page, "artifacts");
 	await page.getByTestId("artifacts-filter-all").click();
 	await expect(page.getByTestId("artifacts-filter-all")).toHaveAttribute("data-active", "true");
-	if (view === "list") await page.getByTestId("artifacts-view-list").click();
+	if (view === "list") await chooseView(page, "list");
+}
+
+function parseFrame(message: string | Buffer): Record<string, unknown> | null {
+	if (typeof message !== "string") return null;
+	try {
+		const frame: unknown = JSON.parse(message);
+		return frame !== null && typeof frame === "object" ? (frame as Record<string, unknown>) : null;
+	} catch {
+		return null;
+	}
+}
+
+async function publishOnWire(page: Page, published: ReadonlySet<string>): Promise<void> {
+	const lists = new Set<string>();
+	await page.routeWebSocket(/\/ws(?:\?|$)/, (browser) => {
+		const server = browser.connectToServer();
+		browser.onMessage((message) => {
+			const frame = parseFrame(message);
+			if (frame?.method === "artifacts.list" && typeof frame.id === "string") lists.add(frame.id);
+			server.send(message);
+		});
+		server.onMessage((message) => {
+			const frame = parseFrame(message);
+			if (typeof frame?.id !== "string" || !lists.delete(frame.id) || frame.ok !== true) {
+				browser.send(message);
+				return;
+			}
+			const snapshot = frame.result as WorkspaceArtifactsSnapshot;
+			const mark = (entry: WorkspaceArtifact): WorkspaceArtifact =>
+				published.has(entry.path.slice(CONTEXT.length + 1))
+					? { ...entry, published: true, role: "result", reason: "published" }
+					: entry;
+			browser.send(
+				JSON.stringify({
+					...frame,
+					result: { ...snapshot, artifacts: snapshot.artifacts.map(mark) },
+				}),
+			);
+		});
+	});
+}
+
+function writeArtifactAt(root: string, path: string, minutesAgo: number): void {
+	writeArtifact(root, path, `${path}\n`);
+	const time = new Date(Date.now() - minutesAgo * 60_000);
+	utimesSync(join(root, CONTEXT, path), time, time);
 }
 
 function folder(page: Page, path: string) {
@@ -54,7 +121,7 @@ test("the Artifacts tab keeps what the agent left: a deleted file stays restorab
 	writeArtifact(root, "report.md", "# Report\n");
 	writeArtifact(root, "mockups/a.html", "<h1>a</h1>\n");
 	await revealWorkbenchTool(page, "artifacts");
-	await page.getByTestId("artifacts-view-list").click();
+	await chooseView(page, "list");
 
 	await expect(page.getByTestId("artifacts-filter-chat")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("artifact-row")).toHaveCount(0);
@@ -111,9 +178,9 @@ test("the Tree view groups artifacts into folders, marks new and deleted ones on
 	writeArtifact(root, "gallery/analyzers/shot.png", "png\n");
 	await showArtifacts(page);
 	await expect(artifact(page, "report.md")).toBeVisible();
-	await expect(page.getByTestId("artifacts-view-list")).toHaveAttribute("data-active", "true");
+	await expectView(page, "list");
 
-	await page.getByTestId("artifacts-view-tree").click();
+	await chooseView(page, "tree");
 	await expect(page.getByTestId("artifact-folder")).toHaveCount(2);
 	await expect(folderRow(page, "gallery/analyzers")).toContainText("gallery/analyzers");
 	await expect(folderRow(page, "mockups").getByTestId("artifact-folder-files")).toHaveText("3");
@@ -150,13 +217,13 @@ test("the Tree view groups artifacts into folders, marks new and deleted ones on
 
 	await page.reload();
 	await showArtifacts(page, "remembered");
-	await expect(page.getByTestId("artifacts-view-tree")).toHaveAttribute("data-active", "true");
+	await expectView(page, "tree");
 	await expect(artifact(page, "mockups/features/a.html")).toBeVisible();
 	await page.getByTestId("artifacts-collapse-all").click();
 	await expect(artifact(page, "mockups/features/a.html")).toHaveCount(0);
 	await expect(page.getByTestId("artifacts-collapse-all")).toHaveCount(0);
 
-	await page.getByTestId("artifacts-view-list").click();
+	await chooseView(page, "list");
 	await expect(page.getByTestId("artifact-folder")).toHaveCount(0);
 	await expect(artifact(page, "mockups/features/a.html")).toBeVisible();
 });
@@ -170,7 +237,7 @@ test("a folder in the Tree offers no Delete and renames from the keyboard, its a
 	writeArtifact(root, "mockups/onboarding/c.html", "<h1>c</h1>\n");
 	writeArtifact(root, "mockups/features/a.html", "<h1>a</h1>\n");
 	await showArtifacts(page);
-	await page.getByTestId("artifacts-view-tree").click();
+	await chooseView(page, "tree");
 	await folderRow(page, "mockups").click();
 
 	await folderRow(page, "mockups/onboarding").click({ button: "right" });
@@ -193,7 +260,7 @@ test("a folder in the Tree offers no Delete and renames from the keyboard, its a
 	expect(readFileSync(join(root, CONTEXT, "mockups/welcome/c.html"), "utf8")).toBe("<h1>c</h1>\n");
 });
 
-test("a narrow Artifacts toolbar folds its actions, then its views, into a More menu", async ({
+test("a narrow Artifacts toolbar folds its actions into a More menu and keeps the view dropdown", async ({
 	page,
 }) => {
 	await page.setViewportSize({ width: 900, height: 800 });
@@ -201,70 +268,168 @@ test("a narrow Artifacts toolbar folds its actions, then its views, into a More 
 	const workspace = await createWorkspaceViaDialog(page);
 	writeArtifact(workspace.worktreePath, "mockups/a.html", "<h1>a</h1>\n");
 	await showArtifacts(page, "remembered");
-	const toolbar = page.getByRole("toolbar", { name: "Artifacts" });
-	await expect(toolbar).toHaveAttribute("data-fold", "2");
-	await expect(page.getByTestId("artifacts-view-tree")).toHaveCount(0);
-	await expect(page.getByTestId("artifacts-toggle-ignored")).toHaveCount(0);
-
-	await page.getByTestId("artifacts-more").click();
-	await page.getByTestId("artifacts-more-view-tree").click();
+	await chooseView(page, "tree");
 	await folderRow(page, "mockups").click();
 	await expect(artifact(page, "mockups/a.html")).toBeVisible();
+	const toolbar = page.getByRole("toolbar", { name: "Artifacts" });
+	await expect(toolbar).toHaveAttribute("data-fold", "1");
+	await expect(page.getByTestId("artifacts-collapse-all")).toHaveCount(0);
+	await expect(page.getByTestId("artifacts-view")).toBeVisible();
+
 	await page.getByTestId("artifacts-more").click();
 	await page.getByTestId("artifacts-more-collapse-all").click();
 	await expect(artifact(page, "mockups/a.html")).toHaveCount(0);
 
 	await page.setViewportSize({ width: 1600, height: 800 });
+	await folderRow(page, "mockups").click();
 	await expect(toolbar).toHaveAttribute("data-fold", "0");
-	await expect(page.getByTestId("artifacts-view-tree")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("artifacts-collapse-all")).toBeVisible();
 	await expect(page.getByTestId("artifacts-more")).toHaveCount(0);
+	await expectView(page, "tree");
 });
 
-test("Smart groups what the agent made by folder with its working files folded under it, until Settings turns it off", async ({
+test("Outputs opens by default and lists only what the agent published, newest first, like Claude's Outputs", async ({
 	page,
 }) => {
+	const published = new Set<string>();
+	await publishOnWire(page, published);
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const root = workspace.worktreePath;
+	writeArtifactAt(root, "notes.md", 30);
+	writeArtifactAt(root, "mockups/_work/checkout-v1.html", 29);
+	await showArtifacts(page, "remembered");
+	await expectView(page, "outputs");
+	await expect(page.getByTestId("artifacts-outputs-empty")).toContainText("No outputs yet");
+	await page.getByTestId("artifacts-outputs-show-all").click();
+	await expectView(page, "list");
+	await expect(page.getByTestId("artifact-row")).toHaveCount(2);
+
+	for (const path of [
+		"round-3/FINDINGS.md",
+		"proofs/NSCal.lean",
+		"mockups/checkout.html",
+		"round-4/BUG_REPORT_subset.md",
+		"round-4/FINDINGS.md",
+	])
+		published.add(path);
+	writeArtifactAt(root, "round-3/FINDINGS.md", 5);
+	writeArtifactAt(root, "proofs/NSCal.lean", 4);
+	writeArtifactAt(root, "mockups/checkout.html", 3);
+	writeArtifactAt(root, "round-4/BUG_REPORT_subset.md", 2);
+	writeArtifactAt(root, "round-4/FINDINGS.md", 1);
+	await expect(page.getByTestId("artifact-row")).toHaveCount(7, { timeout: 10_000 });
+	await chooseView(page, "outputs");
+	const rows = page.getByTestId("artifact-output-file");
+	await expect(rows).toHaveCount(5);
+	await expect(page.getByTestId("artifacts-section")).toContainText("Outputs");
+	await expect(rows.getByTestId("artifact-open")).toHaveText([
+		"FINDINGSround-4MD",
+		"BUG REPORT subsetMD",
+		"checkoutHTML",
+		"NSCal.leanFile",
+		"FINDINGSround-3MD",
+	]);
+	await expect(page.getByTestId("artifact-new")).toHaveCount(0);
+	await expect(rows.first().locator("[title^='round-4/FINDINGS.md · Changed ']")).toHaveCount(1);
+
+	await page
+		.locator(`[data-testid="artifact-output-file"][data-path="${CONTEXT}/mockups/checkout.html"]`)
+		.getByTestId("artifact-open")
+		.click();
+	await expect(
+		page
+			.locator('[data-testid="editor-tab"][data-kind="file"]')
+			.filter({ hasText: "checkout.html" }),
+	).toBeVisible();
+});
+
+test("a present_files call shows the published files as cards in chat that open the file", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const root = realpathSync(E2E_FIXTURE_REPO);
+	writeArtifact(root, "mockups/checkout.html", "<h1>checkout</h1>\n");
+	writeArtifact(root, "round-4/BUG_REPORT_subset.md", "# Bug\n");
+	const files = [`${CONTEXT}/mockups/checkout.html`, `${CONTEXT}/round-4/BUG_REPORT_subset.md`];
+	const at = Date.now() - 60_000;
+	seedWorkspaceSession(root, {
+		name: "published outputs",
+		messages: [
+			{ role: "user", text: "Make the mockup.", timestamp: at },
+			{
+				role: "assistant",
+				content: [
+					{ type: "text", text: "Here it is." },
+					{
+						type: "toolCall",
+						id: "present-1",
+						name: "present_files",
+						arguments: { filepaths: ["mockups/checkout.html", "round-4/BUG_REPORT_subset.md"] },
+					},
+				],
+				stopReason: "toolUse",
+				timestamp: at + 1_000,
+			},
+			{
+				role: "toolResult",
+				toolCallId: "present-1",
+				toolName: "present_files",
+				content: [{ type: "text", text: `Published to the user's Outputs: ${files.join(", ")}.` }],
+				details: { files },
+				isError: false,
+				timestamp: at + 2_000,
+			},
+		],
+	});
+	await enterDefaultWorkspace(page);
+	await openPersistedChat(page, "published outputs");
+	const cards = page.getByTestId("tool-present-file");
+	await expect(cards).toHaveCount(2);
+	await expect(cards).toHaveText(["checkoutHTML", "BUG REPORT subsetMD"]);
+	await cards.first().click();
+	await expect(
+		page
+			.locator('[data-testid="editor-tab"][data-kind="file"]')
+			.filter({ hasText: "checkout.html" }),
+	).toBeVisible();
+});
+
+test("Smart keeps what was shown, linked, picked or published; an unmarked document is a working file", async ({
+	page,
+}) => {
+	await publishOnWire(page, new Set(["mockups/onboarding/welcome.html"]));
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
 	const root = workspace.worktreePath;
 	writeArtifact(root, "unattached/r.md", "# r\n");
 	writeArtifact(root, "mockups/onboarding/welcome.html", "<h1>w</h1>\n");
-	writeArtifact(root, "mockups/onboarding/gen.mjs", "export {};\n");
+	writeArtifact(root, "mockups/onboarding/draft.html", "<h1>d</h1>\n");
 	writeArtifact(root, "mockups/onboarding/_scratch/v1.png", "png\n");
 	writeArtifact(root, "loose/shot.png", "png\n");
 	await showArtifacts(page, "remembered");
-	await expect(page.getByTestId("artifacts-view-smart")).toHaveAttribute("data-active", "true");
+	await chooseView(page, "smart");
 
 	const smartGroup = (folder: string) =>
 		page.locator(`[data-testid="artifact-smart-group"][data-folder="${folder}"]`);
-	await expect(smartGroup("unattached").getByTestId("artifact-smart-summary")).toHaveText(
+	await expect(page.getByTestId("artifact-smart-group")).toHaveCount(1);
+	await expect(smartGroup("mockups/onboarding").getByTestId("artifact-smart-summary")).toHaveText(
 		"1 result",
 	);
-	await expect(artifact(page, "mockups/onboarding/welcome.html")).toHaveCount(0);
 	await smartGroup("mockups/onboarding").getByTestId("artifact-smart-group-row").click();
 	await expect(artifact(page, "mockups/onboarding/welcome.html")).toBeVisible();
-	await expect(
-		artifact(page, "mockups/onboarding/welcome.html").locator("[title^='A document the agent']"),
-	).toHaveCount(1);
-	await expect(artifact(page, "mockups/onboarding/gen.mjs")).toHaveCount(0);
+	await expect(artifact(page, "mockups/onboarding/draft.html")).toHaveCount(0);
 	const working = smartGroup("mockups/onboarding").getByTestId("artifact-working-files");
 	await expect(working).toHaveText("2 working files");
 	await working.click();
-	await expect(artifact(page, "mockups/onboarding/gen.mjs")).toBeVisible();
+	await expect(artifact(page, "mockups/onboarding/draft.html")).toBeVisible();
 	await expect(folderRow(page, "mockups/onboarding/_scratch")).toBeVisible();
 	await expect(page.getByTestId("artifact-unattached")).toHaveText(
-		"1 working file without a result",
+		"2 working files without a result",
 	);
 	await page.getByTestId("artifact-unattached").click();
 	await expect(folderRow(page, "loose")).toBeVisible();
-	await expect(artifact(page, "unattached/r.md")).toHaveCount(0);
-
-	await openSettingsSection(page, "layout");
-	await page.getByTestId("artifacts-smart-toggle").click();
-	await expect(page.getByTestId("artifacts-smart-toggle")).toHaveAttribute("aria-checked", "false");
-	await closeSettings(page);
-	await expect(page.getByTestId("artifacts-view-smart")).toHaveCount(0);
-	await expect(page.getByTestId("artifacts-view-list")).toHaveAttribute("data-active", "true");
-	await expect(artifact(page, "mockups/onboarding/gen.mjs")).toBeVisible();
+	await expect(folderRow(page, "unattached")).toBeVisible();
 });
 
 test("a new artifact lights the rail until the tab is opened, and a cut file pastes into artifacts", async ({
@@ -339,20 +504,21 @@ test("F6 into the Artifacts group lands on its first row, not on its chat filter
 	page,
 }) => {
 	await page.setViewportSize({ width: 1440, height: 900 });
+	await publishOnWire(page, new Set(["notes.md"]));
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
 	const root = loadPersistedWorkspaces().find((workspace) => workspace.kind === "default");
 	if (!root) throw new Error("no Default workspace was persisted");
 	writeArtifact(root.worktreePath, "notes.md", "notes\n");
 	await revealWorkbenchTool(page, "artifacts");
-	const firstGroup = page.getByTestId("artifact-smart-group-row").first();
-	await expect(firstGroup).toBeVisible();
+	const firstRow = page.getByTestId("artifact-output-file").getByTestId("artifact-open").first();
+	await expect(firstRow).toBeVisible();
 	const body = page.locator('[data-tool-body="artifacts"]');
 	for (let press = 0; press < 12; press++) {
 		if (await body.evaluate((element) => element.contains(document.activeElement))) break;
 		await page.keyboard.press("F6");
 	}
-	await expect(firstGroup).toBeFocused();
+	await expect(firstRow).toBeFocused();
 });
 
 test("deleting an artifact from the keyboard focuses the next artifact", async ({ page }) => {

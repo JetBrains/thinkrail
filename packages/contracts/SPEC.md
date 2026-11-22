@@ -74,7 +74,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   (`NativeUpdateState` / `NativeUpdateBridge`, `NativeWindowState` / `NativeWindowControlsBridge`,
   `NativeQuitHint` / `NativeCommand` / `NativeShortcutsBridge`, and
   `NativeNotificationInput` / `NativeNotificationBridge`, `NativePageZoomAction` / `NativePageZoomBridge`,
-  and `NativeMenuBridge` (translated native menu labels), the optional shell-local desktop capabilities);
+  `NativeClipboardContent` / `NativeClipboardFile` / `NativeClipboardBridge`, and `NativeMenuBridge`
+  (translated native menu labels), the optional shell-local desktop capabilities); `attachments` (§ Chat
+  attachments);
   `QUIT_CONFIRMATION` + **`createQuitConfirmation`** + `QuitConfirmationDependencies` from `quitConfirmation`;
   **`matchFields`** + `parseMatchTerms` + `foldMatchText` + `MATCH_TIER` and the `Match*` types from
   `match` (the one search matcher: fixed tiers exact > prefix > word start/camel hump/acronym > substring >
@@ -190,6 +192,26 @@ optional `model` and `thinking`, disabled entries included, never a prompt body 
 ([[submodule-server-host]] derives project admission). `subagent.setEnabled({ name, enabled })` returns
 `Ack` and changes only that name ([[submodule-server-settings]]); the result converges through
 `settings.changed`, with no new channel. Enforcement: [[module-pi-subagents]].
+
+## Chat attachments (v129)
+
+`CHAT_ATTACHMENTS_PROTOCOL_VERSION` (129) gates the host's attachment doors ([[submodule-server-host]]); the
+client checks it and turns a file on an older host into an error chip. `attachments.ts` holds the shared
+pieces: `CHAT_ATTACHMENTS_ROUTE` (`/attachments/`), `CHAT_ATTACHMENT_WORKSPACE_PARAM`,
+`CHAT_ATTACHMENT_UPLOAD_HEADER`, `CHAT_ATTACHMENT_MAX_BYTES` (100 MB per file), the closed
+`ChatAttachmentErrorCode`s and the `ChatAttachmentResult` both doors answer (`isChatAttachmentResult`
+guards the HTTP body); `attachments.copyLocal({ workspaceId?, path })` is the socket door for a local path.
+**`withAttachedFiles(prompt, files)`** is the one "Attached files:" trailer, shared by `start_workspace` and
+the composer so the agent reads one format. **`attachmentImageType({ name, type })`** is the one image
+classifier: a raster image by MIME type, else by extension (png, jpg/jpeg, gif, webp, bmp, heic/heif, avif,
+tif/tiff), answers the type it goes to the model as, SVG and everything else `null` (a file the agent reads
+from disk); the composer and the desktop's clipboard read share it, so a format the webview cannot convert
+(HEIC…) ends on the image error chip on every path and is never copied to the workspace. **`copiedFilePaths(text, { barePaths })`** reads what a file manager put on
+the clipboard as text — local `file://` URIs one per line, GNOME's copied-files `copy`/`cut` line (and
+Nautilus 3.30–3.38's `x-special/nautilus-clipboard` header) allowed before them — or answers `null`. Bare
+absolute paths count only with `barePaths`, for the text of a clipboard that also offers a file target
+(GTK 4 file managers put paths there); copied as plain text they stay text, since whoever copies a path
+usually wants the path. The desktop's clipboard read and the web's decision to consult it use this one rule.
 
 ## Contents
 
@@ -468,9 +490,11 @@ optional `model` and `thinking`, disabled entries included, never a prompt body 
   disk but restorable from the host's kept copy — `size`, `changedAt` (for a deleted row, when the host saw
   it gone, so a new deletion of the same path carries a new value), `firstSeenAt`, the writing chat's
   optional `sessionId`, and from **`ARTIFACT_ROLES_PROTOCOL_VERSION`** (v124) the host's **`role`**
-  (`ArtifactRole`: `"result" | "working"`), its **`reason`** (`ArtifactRoleReason`: `picked`, `shown`,
-  `linked`, `document` for a result; `working-folder`, `script`, `data`, `unshown` for a working file)
-  and **`rounds`** (`ArtifactRound[]`: the chat rounds, `{ sessionId, startedAt }`, that created or
+  (`ArtifactRole`: `"result" | "working"`), its **`reason`** (`ArtifactRoleReason`: `published`, `picked`,
+  `shown`, `linked` for a result; `working-folder`, `script`, `data`, `unshown` for a working file; a
+  v124–v127 host also sent `document`, which v128 dropped), from **`ARTIFACT_OUTPUTS_PROTOCOL_VERSION`**
+  (v128) the flag **`published: true`** on what the agent published (`present_files`), whatever its
+  reason, and **`rounds`** (`ArtifactRound[]`: the chat rounds, `{ sessionId, startedAt }`, that created or
   changed it, oldest first and bounded; `startedAt` is the round's prompt timestamp, or the run start for a
   run no prompt opened) — absent from an older host, so a client that needs them checks the
   version rather than reading absence as "working") and `outputs` (**`WorkspaceIgnoredOutput`** rows — an ignored file or folder an
@@ -794,7 +818,10 @@ optional `model` and `thinking`, disabled entries included, never a prompt body 
   desktop-only subscription seam, not host-wire state. The page-zoom bridge's one action
   `request(action)` asks the native side to step (`in` / `out`) or reset its page zoom; it returns nothing
   and the web keeps no zoom state. `NativePageZoomAction` is the one definition of the actions; the
-  desktop's zoom chords send the same ones. A browser
+  desktop's zoom chords send the same ones. The clipboard bridge's one action `read()` answers what the
+  system clipboard holds when the webview hid it from a paste: an image (its MIME type and bytes), the files
+  a file manager copied (path, name, size, and an image file's bytes while they fit the read's budget),
+  `oversized` (an image past that budget), `unreadable`, or nothing. A browser
   connection has none of these bridges and renders none of their affordances.
 - **quitConfirmation.ts** — the single home of the quit-confirmation gesture shared by the desktop main
   process (macOS Cmd+Q, key state polled through CoreGraphics) and the web shell (Linux Ctrl+Q, key state

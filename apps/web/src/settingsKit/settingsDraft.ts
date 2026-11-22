@@ -7,6 +7,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { focusUnitStop } from "./settingsWalk";
 
 export const SETTINGS_INPUT =
 	"h-32 rounded-sm border border-control-border-default bg-control-bg px-8 tr-text-ui text-text-default placeholder:text-text-subtle focus:border-control-border-active focus-visible:focus-ring disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text aria-invalid:border-feedback-error";
@@ -40,7 +41,6 @@ export interface SettingsDraftOptions {
 	saved: string;
 	isValid: (draft: string) => boolean;
 	commit: (draft: string) => undefined | Promise<boolean>;
-	enterBlurs?: boolean;
 	onEdit?: () => void;
 }
 
@@ -64,7 +64,6 @@ export function useSettingsDraft({
 	saved,
 	isValid,
 	commit,
-	enterBlurs = false,
 	onEdit,
 }: SettingsDraftOptions): SettingsDraft {
 	const [draft, setDraftState] = useState(saved);
@@ -135,8 +134,8 @@ export function useSettingsDraft({
 				if (isImeComposing(event.nativeEvent)) return;
 				if (event.key === "Enter") {
 					event.preventDefault();
-					if (enterBlurs) event.currentTarget.blur();
-					else commitDraft();
+					commitDraft();
+					if (!invalid) focusUnitStop<HTMLElement>(event.currentTarget);
 					return;
 				}
 				if (event.key !== "Escape") return;

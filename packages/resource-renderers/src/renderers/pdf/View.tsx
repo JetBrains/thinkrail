@@ -1,6 +1,7 @@
 import { useT } from "@thinkrail/locales/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ResourceViewProps } from "../../registry";
+import { READING_SURFACE_CLASS, useReadingSurface } from "../../support/readingSurface";
 import type { Size } from "../regionReview";
 import { PdfPageCanvas } from "./PdfPageCanvas";
 import { PdfToolbar } from "./PdfToolbar";
@@ -23,6 +24,7 @@ const NO_THREADS: ReadonlySet<string> = new Set();
 const NO_PAGES: ReadonlySet<number> = new Set();
 
 export default function PdfView({
+	resource,
 	content,
 	review,
 	onPlacedThreadIds,
@@ -30,6 +32,7 @@ export default function PdfView({
 	onViewState,
 }: ResourceViewProps) {
 	const t = useT();
+	const reading = useReadingSurface({ label: resource.path });
 	const initial = pdfViewState(viewState);
 	const [page, setPage] = useState(initial.page);
 	const [zoom, setZoom] = useState(initial.zoom);
@@ -145,7 +148,11 @@ export default function PdfView({
 				onPage={goToPage}
 				onZoom={changeZoom}
 			/>
-			<div data-pdf-scroll className="min-h-0 flex-1 overflow-auto p-12">
+			<div
+				data-pdf-scroll
+				{...reading}
+				className={`min-h-0 flex-1 overflow-auto p-12 ${READING_SURFACE_CLASS}`}
+			>
 				<div className="mx-auto flex max-w-[1200px] flex-col gap-16">
 					{Array.from({ length: document.numPages }, (_value, index) => {
 						const pageNumber = index + 1;

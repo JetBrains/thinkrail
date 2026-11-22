@@ -19,11 +19,18 @@ import {
 } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { prepareChatTitle } from "../chat/chatTitle";
+import type { SuggestionShortcut } from "../chat/SuggestionChips";
 import { useAutoPlanSummary } from "../chat/useChatTodos";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { preloadedLazy } from "../components/preloadedLazy";
 import { QuietScrollArea } from "../components/QuietScrollArea";
-import { keybindingKeys, keybindingLabel, type ResolvedKeybindings } from "../keybindings";
+import {
+	keybindingAria,
+	keybindingKeys,
+	keybindingLabel,
+	type ResolvedKeybindings,
+	SUGGESTION_KEYS,
+} from "../keybindings";
 import { chatDisplayName, type LayoutAttention, layoutResourceIdentity } from "../lib";
 import { ArtifactsPanel } from "../panels/ArtifactsPanel";
 import { DiffPane } from "../panels/DiffPane";
@@ -220,11 +227,13 @@ function ChatResourceBody({
 	tab,
 	onOpenFile,
 	landingChord,
+	suggestionShortcuts,
 }: {
 	workspaceId: string;
 	tab: Extract<LayoutCenterTab, { kind: "chat" }>;
 	onOpenFile: (path: string) => void;
 	landingChord: string;
+	suggestionShortcuts: readonly SuggestionShortcut[];
 }) {
 	const t = useT();
 	const available = useAppStore((state) => state.sessions[tab.sessionId] !== undefined);
@@ -248,6 +257,7 @@ function ChatResourceBody({
 						workspaceId={workspaceId}
 						onOpenFile={onOpenFile}
 						landingChord={landingChord}
+						suggestionShortcuts={suggestionShortcuts}
 					/>
 				</Suspense>
 			</ErrorBoundary>
@@ -360,6 +370,13 @@ function workbenchChromeShortcuts(keybindings: ResolvedKeybindings): WorkbenchCh
 	};
 }
 
+function suggestionShortcuts(keybindings: ResolvedKeybindings): SuggestionShortcut[] {
+	return SUGGESTION_KEYS.send.map((send, index) => ({
+		caps: keybindingKeys(keybindings, send),
+		aria: keybindingAria(keybindings, send, SUGGESTION_KEYS.edit[index] ?? ""),
+	}));
+}
+
 export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const t = useT();
 	const status = useAppStore((state) => state.status);
@@ -413,6 +430,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const [nativeShortcuts] = useState(hasNativeShortcuts);
 	const chromeShortcuts = useMemo(() => workbenchChromeShortcuts(keybindings), [keybindings]);
 	const landingChord = keybindingLabel(keybindings, "region.next");
+	const chipShortcuts = useMemo(() => suggestionShortcuts(keybindings), [keybindings]);
 	const requestRenameChat = useCallback(
 		(sessionId: string, titleInput: string, currentTitle: string) => {
 			const prepared = prepareChatTitle(titleInput);
@@ -656,6 +674,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						tab={tab}
 						onOpenFile={openToolFile}
 						landingChord={landingChord}
+						suggestionShortcuts={chipShortcuts}
 					/>
 				);
 			}
@@ -703,7 +722,16 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			}
 			return <EditorResourceBody workspaceId={workspaceId} tab={tab} />;
 		},
-		[deletedSessions, document, landingChord, openToolFile, t, terminalByKey, workspaceId],
+		[
+			chipShortcuts,
+			deletedSessions,
+			document,
+			landingChord,
+			openToolFile,
+			t,
+			terminalByKey,
+			workspaceId,
+		],
 	);
 	const renderTabBody = useCallback(
 		(tab: LayoutCenterTab | Extract<LayoutTab, { kind: "terminal" }>) => (

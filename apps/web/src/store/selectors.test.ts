@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
+	ARTIFACT_OUTPUTS_PROTOCOL_VERSION,
+	ARTIFACT_ROLES_PROTOCOL_VERSION,
 	MODEL_PICKER_PROTOCOL_VERSION,
 	type Project,
 	SEARCH_PROTOCOL_VERSION,
@@ -24,6 +26,8 @@ import {
 	selectActiveWorkspace,
 	selectActiveWorkspaceProjectId,
 	selectAgentReviewCommentCount,
+	selectArtifactsRoundFilter,
+	selectArtifactsView,
 	selectAttentionCenterResourceCacheKey,
 	selectAttentionCenterResourceReady,
 	selectAttentionCenterTab,
@@ -1086,4 +1090,36 @@ test("agent catalog trust follows only the active repository workspace, never Ch
 			workspaces: { p2: [{ ...workspace, kind: "chat" }] },
 		}),
 	).toBeUndefined();
+});
+
+describe("the Artifacts view", () => {
+	const at = (
+		protocolVersion: number | null,
+		artifactsView: Parameters<typeof selectArtifactsView>[0]["artifactsView"] = null,
+		disabledExtensions: string[] = [],
+	) => ({ protocolVersion, artifactsView, disabledExtensions });
+
+	test("opens on Outputs, else Smart, else List, by what the host and the extension switch allow", () => {
+		expect(selectArtifactsView(at(ARTIFACT_OUTPUTS_PROTOCOL_VERSION))).toBe("outputs");
+		expect(selectArtifactsView(at(ARTIFACT_OUTPUTS_PROTOCOL_VERSION, null, ["outputs"]))).toBe(
+			"smart",
+		);
+		expect(selectArtifactsView(at(ARTIFACT_ROLES_PROTOCOL_VERSION))).toBe("smart");
+		expect(selectArtifactsView(at(ARTIFACT_ROLES_PROTOCOL_VERSION - 1))).toBe("list");
+	});
+
+	test("keeps the user's choice while it is offered and falls back when it is not", () => {
+		expect(selectArtifactsView(at(ARTIFACT_OUTPUTS_PROTOCOL_VERSION, "tree"))).toBe("tree");
+		expect(selectArtifactsView(at(ARTIFACT_OUTPUTS_PROTOCOL_VERSION, "smart"))).toBe("smart");
+		expect(selectArtifactsView(at(ARTIFACT_ROLES_PROTOCOL_VERSION, "outputs"))).toBe("smart");
+		expect(selectArtifactsView(at(ARTIFACT_ROLES_PROTOCOL_VERSION - 1, "smart"))).toBe("list");
+	});
+
+	test("the chat divider lists what the chosen view shows", () => {
+		expect(selectArtifactsRoundFilter(at(ARTIFACT_OUTPUTS_PROTOCOL_VERSION))).toBe("published");
+		expect(selectArtifactsRoundFilter(at(ARTIFACT_OUTPUTS_PROTOCOL_VERSION, "smart"))).toBe(
+			"results",
+		);
+		expect(selectArtifactsRoundFilter(at(ARTIFACT_OUTPUTS_PROTOCOL_VERSION, "list"))).toBe("all");
+	});
 });

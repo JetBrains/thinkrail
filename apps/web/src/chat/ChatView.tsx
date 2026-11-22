@@ -7,6 +7,7 @@ import {
 	sameModel,
 	type TemplateInfo,
 	type ThinkingLevel,
+	withAttachedFiles,
 } from "@thinkrail/contracts";
 import { t as translate, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
@@ -32,6 +33,7 @@ import { useNow } from "@/components/useNow";
 import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
 import {
 	EMPTY_RUNTIME,
+	type PromptFile,
 	SettingsSection,
 	selectCanRenameChat,
 	selectCatalogModel,
@@ -47,7 +49,17 @@ import {
 	useAppStore,
 	workspaceName,
 } from "@/store";
-import { errorText, getTransport, hostUrl, watchMcpWorkspace, wsErrorCode } from "@/transport";
+import {
+	attachmentFailureText,
+	errorText,
+	getTransport,
+	hostUrl,
+	supportsChatAttachments,
+	uploadPromptFiles,
+	watchMcpWorkspace,
+	wsErrorCode,
+} from "@/transport";
+import { withRestoredDraft } from "./attachments";
 import type { ResultTarget } from "./ChatActions";
 import { ChatHeader } from "./ChatHeader";
 import { ChatMediaContext } from "./ChatImage";
@@ -56,6 +68,7 @@ import {
 	Composer,
 	type ComposerHandle,
 	type ComposerSubmitDisposition,
+	type ComposerUpload,
 	type MentionCandidate,
 	type SubmitBehavior,
 } from "./Composer";
@@ -88,7 +101,7 @@ import {
 } from "./resources";
 import { SkillsDialog } from "./SkillsDialog";
 import { SubagentTranscriptDialog, SubagentTranscriptPane } from "./SubagentTranscriptDialog";
-import { SuggestionChips } from "./SuggestionChips";
+import { SuggestionChips, type SuggestionShortcut } from "./SuggestionChips";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { useChatResources, useCommandLog } from "./useChatResources";
 import { useModelCatalog } from "./useModelCatalog";
@@ -112,11 +125,13 @@ export default function ChatView({
 	workspaceId,
 	onOpenFile,
 	landingChord,
+	suggestionShortcuts,
 }: {
 	sessionId: string;
 	workspaceId: string;
 	onOpenFile?: ((path: string) => void) | undefined;
 	landingChord: string;
+	suggestionShortcuts: readonly SuggestionShortcut[];
 }) {
 	const t = useT();
 	const sessionExists = useAppStore((s) => s.sessions[sessionId] !== undefined);
@@ -129,6 +144,7 @@ export default function ChatView({
 	const imageDraft = useAppStore(
 		(s) => s.sessions[sessionId]?.promptImages ?? EMPTY_RUNTIME.promptImages,
 	);
+	const acceptsFiles = useAppStore((s) => supportsChatAttachments(s.protocolVersion));
 	const imageOwner = useMemo<PromptImagesOwner>(
 		() => ({
 			state: imageDraft,
@@ -580,11 +596,11 @@ export default function ChatView({
 			.then(() => refreshStats());
 	};
 
+	const readDraft = () => useAppStore.getState().sessions[sessionId]?.draft ?? "";
+
 	const restoreTextToDraft = (text: string) => {
 		if (!text.trim()) return;
-		const current = useAppStore.getState().sessions[sessionId]?.draft ?? "";
-		const combined = [text, current].filter((t) => t.trim()).join("\n\n");
-		useAppStore.getState().setChatDraft(sessionId, combined);
+		useAppStore.getState().setChatDraft(sessionId, withRestoredDraft(text, readDraft()));
 		composerRef.current?.refocus();
 	};
 
@@ -662,31 +678,7 @@ export default function ChatView({
 			});
 	};
 
-	const onSubmit = (
-		text: string,
-		attachments: ChatAttachment[],
-		behavior: SubmitBehavior,
-	): ComposerSubmitDisposition => {
-		const nativeCommand = parseNativeChatCommand(text, canRenameChat);
-		if (nativeCommand?.kind === "compact") {
-			const submissionError = compactSubmissionError(
-				attachments.length > 0,
-				queue.hasImages === true,
-			);
-			if (submissionError) return { accepted: false, reason: submissionError };
-			performCompact(nativeCommand.instructions);
-			return { accepted: true };
-		}
-		if (nativeCommand?.kind === "name") {
-			const prepared = prepareNameChatCommand(nativeCommand.title, attachments.length > 0);
-			if ("reason" in prepared) return { accepted: false, reason: prepared.reason };
-			performRename(prepared.title);
-			return { accepted: true };
-		}
-		if (behavior !== "interrupt") {
-			performSend(text, attachments, behavior);
-			return { accepted: true };
-		}
+	const abortThenSend = (text: string, attachments: ChatAttachment[]) => {
 		getTransport()
 			.request("session.abort", { sessionId })
 			.then(() => performSend(text, attachments, "send"))
@@ -694,6 +686,62 @@ export default function ChatView({
 				useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
 				restoreTextToDraft(text);
 			});
+	};
+
+	const sendWithFiles = (
+		text: string,
+		attachments: ChatAttachment[],
+		behavior: SubmitBehavior,
+		files: PromptFile[],
+		upload: ComposerUpload,
+	): Promise<ComposerSubmitDisposition> =>
+		uploadPromptFiles(workspaceId, files, upload).then(
+			(paths): ComposerSubmitDisposition => {
+				const full = withAttachedFiles(text, paths);
+				if (behavior === "interrupt") abortThenSend(full, attachments);
+				else performSend(full, attachments, behavior);
+				return { accepted: true };
+			},
+			(error: unknown): ComposerSubmitDisposition => ({
+				accepted: false,
+				reason: attachmentFailureText(error),
+			}),
+		);
+
+	const onSubmit = (
+		text: string,
+		attachments: ChatAttachment[],
+		behavior: SubmitBehavior,
+		files: PromptFile[],
+		upload: ComposerUpload,
+	): ComposerSubmitDisposition | Promise<ComposerSubmitDisposition> => {
+		const nativeCommand = parseNativeChatCommand(text, canRenameChat);
+		if (nativeCommand?.kind === "compact") {
+			const submissionError = compactSubmissionError(
+				attachments.length > 0,
+				queue.hasImages === true,
+				files.length > 0,
+			);
+			if (submissionError) return { accepted: false, reason: submissionError };
+			performCompact(nativeCommand.instructions);
+			return { accepted: true };
+		}
+		if (nativeCommand?.kind === "name") {
+			const prepared = prepareNameChatCommand(
+				nativeCommand.title,
+				attachments.length > 0,
+				files.length > 0,
+			);
+			if ("reason" in prepared) return { accepted: false, reason: prepared.reason };
+			performRename(prepared.title);
+			return { accepted: true };
+		}
+		if (files.length > 0) return sendWithFiles(text, attachments, behavior, files, upload);
+		if (behavior !== "interrupt") {
+			performSend(text, attachments, behavior);
+			return { accepted: true };
+		}
+		abortThenSend(text, attachments);
 		return { accepted: true };
 	};
 
@@ -790,12 +838,13 @@ export default function ChatView({
 		else composerRef.current?.openHistory();
 	}, [historyOpenRequest, sessionId, historyOverlayOpen, cycleScope]);
 
+	const composerHeld = imageDraft.upload !== null;
 	useLayoutEffect(() => {
 		const composer = composerRef.current;
-		if (!composerEdit || !composer) return;
+		if (!composerEdit || !composer || composerHeld) return;
 		composer.applyEdit(composerEdit.kind, composerEdit.text);
 		useAppStore.getState().consumeComposerEdit(sessionId, composerEdit.id);
-	}, [composerEdit, sessionId]);
+	}, [composerEdit, sessionId, composerHeld]);
 
 	const mayClaimFocus = useCallback(
 		(toolCallId: string) =>
@@ -1030,10 +1079,12 @@ export default function ChatView({
 				/>
 			) : null}
 			<SuggestionChips
+				sessionId={sessionId}
 				suggestions={suggestions}
 				onSend={sendSuggestion}
 				onEdit={editSuggestion}
-				shortcutScope={chatRoot}
+				shortcuts={suggestionShortcuts}
+				chatRoot={chatRoot}
 			/>
 			<div className="relative shrink-0">
 				<HistoryOverlay
@@ -1058,7 +1109,10 @@ export default function ChatView({
 					ref={composerRef}
 					value={draft}
 					onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
+					readDraft={readDraft}
 					imageOwner={imageOwner}
+					acceptsFiles={acceptsFiles}
+					onAttachmentNotice={toast.info}
 					isStreaming={isStreaming}
 					awaitingResponse={awaitingResponse}
 					growthLimit={composerGrowthLimit}

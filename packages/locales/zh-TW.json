@@ -2341,7 +2341,7 @@
 	"tools.ask.hintEnterToggle": "· Enter 切換",
 	"tools.ask.hintMove": "↑↓ 移動",
 	"tools.ask.hintPreviewScroll": "· PgUp/PgDn 預覽",
-	"tools.ask.hintQuestions": "· ←→ 切換問題",
+	"tools.ask.hintQuestions": "· ←→ 切換問題，最後送出",
 	"tools.ask.hintSkip": "· {{key}} 略過",
 	"tools.ask.hintSpaceNote": "· Space 備註",
 	"tools.ask.hintSubmit": "· {{key}} 送出",

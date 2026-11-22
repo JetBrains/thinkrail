@@ -5,6 +5,7 @@ export type Presented = "shown" | "linked";
 export interface ArtifactSignals {
 	presented?: Presented;
 	picked?: true;
+	published?: true;
 }
 
 const WORKING_FOLDERS = new Set([
@@ -27,7 +28,6 @@ const WORKING_FOLDERS = new Set([
 ]);
 const SCRIPT = /\.(?:mjs|cjs|js|jsx|ts|tsx|py|sh)$/i;
 const DATA = /\.(?:json|jsonl|txt|tsv|csv|log|patch)$/i;
-const DOCUMENT = /\.(?:md|markdown|html?|pdf|svg)$/i;
 
 function workingFolder(segment: string): boolean {
 	return (
@@ -44,13 +44,13 @@ export function artifactRole(
 	signals: ArtifactSignals,
 ): { role: ArtifactRole; reason: ArtifactRoleReason } {
 	if (signals.picked) return { role: "result", reason: "picked" };
+	if (signals.published) return { role: "result", reason: "published" };
 	if (signals.presented) return { role: "result", reason: signals.presented };
 	const segments = pathInArtifacts.split("/");
 	const name = segments.pop() ?? "";
 	if (segments.some(workingFolder)) return { role: "working", reason: "working-folder" };
 	if (SCRIPT.test(name)) return { role: "working", reason: "script" };
 	if (DATA.test(name) || !name.includes(".")) return { role: "working", reason: "data" };
-	if (DOCUMENT.test(name)) return { role: "result", reason: "document" };
 	return { role: "working", reason: "unshown" };
 }
 

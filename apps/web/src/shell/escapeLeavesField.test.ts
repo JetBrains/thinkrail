@@ -4,6 +4,7 @@ import {
 	type EscapePress,
 	type EscapeTarget,
 	leavesField,
+	leavesFile,
 } from "./escapeLeavesField";
 
 const ESCAPE: EscapePress = {
@@ -156,5 +157,43 @@ describe("a bare Esc on a panel climbs to the main area", () => {
 		expect(climbs(row, { keyCode: 229 })).toBe(false);
 		expect(climbs(row, {}, true)).toBe(false);
 		expect(climbs(row, { key: "Enter" })).toBe(false);
+	});
+});
+
+const FILE_PANE = "[data-file-pane]";
+const READ_ONLY_TEXT = '[data-text-entry="false"]';
+const inFile = (tagName: string, init: { type?: string; inside?: string[]; is?: string[] } = {}) =>
+	field(tagName, {
+		...init,
+		inside: [REGION, CENTER, CENTER_CONTENT, FILE_PANE, ...(init.inside ?? [])],
+	});
+const backToFiles = (target: EscapeTarget, press: Partial<EscapePress> = {}, claimed = false) =>
+	leavesFile({ ...ESCAPE, ...press }, target, claimed);
+
+describe("a bare Esc in a file goes back to the Files tree", () => {
+	test("from a reading surface, a block cursor or a control of the file", () => {
+		expect(backToFiles(inFile("DIV", { is: ['[data-key-scope="reader"]'] }))).toBe(true);
+		expect(backToFiles(inFile("DIV", { is: ["[data-review-surface]"] }))).toBe(true);
+		expect(backToFiles(inFile("BUTTON"))).toBe(true);
+	});
+
+	test("from a read-only editor's text, but not from its widgets or an editable one", () => {
+		expect(backToFiles(inFile("TEXTAREA", { inside: [".monaco-editor", READ_ONLY_TEXT] }))).toBe(
+			true,
+		);
+		expect(backToFiles(inFile("TEXTAREA", { inside: [".monaco-editor"] }))).toBe(false);
+		expect(backToFiles(inFile("INPUT", { type: "text", inside: [".monaco-editor"] }))).toBe(false);
+	});
+
+	test("never from a text field, a select, a layer, outside a file or once an owner took it", () => {
+		expect(backToFiles(inFile("TEXTAREA"))).toBe(false);
+		expect(backToFiles(inFile("SELECT"))).toBe(false);
+		expect(backToFiles(inFile("BUTTON", { inside: ['[role="dialog"][data-state="open"]'] }))).toBe(
+			false,
+		);
+		expect(backToFiles(field("DIV", { inside: [REGION, CENTER, CENTER_CONTENT] }))).toBe(false);
+		expect(backToFiles(inFile("DIV"), { defaultPrevented: true })).toBe(false);
+		expect(backToFiles(inFile("DIV"), { shiftKey: true })).toBe(false);
+		expect(backToFiles(inFile("DIV"), {}, true)).toBe(false);
 	});
 });

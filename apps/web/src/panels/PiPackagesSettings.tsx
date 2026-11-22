@@ -27,6 +27,8 @@ import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useState } from "react";
 import {
 	SETTINGS_LIST_PRIMARY,
+	SETTINGS_ROW_FOCUS,
+	SETTINGS_ROW_INSET,
 	SETTINGS_TAG,
 	SettingsGroup,
 	SettingsList,
@@ -289,7 +291,11 @@ export function PackageRow({
 			data-identity={summary.identity}
 			data-scope={summary.scope}
 			data-installed={installedPath === undefined ? "false" : "true"}
-			className="flex flex-col gap-4 border-border-muted border-b py-6 last:border-b-0"
+			className={cn(
+				"flex flex-col gap-4 border-border-muted border-b py-6 last:border-b-0",
+				SETTINGS_ROW_INSET,
+				SETTINGS_ROW_FOCUS,
+			)}
 		>
 			<div className="flex flex-wrap items-center gap-8">
 				<button
@@ -467,7 +473,11 @@ export function LooseRow({
 			data-enabled={off ? "false" : "true"}
 			data-path={entry.path}
 			data-scope={entry.scope}
-			className="flex flex-col gap-4 border-border-muted border-b py-6 last:border-b-0"
+			className={cn(
+				"flex flex-col gap-4 border-border-muted border-b py-6 last:border-b-0",
+				SETTINGS_ROW_INSET,
+				SETTINGS_ROW_FOCUS,
+			)}
 		>
 			<div className="flex flex-wrap items-center gap-8">
 				<button
@@ -605,6 +615,7 @@ export function PiPackagesGroup({
 		return group(
 			<SettingsNotice
 				variant="error"
+				rowId="packages-failed"
 				testId="packages-failed"
 				action={
 					onRetry ? (
@@ -673,7 +684,6 @@ export function PiPackagesGroup({
 							variant="primary"
 							size="m"
 							tabIndex={0}
-							data-setting-side=""
 							data-testid="packages-update-all"
 							onClick={onUpdateAll}
 						>
@@ -686,7 +696,7 @@ export function PiPackagesGroup({
 				<div
 					data-testid="packages-empty"
 					data-setting-id={SETTING.installedPackages.id}
-					className="flex flex-col gap-2 py-8"
+					className="flex flex-col gap-2 px-8 py-8"
 				>
 					<span className="tr-text-ui text-text-default">{t("settings.packages.empty")}</span>
 					<span className="tr-text-metadata text-text-muted">
@@ -740,7 +750,7 @@ export function PiPackagesGroup({
 	);
 }
 
-export function GalleryLink({ side = false }: { side?: boolean }) {
+export function GalleryLink() {
 	const t = useT();
 	return (
 		<a
@@ -749,7 +759,6 @@ export function GalleryLink({ side = false }: { side?: boolean }) {
 			target="_blank"
 			rel="noopener noreferrer"
 			tabIndex={0}
-			data-setting-side={side ? "" : undefined}
 			className="tr-text-metadata text-primary underline underline-offset-2 focus-visible:focus-ring"
 		>
 			{t("settings.packages.gallery")} ↗
