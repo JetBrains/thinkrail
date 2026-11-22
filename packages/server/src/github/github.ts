@@ -31,17 +31,10 @@ export function githubRefresh(): Promise<GithubAuthStatus> {
 	return githubAuthStatus();
 }
 
-export function ghSetupProblemFrom(ghPath: string | null, authOk: boolean): GhSetupProblem | null {
-	if (ghPath === null) return "missing";
-	return authOk ? null : "unauthenticated";
-}
-
 export async function ghSetupProblem(): Promise<GhSetupProblem | null> {
 	if (process.env.THINKRAIL_GH_OFFLINE === "1") return null;
-	const ghPath = Bun.which("gh");
-	if (ghPath === null) return "missing";
 	const result = await runBounded(["gh", "auth", "status"], { timeoutMs: GH_PROBE_TIMEOUT_MS });
 	if (result.timedOut) return null;
 	if (result.launchFailed) return "missing";
-	return ghSetupProblemFrom(ghPath, result.ok);
+	return result.ok ? null : "unauthenticated";
 }
