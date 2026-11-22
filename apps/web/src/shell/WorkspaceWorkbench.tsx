@@ -95,6 +95,7 @@ import {
 	findPlacedResource,
 	findTabLocation,
 	isToolShowing,
+	type LayoutAuxiliaryRegion,
 	type LayoutCenterTab,
 	type LayoutTab,
 	type LayoutTabFocusRequest,
@@ -531,10 +532,15 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	);
 
 	const commit = useCallback(
-		(next: WorkspaceLayoutDocument, nextAttention?: LayoutAttention) => {
+		(
+			next: WorkspaceLayoutDocument,
+			nextAttention?: LayoutAttention,
+			panelsToRestore?: readonly LayoutAuxiliaryRegion[],
+		) => {
 			void commitWorkspaceLayout(workspaceId, next, {
 				...(document ? { baseDocument: document } : {}),
 				...(nextAttention ? { attention: nextAttention } : {}),
+				...(panelsToRestore ? { panelsToRestore } : {}),
 			}).catch(() => {});
 		},
 		[document, workspaceId],

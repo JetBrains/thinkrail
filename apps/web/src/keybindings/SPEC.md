@@ -60,6 +60,13 @@ binding does.
   `tab.close` is `Mod+W` (display-only) and `Mod+Alt+W`, `group.splitRight` is `Mod+\` (`Backslash`),
   and the group moves are `⌃⌘←` / `⌃⌘→` on Apple and `Ctrl+Alt+←` / `Ctrl+Alt+→` elsewhere (`Mod+Alt`
   would collide with the Mac browsers' tab switching).
+- **Hide all panels:** `view.toggleAllPanels` is `Mod+Shift+F12` (⇧⌘F12, Ctrl+Shift+F12) beside the
+  side and bottom toggles (`Mod+B`, `Mod+J`, `Mod+Shift+J`; [[submodule-web-shell]], *Global chords*, owns
+  what it does). It is JetBrains IDEs' *Hide All Tool Windows*, and no default table chord, browser-reserved
+  or desktop-native chord, element local key or bundled extension command holds it on any platform
+  (tested). An F-key chord is never plain, so it acts in text entry too; it takes the press from Monaco,
+  whose Peek Implementation shares the chord, as `Mod+K` does. A Mac whose top row sends media keys needs
+  Fn for it, as in JetBrains IDEs (accepted).
 - **Region and focus chords:** `region.next` `F6` and `region.previous` `Shift+F6` (no modifier, so
   `Ctrl+F6` stays the workbench's group cycling), `focus.composer` `Mod+L`, `focus.projects` `Mod+0`,
   `focus.group1…9` `Mod+1…9` (`FOCUS_GROUP_BINDINGS` lists them in group order), `shortcuts.open`

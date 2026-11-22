@@ -43,8 +43,16 @@ export function toggleBottomPanel(): void {
 	if (workspaceId) state.enqueueLayoutIntent({ kind: "toggle-bottom", workspaceId });
 }
 
+export function toggleAllPanels(): void {
+	const state = useAppStore.getState();
+	const workspaceId = state.activeWorkspaceId;
+	if (workspaceId) state.enqueueLayoutIntent({ kind: "toggle-all-panels", workspaceId });
+}
+
 /** Hides the left, right and bottom panes of the workspace's frame, remembering what it hid for `view.toggleAllPanels`. */
-export function hideAllPanels(_workspaceId: string): void {}
+export function hideAllPanels(workspaceId: string): void {
+	useAppStore.getState().enqueueLayoutIntent({ kind: "hide-all-panels", workspaceId });
+}
 
 export function openChatHistory(): void {
 	const state = useAppStore.getState();

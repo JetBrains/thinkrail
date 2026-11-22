@@ -111,6 +111,7 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 			toggleLeft: noop,
 			toggleRight: noop,
 			toggleBottom: noop,
+			toggleAllPanels: noop,
 			showTool: noop,
 			openExtensionPanel: noop,
 			openExtensionPanelInProject: noop,
@@ -196,6 +197,17 @@ describe("palette project and Settings commands", () => {
 		});
 	});
 
+	test("Hide all panels runs the chord's action with its Mod+Shift+F12, only in a workspace", () => {
+		let toggled = 0;
+		const catalog = deps({ actions: { ...deps().actions, toggleAllPanels: () => (toggled += 1) } });
+		const hideAll = row("view.toggleAllPanels", catalog);
+		expect(hideAll?.title).toBe("Hide all panels");
+		expect(hideAll?.shortcut).toEqual({ key: "F12", mod: true, shift: true });
+		hideAll?.run?.();
+		expect(toggled).toBe(1);
+		expect(row("view.toggleAllPanels", deps({ activeWorkspace: null }))).toBeUndefined();
+	});
+
 	test("every chord-bound command shows its keybinding's shortcut", () => {
 		const bound: readonly KeybindingId[] = [
 			"workspace.new",
@@ -204,6 +216,7 @@ describe("palette project and Settings commands", () => {
 			"view.toggleLeft",
 			"view.toggleRight",
 			"view.toggleBottom",
+			"view.toggleAllPanels",
 			"view.changes",
 			"region.next",
 			"region.previous",

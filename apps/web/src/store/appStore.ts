@@ -363,6 +363,7 @@ export interface LocalLayoutStatePayload {
 	documentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
 	attentionByWorkspace: Record<string, LayoutAttention>;
 	preferences: LocalLayoutPreferences;
+	panelsToRestore?: readonly LayoutAuxiliaryRegion[];
 }
 
 export interface CenterNavigationStamp {
@@ -441,7 +442,9 @@ export type LayoutIntent =
 	| { id: string; kind: "close-terminal"; workspaceId: string; tabKey: string }
 	| { id: string; kind: "select-terminal"; workspaceId: string; tabKey: string }
 	| { id: string; kind: "toggle-side"; workspaceId: string; side: "left" | "right" }
-	| { id: string; kind: "toggle-bottom"; workspaceId: string };
+	| { id: string; kind: "toggle-bottom"; workspaceId: string }
+	| { id: string; kind: "toggle-all-panels"; workspaceId: string }
+	| { id: string; kind: "hide-all-panels"; workspaceId: string };
 export type LayoutIntentInput = LayoutIntent extends infer Intent
 	? Intent extends { id: string }
 		? Omit<Intent, "id">
@@ -1156,6 +1159,8 @@ interface AppState {
 	layoutDocumentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
 	layoutAttentionByWorkspace: Record<string, LayoutAttention>;
 	layoutProjectionEpoch: number;
+	/** The panes `view.toggleAllPanels` hid and brings back next; runtime only, never persisted. */
+	panelsToRestore: readonly LayoutAuxiliaryRegion[];
 	layoutIntents: LayoutIntent[];
 	tabsByWorkspace: Record<string, EditorTab[]>;
 	activeTabByWorkspace: Record<string, string | null>;
@@ -2590,6 +2595,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	layoutDocumentsByWorkspace: {},
 	layoutAttentionByWorkspace: {},
 	layoutProjectionEpoch: 0,
+	panelsToRestore: [],
 	layoutIntents: [],
 	tabsByWorkspace: {},
 	activeTabByWorkspace: {},
@@ -3181,6 +3187,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			layoutAttentionByWorkspace: payload.attentionByWorkspace,
 			localLayoutPreferences: payload.preferences,
 			layoutProjectionEpoch: state.layoutProjectionEpoch + (invalidateProjection ? 1 : 0),
+			panelsToRestore: payload.panelsToRestore ?? state.panelsToRestore,
 		}));
 	},
 	setLocalLayoutPreferences: (preferences) => set({ localLayoutPreferences: preferences }),

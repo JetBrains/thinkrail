@@ -217,7 +217,9 @@ roster's catalog reads ([[submodule-web-panels]]).
   together with every retained workspace-view remap, so an explicit group removal or preset application can
   never leave a hidden workspace referencing a dead group. Components never splice group/tab arrays. Empty
   groups are valid frame state and closing a final resource does not delete them. `layoutProjectionEpoch`
-  advances only when a local transition invalidates an uncontrolled pointer/resize draft.
+  advances only when a local transition invalidates an uncontrolled pointer/resize draft. `panelsToRestore`
+  is *Hide all panels*' runtime-only restore memory (the auxiliary regions it hid), installed by the same
+  `applyLocalLayoutState` payload as the frame and never persisted ([[submodule-web-shell-layout-state]]).
 
   The store owns values and actions, never persistence. `shell/layoutState` validates and hydrates one
   browser-endpoint/surface- or native-profile/window-qualified local document, subscribes to relevant state

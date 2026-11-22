@@ -909,11 +909,10 @@ export function setBottomVisibility(
 
 const TOOL_RESTORE_ORDER = LAYOUT_TOOLS;
 
-export function hideSide(
+function centerRecoveryFocus(
 	document: WorkspaceLayoutDocument,
-	side: LayoutSide,
 	attention: LayoutAttention,
-): LayoutMutationResult {
+): Omit<LayoutMutationResult, "document"> {
 	const center =
 		findCenterGroup(document.center, attention.lastFocusedCenterGroupId) ??
 		findCenterGroup(document.center, primaryCenterGroupId(document));
@@ -921,9 +920,19 @@ export function hideSide(
 		center?.tabs.find((tab) => tab.id === readLayoutSelection(attention, center.id)) ??
 		center?.tabs[0];
 	return {
-		document: setSideVisibility(document, side, false),
 		...(center ? { focusGroupId: center.id, focusOnlyIfLost: true } : {}),
 		...(selected ? { focusTabId: selected.id } : {}),
+	};
+}
+
+export function hideSide(
+	document: WorkspaceLayoutDocument,
+	side: LayoutSide,
+	attention: LayoutAttention,
+): LayoutMutationResult {
+	return {
+		document: setSideVisibility(document, side, false),
+		...centerRecoveryFocus(document, attention),
 	};
 }
 
@@ -931,17 +940,92 @@ export function hideBottom(
 	document: WorkspaceLayoutDocument,
 	attention: LayoutAttention,
 ): LayoutMutationResult {
-	const center =
-		findCenterGroup(document.center, attention.lastFocusedCenterGroupId) ??
-		findCenterGroup(document.center, primaryCenterGroupId(document));
-	const selected =
-		center?.tabs.find((tab) => tab.id === readLayoutSelection(attention, center.id)) ??
-		center?.tabs[0];
 	return {
 		document: setBottomVisibility(document, false),
-		...(center ? { focusGroupId: center.id, focusOnlyIfLost: true } : {}),
-		...(selected ? { focusTabId: selected.id } : {}),
+		...centerRecoveryFocus(document, attention),
 	};
+}
+
+const AUXILIARY_REGIONS: readonly LayoutAuxiliaryRegion[] = ["left", "right", "bottom"];
+
+interface AuxiliaryRegionShape {
+	readonly visible: boolean;
+	readonly groups: readonly { readonly folded: boolean }[];
+}
+
+type AuxiliaryRegionsShape = Readonly<Record<LayoutAuxiliaryRegion, AuxiliaryRegionShape>>;
+
+export function isAuxiliaryRegionShown(region: AuxiliaryRegionShape): boolean {
+	return region.visible && region.groups.some((group) => !group.folded);
+}
+
+export function shownAuxiliaryRegions(layout: AuxiliaryRegionsShape): LayoutAuxiliaryRegion[] {
+	return AUXILIARY_REGIONS.filter((region) => isAuxiliaryRegionShown(layout[region]));
+}
+
+const NO_PANELS: readonly LayoutAuxiliaryRegion[] = [];
+
+export function keptPanelsToRestore(
+	remembered: readonly LayoutAuxiliaryRegion[],
+	frame: AuxiliaryRegionsShape,
+): readonly LayoutAuxiliaryRegion[] {
+	return remembered.length > 0 && shownAuxiliaryRegions(frame).length > 0 ? NO_PANELS : remembered;
+}
+
+export interface AuxiliaryPanelsResult extends LayoutMutationResult {
+	panelsToRestore: readonly LayoutAuxiliaryRegion[];
+	select: readonly { location: LayoutGroupLocation; tabId: string }[];
+}
+
+export function hideAuxiliaryPanels(
+	document: WorkspaceLayoutDocument,
+	attention: LayoutAttention,
+	remembered: readonly LayoutAuxiliaryRegion[],
+): AuxiliaryPanelsResult | null {
+	const shown = shownAuxiliaryRegions(document);
+	if (shown.length === 0) return null;
+	const hidden = shown.reduce(
+		(next, region) =>
+			region === "bottom"
+				? setBottomVisibility(next, false)
+				: setSideVisibility(next, region, false),
+		document,
+	);
+	return {
+		document: hidden,
+		...centerRecoveryFocus(document, attention),
+		panelsToRestore: AUXILIARY_REGIONS.filter(
+			(region) => shown.includes(region) || remembered.includes(region),
+		),
+		select: [],
+	};
+}
+
+export function toggleAuxiliaryPanels(
+	document: WorkspaceLayoutDocument,
+	attention: LayoutAttention,
+	remembered: readonly LayoutAuxiliaryRegion[],
+	maxSideGroups: number,
+	maxBottomGroups: number,
+): AuxiliaryPanelsResult | null {
+	const hidden = hideAuxiliaryPanels(document, attention, remembered);
+	if (hidden) return hidden;
+	const restore: readonly LayoutAuxiliaryRegion[] =
+		remembered.length > 0 ? remembered : ["left", "right"];
+	let next = document;
+	const select: { location: LayoutGroupLocation; tabId: string }[] = [];
+	for (const region of AUXILIARY_REGIONS) {
+		if (!restore.includes(region)) continue;
+		const shown =
+			region === "bottom"
+				? showBottom(next, maxSideGroups, maxBottomGroups, attention)
+				: showSide(next, region, maxSideGroups, attention);
+		if (isLayoutUnavailable(shown)) continue;
+		next = shown.document;
+		const location = shown.focusTabId ? findTabLocation(next, shown.focusTabId) : null;
+		if (location && shown.focusTabId) select.push({ location, tabId: shown.focusTabId });
+	}
+	return next === document ? null : { document: next, panelsToRestore: NO_PANELS, select };
 }
 
 export function canShowSide(document: WorkspaceLayoutDocument, side: LayoutSide): boolean {

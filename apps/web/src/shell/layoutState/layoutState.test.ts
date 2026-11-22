@@ -5,6 +5,7 @@ import {
 	closeLayoutTab,
 	collectAllGroups,
 	findTabLocation,
+	hideAuxiliaryPanels,
 	openCenterTab,
 	resizeBottomRegion,
 	resizeSideRegion,
@@ -72,6 +73,7 @@ function resetStore(): void {
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
 		layoutProjectionEpoch: 0,
+		panelsToRestore: [],
 		workspaceSelectionHistory: [],
 		toasts: [],
 	});
@@ -655,6 +657,44 @@ describe("frontend-local layout state", () => {
 			left: { ...resized.left, visible: false },
 		});
 		expect(useAppStore.getState().layoutProjectionEpoch).toBe(epoch + 1);
+	});
+
+	test("the panes' restore memory installs with its frame, clears once a pane shows, and is never persisted", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-panels");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		const base = await ensureWorkspaceLayoutState("workspace");
+		const attention = useAppStore.getState().layoutAttentionByWorkspace.workspace;
+		if (!attention) throw new Error("Missing fixture");
+		const hidden = hideAuxiliaryPanels(base, attention, []);
+		if (!hidden) throw new Error("expected the Balanced panes to hide");
+		const changes: (readonly string[])[] = [];
+		const unsubscribe = useAppStore.subscribe((state, previous) => {
+			if (state.workbenchFrame !== previous.workbenchFrame) changes.push(state.panelsToRestore);
+		});
+		try {
+			await commitWorkspaceLayout("workspace", hidden.document, {
+				panelsToRestore: hidden.panelsToRestore,
+			});
+		} finally {
+			unsubscribe();
+		}
+		expect(changes).toEqual([["left", "right", "bottom"]]);
+		expect(local.values.size).toBeGreaterThan(0);
+		for (const raw of local.values.values()) expect(raw).not.toContain("panelsToRestore");
+
+		const current = useAppStore.getState().layoutDocumentsByWorkspace.workspace;
+		if (!current) throw new Error("Missing committed document");
+		await commitWorkspaceLayout("workspace", resizeSideRegion(current, "left", 0.3));
+		expect(useAppStore.getState().panelsToRestore).toEqual(["left", "right", "bottom"]);
+		const latest = useAppStore.getState().layoutDocumentsByWorkspace.workspace;
+		if (!latest) throw new Error("Missing committed document");
+		await commitWorkspaceLayout("workspace", {
+			...latest,
+			right: { ...latest.right, visible: true },
+		});
+		expect(useAppStore.getState().panelsToRestore).toEqual([]);
 	});
 
 	test("a newly shown singleton tool cannot collide with a hidden workspace resource", async () => {

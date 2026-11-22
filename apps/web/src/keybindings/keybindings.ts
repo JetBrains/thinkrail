@@ -47,6 +47,7 @@ export type KeybindingId =
 	| "view.toggleLeft"
 	| "view.toggleRight"
 	| "view.toggleBottom"
+	| "view.toggleAllPanels"
 	| "view.files"
 	| "view.changes"
 	| "workspace.new"
@@ -91,6 +92,7 @@ export const KEYBINDINGS: Readonly<Record<KeybindingId, readonly [KeyChord, ...K
 	"view.toggleLeft": [{ code: "KeyB", key: "B", mod: true }],
 	"view.toggleRight": [{ code: "KeyJ", key: "J", mod: true }],
 	"view.toggleBottom": [{ code: "KeyJ", key: "J", mod: true, shift: true }],
+	"view.toggleAllPanels": [{ code: "F12", key: "F12", mod: true, shift: true }],
 	"workspace.new": [
 		{ code: "KeyN", key: "N", mod: true },
 		{ code: "KeyN", key: "N", mod: true, alt: true },
