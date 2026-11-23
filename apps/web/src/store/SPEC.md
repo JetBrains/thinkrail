@@ -876,11 +876,18 @@ width; read through **`selectChatPane`**, and **`selectChatPlacedInCenter`** say
 in the active workspace's center (where a pane can open, [[submodule-web-shell]] § Extension panels).
 **`panelViewStatesByWorkspace`** is the extension panels' view state, one JSON-like value per tab
 (its resource identity) or chat pane (`chatPaneViewKey`), each with an `epoch`, written by
-**`savePanelViewState`** (an `undefined` value forgets the key; the epoch stays) and read through
-`getState()` (`selectPanelViewState`) when a panel mounts — a save re-renders nothing.
+**`savePanelViewState`** (an `undefined` value forgets the value; the epoch stays — an entry handed over
+keeps `{ state: undefined, epoch }`, so its tab does not remount — and an entry at epoch 0 goes) and read
+through `getState()` (`selectPanelViewState`) when a panel mounts — a save re-renders nothing. A save
+whose owner is gone writes nothing: a key with no tab of that identity left in the workspace's view, and
+no pane record of a live chat it belongs to, is refused in that one action, so a panel's unmount flush
+after its tab closed or its chat was deleted cannot write the key back.
 **`transferPanelViewState`** writes a view another placement hands over and bumps the epoch, the one
-value a component subscribes to (`selectPanelViewEpoch`), so a mounted panel remounts on it. Both are runtime only: `closeTab`
-drops an extension tab's value, deleting a chat (`withoutChat`) drops its pane and the pane's values, and
+value a component subscribes to (`selectPanelViewEpoch`), so a mounted panel remounts on it; it is not
+guarded, since it runs before the destination tab is placed. Both are runtime only: `closeTab` drops a
+cached extension tab's value, **`dropPanelViewState`** drops a closed tab's by its identity, epoch
+included (the shell calls it on every committed extension-tab close, since a tab restored from the layout
+has no cache), deleting a chat (`withoutChat`) drops its pane and the pane's values, and
 `applyWorkspaceRemoved` drops the workspace's entries. The transient **`chatLocationRequest`** — the
   history-search jump, an extension panel's *Open in chat* (`PanelHost.openChat` with an anchor) and a
   chat pane's *Show in chat* (`focus: false`: reveal and highlight without moving focus)

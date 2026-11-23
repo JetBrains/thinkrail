@@ -571,6 +571,10 @@ export function chatPaneViewKey(sessionId: string, extension: string, panel: str
 	return tupleKey("chat-pane", sessionId, extension, panel);
 }
 
+function chatPaneViewPrefix(sessionId: string): string {
+	return tupleKey("chat-pane", sessionId);
+}
+
 export interface PendingMarkUnread {
 	candidates: Record<string, string>;
 	attendedSessionId: string | null;
@@ -1494,6 +1498,8 @@ interface AppState {
 	savePanelViewState: (workspaceId: string, key: string, state: unknown) => void;
 	/** Saves a view another placement hands over and bumps its epoch, so a mounted panel remounts on it. */
 	transferPanelViewState: (workspaceId: string, key: string, state: unknown) => void;
+	/** Forgets a closed tab's view, epoch included, whether or not the tab had a cache. */
+	dropPanelViewState: (workspaceId: string, key: string) => void;
 	noteFsChanged: (payload: WorkspaceFsChangedPayload) => void;
 	turnsByWorkspace: Record<string, TurnChangeSet[]>;
 	setWorkspaceTurns: (
@@ -1980,6 +1986,15 @@ function patchChatPane(
 	};
 }
 
+/** A panel view's owner is still there: a tab of that identity in the workspace's view, or a live chat's pane. */
+function panelViewOwned(s: AppState, workspaceId: string, key: string): boolean {
+	if (selectLayoutIdentityPlacement(s, workspaceId, key) !== null) return true;
+	return Object.keys(s.chatPanesByWorkspace[workspaceId] ?? {}).some(
+		(sessionId) =>
+			key.startsWith(chatPaneViewPrefix(sessionId)) && !isSessionDeleted(s, workspaceId, sessionId),
+	);
+}
+
 function withoutPanelViewStates(
 	states: AppState["panelViewStatesByWorkspace"],
 	workspaceId: string,
@@ -2262,7 +2277,7 @@ function withoutChat(
 	const isObscured = Boolean(s.obscuredChatSessions[sessionId]);
 	const hasSkillBaseline = Object.hasOwn(s.skillsSyncedTickBySession, sessionId);
 	const hasChatPane = s.chatPanesByWorkspace[workspaceId]?.[sessionId] !== undefined;
-	const paneViewPrefix = tupleKey("chat-pane", sessionId);
+	const paneViewPrefix = chatPaneViewPrefix(sessionId);
 	const panelViewStates = withoutPanelViewStates(s.panelViewStatesByWorkspace, workspaceId, (key) =>
 		key.startsWith(paneViewPrefix),
 	);
@@ -3789,15 +3804,18 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	savePanelViewState: (workspaceId, key, state) =>
 		set((s) => {
-			if (s.removedWorkspaceIds[workspaceId]) return {};
+			if (s.removedWorkspaceIds[workspaceId] || !panelViewOwned(s, workspaceId, key)) return {};
 			const current = s.panelViewStatesByWorkspace[workspaceId] ?? {};
-			if (state === undefined && !Object.hasOwn(current, key)) return {};
-			const epoch = current[key]?.epoch ?? 0;
+			const entry = current[key];
+			if (state === undefined && entry?.state === undefined) return {};
+			const epoch = entry?.epoch ?? 0;
 			return {
 				panelViewStatesByWorkspace: {
 					...s.panelViewStatesByWorkspace,
 					[workspaceId]:
-						state === undefined ? omitKey(current, key) : { ...current, [key]: { state, epoch } },
+						state === undefined && epoch === 0
+							? omitKey(current, key)
+							: { ...current, [key]: { state, epoch } },
 				},
 			};
 		}),
@@ -3812,6 +3830,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 					[workspaceId]: { ...current, [key]: { state, epoch } },
 				},
 			};
+		}),
+	dropPanelViewState: (workspaceId, key) =>
+		set((s) => {
+			const panelViewStatesByWorkspace = withoutPanelViewStates(
+				s.panelViewStatesByWorkspace,
+				workspaceId,
+				(candidate) => candidate === key,
+			);
+			return panelViewStatesByWorkspace === s.panelViewStatesByWorkspace
+				? {}
+				: { panelViewStatesByWorkspace };
 		}),
 	setWorkspaceTurns: (workspaceId, turns, baseline, connectionGeneration) =>
 		set((s) => {

@@ -8,9 +8,15 @@ import type {
 } from "@thinkrail/extension-api/web";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { extensionPanels, type RegisteredPanel } from "../extensions";
-import { extensionParamsKey, tupleKey } from "../lib";
+import { extensionParamsKey, layoutResourceIdentity, tupleKey } from "../lib";
 import { enterDefaultWorkspace } from "../panels/defaultWorkspace";
-import { type ChatLocationRequest, selectContextRepoProject, useAppStore } from "../store";
+import {
+	type ChatLocationRequest,
+	type ExtensionTab,
+	selectContextRepoProject,
+	selectLayoutIdentityPlacement,
+	useAppStore,
+} from "../store";
 import { getTransport, RequestError, supportsExtensionQuery } from "../transport";
 import { hideAllPanels } from "./chordActions";
 import { paletteNavigator } from "./paletteNavigation";
@@ -278,7 +284,7 @@ export function openExtensionPanel(
 	params: Readonly<Record<string, string>> = {},
 	title = "",
 ): void {
-	useAppStore.getState().openDoc({
+	const tab: ExtensionTab = {
 		kind: "extension",
 		id: tupleKey(
 			"extension",
@@ -293,6 +299,10 @@ export function openExtensionPanel(
 		panel: panel.panel,
 		titleKey: panel.declaration.title,
 		params: { ...params },
-	});
-	if (panel.declaration.wide) hideAllPanels(workspaceId);
+	};
+	const state = useAppStore.getState();
+	const placed =
+		selectLayoutIdentityPlacement(state, workspaceId, layoutResourceIdentity(tab)) !== null;
+	state.openDoc(tab);
+	if (panel.declaration.wide && !placed) hideAllPanels(workspaceId);
 }

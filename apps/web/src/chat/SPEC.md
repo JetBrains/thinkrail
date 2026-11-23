@@ -1312,8 +1312,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `h-panel-header-row` (`--panel-header-row-height`, currently 28px), the shared structural geometry with
   workbench Group Headers and the Changes toolbar, not a value pinned here; it never scrolls,
   and constrained widths clip/truncate TODO + status/usage text while preserving the trailing Skills
-  action. After the usage figures, before Resources, it renders `links` — a compact link per chat action
-  the shell offers (an extension panel opened for this chat, "Session analysis ↗"): `ChatView` receives
+  action. After the usage figures, before Resources, it renders `links` — a compact "<label> ↗" link per chat
+  action the shell offers (an extension panel opened for this chat, in a tab): `ChatView` receives
   them as its `chatActions` prop (`lib`'s `ChatAction`, [[submodule-web-shell]] § Extension panels) and
   shows them once the chat has a session file (the store's `selectChatPersisted`), so chat never reads
   the extension registry. An action marked `pane` (it opens beside the chat) renders as a toggle instead

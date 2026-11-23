@@ -2,9 +2,9 @@ import { useT } from "@thinkrail/locales/react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
 import { type ReactNode, useId, useRef } from "react";
 
-export const CHAT_PANE_DEFAULT_WIDTH = 50;
-export const CHAT_PANE_MIN_WIDTH = 25;
-export const CHAT_MIN_WIDTH = 30;
+const CHAT_PANE_DEFAULT_WIDTH = 50;
+const CHAT_PANE_MIN_WIDTH = 25;
+const CHAT_MIN_WIDTH = 30;
 
 /** What the shell shows beside a chat, inside the chat's tab. */
 export interface ChatPaneSlot {
@@ -18,7 +18,7 @@ export interface ChatPaneSlot {
 	readonly onClose: () => void;
 }
 
-export function chatPaneWidth(width: number | null): number {
+function chatPaneWidth(width: number | null): number {
 	if (width === null) return CHAT_PANE_DEFAULT_WIDTH;
 	return Math.min(100 - CHAT_MIN_WIDTH, Math.max(CHAT_PANE_MIN_WIDTH, width));
 }

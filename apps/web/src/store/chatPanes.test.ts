@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { Workspace } from "@thinkrail/contracts";
 import { layoutResourceIdentity } from "../lib";
-import type { WorkspaceLayoutDocument } from "../shell/layout";
+import type { LayoutCenterTab, LayoutExtensionTab, WorkspaceLayoutDocument } from "../shell/layout";
 import {
 	type ChatPanePanel,
 	chatPaneViewKey,
 	type ExtensionTab,
 	selectChatPane,
 	selectChatPlacedInCenter,
+	selectPanelViewEpoch,
 	selectPanelViewState,
 	useAppStore,
 } from "./index";
@@ -40,18 +41,37 @@ const extensionTab: ExtensionTab = {
 	params: { sessionId: "s1" },
 };
 
-function centerLayout(sessionIds: readonly string[]): WorkspaceLayoutDocument {
+const placedExtensionTab: LayoutExtensionTab = {
+	kind: "extension",
+	id: extensionTab.id,
+	name: extensionTab.name,
+	extension: extensionTab.extension,
+	panel: extensionTab.panel,
+	titleKey: extensionTab.titleKey,
+	params: extensionTab.params,
+};
+const extensionKey = layoutResourceIdentity(extensionTab);
+
+function centerLayout(
+	sessionIds: readonly string[],
+	others: readonly LayoutCenterTab[] = [],
+): WorkspaceLayoutDocument {
 	return {
 		version: 2,
 		center: {
 			kind: "group",
 			id: "center",
-			tabs: sessionIds.map((sessionId) => ({
-				kind: "chat",
-				id: `chat:${sessionId}`,
-				name: "",
-				sessionId,
-			})),
+			tabs: [
+				...sessionIds.map(
+					(sessionId): LayoutCenterTab => ({
+						kind: "chat",
+						id: `chat:${sessionId}`,
+						name: "",
+						sessionId,
+					}),
+				),
+				...others,
+			],
 		},
 		left: { visible: false, width: 0.2, groups: [] },
 		right: { visible: false, width: 0.2, groups: [] },
@@ -135,26 +155,86 @@ describe("chat panes", () => {
 });
 
 describe("panel view state", () => {
+	const placeExtensionTab = () =>
+		useAppStore.setState({
+			layoutDocumentsByWorkspace: { w1: centerLayout([], [placedExtensionTab]) },
+		});
+
 	test("keeps the last value saved per key, and forgets one saved as undefined", () => {
-		state().savePanelViewState("w1", "k", { section: "trace" });
-		state().savePanelViewState("w1", "k", { section: "errors" });
-		expect(selectPanelViewState(state(), "w1", "k")).toEqual({ section: "errors" });
-		state().savePanelViewState("w1", "k", undefined);
+		placeExtensionTab();
+		state().savePanelViewState("w1", extensionKey, { section: "trace" });
+		state().savePanelViewState("w1", extensionKey, { section: "errors" });
+		expect(selectPanelViewState(state(), "w1", extensionKey)).toEqual({ section: "errors" });
+		state().savePanelViewState("w1", extensionKey, undefined);
 		expect(state().panelViewStatesByWorkspace.w1).toEqual({});
 		const before = state().panelViewStatesByWorkspace;
-		state().savePanelViewState("w1", "k", undefined);
+		state().savePanelViewState("w1", extensionKey, undefined);
 		expect(state().panelViewStatesByWorkspace).toBe(before);
 	});
 
+	test("forgetting a handed-over view keeps its epoch, so the tab it went to does not remount", () => {
+		placeExtensionTab();
+		state().transferPanelViewState("w1", extensionKey, { section: "files" });
+		expect(selectPanelViewEpoch(state(), "w1", extensionKey)).toBe(1);
+
+		state().savePanelViewState("w1", extensionKey, undefined);
+
+		expect(selectPanelViewState(state(), "w1", extensionKey)).toBeUndefined();
+		expect(selectPanelViewEpoch(state(), "w1", extensionKey)).toBe(1);
+		state().savePanelViewState("w1", extensionKey, { section: "errors" });
+		expect(state().panelViewStatesByWorkspace.w1?.[extensionKey]).toEqual({
+			state: { section: "errors" },
+			epoch: 1,
+		});
+	});
+
+	test("a save whose tab or chat pane is gone writes nothing", () => {
+		const paneKey = chatPaneViewKey("s1", "insights", "analysis");
+		state().savePanelViewState("w1", extensionKey, { section: "files" });
+		state().savePanelViewState("w1", paneKey, { section: "trace" });
+		expect(state().panelViewStatesByWorkspace).toEqual({});
+
+		placeExtensionTab();
+		state().openChatPane("w1", "s1", analysis);
+		state().savePanelViewState("w1", extensionKey, { section: "files" });
+		state().savePanelViewState("w1", paneKey, { section: "trace" });
+		expect(selectPanelViewState(state(), "w1", extensionKey)).toEqual({ section: "files" });
+		expect(selectPanelViewState(state(), "w1", paneKey)).toEqual({ section: "trace" });
+
+		state().deleteChat("w1", "s1");
+		state().savePanelViewState("w1", paneKey, { section: "errors" });
+		expect(state().panelViewStatesByWorkspace.w1?.[paneKey]).toBeUndefined();
+
+		state().openChatPane("w1", "s2", analysis);
+		useAppStore.setState({ deletedSessionsByWorkspace: { w1: { s2: true } } });
+		state().savePanelViewState("w1", chatPaneViewKey("s2", "insights", "analysis"), { a: 1 });
+		expect(
+			state().panelViewStatesByWorkspace.w1?.[chatPaneViewKey("s2", "insights", "analysis")],
+		).toBeUndefined();
+
+		useAppStore.setState({ layoutDocumentsByWorkspace: { w1: centerLayout([]) } });
+		state().dropPanelViewState("w1", extensionKey);
+		state().savePanelViewState("w1", extensionKey, { section: "errors" });
+		expect(state().panelViewStatesByWorkspace.w1).toEqual({});
+	});
+
 	test("closing an extension tab drops its view state; other tabs keep theirs", () => {
-		const key = layoutResourceIdentity(extensionTab);
-		useAppStore.setState({ tabsByWorkspace: { w1: [extensionTab] } });
-		state().savePanelViewState("w1", key, { section: "files" });
-		state().savePanelViewState("w1", "other", { kept: true });
+		const other: LayoutExtensionTab = {
+			...placedExtensionTab,
+			id: "other-tab",
+			params: { sessionId: "s2" },
+		};
+		const otherKey = layoutResourceIdentity(other);
+		useAppStore.setState({
+			tabsByWorkspace: { w1: [extensionTab] },
+			layoutDocumentsByWorkspace: { w1: centerLayout([], [placedExtensionTab, other]) },
+		});
+		state().savePanelViewState("w1", extensionKey, { section: "files" });
+		state().savePanelViewState("w1", otherKey, { kept: true });
 
 		state().closeTab(extensionTab.id, false, false, "w1");
 
-		expect(selectPanelViewState(state(), "w1", key)).toBeUndefined();
-		expect(selectPanelViewState(state(), "w1", "other")).toEqual({ kept: true });
+		expect(selectPanelViewState(state(), "w1", extensionKey)).toBeUndefined();
+		expect(selectPanelViewState(state(), "w1", otherKey)).toEqual({ kept: true });
 	});
 });

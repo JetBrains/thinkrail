@@ -18,6 +18,7 @@ import {
 	type PanelHostDeps,
 	readExtensionCatalog,
 } from "./extensionPanelHost";
+import type { LayoutExtensionTab } from "./layout";
 
 function deferred<T>() {
 	let resolve: (value: T) => void = () => {};
@@ -419,6 +420,7 @@ describe("openExtensionPanel", () => {
 			tabsByWorkspace: {},
 			activeTabByWorkspace: {},
 			layoutIntents: [],
+			layoutDocumentsByWorkspace: {},
 			removedWorkspaceIds: {},
 		});
 	});
@@ -453,20 +455,45 @@ describe("openExtensionPanel", () => {
 		]);
 	});
 
-	test("a wide panel hides the panes after every open of its tab, focusing an existing one included", () => {
+	test("a wide panel hides the panes when its tab opens, never when an open one is focused", () => {
 		const wide: RegisteredPanel = {
 			extension: "insights",
 			panel: "compare",
 			declaration: { ...declaration, wide: true },
 		};
+		const placed: LayoutExtensionTab = {
+			kind: "extension",
+			id: "compare-tab",
+			name: "Compare",
+			extension: "insights",
+			panel: "compare",
+			titleKey: "common.retry",
+			params: { a: "1" },
+		};
+		const intents = () =>
+			useAppStore.getState().layoutIntents.map(({ kind, workspaceId }) => `${kind}:${workspaceId}`);
 		openExtensionPanel("w1", panel);
 		openExtensionPanel("w1", wide, { a: "1" }, "Compare");
-		openExtensionPanel("w1", wide, { a: "1" }, "Compare");
+		expect(intents()).toEqual(["open:w1", "open:w1", "hide-all-panels:w1"]);
 
-		expect(useAppStore.getState().tabsByWorkspace.w1).toHaveLength(2);
-		expect(
-			useAppStore.getState().layoutIntents.map(({ kind, workspaceId }) => `${kind}:${workspaceId}`),
-		).toEqual(["open:w1", "open:w1", "hide-all-panels:w1", "open:w1", "hide-all-panels:w1"]);
+		useAppStore.setState({
+			layoutIntents: [],
+			layoutDocumentsByWorkspace: {
+				w1: {
+					version: 2,
+					center: { kind: "group", id: "center", tabs: [placed] },
+					left: { visible: true, width: 0.2, groups: [] },
+					right: { visible: false, width: 0.2, groups: [] },
+					bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+					toolRestoreTargets: {},
+				},
+			},
+		});
+		openExtensionPanel("w1", wide, { a: "1" }, "Compare");
+		openExtensionPanel("w1", wide, { a: "2" }, "Compare");
+
+		expect(useAppStore.getState().tabsByWorkspace.w1).toHaveLength(3);
+		expect(intents()).toEqual(["open:w1", "open:w1", "hide-all-panels:w1"]);
 	});
 
 	test("names the tab with the title it is opened with, keeping one tab per params", () => {

@@ -156,9 +156,10 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
     shows the panel. The host draws no chrome around the pane: the panel renders its own *Open as tab*
     and close controls from `PanelHost.openAsTab` / `closePane`. A second center group was rejected: two
     tab strips, an analysis left stale when the user switches chats, a group left behind.
-  - `wide: true` — the panel needs the width: opening it, as a tab or as a chat pane, hides the side and
-    bottom panes once through the shell's hide-all action (the one the hide-all command restores from);
-    switching tabs or chats does not hide them again.
+  - `wide: true` — the panel needs the width: the side and bottom panes are hidden once, when such a
+    panel opens, as a tab or as a chat pane, through the shell's hide-all action (the one the hide-all
+    command restores from); focusing an already open one — its tab, or a pane already showing it — leaves
+    the panes alone, and switching tabs or chats does not hide them again.
 
   The component receives `PanelProps { host, params }`
   (`params` a flat string map the tab persists) and never reaches host state. `PanelHost.query` calls

@@ -216,7 +216,7 @@ outside one an item is natively tabbable and unmarked, as in an extension's tree
   dialog, popover or menu beneath it. An optional `shortcut` (pre-formatted caps — the tooltip never
   formats a chord, the app passes its own labels) renders as `Keycaps` after the label; `Button` and
   `IconButton` forward it as `tooltipShortcut`. `passThrough` makes a tooltip that never takes the pointer
-  (Session insights' list figures, where a tooltip covered the next row's click targets): it closes as the
+  (a tooltip over dense row targets, where it would cover the next row's click targets): it closes as the
   pointer leaves the trigger (`disableHoverableContent`) and the content carries `data-pass-through` and
   `pointer-events-none`; the app's `global.css` gives Radix's positioning wrapper around such content
   `pointer-events: none` with one `:has()` rule, since a class on the content cannot reach its parent. Tooltip content stacks at `z-150`, above dialogs and the toast

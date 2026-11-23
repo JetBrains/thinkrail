@@ -6,7 +6,7 @@ import type {
 	PanelProps,
 	WebExtension,
 } from "@thinkrail/extension-api/web";
-import { act, type ReactNode } from "react";
+import { act, type ReactNode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToReadableStream, renderToStaticMarkup } from "react-dom/server";
 import { type ChatPaneSlot, ChatPaneSplit } from "../chat/ChatPaneSplit";
@@ -28,6 +28,7 @@ import {
 	type ExtensionCatalogRead,
 	readExtensionCatalog,
 } from "./extensionPanelHost";
+import type { LayoutExtensionTab } from "./layout";
 
 type ReactGlobals = { IS_REACT_ACT_ENVIRONMENT?: boolean | undefined; window?: unknown };
 const globals = globalThis as ReactGlobals;
@@ -46,19 +47,38 @@ afterAll(() => {
 	globals.window = saved.window;
 });
 
-async function mount(node: ReactNode) {
-	const noop = () => {};
-	const container = {
+const noop = () => {};
+const headlessDocument = {
+	nodeType: 9,
+	addEventListener: noop,
+	removeEventListener: noop,
+	createElement: (tag: string) => headlessElement(tag.toUpperCase()),
+	createTextNode: (text: string) => ({ nodeType: 3, nodeValue: text }),
+};
+
+function headlessElement(nodeName: string) {
+	return {
 		nodeType: 1,
-		nodeName: "DIV",
-		tagName: "DIV",
+		nodeName,
+		tagName: nodeName,
 		namespaceURI: "http://www.w3.org/1999/xhtml",
 		textContent: "",
+		firstChild: null,
+		lastChild: null,
+		style: { setProperty: noop, removeProperty: noop },
+		setAttribute: noop,
+		removeAttribute: noop,
+		appendChild: <T,>(child: T) => child,
+		insertBefore: <T,>(child: T) => child,
+		removeChild: <T,>(child: T) => child,
 		addEventListener: noop,
 		removeEventListener: noop,
-		ownerDocument: { nodeType: 9, addEventListener: noop, removeEventListener: noop },
-	} as unknown as Element;
-	const root = createRoot(container);
+		ownerDocument: headlessDocument,
+	};
+}
+
+async function mount(node: ReactNode) {
+	const root = createRoot(headlessElement("DIV") as unknown as Element);
 	await act(async () => root.render(node));
 	return { unmount: () => act(async () => root.unmount()) };
 }
@@ -192,8 +212,13 @@ describe("loaded extension panel", () => {
 describe("the pane beside a chat", () => {
 	const GENERATION = 901;
 	let lastHost: PanelHost | null = null;
+	let mountedViews: unknown[] = [];
 	function PanePanel({ host, params }: PanelProps) {
 		lastHost = host;
+		const [initialView] = useState(host.viewState);
+		useEffect(() => {
+			mountedViews.push(initialView);
+		}, [initialView]);
 		return (
 			<output data-placement={host.placement} data-view={JSON.stringify(host.viewState ?? null)}>
 				{params.sessionId}
@@ -217,6 +242,15 @@ describe("the pane beside a chat", () => {
 		{ name: "insights", panels: { beside: paneDeclaration } },
 	];
 	const paneKey = chatPaneViewKey("s1", "insights", "beside");
+	const placedTab = (sessionId: string): LayoutExtensionTab => ({
+		kind: "extension",
+		id: `tab-${sessionId}`,
+		name: "",
+		extension: "insights",
+		panel: "beside",
+		titleKey: "common.retry",
+		params: { sessionId },
+	});
 	const openPane = () =>
 		useAppStore.getState().openChatPane("w1", "s1", {
 			extension: "insights",
@@ -248,6 +282,7 @@ describe("the pane beside a chat", () => {
 
 	beforeEach(async () => {
 		lastHost = null;
+		mountedViews = [];
 		await readExtensionCatalog(GENERATION, async () => [entry]);
 		useAppStore.setState({
 			protocolVersion: EXTENSION_QUERY_PROTOCOL_VERSION,
@@ -268,6 +303,17 @@ describe("the pane beside a chat", () => {
 			},
 			chatPanesByWorkspace: {},
 			panelViewStatesByWorkspace: {},
+			deletedSessionsByWorkspace: {},
+			layoutDocumentsByWorkspace: {
+				w1: {
+					version: 2,
+					center: { kind: "group", id: "center", tabs: [placedTab("s1"), placedTab("s2")] },
+					left: { visible: false, width: 0.2, groups: [] },
+					right: { visible: false, width: 0.2, groups: [] },
+					bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+					toolRestoreTargets: {},
+				},
+			},
 		});
 	});
 
@@ -335,6 +381,7 @@ describe("the pane beside a chat", () => {
 	});
 
 	test("the pane body renders the panel with the pane's host, or the tab's placeholders", async () => {
+		openPane();
 		useAppStore.getState().savePanelViewState("w1", paneKey, { section: "trace" });
 		const body = (bodyGate: ExtensionPanelGate) => (
 			<GatedExtensionPanel
@@ -391,38 +438,37 @@ describe("the pane beside a chat", () => {
 	});
 
 	test("a view handed over to a mounted tab wins: the panel remounts on it and the old one saves nothing more", async () => {
-		const tabKey = layoutResourceIdentity({
-			kind: "extension",
-			extension: "insights",
-			panel: "beside",
-			params: { sessionId: "s2" },
-		});
-		const body = (
+		const tabKey = layoutResourceIdentity(placedTab("s2"));
+		const view = await mount(
 			<GatedExtensionPanel
 				workspaceId="w1"
 				gate={gate()}
 				params={{ sessionId: "s2" }}
 				viewKey={tabKey}
 				resetKeys={["w1", "tab"]}
-			/>
+			/>,
 		);
-		await html(body);
+		expect(mountedViews).toEqual([undefined]);
 		const mounted = lastHost;
 		mounted?.saveViewState?.({ section: "trace" });
 		expect(selectPanelViewEpoch(useAppStore.getState(), "w1", tabKey)).toBe(0);
 
-		useAppStore.getState().transferPanelViewState("w1", tabKey, { section: "files" });
-		expect(selectPanelViewEpoch(useAppStore.getState(), "w1", tabKey)).toBe(1);
+		await act(async () =>
+			useAppStore.getState().transferPanelViewState("w1", tabKey, { section: "files" }),
+		);
+
+		expect(mountedViews).toEqual([undefined, { section: "files" }]);
+		expect(lastHost).not.toBe(mounted);
+		expect(lastHost?.viewState).toEqual({ section: "files" });
 		mounted?.saveViewState?.({ section: "trace" });
 		expect(selectPanelViewState(useAppStore.getState(), "w1", tabKey)).toEqual({
 			section: "files",
 		});
-
-		expect(await html(body)).toContain(viewAttr({ section: "files" }));
 		lastHost?.saveViewState?.({ section: "errors" });
 		expect(selectPanelViewState(useAppStore.getState(), "w1", tabKey)).toEqual({
 			section: "errors",
 		});
 		expect(selectPanelViewEpoch(useAppStore.getState(), "w1", tabKey)).toBe(1);
+		await view.unmount();
 	});
 });

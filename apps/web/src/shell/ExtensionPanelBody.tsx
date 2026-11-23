@@ -281,7 +281,7 @@ export interface ExtensionPanelGate {
 }
 
 /** The tab body's and the chat pane's one gate: what to show for this panel right now. */
-export function useExtensionPanelGate(
+function useExtensionPanelGate(
 	workspaceId: string,
 	extension: string | undefined,
 	panelId: string | undefined,
@@ -384,7 +384,7 @@ export function ExtensionPanelBody({
 	);
 }
 
-export function ExtensionChatPaneBody({
+function ExtensionChatPaneBody({
 	workspaceId,
 	sessionId,
 	pane,

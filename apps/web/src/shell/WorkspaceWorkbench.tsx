@@ -87,6 +87,7 @@ import {
 	useDeletedChatPlacementReconciliation,
 	useWorkspaceChatCatalogReconciliation,
 } from "./chatReconciliation";
+import { releaseClosedTab } from "./closedTab";
 import { ExtensionPanelBody, useExtensionChatPane } from "./ExtensionPanelBody";
 import { useChatActions, useChatTabActions, useLeftRailFooter } from "./extensionEntryPoints";
 import { useResolvedKeybindings } from "./keybindingState";
@@ -1094,22 +1095,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 									? { document: current, attention: currentAttention }
 									: undefined,
 							);
-							if (tab.kind === "chat") {
-								state.closeChatToHistory(tab.sessionId, false, workspaceId, false);
-							} else if (
-								tab.kind === "file" ||
-								tab.kind === "diff" ||
-								tab.kind === "changes" ||
-								tab.kind === "document" ||
-								tab.kind === "extension"
-							) {
-								for (const cache of state.tabsByWorkspace[workspaceId] ?? []) {
-									const resource = toLayoutTab(cache);
-									if (resource && layoutResourceIdentity(resource) === closedIdentity) {
-										state.closeTab(cache.id, false, false, workspaceId);
-									}
-								}
-							}
+							releaseClosedTab(workspaceId, tab);
 						})
 						.catch(() => {});
 				}}

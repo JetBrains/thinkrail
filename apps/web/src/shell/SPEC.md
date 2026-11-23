@@ -200,9 +200,13 @@ initializer, when the panel mounts — a tab brought back remounts and restores 
 re-renders nothing. A view handed over by *Open as tab* bumps the key's epoch: the one subscriber, the
 panel frame's `selectPanelViewEpoch`, remounts a destination tab that is already mounted (visible in
 another group) on the handed-over view, and the host it replaced saves nothing more (each host saves
-only while the epoch it mounted with is current), so its unmount cannot write back the old view. Closing an extension tab drops its value, deleting a chat drops its pane and the
-pane's values, and removing a workspace drops all of them; a closed chat keeps its pane, so reopening
-it shows the pane again.
+only while the epoch it mounted with is current), so its unmount cannot write back the old view. A
+save whose owner is gone writes nothing (*store*'s `savePanelViewState`: no tab of that identity left in
+the workspace's view, or a pane key whose chat has no pane or is deleted), so the unmount flush after a
+close or a chat deletion cannot bring a dropped value back. Closing an extension tab drops its value by
+the closed identity (`releaseClosedTab` → `dropPanelViewState`), cached or not — a tab restored from the
+layout has no cache —, deleting a chat drops its pane and the pane's values, and removing a workspace
+drops all of them; a closed chat keeps its pane, so reopening it shows the pane again.
 
 **Which panels an entry point offers is one rule**, `openableExtensionPanels` (`extensionPanelHost.ts`;
 `useOpenableExtensionPanels()` reads it from the store and the host's catalog): a panel is openable
@@ -254,13 +258,16 @@ and `rail`, and nothing here names an extension):
   modal is open, else the press is left alone — so the command lists, rebinds and shows under the
   extension's own area like any other ([[submodule-web-keybindings]]).
 
-**Wide panels hide the panes once per open.** `openExtensionPanel`, which every entry point above goes
-through as a tab — the palette row, the rail icon and its chord, a chat action's tab path and
-`PanelHost.openPanel` —, calls `hideAllPanels` after opening or focusing the tab of a panel declaring
-`wide` ([[module-extension-api]]), on every open: panes the user brought back hide again when another wide
-panel opens. Nothing restores them on its own; *Hide all panels* (*Global chords*) brings back what that
-hide took. Switching tabs in the strip, restoring tabs on reload and Project Home's own navigator never
-hide anything.
+**Wide panels hide the panes once, when they open.** `openExtensionPanel`, which every entry point above
+goes through as a tab — the palette row, the rail icon and its chord, a chat action's tab path and
+`PanelHost.openPanel` —, calls `hideAllPanels` after opening the tab of a panel declaring `wide`
+([[module-extension-api]]) only when that tab was not already placed in the workspace's view
+(`selectLayoutIdentityPlacement`, read before `openDoc`); focusing an open one leaves the panes alone, so
+a pane the user brought back with `Mod+B` stays. The chat-pane path is the same rule: a pane already
+showing that panel hides nothing. Panes the user brought back hide again only when another wide panel
+opens. Nothing restores them on its own; *Hide all panels* (*Global chords*) brings back what that hide
+took. Switching tabs in the strip, restoring tabs on reload and Project Home's own navigator never hide
+anything.
 
 ## Layout settings
 
@@ -359,7 +366,7 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   or palette layout command, a preset, a reveal — clears the memory, so the next press hides whatever shows.
   With nothing shown and nothing remembered it shows left and right. The memory is runtime-only (a reload
   starts with none; [[submodule-web-shell-layout-state]]). `chordActions.hideAllPanels(workspaceId)` is the
-  hide half alone, into the same memory: it does nothing when nothing shows and never restores; opening a
+  hide half alone, into the same memory: it does nothing when nothing shows and never restores; opening (not focusing) a
   wide extension panel calls it (*Extension panels*);
 - `Mod+N`, and its alias `Mod+Alt+N`, open `NewWorkspaceDialog` for the context project (the active workspace's project, else the selected project). The shell owns this one keyboard-opened instance as local state — it is not store state and not the `ProjectTree`/`WelcomePanel` instances, which keep their own return-focus and prompt-seeding semantics. `Mod+N` is the canonical chord and the one shortcut chrome advertises first; the alias exists because browsers reserve Cmd/Ctrl+N for a new window and never deliver it to the page, while the desktop webview does.
 - `Mod+K`, double Shift and the topbar search button open the search palette ([[submodule-web-search]]). `SearchPaletteHost` mounts it only while `searchOpen` is true and composes what it runs: `paletteCatalog.ts` builds the command list for the current context (a command exists only where it applies; every chord-bound action shows its shortcut and runs the very function its chord runs — the side/bottom toggles, *Hide all panels* and history open live in `chordActions.ts`, which `useGlobalHotkeys` binds too), one row per Settings section, each opening its section, and one `setting:<entryId>` row per individual setting — the entries Settings search offers in this context (`panels/settingsCatalog`'s `availableSettings` over the same nav groups and `useSettingsCatalogContext`), titled with the setting and "Settings › <section>" — which opens Settings on it (`openSettings(section, id)`, a search jump: focus and flash). The palette never flips a setting in place, and it adds no per-shortcut rows: it already lists the commands. `SearchPaletteHost` supplies `renderFilePreview` — a `ResourcePreview` from `@thinkrail/resource-renderers` keyed by workspace + path, with a section's heading line as its `reveal`, under `AppResourceHost`'s **`PALETTE_PREVIEW_HOST`** (built once beside the app's `HOST`): its `readFile` and `bytesUrl` carry the palette's `maxBytes` (`FILE_TOO_LARGE` becomes the "too large to preview" message), it refuses a read while the host is unreachable, and its change subscription stays silent until this connection's welcome and then refreshes once — so the palette's file and spec previews are the preview tab's renderer, bounded. The host search context names the active workspace and the context project; the host resolves the root (Project Home searches the project's Default folder). `useSearchPalette` turns store state into the props-driven palette's items: work items from `buildWorkItems` over the normalized session snapshot, so chats in workspaces this client never opened appear, named by their state record's title; **Waiting for you** is those chats that need the user (`waitingItems`); the context project and active workspace are ranking boosts. The palette's Start work row and `Mod+↵` call `PaletteStart.openDialog(text)`, which opens the keyboard-owned `NewWorkspaceDialog` instance (the `Mod+N` one) with the text as `initialPrompt` — or, when that dialog or the store's Edit & retry dialog is already open (an attention notification can open the palette over it), keeps it as it is, its draft and any creation in flight untouched, and returns `false` so the palette returns focus to it; the palette's New workspace row keeps an open dialog the same way, but does not hand focus back to it. The dialog is the only start path, so the palette never creates a workspace or sends a prompt itself. The `#` scope's Ask the agent row and `Alt+↵` call `PaletteAsk.ask(text)` instead, which starts a new chat (`startChatInTab`) in the active workspace — on Project Home in the context project's Default, entered through `enterDefaultWorkspace` under a `paletteNavigator.beginPick()` guard like Work in project folder, so a later pick or navigation while the list loads keeps the user where they went and drops the ask — with the question and the spec-citing note as its first prompt.
