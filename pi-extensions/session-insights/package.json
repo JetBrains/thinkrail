@@ -1,6 +1,6 @@
 {
 	"name": "@thinkrail/pi-session-insights",
-	"version": "0.0.0",
+	"version": "0.2.0",
 	"description": "A pi extension adding an `/insights` command: findings, usage and cost from your local pi sessions — failing commands, skills never loaded, rework, cost outliers, subagent spend pi's total misses — computed on your machine without a model or the network, every figure with its origin. Also the analysis library behind ThinkRail's Session insights.",
 	"license": "Apache-2.0",
 	"type": "module",
@@ -43,7 +43,8 @@
 	"pi": {
 		"extensions": [
 			"./extension.ts"
-		]
+		],
+		"video": "https://github.com/JetBrains/thinkrail/raw/refs/heads/main/.github/readme-assets/pi-packages/session-insights.mp4"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",
