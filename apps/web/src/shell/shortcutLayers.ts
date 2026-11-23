@@ -40,6 +40,12 @@ export function isInTerminal(target: EventTarget | null) {
 	return target instanceof Element && target.closest(TERMINAL_ROOT_SELECTOR) !== null;
 }
 
+const CODE_EDITOR_SELECTOR = ".monaco-editor";
+
+export function isInCodeEditor(target: EventTarget | null) {
+	return target instanceof Element && target.closest(CODE_EDITOR_SELECTOR) !== null;
+}
+
 const EDITOR_FIND_SELECTOR = ".monaco-editor .find-widget";
 
 export function isInEditorFind(target: EventTarget | null) {

@@ -4,8 +4,12 @@ export { installExtensionHost } from "./host";
 export { useWebExtensionLoads, type WebExtensionLoadResult } from "./loader";
 export {
 	enabledWebExtensions,
+	extensionPanels,
+	findExtensionPanel,
+	type RegisteredPanel,
 	registerWebExtensions,
 	webExtensionCommands,
 	webExtensions,
+	webExtensionTitle,
 	webOnlyExtensions,
 } from "./registry";

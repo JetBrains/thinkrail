@@ -13,6 +13,7 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	ARTIFACTS_PROTOCOL_VERSION,
+	CHAT_ATTACHMENTS_ROUTE,
 	CONTINUATION_PROTOCOL_VERSION,
 	EXTENSION_ASSETS_ROUTE,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
@@ -108,6 +109,7 @@ import {
 	track,
 } from "../analytics";
 import {
+	checkArtifactFiles,
 	noteArtifactPathsChanged,
 	observeArtifactSessionEvent,
 	setArtifactsPublisher,
@@ -121,7 +123,12 @@ import {
 	stopJbcentralRuntime,
 } from "../auth";
 import { forgetOpenBranchReview } from "../branch-review";
-import { artifactTools, installedExtensions, startInstalledExtensions } from "../extensions";
+import {
+	artifactTools,
+	installedExtensions,
+	setArtifactFileCheck,
+	startInstalledExtensions,
+} from "../extensions";
 import {
 	configureSurveySource,
 	redeliverInvitation,
@@ -200,6 +207,7 @@ import {
 	type WorkspaceLifecycleEvent,
 } from "../workspaces";
 import { createArtifactEventMapper } from "./artifactEvents";
+import { serveChatAttachments } from "./attachments";
 import { seesChats } from "./chats";
 import { continueToolHost, observeContinuation, setContinuationPublisher } from "./continuations";
 import { serveExtensionAsset } from "./extensionRoutes";
@@ -215,6 +223,7 @@ import { setFsNudgePublisher } from "./fsNudge";
 import { applyGitCeiling } from "./gitCeiling";
 import {
 	handleRequest,
+	releaseDisabledExtensionQueries,
 	requestErrorReport,
 	requestMethodDiagnostic,
 	workspaceCreationHandoff,
@@ -498,6 +507,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			}
 			if (url.pathname.startsWith(EXTENSION_ASSETS_ROUTE)) {
 				return serveExtensionAsset(req, url.pathname);
+			}
+			if (url.pathname.startsWith(CHAT_ATTACHMENTS_ROUTE)) {
+				return serveChatAttachments(req, url);
 			}
 			if (url.pathname.startsWith(WORKSPACE_VIEW_ROUTE)) {
 				return serveWorktreeView(req.method, url);
@@ -944,6 +956,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setSpecsEnabledResolver((workspaceId) => !isChatWorkspaceId(workspaceId));
 
 	setDisabledExtensionsResolver(() => new Set(getConfig().disabledExtensions));
+	setArtifactFileCheck(checkArtifactFiles);
 	setExtensionSettingsResolver(() => getConfig().extensionSettings ?? {});
 
 	setProjectPublisher((project) => {
@@ -1108,6 +1121,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		if (appliedUpdate.subagentMaxConcurrent !== undefined) refreshSubagentConcurrency();
 		if (appliedUpdate.agentReviewEnabled !== undefined) refreshAgentReviewTool();
 		if (appliedUpdate.disabledPackages !== undefined) bumpPackageSwitchGeneration();
+		if (appliedUpdate.disabledExtensions !== undefined) releaseDisabledExtensionQueries();
 		if (
 			appliedUpdate.disabledExtensions !== undefined ||
 			appliedUpdate.extensionSettings !== undefined ||
@@ -1115,7 +1129,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		) {
 			refreshExtensionTools();
 		}
-		if (appliedUpdate.disabledPackages !== undefined) publishPiPackagesChanged();
+		if (
+			appliedUpdate.disabledPackages !== undefined ||
+			appliedUpdate.disabledExtensions !== undefined
+		) {
+			publishPiPackagesChanged();
+		}
 		if (appliedUpdate.otherAgentSkills !== undefined) void refreshSkillAdmission();
 	});
 

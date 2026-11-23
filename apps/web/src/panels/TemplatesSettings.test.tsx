@@ -75,8 +75,8 @@ test("with a workspace open there are two groups, This project and All projects,
 	expect(global).toContain('data-name="explain"');
 	expect(global).not.toContain('data-testid="template-open-file"');
 	expect(markup).not.toContain("project-templates-hint");
-	expect(markup).toMatch(/data-focus-row-primary=""[^>]*data-testid="template-edit"/);
-	expect(markup).toMatch(/data-setting-side=""[^>]*data-testid="template-delete"/);
+	expect(markup).toMatch(/data-setting-primary=""[^>]*data-testid="template-edit"/);
+	expect(markup).toMatch(/tabindex="(0|-1)"[^>]*data-testid="template-delete"/);
 	expect(markup).not.toContain('data-testid="template-scope');
 });
 

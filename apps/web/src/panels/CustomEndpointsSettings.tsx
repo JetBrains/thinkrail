@@ -31,6 +31,7 @@ import {
 	SETTINGS_LIST_PRIMARY,
 	SETTINGS_LIST_ROW,
 	SettingsGroup,
+	SettingsLine,
 	SettingsList,
 	SettingsRow,
 	useSettingsDraft,
@@ -688,10 +689,11 @@ export function CustomEndpointsSettings({
 					}
 				/>
 			) : endpoints === null ? null : list.length === 0 ? (
-				<div
-					data-setting-row={row.settingId}
-					data-setting-id={row.settingId}
-					data-testid="custom-endpoints-empty"
+				<SettingsLine
+					rowId={row.settingId}
+					settingId={row.settingId}
+					testId="custom-endpoints-empty"
+					framed
 					className="my-8 flex flex-wrap items-center gap-12 rounded-sm border border-border-default border-dashed p-12"
 				>
 					<span className="flex min-w-160 flex-1 flex-col gap-2">
@@ -703,7 +705,7 @@ export function CustomEndpointsSettings({
 						</span>
 					</span>
 					{addButton(true)}
-				</div>
+				</SettingsLine>
 			) : (
 				<>
 					<SettingsList
@@ -722,9 +724,9 @@ export function CustomEndpointsSettings({
 							/>
 						))}
 					</SettingsList>
-					<div data-setting-row="custom-servers-add" className="py-12">
+					<SettingsLine rowId="custom-servers-add" className="py-12">
 						{addButton(false)}
-					</div>
+					</SettingsLine>
 				</>
 			)}
 			{dialog ? (

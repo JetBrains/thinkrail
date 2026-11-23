@@ -23,6 +23,7 @@ export {
 	saveCustomEndpoint,
 } from "./customEndpoints";
 export {
+	delegationRootDir,
 	type ReviewSubagentRun,
 	readChildTranscript,
 	refreshSubagentConcurrency,

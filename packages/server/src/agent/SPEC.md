@@ -1110,7 +1110,15 @@ re-opened transcripts provider-valid.
     `isLoaderPolicyStale` is one more predicate of the reconciliation `applyExtensionTools` runs at
     registration, after every reload and on `refreshExtensionTools`, so a session prepared under an older
     policy or older setting values reloads when it registers (or once its turn ends) and a change
-    mid-reload re-reloads — the fan-out alone would miss both. A pending question keeps the arguments it
+    mid-reload re-reloads — the fan-out alone would miss both. It also compares the **superseded
+    packages** a loader's last load left out (`omitSupersededPackages`, recorded with what that load found
+    of the packages any registry extension supersedes, `supersedablePackagesIn`) with what the current
+    switches would leave out of the same packages: switching a superseding extension reloads exactly the
+    chats that load such a package (a user's vanilla `@thinkrail/pi-session-insights`, whose `/insights`
+    then appears or goes), under the same end-of-turn rule, and no other chat. Keying the disabled set
+    itself into the policy was rejected: every toggle of any extension would reload every open chat.
+    `piPackagesCatalog` marks an installed package's row `supersededBy` (`supersedingExtension`) the same
+    way, after the shared catalog cache, so the row follows the switch without invalidating it. A pending question keeps the arguments it
     was asked with.
     The **`set_title`** tool (`titleTool.ts`) is how chats and workspaces get named: the main agent calls it
     with `chat_title?` / `workspace_name?` / `branch?` (English kebab slug). It is always registered and
@@ -1417,9 +1425,11 @@ re-opened transcripts provider-valid.
   and pure helpers (`createToolResponseWaiters`/`toolResponseSessionServices`/`assessRespondability`/
   `describeToolResponse`/`buildToolResponseMessage`/`awaitingToolCallId`); normalized-state operations
   (`listSessionStates`/`acknowledgeCompletion`/`markWorkspaceUnread`/`markWorkspaceRead`/`nudgeSession` +
-  publisher/project seams);
-  `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript` + `trashWorkspaceDelegation`
-  (the delegation embedding); the skill catalog helpers
+  publisher/project seams) and `sessionCompletionOf(sessionId)` (the persisted completion, `null` when none
+  or before the baseline — an in-memory read that, unlike `listSessionStates`, parses no transcript, for
+  the extension host services);
+  `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript` + `trashWorkspaceDelegation` +
+  `delegationRootDir()` (the delegation embedding); the skill catalog helpers
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /
   `isProjectSkillPath(relativePath)` (watch-classification predicate) /

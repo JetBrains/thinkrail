@@ -38,6 +38,7 @@ const inertSession: HostSessionServices = {
 	awaitToolResponse: () => Promise.reject(new Error("the Settings catalog has no session")),
 	workspaceFiles: {
 		check: () => Promise.reject(new Error("the Settings catalog has no workspace")),
+		checkArtifacts: () => Promise.reject(new Error("the Settings catalog has no workspace")),
 		ensureArtifactsDir: () => Promise.reject(new Error("the Settings catalog has no workspace")),
 		scratchDir: "",
 		artifactsDir: "",
@@ -75,8 +76,11 @@ async function describe(extension: ServerExtension): Promise<ExtensionDescriptio
 		title: extension.title ?? extension.name,
 		...(extension.description ? { description: extension.description } : {}),
 		tools: [...new Set(tools)],
+		hasParentExtensions:
+			extension.extensions.length > 0 || extension.sessionExtensions !== undefined,
 		hasChildExtensions: (extension.childExtensions?.length ?? 0) > 0,
 		...(settings.length > 0 ? { settings } : {}),
+		...(extension.apiVersion === undefined ? {} : { apiVersion: extension.apiVersion }),
 	};
 }
 
@@ -134,6 +138,7 @@ async function installedEntry(
 	const web = webHalfOf(record);
 	return {
 		tools: [],
+		hasParentExtensions: false,
 		hasChildExtensions: false,
 		...server,
 		...(owned ? { tools: owned.tools } : {}),

@@ -75,6 +75,11 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   stop; nothing without a host and a workspace scope. It is the one
   framed preview of visualize's file card and the questionnaire's previews ([[module-ext-visualize]],
   [[module-ext-ask-user-question]]) — lifted from visualize when the second consumer arrived;
+- **`outputFileLabel(path)`** (`OutputFileLabel`: `{ name, type }`) and **`outputFileIcon(path)`** — how a
+  published file reads in a list: a known type (MD, HTML, PDF, SVG, the common images, CSV, JSON) drops
+  its extension, reads `_` as a space and names its type; anything else keeps its whole name and has no
+  type (the caller shows "File", `resources.outputFile.type`). Here because both the Artifacts Outputs
+  rows and the outputs extension's chat cards ([[module-ext-outputs]]) draw it;
 - **`ResourceReveal`** and **`SOURCE_RENDERER_ID`** (`thinkrail/code`) — the open-at-a-line contract: a
   text view that receives `ResourceViewProps.reveal` (`{ line, column?, length?, tick }`) scrolls that line
   into view and marks it (the Pierre file view through its virtualizer's `revealLine`, retried over a few
@@ -99,7 +104,8 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   - **`usePreloadResourceView()`** — a stable `(resource) => void` that resolves the view renderer for the
     environment's phone class, loads its implementation and runs the module's optional `warm`; it needs both
     providers;
-  - the lazy `RendererView` mount and **`GuardedRendererDiff`**, the one diff mount: the expensive-diff notice
+  - the lazy `RendererView` mount (its `focusHome` makes the view its tab's focus home, *Reading keys*)
+    and **`GuardedRendererDiff`**, the one diff mount: the expensive-diff notice
     (`diff-too-large` / **Show diff anyway**, per mount, with a caller action slot) until opted in, then the
     lazy diff renderer, virtualized above `VIRTUALIZED_DIFF_LINES` of the caller's `lineCount`
     (`surfaceLineCount`);
@@ -999,3 +1005,69 @@ Enter, the arrows, Shift+arrows, Home/End, PgUp/PgDn, Tab and Esc stay locked. M
 - **Monaco** Shift+Mod+M with an empty selection comments the caret line (`commentLines`): a second,
   keybinding-only action holds `!editorHasSelection`, so the context menu still offers commenting only on
   a selection.
+
+## Reading keys
+
+A file a reader opens in a tab reads from the keyboard (user, 2026-11-20). `RendererView`'s `focusHome`
+(only the app's file tab sets it) puts `ResourceEnvironment.focusHome` under the view; there, and only
+there, the views' scrollers become reading surfaces — embedded previews (chat cards, the palette, the
+questionnaire) keep their Tab order and never compete for a region's landing.
+
+- **One handler** (`support/readingSurface.ts`): `useReadingSurface({ label, sideways, toEdge })` returns
+  `role="document"`, its `aria-label`, `tabIndex=0`, `data-focus-default`, `data-key-scope="reader"` and a
+  key handler that acts only on the surface itself (an inner control keeps its keys) through
+  `@thinkrail/ui/reading` ([[module-ui]]): `readingCommand` (↑/↓ and the j/k twins a line of
+  `READING_LINE` 40 px, Space/PgDn and Shift+Space/PgUp a page of `readingPage` — the viewport less a
+  line — g/Home and Shift+G/End the ends, ←/→ and h/l sideways where `sideways`) applied by
+  `scrollReading`. Letters are the shared, rebindable twins (`arrows.*`, `reading.top`/`reading.bottom`)
+  matched through `useReaderKeys()` in scope `reader`, which the app resolves (it includes `arrows` and
+  `reading`, [[submodule-web-keybindings]]). The ring is `focus-visible:focus-ring-inset`. Used by JSON,
+  notebook, PDF (the pages scroller), CSV (on `TableVirtuoso`'s own scroller, which forwards the props, with
+  `sideways`) and the Markdown preview without review. A virtualized view passes `toEdge` for g/G: one
+  jump to `scrollHeight` uses the size estimate and stops short of rows taller than it, so CSV calls
+  `scrollToIndex` on its first row (start) or last row, which Virtuoso retries as it measures rows. The
+  last row aligns to the end plus a line, which the scroller clamps to its true bottom (Virtuoso's sum of
+  sub-pixel row heights lands a pixel or two above it).
+- **Markdown with review** keeps its block cursor proxy as the Tab stop (`CursorProxy`'s `focusDefault`
+  under a focus home) inside a `reader`-scoped scroller. Plain ↑/↓/j/k scroll before they step, as in the
+  chat transcript: a block taller than the rest of the view scrolls a line at a time until its far edge
+  shows (`scrollBeforeStep`), then the cursor moves to the next block, revealed minimally
+  (`stepRevealDelta`); a cursor block wholly off screen re-anchors to the first or last visible one. Page
+  keys scroll and keep the cursor while its block shows, else move it to the first visible block; g/G and
+  Home/End scroll to the ends with the cursor on the first or last block. Shift extends, Enter and
+  Shift+Mod+M comment and Esc clears a range exactly as before (*Keyboard review surfaces*).
+  A block's extent for all of this — the scroll, "shows", the reveal of a stepped-to or extended-to
+  block and the first visible block a fresh focus takes — is its own: `blockSpan`, i.e.
+  `ownReadingSpan` ([[module-ui]]), ends a parent at its first nested stop. A parent bullet's box holds
+  its whole sub-list, so measuring the box read the sub-list twice: j scrolled through it on the parent,
+  then stepped back up to its first child. Key precedence (`readingCursorKey` in
+  `support/cursorKeys.ts`): Enter, `review.surface.comment` and Esc keep the review actions first; an
+  exact `reader` match reads next; a shifted twin extends only when no reader key matches exactly. So
+  `reading.bottom` rebound to Shift+J goes to the end instead of extending (the rebind has no conflict,
+  because Shift-extension is a fallback, not a binding). The transcript and the other reading surfaces
+  have no Shift fallback, so an exact match already wins there.
+- **Read-only Monaco** (`MonacoEditor`, `readCode`): while the editor is read-only and its text has
+  focus (`hasTextFocus`, so the find widget and a focused hover keep every key), ↑/↓ and j/k scroll the
+  view one code line and move the caret with it (the caret moves first, then the scroll is set: Monaco's
+  cursor reveal would undo an earlier scroll). A caret off the completely visible rows (a wheel scrolled
+  away from it) first re-anchors to the start of the first of them going down, the last going up
+  (`support/codeReading.ts` `readingAnchor`, then `cursorMove` to the row's start), so the step and
+  Shift+Mod+M stay on the text in view. The check compares line and column against
+  `getVisibleRanges()`, so a caret on the scrolled-away rows of a long wrapped line is off too; a range
+  ending at a wrap column ends before it (that column starts the next, hidden row). Space/Shift+Space
+  scroll the view a `readingPage` from where it is (clamped to the file's ends), not from the caret:
+  Monaco's `cursorPageDown`/`Up` move the caret a page and only reveal it, so a wheel-scrolled view jumped
+  back to it. As in the Markdown preview, the caret stays while it shows, else moves to the start of the
+  first completely visible row (`readingAnchor` going down); the scroll is set again after that, since the
+  caret's reveal keeps sticky-scroll context lines above it. g/G and Home/End go to the file's ends
+  (`cursorTop`/`Bottom`), h/l move the caret like ←/→; PgUp/PgDn and ←/→ stay Monaco's. The press is
+  consumed before Monaco types it, so no "Cannot edit" message. The container carries `data-key-scope="reader"` and, while the read-only text
+  has focus, `data-text-entry="false"`: the app's text-entry rule then lets plain keys through (hint
+  mode's `F`), and its Esc ladder takes Esc back to the Files tree ([[submodule-web-shell]]). An editable
+  editor keeps typing every letter.
+- **HTML, images, SVG and LFS/binary cards** have no reading surface and no `data-focus-default`, so
+  a keyboard open lands on the tab button and F6 on the region's usual target. An HTML frame must never be
+  a landing: once focused it owns every key, and F6, Esc, Mod+Shift+E and the global chords die inside it
+  (the desktop has no native F6 either). Nor can a focusable wrapper read it: the single view's
+  `sandbox=""` frame has an opaque origin and no scroll bridge, so the host cannot scroll it.
+  The frame keeps its natural Tab stop (or `frameFocus`'s) and scrolls natively once entered.

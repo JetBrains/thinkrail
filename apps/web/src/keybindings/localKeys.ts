@@ -4,6 +4,7 @@ import {
 	ARROW_TWINS_SCOPE,
 	type LocalKeyCommand,
 } from "@thinkrail/ui/keyboard";
+import { READING_COMMANDS, READING_SCOPE } from "@thinkrail/ui/reading";
 import type { PhysicalChord } from "./keybindings";
 
 export interface LocalScopeInfo {
@@ -14,12 +15,15 @@ export interface LocalScopeInfo {
 }
 
 const ARROWS = [ARROW_TWINS_SCOPE] as const;
-const SUGGESTIONS_SCOPE = "suggestions";
 
 export const LOCAL_SCOPES = {
 	[ARROW_TWINS_SCOPE]: {
 		where: "shortcuts.scope.arrows.where",
 		inside: "shortcuts.scope.arrows.inside",
+	},
+	[READING_SCOPE]: {
+		where: "shortcuts.scope.reading.where",
+		inside: "shortcuts.scope.reading.inside",
 	},
 	tabs: {
 		where: "shortcuts.scope.tabs.where",
@@ -43,19 +47,19 @@ export const LOCAL_SCOPES = {
 		includes: ARROWS,
 		extendsWithShift: true,
 	},
-	[SUGGESTIONS_SCOPE]: {
-		where: "shortcuts.scope.suggestions.where",
-		inside: "shortcuts.scope.suggestions.inside",
-	},
 	transcript: {
 		where: "shortcuts.scope.transcript.where",
 		inside: "shortcuts.scope.transcript.inside",
-		includes: [ARROW_TWINS_SCOPE, SUGGESTIONS_SCOPE],
+		includes: [ARROW_TWINS_SCOPE, READING_SCOPE],
+	},
+	reader: {
+		where: "shortcuts.scope.reader.where",
+		inside: "shortcuts.scope.reader.inside",
+		includes: [ARROW_TWINS_SCOPE, READING_SCOPE],
 	},
 	composer: {
 		where: "shortcuts.scope.composer.where",
 		inside: "shortcuts.scope.composer.inside",
-		includes: [SUGGESTIONS_SCOPE],
 	},
 	history: { where: "shortcuts.scope.history.where", inside: "shortcuts.scope.history.inside" },
 	palette: { where: "shortcuts.scope.palette.where", inside: "shortcuts.scope.palette.inside" },
@@ -119,22 +123,6 @@ const letter = (key: string, modifiers: Omit<PhysicalChord, "code" | "key"> = {}
 	...modifiers,
 });
 
-const SUGGESTION_DIGITS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
-
-export const SUGGESTION_KEYS: {
-	readonly send: readonly string[];
-	readonly edit: readonly string[];
-} = {
-	send: SUGGESTION_DIGITS.map((n) => `${SUGGESTIONS_SCOPE}.send${n}`),
-	edit: SUGGESTION_DIGITS.map((n) => `${SUGGESTIONS_SCOPE}.edit${n}`),
-};
-
-const digit = (n: number, modifiers: Omit<PhysicalChord, "code" | "key">): PhysicalChord => ({
-	code: `Digit${n}`,
-	key: String(n),
-	...modifiers,
-});
-
 export const APP_LOCAL_COMMANDS: readonly LocalCommandDefaults[] = [
 	...ARROW_TWIN_COMMANDS.map(({ id, chords }) => ({
 		id,
@@ -142,6 +130,7 @@ export const APP_LOCAL_COMMANDS: readonly LocalCommandDefaults[] = [
 		title: null,
 		chords,
 	})),
+	...READING_COMMANDS.map(({ id, chords }) => ({ id, scope: READING_SCOPE, title: null, chords })),
 	local("tabs", "close", DELETE),
 	local("tabs", "moveBefore", { ...LEFT, ...MOVE }),
 	local("tabs", "moveAfter", { ...RIGHT, ...MOVE }),
@@ -162,10 +151,6 @@ export const APP_LOCAL_COMMANDS: readonly LocalCommandDefaults[] = [
 	local("review", "previousFile", { ...UP, alt: true }),
 	local("review", "nextStep", letter("N")),
 	local("review", "previousStep", letter("P")),
-	...SUGGESTION_DIGITS.map((n) => local(SUGGESTIONS_SCOPE, `send${n}`, digit(n, { alt: true }))),
-	...SUGGESTION_DIGITS.map((n) =>
-		local(SUGGESTIONS_SCOPE, `edit${n}`, digit(n, { alt: true, shift: true })),
-	),
 	local("composer", "followUp", ...enter({ mod: true })),
 	local("composer", "interrupt", ...enter({ mod: true, shift: true })),
 	local("composer", "enterTranscript", { ...UP, mod: true }),
@@ -201,13 +186,14 @@ function scopeDefaults(scope: AppLocalScope): readonly LocalKeyCommand[] {
 
 export const LOCAL_KEY_DEFAULTS: Readonly<Record<AppLocalScope, readonly LocalKeyCommand[]>> = {
 	[ARROW_TWINS_SCOPE]: scopeDefaults(ARROW_TWINS_SCOPE),
+	[READING_SCOPE]: scopeDefaults(READING_SCOPE),
 	tabs: scopeDefaults("tabs"),
 	rails: scopeDefaults("rails"),
 	trees: scopeDefaults("trees"),
 	review: scopeDefaults("review"),
 	"review.surface": scopeDefaults("review.surface"),
-	[SUGGESTIONS_SCOPE]: scopeDefaults(SUGGESTIONS_SCOPE),
 	transcript: scopeDefaults("transcript"),
+	reader: scopeDefaults("reader"),
 	composer: scopeDefaults("composer"),
 	history: scopeDefaults("history"),
 	palette: scopeDefaults("palette"),

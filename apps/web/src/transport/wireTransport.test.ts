@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import {
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
+	EXTENSION_QUERY_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	KEYBINDINGS_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
@@ -19,6 +20,7 @@ import {
 	applyWorkspaceListRefresh,
 	mergeSessionStateRecords,
 	supportsChangeMutations,
+	supportsExtensionQuery,
 	supportsHostUpdateRun,
 	supportsKeybindings,
 	supportsPlanReview,
@@ -33,6 +35,12 @@ test("tool responses go to session.respondToTool only from a v93 host; older hos
 	expect(supportsToolResponses(TOOL_RESPONSE_PROTOCOL_VERSION)).toBe(true);
 	expect(supportsToolResponses(TOOL_RESPONSE_PROTOCOL_VERSION - 1)).toBe(false);
 	expect(supportsToolResponses(null)).toBe(false);
+});
+
+test("extension queries are sent only to a v130 host", () => {
+	expect(supportsExtensionQuery(EXTENSION_QUERY_PROTOCOL_VERSION)).toBe(true);
+	expect(supportsExtensionQuery(EXTENSION_QUERY_PROTOCOL_VERSION - 1)).toBe(false);
+	expect(supportsExtensionQuery(null)).toBe(false);
 });
 
 test("user theme files are read only from a host at or beyond their capability version", () => {

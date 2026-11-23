@@ -15,6 +15,7 @@ import { randomId } from "@/lib";
 import {
 	SETTINGS_INPUT,
 	SettingsGroup,
+	SettingsLine,
 	SettingsNotice,
 	SettingsPage,
 	SettingsRow,
@@ -84,6 +85,7 @@ export function EnvironmentForm({
 			<SettingsPage testId="settings-environment" title={title} description={description}>
 				<SettingsNotice
 					variant="error"
+					rowId="environment-failed"
 					testId="settings-environment-failed"
 					action={
 						onRetry ? (
@@ -202,15 +204,14 @@ export function EnvironmentForm({
 							const shown = revealed.has(entry.id);
 							const launchSet = overridden.has(entry.name);
 							return (
-								<div
+								<SettingsLine
 									key={entry.id}
-									data-setting-row={`environment-var/${entry.id}`}
+									rowId={`environment-var/${entry.id}`}
 									className="flex flex-col gap-2 border-border-muted border-b py-8"
 								>
 									<div className="flex items-center gap-4" data-testid="settings-environment-var">
 										<input
 											tabIndex={0}
-											data-setting-stop=""
 											aria-label={t("settings.environment.vars.name")}
 											aria-invalid={issue !== undefined}
 											data-testid="settings-environment-var-name"
@@ -285,10 +286,10 @@ export function EnvironmentForm({
 											{t(ISSUE_TEXT[issue])}
 										</p>
 									) : null}
-								</div>
+								</SettingsLine>
 							);
 						})}
-						<div data-setting-row="environment-add-var" className="py-8">
+						<SettingsLine rowId="environment-add-var" className="py-8">
 							<Button
 								variant="ghost"
 								size="m"
@@ -304,7 +305,7 @@ export function EnvironmentForm({
 							>
 								{t("settings.environment.vars.add")}
 							</Button>
-						</div>
+						</SettingsLine>
 					</div>
 				</SettingsGroup>
 
@@ -314,9 +315,9 @@ export function EnvironmentForm({
 					</SettingsNotice>
 				) : null}
 
-				<div
-					data-setting-row="environment-save"
-					className="flex flex-wrap items-center justify-end gap-8"
+				<SettingsLine
+					rowId="environment-save"
+					className="flex flex-wrap items-center justify-end gap-8 py-8"
 				>
 					<Button
 						variant="outline"
@@ -329,14 +330,13 @@ export function EnvironmentForm({
 					</Button>
 					<Button
 						tabIndex={0}
-						data-setting-stop=""
 						data-testid="settings-environment-save"
 						disabled={!changed || saving}
 						onClick={onSave}
 					>
 						{t("common.save")}
 					</Button>
-				</div>
+				</SettingsLine>
 			</fieldset>
 		</SettingsPage>
 	);

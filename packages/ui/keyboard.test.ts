@@ -219,10 +219,14 @@ const UNGUARDED_BY_DESIGN: Record<string, string> = {
 		"its rename inputs spread workspaceActions' guarded inputProps; its own onKeyDown opens a row's context menu",
 	"apps/web/src/panels/ArtifactsPanel.tsx":
 		"its rename input spreads workspaceActions' guarded inputProps; its only onKeyDown opens a row's context menu",
+	"apps/web/src/panels/ArtifactsOutputs.tsx":
+		"its rename input spreads workspaceActions' guarded inputProps; its only onKeyDown opens a row's context menu",
 	"apps/web/src/panels/ArtifactsTree.tsx":
 		"its rename inputs spread workspaceActions' guarded inputProps; its only onKeyDown is a row's menu, Delete and F2 keys",
 	"packages/resource-renderers/src/renderers/VisualDiff.tsx":
 		"its only key handler is the swipe divider slider (swipeDividerValue yields to an IME); its only input is the onion opacity range",
+	"thinkrail-extensions/session-insights/web/SessionsPanel.tsx":
+		"its only key listener matches the panel's search key through useLocalKeys, whose match yields to an IME; the field itself is SearchBox's",
 };
 
 function sourceFiles(dir: string): string[] {

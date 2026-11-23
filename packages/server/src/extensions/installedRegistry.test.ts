@@ -115,6 +115,8 @@ describe("the runtime registry", () => {
 			"ask-user-question",
 			"web-access",
 			"next-steps",
+			"outputs",
+			"session-insights",
 			"session-ext",
 		]);
 		expect(serverExtensions()).toBe(entries);
@@ -150,6 +152,7 @@ describe("the runtime registry", () => {
 			description: "A fixture extension",
 			enabled: false,
 			tools: ["quiet_tool"],
+			hasParentExtensions: true,
 			hasChildExtensions: false,
 			settings: [{ key: "loud", default: false, title: "Loud", description: "Shout" }],
 			kind: "installed",
@@ -183,6 +186,7 @@ describe("the runtime registry", () => {
 			awaitToolResponse: () => Promise.resolve({ kind: "deferred" as const }),
 			workspaceFiles: {
 				check: async () => {},
+				checkArtifacts: async (paths: readonly string[]) => paths.map((path) => ({ path })),
 				ensureArtifactsDir: async () => {},
 				scratchDir: "",
 				artifactsDir: "",

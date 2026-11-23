@@ -45,6 +45,21 @@ describe("the shortcut catalog", () => {
 		);
 	});
 
+	test("lists Hide all panels with its chord right after the side and bottom toggles", () => {
+		const panels = rowsFor(false, LINUX).filter((row) => row.surface === "panels");
+		const ids = panels.map((row) => row.id);
+		expect(ids.slice(ids.indexOf("view.toggleLeft"), ids.indexOf("view.toggleLeft") + 4)).toEqual([
+			"view.toggleLeft",
+			"view.toggleRight",
+			"view.toggleBottom",
+			"view.toggleAllPanels",
+		]);
+		const hideAll = panels.find((row) => row.id === "view.toggleAllPanels");
+		expect(hideAll?.title).toBe("shortcuts.toggleAllPanels");
+		expect(labels(panels, "view.toggleAllPanels")).toEqual(["Ctrl+Shift+F12"]);
+		expect(labels(rowsFor(true, MAC), "view.toggleAllPanels")).toEqual(["⇧⌘F12"]);
+	});
+
 	test("lists the bottom rail's horizontal keys apart from the side rails' vertical ones", () => {
 		const rows = rowsFor(false, LINUX);
 		expect(labels(rows, "rails.up")).toEqual(["↑", "K"]);
@@ -56,19 +71,20 @@ describe("the shortcut catalog", () => {
 		expect(labels(rows, "rails.moveLeft")).toEqual(["Alt+Shift+←"]);
 	});
 
-	test("every app local command has a titled row, and every direction row one arrow twin", () => {
+	test("every app local command has a titled row, and every direction or end row one letter twin", () => {
 		const local = new Set(SHORTCUT_CATALOG.flatMap((entry) => entry.local ?? []));
 		expect(APP_LOCAL_COMMANDS.filter(({ id }) => !local.has(id)).map(({ id }) => id)).toEqual([]);
 		const resolved = resolveKeybindings({ platform: LINUX });
 		const twins = SHORTCUT_CATALOG.flatMap((entry) => (entry.twin ? [entry] : []));
 		expect(twins.length).toBeGreaterThan(0);
 		for (const entry of twins) {
-			expect([
+			const scope = resolved.byId.get(entry.twin?.command ?? "")?.scope ?? "";
+			expect([entry.id, entry.keys?.length, ["arrows", "reading"].includes(scope)]).toEqual([
 				entry.id,
-				entry.keys?.length,
-				resolved.byId.get(entry.twin?.command ?? "")?.scope,
-			]).toEqual([entry.id, 1, "arrows"]);
-			expect(entry.scope && actsIn(resolved, "arrows").includes(entry.scope)).toBe(true);
+				1,
+				true,
+			]);
+			expect(entry.scope && actsIn(resolved, scope).includes(entry.scope)).toBe(true);
 		}
 	});
 
@@ -137,6 +153,8 @@ describe("the shortcut catalog", () => {
 				.slice(-2)
 				.map((row) => row.id),
 		).toEqual(["hint-mode.show", "hint-mode.exit"]);
+		expect(mac.find((row) => row.id === "hint-mode.show")?.extension).toBe("hint-mode");
+		expect(mac.find((row) => row.id === "search.open")?.extension).toBeUndefined();
 		expect(labels(rowsFor(false, LINUX), "hint-mode.show")).toBeUndefined();
 		const off = rowsFor(false, LINUX, { extensions: [{ ...extensions[0], enabled: false }] });
 		expect(labels(off, "hint-mode.show")).toBeUndefined();
@@ -157,10 +175,10 @@ describe("the shortcut catalog", () => {
 		expect(labels(rowsFor(false, MAC), "suggestions.send")).toEqual(["⌥1–9"]);
 		const rebound = rowsFor(false, LINUX, { overrides: { "suggestions.send2": ["Alt+KeyQ"] } });
 		expect(labels(rebound, "suggestions.send")?.slice(0, 3)).toEqual(["Alt+1", "Alt+Q", "Alt+3"]);
-		expect(actsIn(resolveKeybindings({ platform: LINUX }), "suggestions")).toEqual([
-			"transcript",
-			"composer",
-		]);
+		expect(rowsFor(false, LINUX).find(({ id }) => id === "suggestions.send")?.surface).toBe(
+			"general",
+		);
+		expect(actsIn(resolveKeybindings({ platform: LINUX }), "suggestions")).toEqual([]);
 	});
 
 	test("carries a losing chord as a conflict with its winner, not as an active chord", () => {
@@ -210,7 +228,12 @@ describe("the shortcut catalog", () => {
 		const rows = rowsFor(false, LINUX);
 		expect(labels(rows, "transcript.up")).toEqual(["↑", "K"]);
 		expect(labels(rows, "transcript.expand")).toEqual(["→", "L"]);
-		expect(labels(rows, "transcript.page")).toEqual(["PgUp", "PgDn"]);
+		expect(labels(rows, "transcript.page")).toEqual(["PgUp", "PgDn", "Space", "Shift+Space"]);
+		expect(labels(rows, "transcript.first")).toEqual(["Home", "G"]);
+		expect(labels(rows, "transcript.last")).toEqual(["End", "Shift+G"]);
+		expect(labels(rows, "reader.down")).toEqual(["↓", "J"]);
+		expect(labels(rows, "reader.bottom")).toEqual(["End", "Shift+G"]);
+		expect(labels(rows, "reader.back")).toEqual(["Esc"]);
 		expect(labels(rows, "tabs.previous")).toEqual(["←", "H"]);
 		expect(labels(rows, "tabs.next")).toEqual(["→", "L"]);
 		expect(labels(rows, "composer.enterTranscript")).toEqual(["Ctrl+↑"]);
@@ -327,10 +350,11 @@ test("the Settings surface lists the section list, setting, list and Esc keys", 
 		"settings.up",
 		"settings.down",
 		"settings.firstLast",
+		"settings.edit",
 		"settings.actions",
 		"settings.back",
 		"settings.change",
-		"settings.apply",
+		"settings.done",
 		"settings.reset",
 		"settings.escape",
 		"settings.list.open",
@@ -340,6 +364,8 @@ test("the Settings surface lists the section list, setting, list and Esc keys", 
 	expect(labels(rows, "settings.nav.down")).toEqual(["↓", "J"]);
 	expect(labels(rows, "settings.nav.search")).toEqual(["S", "/"]);
 	expect(labels(rows, "settings.back")).toEqual(["←", "H"]);
+	expect(labels(rows, "settings.edit")).toEqual(["↵", "Space"]);
+	expect(labels(rows, "settings.done")).toEqual(["↵", "Esc"]);
 	expect(labels(rows, "settings.reset")).toEqual(["Delete"]);
 	expect(labels(rows, "settings.list.remove")).toEqual(["Delete"]);
 	expect(labels(rows, "settings.list.menu")).toEqual(["Shift+F10"]);

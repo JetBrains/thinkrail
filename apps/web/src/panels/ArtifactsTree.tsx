@@ -1,6 +1,7 @@
 import { RiArrowRightSLine as ChevronRight, RiFolderLine, RiStarFill } from "@remixicon/react";
 import type { ArtifactRoleReason } from "@thinkrail/contracts";
 import { type Translator, useT } from "@thinkrail/locales/react";
+import { TreeRow } from "@thinkrail/ui/tree-row";
 import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
 import { fileName, firstClickOnly } from "../lib";
@@ -20,7 +21,7 @@ import {
 	artifactTimeLabel,
 } from "./artifactsModel";
 import { renameEntry } from "./fileTreeActions";
-import { TreeRow } from "./TreeRow";
+import { type OpenTabOptions, treeOpenFocus } from "./openTabs";
 import { treeRowControlProps } from "./treeNavigation";
 import { useInlineRename } from "./workspaceActions";
 
@@ -230,7 +231,8 @@ export function ArtifactFileRow({
 	});
 	const Icon = artifactIcon(row);
 	const restore = () => void restoreDeletedArtifact(workspaceId, artifact);
-	const open = (intent: "preview" | "keep") => void openArtifact(workspaceId, artifact, intent);
+	const open = (intent: "preview" | "keep", options?: OpenTabOptions) =>
+		void openArtifact(workspaceId, artifact, intent, options);
 	return (
 		<li
 			role="none"
@@ -285,7 +287,7 @@ export function ArtifactFileRow({
 								highlight="wrapper"
 								label={node.name}
 								labelClassName={deleted ? "text-text-subtle line-through" : undefined}
-								onClick={firstClickOnly(() => open("preview"))}
+								onClick={firstClickOnly((event) => open("preview", treeOpenFocus(event)))}
 								onDoubleClick={() => open("keep")}
 								onKeyDown={onRowKeyDown}
 								trailing={

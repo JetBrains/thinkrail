@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import type { LocalKeyEvent } from "@thinkrail/ui/local-keys";
+import { type LocalKeyEvent, localKeys } from "@thinkrail/ui/local-keys";
 import { act } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { LOCAL_KEY_DEFAULTS } from "../keybindings";
 import {
 	type ChoiceKeyEvent,
 	choiceFocus,
@@ -14,14 +15,18 @@ import {
 	useSettingsChoice,
 } from "./SettingsChoice";
 import {
+	control,
 	dom,
 	type FakeNode,
+	field,
 	h,
 	headlessReact,
 	nameOf,
 	press,
 	resetDom,
+	row,
 } from "./settingsFakeDom.test";
+import { settingsKeyDown } from "./useSettingsKeyboard";
 
 type Order = "oldest" | "newest" | "custom";
 
@@ -46,8 +51,9 @@ describe("SettingsChoice markup", () => {
 		expect(oldest).toContain('tabindex="-1"');
 		expect(newest).toContain('aria-selected="true"');
 		expect(newest).toContain('tabindex="0"');
-		expect(newest).toContain("data-setting-stop");
+		expect(newest).not.toContain("data-setting-stop");
 		expect(newest).toContain('data-active="true"');
+		expect(markup).toContain("has-[:focus-visible]:focus-ring-editing");
 		expect(custom).toContain("disabled");
 		expect(markup).not.toContain('type="radio"');
 	});
@@ -152,6 +158,12 @@ async function mountChoice(
 			}),
 		),
 	);
+	const content = h(
+		"div",
+		{ "data-settings-content": "" },
+		row("order", control(listbox), control(field("order.custom"))),
+	);
+	const walkKeys = localKeys(null, "settings", LOCAL_KEY_DEFAULTS.settings);
 	const current = () => {
 		if (!state) throw new Error("not rendered");
 		return state;
@@ -190,13 +202,23 @@ async function mountChoice(
 			await act(async () => current().onKeyDown(event));
 			return prevented;
 		},
+		walk: (from: Order, key: LocalKeyEvent) =>
+			settingsKeyDown(
+				{ defaultPrevented: false, nativeEvent: key },
+				content,
+				option(from),
+				walkKeys,
+				{
+					toNav: () => {},
+				},
+			),
 		click: (id: Order) => act(async () => option(id).click()),
 		leave: () => act(async () => current().onLeave()),
 	};
 }
 
 describe("SettingsChoice keys", () => {
-	test("a cheap choice applies on each arrow and leaves the edges to the walk", async () => {
+	test("a cheap choice applies on each arrow; at either end a segmented one leaves ←/→ to the walk", async () => {
 		const choice = await mountChoice("cheap");
 		expect(await choice.key("oldest", press("ArrowRight"))).toBe(true);
 		expect(choice.selected).toEqual(["newest"]);
@@ -207,18 +229,53 @@ describe("SettingsChoice keys", () => {
 		expect(await choice.key("newest", press("ArrowDown"))).toBe(false);
 		expect(await choice.key("newest", press("KeyH", "h"))).toBe(true);
 		expect(choice.selected).toEqual(["newest", "oldest"]);
+		await choice.host("oldest");
+		expect(await choice.key("oldest", press("ArrowLeft"))).toBe(false);
+		expect(choice.selected).toEqual(["newest", "oldest"]);
 		expect(choice.pending).toEqual([]);
 	});
 
-	test("a list or cards choice steps with ↑/↓ and the j/k twins, not ←/→", async () => {
-		const choice = await mountChoice("cheap", "list");
-		expect(await choice.key("oldest", press("ArrowRight"))).toBe(false);
-		expect(await choice.key("oldest", press("KeyJ", "j"))).toBe(true);
-		expect(choice.selected).toEqual(["newest"]);
-		expect(await choice.key("oldest", press("ArrowUp"))).toBe(false);
+	test("→ at a segmented choice's last option reaches the row's next control, ← at its first the row", async () => {
+		const choice = await mountChoice("cheap");
+		await choice.host("newest");
+		resetDom();
+		expect(await choice.key("newest", press("ArrowRight"))).toBe(false);
+		expect(choice.walk("newest", press("ArrowRight"))).toBe(true);
+		expect(choice.focused()).toBe("order.custom");
+		expect(dom.log).toEqual(["focus order.custom", "select order.custom"]);
+		resetDom();
+		expect(await choice.key("oldest", press("ArrowLeft"))).toBe(false);
+		expect(choice.walk("oldest", press("ArrowLeft"))).toBe(true);
+		expect(choice.focused()).toBe("order");
+		expect(choice.selected).toEqual([]);
 	});
 
-	test("an expensive choice moves only a pending option; Esc cancels back to the value", async () => {
+	test("a list or cards choice steps with ↑/↓ and the j/k twins and keeps them at its ends; ←/→ are the walk's", async () => {
+		const choice = await mountChoice("cheap", "list");
+		expect(await choice.key("oldest", press("ArrowRight"))).toBe(false);
+		expect(await choice.key("oldest", press("ArrowLeft"))).toBe(false);
+		expect(await choice.key("oldest", press("KeyJ", "j"))).toBe(true);
+		expect(choice.selected).toEqual(["newest"]);
+		expect(await choice.key("oldest", press("ArrowUp"))).toBe(true);
+		expect(choice.selected).toEqual(["newest"]);
+	});
+
+	test("Enter or Space applies the focused option and returns to the row", async () => {
+		const cheap = await mountChoice("cheap");
+		resetDom();
+		expect(await cheap.key("oldest", press("Enter"))).toBe(true);
+		expect(cheap.focused()).toBe("order");
+		expect(cheap.selected).toEqual([]);
+		const expensive = await mountChoice("expensive");
+		await expensive.key("oldest", press("ArrowRight"));
+		expect(expensive.waiting()).toBe("newest");
+		expect(await expensive.key("newest", press("Space", " "))).toBe(true);
+		expect(expensive.selected).toEqual(["newest"]);
+		expect(expensive.waiting()).toBeNull();
+		expect(expensive.focused()).toBe("order");
+	});
+
+	test("an expensive choice moves only a pending option; Esc cancels it and returns to the row", async () => {
 		const choice = await mountChoice("expensive");
 		expect(await choice.key("oldest", press("ArrowRight"))).toBe(true);
 		expect(choice.selected).toEqual([]);
@@ -227,21 +284,10 @@ describe("SettingsChoice keys", () => {
 		expect(choice.pending).toEqual(["newest"]);
 		expect(await choice.key("newest", press("Escape"))).toBe(true);
 		expect(choice.waiting()).toBeNull();
-		expect(choice.focused()).toBe("oldest");
+		expect(choice.focused()).toBe("order");
 		expect(choice.pending).toEqual(["newest", null]);
 		expect(await choice.key("oldest", press("Escape"))).toBe(false);
 		expect(choice.selected).toEqual([]);
-	});
-
-	test("Enter is left to the pending option's own click, which applies it", async () => {
-		const choice = await mountChoice("expensive");
-		await choice.key("oldest", press("ArrowRight"));
-		expect(await choice.key("newest", press("Enter"))).toBe(false);
-		expect(choice.waiting()).toBe("newest");
-		await act(async () => dom.focused?.click());
-		expect(choice.selected).toEqual(["newest"]);
-		expect(choice.waiting()).toBeNull();
-		expect(choice.pending).toEqual(["newest", null]);
 	});
 
 	test("stepping back onto the value or leaving the group drops the pending option", async () => {

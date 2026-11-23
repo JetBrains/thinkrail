@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { currentTranslator } from "@thinkrail/locales/react";
 import {
 	ancestorPaths,
@@ -6,13 +6,16 @@ import {
 	cssColorToHex,
 	DOUBLE_CLICK_SETTLE_MS,
 	doubleClickPendingMs,
+	extensionParamsKey,
 	fileName,
 	firstClickOnly,
 	firstNonBlankLine,
 	hasPlatformModifier,
 	isAbsolutePath,
+	isMessageKey,
 	isRecord,
 	isShellInert,
+	isTextEntryTarget,
 	layoutResourceIdentity,
 	normalizePath,
 	parseTupleKey,
@@ -20,6 +23,7 @@ import {
 	platformFamily,
 	platformShortcutLabel,
 	projectRelativePath,
+	READ_ONLY_TEXT_SELECTOR,
 	randomUuid,
 	relativeTime,
 	shallowEqualArrays,
@@ -118,6 +122,26 @@ test("layout resource identity ignores placement ids and separates delimiter-bea
 			scope: { kind: "commit", sha: "y" },
 		}),
 	);
+});
+
+test("an extension tab is identified by extension, panel and params, never by param order or placement", () => {
+	const identity = (params: Record<string, string>, extension = "insights", panel = "sessions") =>
+		layoutResourceIdentity({ kind: "extension", extension, panel, params });
+	expect(identity({ a: "1", b: "2" })).toBe(identity({ b: "2", a: "1" }));
+	expect(identity({})).not.toBe(identity({ a: "" }));
+	expect(identity({ a: "1&b=2" })).not.toBe(identity({ a: "1", b: "2" }));
+	expect(identity({}, "insights", "other")).not.toBe(identity({}));
+	expect(identity({}, "insights:sessions", "")).not.toBe(identity({}, "insights", "sessions"));
+	expect(extensionParamsKey({ b: "2", a: "1" })).toBe(extensionParamsKey({ a: "1", b: "2" }));
+	expect(identity({})).not.toBe(layoutResourceIdentity({ kind: "tool", tool: "insights" }));
+});
+
+test("a persisted string is a message key only while the bundled English catalog has it", () => {
+	expect(isMessageKey("common.retry")).toBe(true);
+	expect(isMessageKey("changes.review.fileCount")).toBe(true);
+	expect(isMessageKey("not.a.key.of.this.build")).toBe(false);
+	expect(isMessageKey("__proto__")).toBe(false);
+	expect(isMessageKey("toString")).toBe(false);
 });
 
 test("a file comparison is identified by its two paths, apart from the git diff of either", () => {
@@ -321,4 +345,32 @@ test("randomUuid is a v4 UUID built without crypto.randomUUID", () => {
 	} finally {
 		Object.defineProperty(crypto, "randomUUID", { value: original, configurable: true });
 	}
+});
+
+describe("isTextEntryTarget", () => {
+	const target = (tagName: string, inside: string[] = [], isContentEditable = false) =>
+		Object.assign(new EventTarget(), {
+			tagName,
+			isContentEditable,
+			closest: (selector: string) =>
+				selector.split(", ").some((part) => inside.includes(part)) ? {} : null,
+		});
+
+	test("fields, contenteditable, Monaco and the terminal keep their letters", () => {
+		expect(isTextEntryTarget(target("INPUT"))).toBe(true);
+		expect(isTextEntryTarget(target("DIV", [], true))).toBe(true);
+		expect(isTextEntryTarget(target("DIV", [".monaco-editor"]))).toBe(true);
+		expect(isTextEntryTarget(target("TEXTAREA", [".xterm"]))).toBe(true);
+		expect(isTextEntryTarget(target("BUTTON"))).toBe(false);
+		expect(isTextEntryTarget(null)).toBe(false);
+	});
+
+	test("a read-only editor's focused text is not text entry", () => {
+		expect(isTextEntryTarget(target("TEXTAREA", [".monaco-editor", READ_ONLY_TEXT_SELECTOR]))).toBe(
+			false,
+		);
+		expect(isTextEntryTarget(target("DIV", [".monaco-editor", READ_ONLY_TEXT_SELECTOR]))).toBe(
+			false,
+		);
+	});
 });

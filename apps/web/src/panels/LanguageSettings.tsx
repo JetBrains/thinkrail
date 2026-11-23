@@ -231,6 +231,7 @@ export function LanguagePage({
 			</div>
 			<SettingsGroup
 				title={t("settings.language.add.title")}
+				descriptionRowId="language-add-steps"
 				description={
 					<T
 						i18nKey="settings.language.add.steps"

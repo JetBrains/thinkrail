@@ -12,7 +12,9 @@ pi install npm:@thinkrail/pi-next-steps
 
 - **`suggest_next_steps` tool.** When its work is done, the agent writes its final message, then calls
   the tool alone with a short list of suggestions. The tool ends the turn, so there is no extra model
-  round trip. When nothing useful applies, the agent skips the call and you see nothing.
+  round trip. When nothing useful applies, the agent skips the call and you see nothing. If the agent
+  calls it without having written an answer (some models put the answer in their thinking), the tool
+  asks once for the answer as a normal reply instead of ending the turn.
 - **A row above the editor.** After the turn settles, the suggestions appear above pi's input with their
   keys:
 
@@ -50,7 +52,8 @@ prompt text in every request.
 
 `@thinkrail/pi-next-steps/core` is import-free at runtime and exports the tool name, the result type,
 `normalizeSuggestions` and `suggestionsOnBranch(entries)`, the rule for "this session currently ends with
-suggestions" (bookkeeping entries such as model or thinking-level changes are skipped). The row is drawn
+suggestions" (bookkeeping entries such as model or thinking-level changes are skipped). A call refused
+for a missing answer returns `details: { suggestions: [], refused: true }` and does not end the turn. The row is drawn
 only in pi's interactive terminal mode (`ctx.mode === "tui"`), so a host binding pi in RPC mode never
 shows it twice. To add your own rules, compose `createNextStepsExtension({ guidance: { promptGuidelines:
 [...DEFAULT_PROMPT_GUIDELINES, "…"] } })`; `guidance` replaces only the `description`, `promptSnippet` or

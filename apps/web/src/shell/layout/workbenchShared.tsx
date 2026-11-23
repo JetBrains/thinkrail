@@ -1,5 +1,6 @@
 import { type CollisionDetection, pointerWithin, useDroppable } from "@dnd-kit/core";
 import type { Translator } from "@thinkrail/locales/react";
+import { defaultFocusTarget } from "@thinkrail/ui/focus";
 import {
 	type ImperativePanelGroupHandle,
 	ResizableHandle,
@@ -16,7 +17,7 @@ import {
 	useState,
 } from "react";
 import { type LayoutAttention, readLayoutNavigationClock, tupleKey } from "../../lib";
-import type { AuxiliaryRailControlProps } from "./AuxiliaryRail";
+import type { AuxiliaryRailFooterItem } from "./AuxiliaryRail";
 import type { AuxiliaryRailEntry } from "./auxiliaryPresentation";
 import {
 	type CenterSplitDirection,
@@ -32,7 +33,7 @@ import {
 	type LayoutSide,
 	layoutTabName,
 } from "./model";
-import type { WorkbenchTabCommands } from "./tabActions";
+import type { ChatTabActions, WorkbenchTabCommands } from "./tabActions";
 import type {
 	LayoutAuxiliaryRegion,
 	LayoutCenterTab,
@@ -48,6 +49,7 @@ export interface LayoutTabFocusRequest {
 	location: LayoutGroupLocation;
 	tabId?: string;
 	onlyIfFocusLost?: true;
+	content?: true;
 }
 
 export type RegisterChatRename = (tabId: string, begin: (name: string) => void) => () => void;
@@ -82,6 +84,7 @@ export interface WorkbenchProps {
 	) => void;
 	onRenameChat?: (sessionId: string, titleInput: string, currentTitle: string) => void;
 	chatFirstPrompts?: ChatFirstPrompts;
+	chatActions?: ChatTabActions;
 	onNewChat: (groupId: string) => void;
 	onNewTerminal: (
 		groupId: string,
@@ -90,7 +93,7 @@ export interface WorkbenchProps {
 	) => void;
 	onGestureCanceled?: () => void;
 	chromeShortcuts?: WorkbenchChromeShortcuts;
-	renderLeftRailFooter?: (control: AuxiliaryRailControlProps) => ReactNode;
+	leftRailFooter?: readonly AuxiliaryRailFooterItem[];
 }
 
 export interface WorkbenchChromeShortcuts {
@@ -390,6 +393,8 @@ export function tabSearchKeywords(
 			return [name, tab.kind, tab.sessionId];
 		case "document":
 			return [name, tab.kind, tab.sourceId, tab.docPath];
+		case "extension":
+			return [name, tab.kind, tab.extension, tab.panel];
 		case "terminal":
 			return [name, tab.kind, tab.tabKey];
 		case "tool":
@@ -442,18 +447,45 @@ function focusRestsInSelectedPanel(tab: HTMLElement | null, active: Element | nu
 	return panel?.contains(active) ?? false;
 }
 
-export function focusLayoutRequest(request: LayoutTabFocusRequest): void {
+const CONTENT_FOCUS_FRAMES = 120;
+
+function focusTabContent(tab: HTMLElement, fallback: () => void): () => void {
+	const origin = globalThis.document.activeElement;
+	let frames = CONTENT_FOCUS_FRAMES;
+	let frame = 0;
+	const attempt = () => {
+		frame = 0;
+		const active = globalThis.document.activeElement;
+		if (!tab.isConnected || tab.getAttribute("aria-selected") !== "true") return;
+		if (active !== origin && !isFocusLost(active)) return;
+		const panelId = tab.getAttribute("aria-controls");
+		const panel = panelId ? globalThis.document.getElementById(panelId) : null;
+		const target = panel ? defaultFocusTarget(panel) : null;
+		if (target) target.focus();
+		else if (frames-- > 0) frame = requestAnimationFrame(attempt);
+		else fallback();
+	};
+	attempt();
+	return () => cancelAnimationFrame(frame);
+}
+
+export function focusLayoutRequest(request: LayoutTabFocusRequest): () => void {
 	const active = globalThis.document.activeElement;
-	if (request.onlyIfFocusLost && !isFocusLost(active)) return;
+	const done = () => undefined;
+	if (request.onlyIfFocusLost && !isFocusLost(active)) return done;
 	const tab = request.tabId
 		? globalThis.document.getElementById(tabDomId(request.location, request.tabId))
 		: null;
-	if (focusRestsInSelectedPanel(tab, active)) return;
+	if (focusRestsInSelectedPanel(tab, active)) return done;
 	const pane = globalThis.document.getElementById(groupDomId(request.location));
 	const rail = globalThis.document
 		.getElementById(railGroupDomId(request.location))
 		?.querySelector<HTMLButtonElement>("button");
-	[tab, pane, rail].find((element) => element && element.getClientRects().length > 0)?.focus();
+	const focusTab = () =>
+		[tab, pane, rail].find((element) => element && element.getClientRects().length > 0)?.focus();
+	if (request.content && tab) return focusTabContent(tab, focusTab);
+	focusTab();
+	return done;
 }
 
 export function useLayoutFocus(
@@ -466,10 +498,14 @@ export function useLayoutFocus(
 		if (!request || consumed.current === request.key) return;
 		consumed.current = request.key;
 		if (request.workspaceId !== workspaceId) return;
+		let cancelFocus: () => void = () => undefined;
 		const frame = requestAnimationFrame(() => {
-			if (workspaceRef.current === request.workspaceId) focusLayoutRequest(request);
+			if (workspaceRef.current === request.workspaceId) cancelFocus = focusLayoutRequest(request);
 		});
-		return () => cancelAnimationFrame(frame);
+		return () => {
+			cancelAnimationFrame(frame);
+			cancelFocus();
+		};
 	}, [request, workspaceId, workspaceRef]);
 }
 
@@ -636,6 +672,7 @@ export interface SharedGroupProps {
 	onRenameChat: WorkbenchProps["onRenameChat"];
 	registerChatRename: RegisterChatRename;
 	chatFirstPrompts: WorkbenchProps["chatFirstPrompts"];
+	chatActions: WorkbenchProps["chatActions"];
 	canFocusAdjacentGroup: boolean;
 	chromeShortcuts: WorkbenchChromeShortcuts | undefined;
 }

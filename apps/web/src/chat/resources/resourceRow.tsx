@@ -398,7 +398,10 @@ export function ResourceRow({
 		</span>
 	);
 	const actions = (
-		<span className="hidden shrink-0 items-center gap-2 group-hover:inline-flex group-focus-within:inline-flex">
+		<span
+			data-hint-reveal="inline-flex"
+			className="hidden shrink-0 items-center gap-2 group-hover:inline-flex group-focus-within:inline-flex"
+		>
 			{live ? (
 				<RowActionButton
 					label={action?.pending ? t("resources.action.stopping") : t("resources.action.stop")}

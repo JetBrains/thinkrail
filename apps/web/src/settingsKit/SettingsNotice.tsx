@@ -6,6 +6,7 @@ import {
 } from "@remixicon/react";
 import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
+import { SETTINGS_ROW_FOCUS, useSettingsRowRoving } from "./settingsRowCursor";
 
 export type SettingsNoticeVariant = "neutral" | "info" | "success" | "warning" | "error";
 
@@ -31,6 +32,7 @@ export interface SettingsNoticeProps {
 	hideIcon?: boolean;
 	children: ReactNode;
 	action?: ReactNode;
+	rowId?: string | undefined;
 	testId?: string;
 	className?: string;
 }
@@ -41,17 +43,27 @@ export function SettingsNotice({
 	hideIcon = false,
 	children,
 	action,
+	rowId,
 	testId,
 	className,
 }: SettingsNoticeProps) {
 	const styles = VARIANT_STYLES[variant];
 	const IconComponent = VARIANT_ICONS[variant];
+	const { tabIndex, ref } = useSettingsRowRoving(rowId);
 
 	return (
 		<div
 			data-testid={testId}
 			data-variant={variant}
-			className={cn("flex items-start gap-8 rounded-sm px-12 py-8", styles.bg, className)}
+			data-setting-row={rowId}
+			ref={ref}
+			tabIndex={rowId === undefined ? undefined : tabIndex}
+			className={cn(
+				"flex items-start gap-8 rounded-sm px-12 py-8",
+				styles.bg,
+				rowId !== undefined && SETTINGS_ROW_FOCUS,
+				className,
+			)}
 		>
 			{!hideIcon && (
 				<span className={cn("mt-2 shrink-0", styles.icon)}>

@@ -4,7 +4,7 @@ type: submodule-design
 status: draft
 title: Web extension composition registry and installed-extension runtime
 parent: module-web
-depends-on: [module-extension-api, module-ext-visualize, module-ext-ask-user-question, module-ext-hint-mode]
+depends-on: [module-extension-api, module-ext-visualize, module-ext-ask-user-question, module-ext-hint-mode, module-ext-session-insights]
 references: [submodule-web-chat, submodule-web-shell, module-thinkrail-extensions, module-resource-renderers, module-ui]
 tags: [public-surface-checked]
 ---
@@ -50,17 +50,28 @@ switched-off extension's commands stay listed (Settings → Keyboard shows and r
 match nor conflict, and registry order decides between two extensions' defaults. A command with a
 `scope` is local and reaches the resolver's per-scope table as it is; the resolver drops one whose id or
 scope lacks the extension's `name.` prefix, and the tests pin that every bundled command has it.
-`webOnlyExtensions(serverNames)` is the titled entries without tool renderers that the server catalog lacks; Settings → Extensions & skills
-lists them under the same switch ([[module-thinkrail-extensions]]).
+`webOnlyExtensions(serverNames)` is the titled entries without tool renderers or panels that the server catalog lacks; Settings → Extensions & skills
+lists them under the same switch ([[module-thinkrail-extensions]]). `webExtensionTitle(name)` is the
+`title` key a web half declares, which translates a bundled extension's name wherever a row names it
+(its catalog row, a pi package row it supersedes) over the server's English `title`.
 Composer suggestions are the one *tool-registered* affordance the switch hides: each registration carries
 its extension's `name` (an installed one's is its descriptor `name`), so the chat hides a switched-off
 extension's chips while its past rows keep rendering ([[submodule-web-chat]]). Removing an installed
 extension unregisters its renderers.
 
-These global contributions — `globalOverlay`, `commands`, `shortcuts`, and a web-only `title` — are read
-from the built-in list only. An installed web half contributes its tool renderers (with their registration
+These global contributions — `globalOverlay`, `commands`, `shortcuts`, `panels`, and a web-only `title` —
+are read from the built-in list only. An installed web half contributes its tool renderers (with their registration
 options, `composerSuggestions` included) and nothing else: the loader requires `toolRenderers` and ignores
-the other fields, so an installed extension cannot bind keys or mount an overlay yet.
+the other fields, so an installed extension cannot bind keys, mount an overlay or declare a panel yet.
+
+The same list is the one authority on **panels** (the server catalog never lists them): `extensionPanels()`
+reads every extension's declarations in registry and declaration order, and `findExtensionPanel(extension,
+panel)` looks one up. Both are pure reads of the static list (computed once; an optional list argument
+lets tests read a fake one) and ignore the on/off switch too; the shell decides what an off, missing or
+unsupported panel shows and which panels its entry points offer (`openableExtensionPanels`,
+[[submodule-web-shell]]). A panel's `rail.command` names one of its extension's global commands, which
+therefore reaches the resolver through `webExtensionCommands` like any other; the tests pin that every
+such command is the extension's own and unscoped.
 
 ## Loader
 
@@ -153,7 +164,8 @@ the other fields, so an installed extension cannot bind keys or mount an overlay
 ## Boundary
 
 - **Public surface:** `webExtensions`, `registerWebExtensions`, `enabledWebExtensions`,
-  `webExtensionCommands`, `webOnlyExtensions`, `installExtensionHost`, `followInstalledWebExtensions`,
+  `webExtensionCommands`, `webOnlyExtensions`, `webExtensionTitle`, `extensionPanels`,
+  `findExtensionPanel`, `RegisteredPanel`, `installExtensionHost`, `followInstalledWebExtensions`,
   `useWebExtensionLoads`, `WebExtensionLoadResult`, `extensionApiFit`, `EXTENSION_API_VERSION`.
 - The barrel carries only what other modules import. The loader's set-level functions
   (`loadWebExtensions`, `syncWebExtensions`, `unloadWebExtension`, `webExtensionLoads`) are reached only

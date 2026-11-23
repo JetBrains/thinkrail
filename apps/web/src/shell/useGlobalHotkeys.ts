@@ -1,21 +1,38 @@
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { useEffect, useInsertionEffect, useRef } from "react";
 import {
+	runSuggestion,
+	type SuggestionKeyAction,
+	type SuggestionTarget,
+	suggestionAt,
+	suggestionKeyAction,
+	suggestionTargetFor,
+} from "../chat/suggestionTargets";
+import type { RegisteredPanel } from "../extensions";
+import {
 	type KeybindingId,
 	type KeyChord,
 	matchKeybinding,
 	matchLocal,
 	pressesChord,
 	type ResolvedKeybindings,
+	type SuggestionKeybindingId,
 } from "../keybindings";
 import { isTextEntryTarget } from "../lib";
 import { createDoubleShiftDetector } from "../search";
-import { useAppStore } from "../store";
+import { selectHistoryTarget, useAppStore } from "../store";
 import { openChatHistory } from "./chordActions";
 import { deliverExtensionCommand, extensionHotkey, keyboardClaimed } from "./extensionCommands";
+import { openExtensionPanelHere, railCommandPanel } from "./extensionPanelHost";
 import { currentKeybindings } from "./keybindingState";
 import { matchShortcut, type ShortcutPlatform } from "./shortcutCommands";
-import { hasLayer, isInEditorFind, isInTerminal, MODAL_LAYER_SELECTOR } from "./shortcutLayers";
+import {
+	hasLayer,
+	isInCodeEditor,
+	isInEditorFind,
+	isInTerminal,
+	MODAL_LAYER_SELECTOR,
+} from "./shortcutLayers";
 import { localScopesOf } from "./shortcutSurface";
 import { nativeShortcutPlatform } from "./useAppShortcuts";
 
@@ -25,6 +42,7 @@ type GlobalHotkeyActions = {
 	onProjects: ChordHandler;
 	onWorkspace?: ChordHandler;
 	onBottom?: ChordHandler;
+	onAllPanels?: ChordHandler;
 	onNewWorkspace?: ChordHandler;
 	onSearch?: ChordHandler;
 	onFindInFiles?: ChordHandler;
@@ -46,6 +64,7 @@ const CHORD_ACTIONS = {
 	"view.toggleLeft": "onProjects",
 	"view.toggleRight": "onWorkspace",
 	"view.toggleBottom": "onBottom",
+	"view.toggleAllPanels": "onAllPanels",
 	"view.files": "onFiles",
 	"view.changes": "onChanges",
 	"workspace.new": "onNewWorkspace",
@@ -70,7 +89,10 @@ const CHORD_ACTIONS = {
 	"tab.moveToPreviousGroup": "onMoveTab",
 	"tab.moveToNextGroup": "onMoveTab",
 	"shortcuts.open": "onShortcuts",
-} as const satisfies Record<Exclude<KeybindingId, "chat.history">, keyof GlobalHotkeyActions>;
+} as const satisfies Record<
+	Exclude<KeybindingId, "chat.history" | SuggestionKeybindingId>,
+	keyof GlobalHotkeyActions
+>;
 
 type GlobalHotkeyCommand = keyof typeof CHORD_ACTIONS;
 
@@ -133,12 +155,28 @@ interface HotkeyContext {
 	readonly localScopes: readonly string[];
 	readonly inTerminal: boolean;
 	readonly inEditorFind: boolean;
+	readonly inCodeEditor: boolean;
+	readonly hasSuggestion: (index: number) => boolean;
+	readonly railPanel?: (extension: string, id: string) => RegisteredPanel | null | undefined;
 }
 
 type HotkeyRoute =
 	| { readonly kind: "extension"; readonly extension: string; readonly id: string }
+	| { readonly kind: "panel"; readonly panel: RegisteredPanel }
 	| { readonly kind: "command"; readonly id: GlobalHotkeyCommand }
+	| ({ readonly kind: "suggestion" } & SuggestionKeyAction)
 	| { readonly kind: "history" };
+
+function suggestionHotkey(
+	event: GlobalHotkeyEvent & Pick<KeyboardEvent, "keyCode">,
+	context: HotkeyContext,
+): SuggestionKeyAction | null {
+	if (isImeComposing(event) || context.modalOpen || context.inTerminal || context.inCodeEditor) {
+		return null;
+	}
+	const action = suggestionKeyAction(matchKeybinding(context.keybindings, event));
+	return action !== null && context.hasSuggestion(action.index) ? action : null;
+}
 
 export function routeHotkey(
 	event: GlobalHotkeyEvent & Pick<KeyboardEvent, "keyCode">,
@@ -150,7 +188,11 @@ export function routeHotkey(
 	const { textEntry } = context;
 	if (matchLocal(keybindings, context.localScopes, event, { textEntry }) !== null) return null;
 	const extension = extensionHotkey(event, keybindings, textEntry);
-	if (extension) return { kind: "extension", ...extension };
+	if (extension) {
+		const panel = context.railPanel?.(extension.extension, extension.id);
+		if (panel === undefined) return { kind: "extension", ...extension };
+		return panel && !context.modalOpen ? { kind: "panel", panel } : null;
+	}
 	const id = globalHotkeyCommand(
 		event,
 		actions,
@@ -160,10 +202,25 @@ export function routeHotkey(
 		inEditorFind,
 	);
 	if (id) return { kind: "command", id };
+	const suggestion = suggestionHotkey(event, context);
+	if (suggestion) return { kind: "suggestion", ...suggestion };
 	if (matchKeybinding(keybindings, event) !== "chat.history") return null;
 	if (elementKeeps(event, keybindings.platform, inTerminal, inEditorFind)) return null;
 	if (isImeComposing(event) && !pressesChord(event, [CTRL_R], keybindings.platform)) return null;
 	return { kind: "history" };
+}
+
+function chipsFor(target: EventTarget | null): () => SuggestionTarget | null {
+	let resolved: SuggestionTarget | null | undefined;
+	return () => {
+		if (resolved === undefined) {
+			resolved = suggestionTargetFor(
+				target instanceof Node ? target : null,
+				selectHistoryTarget(useAppStore.getState())?.sessionId ?? null,
+			);
+		}
+		return resolved;
+	};
 }
 
 function hasOpenModal(): boolean {
@@ -193,6 +250,7 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 			if (keyboardClaimed()) return;
 			const target = event.composedPath()[0] ?? event.target;
 			const current = actionsRef.current;
+			const chips = chipsFor(event.target);
 			const route = routeHotkey(event, current, {
 				keybindings: currentKeybindings(),
 				desktop,
@@ -201,6 +259,9 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 				localScopes: localScopesOf(target instanceof Element ? target : null),
 				inTerminal: isInTerminal(event.target),
 				inEditorFind: isInEditorFind(event.target),
+				inCodeEditor: isInCodeEditor(event.target),
+				hasSuggestion: (index) => suggestionAt(chips(), index) !== undefined,
+				railPanel: railCommandPanel,
 			});
 			if (route === null) return;
 			event.preventDefault();
@@ -210,8 +271,13 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 				return;
 			}
 			event.stopPropagation();
-			if (route.kind === "command") {
+			if (route.kind === "panel") {
+				if (!event.repeat) openExtensionPanelHere(route.panel);
+			} else if (route.kind === "command") {
 				if (!event.repeat) current[CHORD_ACTIONS[route.id]]?.(route.id);
+			} else if (route.kind === "suggestion") {
+				const owner = chips();
+				if (!event.repeat && owner) runSuggestion(owner, route);
 			} else if (!useAppStore.getState().searchOpen) openChatHistory();
 		};
 		const detector = createDoubleShiftDetector();

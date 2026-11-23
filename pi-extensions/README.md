@@ -34,7 +34,8 @@ checklist.
 5. Register the package in `scripts/check-module-boundaries.ts` (`{ root: "pi-extensions/<name>", allowed: [] }`
    or the sibling it depends on) and in the fixture of `scripts/checkModuleBoundaries.test.ts`.
 6. Add its expectations to `EXPECTATIONS` in `scripts/check-pi-packages.ts`: tool names, skill names, and
-   a few executable cases (valid call, rejected call, one TUI render). Tools that register inside
+   a few executable cases (valid call, rejected call, one TUI render); for slash commands, `commands` and
+   `commandCases` (a run per mode, with `seed` for any files the command reads). Tools that register inside
    `session_start` need the session-bound mode — add it with the first such package.
 7. Run `bun install`, then the bar below.
 

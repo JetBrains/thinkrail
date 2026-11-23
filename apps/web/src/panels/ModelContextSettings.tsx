@@ -15,15 +15,16 @@ import {
 import type { MessageKey } from "@thinkrail/locales";
 import { localeOf, type Translator, t as translate, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
-import { isImeComposing, twinArrow } from "@thinkrail/ui/keyboard";
+import { useTreeItem } from "@thinkrail/ui/tree-item";
 import { cn } from "@thinkrail/ui/utils";
-import { type KeyboardEvent, useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
 	SETTINGS_INPUT,
 	SETTINGS_TAG,
 	SettingsChoice,
 	type SettingsChoiceOption,
 	SettingsGroup,
+	SettingsLine,
 	SettingsRow,
 	useSettingsDraft,
 } from "@/settingsKit";
@@ -31,8 +32,8 @@ import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import type { CustomEndpointsState } from "./CustomEndpointsSettings";
 import { MODEL_TREE, MODEL_TREE_ROW, ProviderTreeItem, stopRowClick } from "./ModelProviderTree";
-import { SETTING, settingProps } from "./settingsCatalog";
-import { Tree, useTreeItem, useTreeKeys } from "./treeNavigation";
+import { SETTING, type SettingProps, settingProps } from "./settingsCatalog";
+import { Tree } from "./treeNavigation";
 
 const PRESETS = [
 	{ id: "default", label: "common.default", override: null },
@@ -83,27 +84,54 @@ function presetOptions(t: Translator, testId: string): SettingsChoiceOption<Pres
 	}));
 }
 
-function useContextLimit(
+interface ContextPick {
+	revision: string;
+	custom: number | null;
+	writes: readonly (number | null)[];
+}
+
+export interface ContextLimit {
+	value: PresetId | null;
+	latest: number | null | undefined;
+	select: (id: PresetId) => void;
+	save: (override: number) => void;
+	reset: () => void;
+}
+
+export function useContextLimit(
 	override: number | null | undefined,
 	revision: string,
 	onChange: (override: number | null) => void,
-) {
-	const [custom, setCustom] = useState({ revision, on: false });
-	const value = custom.revision === revision && custom.on ? "custom" : contextPreset(override);
+): ContextLimit {
+	const [pick, setPick] = useState<ContextPick>({ revision, custom: null, writes: [] });
+	let held = pick;
+	if (pick.revision !== revision) {
+		const echo = override === undefined ? -1 : pick.writes.indexOf(override);
+		const custom = pick.custom !== null && echo < pick.custom ? pick.custom - echo - 1 : null;
+		held =
+			echo < 0
+				? { revision, custom: null, writes: [] }
+				: { revision, custom, writes: pick.writes.slice(echo + 1) };
+		setPick(held);
+	}
+	const latest = held.writes.length > 0 ? held.writes.at(-1) : override;
+	const write = (next: number | null, custom: number | null) => {
+		setPick({ revision: held.revision, custom, writes: [...held.writes, next] });
+		onChange(next);
+	};
 	const select = (id: PresetId) => {
-		setCustom({ revision, on: id === "custom" });
-		if (id === "custom") return;
 		const next = id === "1m" ? MODEL_CONTEXT_WINDOW_LIMITS.max : null;
-		if (next !== override) onChange(next);
+		if (id === "custom") setPick({ ...held, custom: held.writes.length });
+		else if (next !== override || next !== latest) write(next, null);
+		else setPick({ ...held, custom: null });
 	};
-	const step = (delta: 1 | -1): boolean => {
-		const index = PRESETS.findIndex((preset) => preset.id === value);
-		const next = index < 0 ? (delta === 1 ? PRESETS[0] : undefined) : PRESETS[index + delta];
-		if (!next) return false;
-		select(next.id);
-		return true;
+	return {
+		value: held.custom === null ? contextPreset(override) : "custom",
+		latest,
+		select,
+		save: (next) => write(next, held.custom),
+		reset: () => write(null, null),
 	};
-	return { value, select, step };
 }
 
 function ContextTokensField({
@@ -146,7 +174,6 @@ function ContextTokensField({
 				aria-label={t("settings.modelContext.tokensFor", { name })}
 				aria-describedby={invalid ? errorId : undefined}
 				data-testid={`${testId}-input`}
-				data-setting-side=""
 				data-setting-clean={dirty ? undefined : ""}
 				className={cn(SETTINGS_INPUT, "w-100 text-right")}
 			/>
@@ -162,22 +189,17 @@ function ContextTokensField({
 function ContextLimitControl({
 	name,
 	testId,
-	override,
+	limit,
 	limits,
-	revision,
 	tabIndex,
-	onChange,
 }: {
 	name: string;
 	testId: string;
-	override: number | null | undefined;
+	limit: ContextLimit;
 	limits: ModelContextWindowLimits;
-	revision: string;
 	tabIndex: number;
-	onChange: (override: number | null) => void;
 }) {
 	const t = useT();
-	const limit = useContextLimit(override, revision, onChange);
 	return (
 		<span className="flex flex-wrap items-start justify-end gap-8">
 			<SettingsChoice
@@ -190,14 +212,51 @@ function ContextLimitControl({
 			{limit.value === "custom" ? (
 				<ContextTokensField
 					name={name}
-					override={override}
+					override={limit.latest}
 					limits={limits}
 					testId={testId}
 					tabIndex={tabIndex}
-					onChange={onChange}
+					onChange={limit.save}
 				/>
 			) : null}
 		</span>
+	);
+}
+
+function SharedContextRow({
+	row,
+	description,
+	override,
+	revision,
+	onChange,
+}: {
+	row: SettingProps;
+	description: string;
+	override: number | null | undefined;
+	revision: string;
+	onChange: (override: number | null) => void;
+}) {
+	const limit = useContextLimit(override, revision, onChange);
+	return (
+		<div
+			data-testid="context-limit-all"
+			data-context-override={override === undefined ? "mixed" : String(override)}
+		>
+			<SettingsRow
+				{...row}
+				description={description}
+				control={
+					<ContextLimitControl
+						name={row.label}
+						testId="context-limit-all"
+						limit={limit}
+						limits={MODEL_CONTEXT_WINDOW_LIMITS}
+						tabIndex={0}
+					/>
+				}
+				reset={{ changed: override !== null, onReset: limit.reset }}
+			/>
+		</div>
 	);
 }
 
@@ -218,20 +277,10 @@ function ContextModelItem({
 		tabIndex: rovingTabIndex,
 		...item
 	} = useTreeItem(`${model.provider}/${model.id}`, { level: 2, label: model.name });
-	const keys = useTreeKeys();
 	const name = `${model.name} (${model.provider})`;
 	const testId = `context-limit-${model.provider}-${model.id}`;
 	const changed = model.override !== null;
 	const tabIndex = rovingTabIndex ?? 0;
-
-	const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-		if (event.defaultPrevented || event.target !== event.currentTarget) return;
-		if (isImeComposing(event.nativeEvent)) return;
-		const plain = !(event.altKey || event.ctrlKey || event.metaKey || event.shiftKey);
-		const key = twinArrow(keys.match(event.nativeEvent)) ?? (plain ? event.key : null);
-		const delta = key === "ArrowRight" ? 1 : key === "ArrowLeft" ? -1 : null;
-		if (delta !== null && limit.step(delta)) event.preventDefault();
-	};
 
 	return (
 		<li role="none">
@@ -243,7 +292,6 @@ function ContextModelItem({
 				data-context-override={String(model.override)}
 				data-changed={changed || undefined}
 				className={cn(MODEL_TREE_ROW, "justify-between pl-24")}
-				onKeyDown={onKeyDown}
 			>
 				<span className="flex min-w-160 flex-1 flex-col gap-2">
 					<span className="flex flex-wrap items-center gap-8">
@@ -273,11 +321,11 @@ function ContextModelItem({
 					{limit.value === "custom" ? (
 						<ContextTokensField
 							name={name}
-							override={model.override}
+							override={limit.latest}
 							limits={limits}
 							testId={testId}
 							tabIndex={tabIndex}
-							onChange={onChange}
+							onChange={limit.save}
 						/>
 					) : null}
 					{changed ? (
@@ -286,13 +334,12 @@ function ContextModelItem({
 							size="m"
 							iconLeft={ArrowGoBack}
 							tabIndex={tabIndex}
-							data-setting-side=""
 							data-setting-reset=""
 							data-testid={`${testId}-reset`}
 							aria-label={t("settings.kit.resetLabel", { label: name })}
 							onClick={(event) => {
 								stopRowClick(event);
-								onChange(null);
+								limit.reset();
 							}}
 						>
 							{t("settings.kit.reset")}
@@ -414,9 +461,9 @@ export function ModelContextControls({
 			testId="settings-model-context"
 		>
 			{failed ? (
-				<div data-setting-row={row.settingId}>
+				<SettingsLine rowId={row.settingId}>
 					<ModelContextLoadFailed pending={pending} onRetry={onRetry} />
-				</div>
+				</SettingsLine>
 			) : rows === null || rows.length === 0 ? (
 				<SettingsRow
 					{...row}
@@ -425,32 +472,13 @@ export function ModelContextControls({
 			) : (
 				<>
 					{shared.length > 0 ? (
-						<div
-							data-testid="context-limit-all"
-							data-context-override={
-								sharedOverride === undefined ? "mixed" : String(sharedOverride)
-							}
-						>
-							<SettingsRow
-								{...row}
-								description={sharedDescription}
-								control={
-									<ContextLimitControl
-										name={row.label}
-										testId="context-limit-all"
-										override={sharedOverride}
-										limits={MODEL_CONTEXT_WINDOW_LIMITS}
-										revision={revision}
-										tabIndex={0}
-										onChange={(override) => onChange("available", override)}
-									/>
-								}
-								reset={{
-									changed: sharedOverride !== null,
-									onReset: () => onChange("available", null),
-								}}
-							/>
-						</div>
+						<SharedContextRow
+							row={row}
+							description={sharedDescription}
+							override={sharedOverride}
+							revision={revision}
+							onChange={(override) => onChange("available", override)}
+						/>
 					) : null}
 					<div data-setting-row="context-window-by-model" className="py-12">
 						<Tree

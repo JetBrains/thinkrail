@@ -83,7 +83,16 @@ to preserve).
   minimal but real pi-shaped JSONL, one flat file per session, that `historyIndex` tests, the e2e fixture
   seeder, and its own format-pinning test (`testFixtures.test.ts`) drive against; `defaultSessionDirFor`
   replicates pi's private default-layout directory encoding (not importable — see "pi file format" below)
-  so fixtures can land where a real no-arg `listAll()` would actually look.
+  so fixtures can land where a real no-arg `listAll()` would actually look. An assistant fixture may carry
+  `provider`, `model` and a pi `Usage`, written into its message, so the e2e seeder can stage sessions
+  with recorded spend (session insights), and a `custom` fixture message writes a `custom_message` entry
+  (an extension's completion message, for turns a background completion starts); the pin test covers them too. `HistoryIndex` itself does not
+  read them. A fixture's name entry carries the header's timestamp, never the write time, so entry-time
+  figures (session insights' start and active time) stay those of the seeded messages.
+  `delegationSessionDirFor(dataDir, workspaceId, parentSessionId)` replicates the host's
+  subagent-transcript folder (`<dataDir>/delegation/<workspaceId>/<parentSessionId>/`, agent's
+  `delegationRootDir` under pi-delegation's layout), so a fixture written there is a child transcript of
+  that parent; the pin test checks it against pi-delegation's `deriveChildSessionFile`.
 
 ## On-disk JSONL structure (observed from pi session files)
 - **`message` entries:** `{ type: "message", ..., message: { role: "system"|"user"|"assistant"|"toolResult", content: string|array, timestamp: ms-number } }`.
@@ -124,7 +133,7 @@ Verified against the installed `dist/core/session-manager.{js,d.ts}`. Re-verify 
   build budget for a cold build **or** a warm revalidation, and a `state` (`cold` / `refreshing` /
   `ready`, **`HistoryState`**) instead of the prompt-recall `indexing` flag; the `search` module matches entries with the shared content matcher, so no second
   parse of the corpus exists (prompt recall keeps its own `matchesTerms` / `makeSnippet`).
-- **Public surface (`index.ts`):** `HistoryIndex` (+ `HistorySession`), `getHistoryIndex()`, `clampLimit`, `extractSession`, `displayTranscriptMessages`, types. **No test helpers** — `writeFixtureSession`/`defaultSessionDirFor`
+- **Public surface (`index.ts`):** `HistoryIndex` (+ `HistorySession`), `getHistoryIndex()`, `clampLimit`, `extractSession`, `locateEntry` (+ `EntryLocation`: an entry's `messageIndex` and anchor text in the display projection `extractSession` indexes, or its nearest shown ancestor's with `exact: false`, plus the `toolCallId` a text-less one shows — a tool result's call, a tool-call-only assistant message's first — since an empty anchor locates nothing, for extension chat jumps through `host`'s `messageAnchor`), `displayTranscriptMessages`, types. **No test helpers** — `writeFixtureSession`/`defaultSessionDirFor`/`delegationSessionDirFor`
   are disk-writing test-only builders and must not enter the runtime module graph; they're reachable only
   through the server package's dedicated **`@thinkrail/server/history-test-fixtures`** subpath export
   (package.json), the sanctioned test boundary — same pattern as `@thinkrail/server/agent`. In-package
@@ -133,7 +142,7 @@ Verified against the installed `dist/core/session-manager.{js,d.ts}`. Re-verify 
   the exported session-tree helpers `parseSessionEntries`/`migrateSessionEntries`/`buildSessionProjection`
   / `sessionEntryToContextMessages` used by `extract.ts` and `displayTranscript.ts`; **not `SessionManager`**
   in production code — see Responsibility. Tests may use
-  `SessionManager` to *pin* layout/format facts against the real thing), `@thinkrail/contracts`,
+  `SessionManager`, and pi-delegation's layout helpers, to *pin* layout/format facts against the real thing), `@thinkrail/contracts`,
   `@thinkrail/shared/stripAnsi` (session titles, on read), `node:fs`, `node:fs/promises`, `node:path`.
 - **`displayTranscript.ts`** is the one display projection `extractSession` and `session.getMessages`
   share: model context still drops summarized turns; the UI/index keep them above the compaction marker,

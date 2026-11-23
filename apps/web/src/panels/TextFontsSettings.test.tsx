@@ -87,13 +87,12 @@ describe("custom fonts", () => {
 			/>,
 		);
 
-	test("an empty folder shows an empty state whose Choose files is the row's stop", () => {
+	test("an empty folder shows an empty state that is a walk row whose Choose files is its button", () => {
 		const markup = view([]);
 		expect(markup).toContain("No custom fonts yet.");
 		expect(markup).toContain('data-setting-id="custom-fonts"');
-		expect(markup).toMatch(
-			/<button[^>]*tabindex="0"[^>]*data-setting-stop=""[^>]*data-testid="custom-fonts-choose"/,
-		);
+		expect(markup).toMatch(/<section[^>]*data-setting-row="custom-fonts"[^>]*tabindex="-1"/);
+		expect(markup).toMatch(/<button[^>]*tabindex="0"[^>]*data-testid="custom-fonts-choose"/);
 		expect(markup).not.toContain('data-testid="custom-font-family"');
 		expect(markup).toContain('data-setting-id="fonts-folder"');
 		expect(markup).toContain('data-testid="custom-fonts-open-folder"');

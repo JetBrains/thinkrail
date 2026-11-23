@@ -25,8 +25,11 @@ import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
 import { cn } from "@thinkrail/ui/utils";
 import { Fragment, type ReactNode, useState } from "react";
+import { webExtensionTitle } from "@/extensions";
 import {
 	SETTINGS_LIST_PRIMARY,
+	SETTINGS_ROW_FOCUS,
+	SETTINGS_ROW_INSET,
 	SETTINGS_TAG,
 	SettingsGroup,
 	SettingsList,
@@ -255,6 +258,14 @@ export function menuControl({ menuOpen = false, onMenuOpenChange }: RowMenuContr
 	return onMenuOpenChange ? { open: menuOpen, onOpenChange: onMenuOpenChange } : {};
 }
 
+function supersedingTitle(
+	t: Translator,
+	by: NonNullable<PiPackageSummary["supersededBy"]>,
+): string {
+	const key = webExtensionTitle(by.name);
+	return key ? t(key) : by.title;
+}
+
 export function PackageRow({
 	summary,
 	updateAvailable,
@@ -289,7 +300,11 @@ export function PackageRow({
 			data-identity={summary.identity}
 			data-scope={summary.scope}
 			data-installed={installedPath === undefined ? "false" : "true"}
-			className="flex flex-col gap-4 border-border-muted border-b py-6 last:border-b-0"
+			className={cn(
+				"flex flex-col gap-4 border-border-muted border-b py-6 last:border-b-0",
+				SETTINGS_ROW_INSET,
+				SETTINGS_ROW_FOCUS,
+			)}
 		>
 			<div className="flex flex-wrap items-center gap-8">
 				<button
@@ -422,6 +437,13 @@ export function PackageRow({
 					{t("settings.packages.shadowed")}
 				</span>
 			) : null}
+			{summary.supersededBy ? (
+				<span data-testid="package-superseded" className="px-4 tr-text-metadata text-text-subtle">
+					{t("settings.packages.supersededBy", {
+						extension: supersedingTitle(t, summary.supersededBy),
+					})}
+				</span>
+			) : null}
 			{loadError && installedPath !== undefined ? (
 				<LoadError
 					error={loadError}
@@ -470,7 +492,11 @@ export function LooseRow({
 			data-enabled={off ? "false" : "true"}
 			data-path={entry.path}
 			data-scope={entry.scope}
-			className="flex flex-col gap-4 border-border-muted border-b py-6 last:border-b-0"
+			className={cn(
+				"flex flex-col gap-4 border-border-muted border-b py-6 last:border-b-0",
+				SETTINGS_ROW_INSET,
+				SETTINGS_ROW_FOCUS,
+			)}
 		>
 			<div className="flex flex-wrap items-center gap-8">
 				<button
@@ -655,6 +681,7 @@ export function PiPackagesGroup({
 				{leading}
 				<SettingsNotice
 					variant="error"
+					rowId="packages-failed"
 					testId="packages-failed"
 					action={
 						onRetry ? (
@@ -720,7 +747,6 @@ export function PiPackagesGroup({
 							variant="primary"
 							size="m"
 							tabIndex={0}
-							data-setting-side=""
 							data-testid="packages-update-all"
 							onClick={onUpdateAll}
 						>
@@ -733,7 +759,7 @@ export function PiPackagesGroup({
 				<div
 					data-testid="packages-empty"
 					data-setting-id={SETTING.installedPackages.id}
-					className="flex flex-col gap-2 py-8"
+					className="flex flex-col gap-2 px-8 py-8"
 				>
 					<span className="tr-text-ui text-text-default">{t("settings.packages.empty")}</span>
 					<span className="tr-text-metadata text-text-muted">
@@ -785,13 +811,7 @@ export function PiPackagesGroup({
 
 export const EXTENSIONS_SHOWCASE_URL = "https://thinkrail.ai/extensions/";
 
-export function GalleryLinks({
-	extensions,
-	side = false,
-}: {
-	extensions: boolean;
-	side?: boolean;
-}) {
+export function GalleryLinks({ extensions }: { extensions: boolean }) {
 	const t = useT();
 	const links = [
 		...(extensions
@@ -817,7 +837,6 @@ export function GalleryLinks({
 			target="_blank"
 			rel="noopener noreferrer"
 			tabIndex={0}
-			data-setting-side={side ? "" : undefined}
 			className="tr-text-metadata text-primary underline underline-offset-2 focus-visible:focus-ring"
 		>
 			{link.label} ↗

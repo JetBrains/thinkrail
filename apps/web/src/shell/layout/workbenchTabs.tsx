@@ -113,6 +113,7 @@ export interface TabStripProps {
 	onRenameChat: WorkbenchProps["onRenameChat"];
 	registerChatRename?: RegisterChatRename | undefined;
 	chatFirstPrompts?: WorkbenchProps["chatFirstPrompts"];
+	chatActions?: WorkbenchProps["chatActions"];
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
 	splitGeometry?: CenterSplitGeometry;
@@ -147,6 +148,7 @@ export const TabStrip = memo(function TabStrip({
 	onRenameChat,
 	registerChatRename,
 	chatFirstPrompts,
+	chatActions,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
 	splitGeometry,
@@ -259,6 +261,7 @@ export const TabStrip = memo(function TabStrip({
 							onRenameChat={onRenameChat}
 							registerChatRename={registerChatRename}
 							{...(chatFirstPrompts ? { chatFirstPrompts } : {})}
+							{...(chatActions ? { chatActions } : {})}
 							canFocusAdjacentGroup={canFocusAdjacentGroup}
 							renderTabAdornment={renderTabAdornment}
 							worktreePath={worktreePath}
@@ -414,6 +417,7 @@ export interface WorkbenchTabProps {
 	onRenameChat: WorkbenchProps["onRenameChat"];
 	registerChatRename?: RegisterChatRename | undefined;
 	chatFirstPrompts?: WorkbenchProps["chatFirstPrompts"];
+	chatActions?: WorkbenchProps["chatActions"];
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
 	worktreePath: string;
@@ -446,6 +450,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 	onRenameChat,
 	registerChatRename,
 	chatFirstPrompts,
+	chatActions,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
 	worktreePath,
@@ -724,6 +729,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 							icon={X}
 							label={t("workbench.tab.closeNamed", { name })}
 							tabIndex={-1}
+							data-hint-reveal
 							data-testid={tab.kind === "terminal" ? "terminal-tab-close" : "editor-tab-close"}
 							onClick={onClose}
 							className="mr-4 shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
@@ -752,6 +758,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 						canRenameChat: onRenameChat !== undefined,
 						worktreePath,
 						chatFirstPrompts,
+						chatActions,
 					}}
 					handlers={{
 						apply: onApply,

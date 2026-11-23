@@ -1,8 +1,15 @@
 import { describe, expect, it, jest, mock } from "bun:test";
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
+import type { ExtensionCatalogEntry } from "@thinkrail/contracts";
 import { extensionToolNames, listExtensionCatalog, setHostToolFactories } from "./catalog";
 import { EXTENSION_LOAD_TIMEOUT_MS, type InstalledExtensionRecord } from "./installed";
-import type { ServerExtensionEntry } from "./registry";
+import { type ServerExtensionEntry, serverExtensions } from "./registry";
+
+function shippedApiVersion(name: string): Pick<ExtensionCatalogEntry, "apiVersion"> {
+	const apiVersion = serverExtensions().find((entry) => entry.extension.name === name)?.extension
+		.apiVersion;
+	return apiVersion === undefined ? {} : { apiVersion };
+}
 
 function tool(name: string): ExtensionFactory {
 	return (pi: ExtensionAPI) => {
@@ -20,6 +27,7 @@ describe("listExtensionCatalog", () => {
 				description: expect.any(String),
 				enabled: true,
 				tools: ["visualize"],
+				hasParentExtensions: true,
 				hasChildExtensions: false,
 				kind: "builtin",
 			},
@@ -29,6 +37,7 @@ describe("listExtensionCatalog", () => {
 				description: expect.any(String),
 				enabled: true,
 				tools: ["ask_user_question"],
+				hasParentExtensions: true,
 				hasChildExtensions: false,
 				settings: [{ key: "richPreviews", default: true }],
 				kind: "builtin",
@@ -39,6 +48,7 @@ describe("listExtensionCatalog", () => {
 				description: expect.any(String),
 				enabled: true,
 				tools: ["web_search", "source_check", "fetch_content", "get_search_content", "web_enable"],
+				hasParentExtensions: true,
 				hasChildExtensions: true,
 				kind: "builtin",
 			},
@@ -48,7 +58,29 @@ describe("listExtensionCatalog", () => {
 				description: expect.any(String),
 				enabled: true,
 				tools: ["suggest_next_steps"],
+				hasParentExtensions: true,
 				hasChildExtensions: false,
+				kind: "builtin",
+			},
+			{
+				name: "outputs",
+				title: "Outputs",
+				description: expect.any(String),
+				enabled: true,
+				tools: ["present_files"],
+				hasParentExtensions: true,
+				hasChildExtensions: false,
+				kind: "builtin",
+			},
+			{
+				name: "session-insights",
+				title: "Session insights",
+				description: expect.any(String),
+				enabled: true,
+				tools: [],
+				hasParentExtensions: false,
+				hasChildExtensions: false,
+				...shippedApiVersion("session-insights"),
 				kind: "builtin",
 			},
 		]);
@@ -77,6 +109,7 @@ describe("listExtensionCatalog", () => {
 		];
 		const [entry] = await listExtensionCatalog(new Set(), entries);
 		expect(entry?.tools).toEqual(["demo"]);
+		expect(entry?.hasParentExtensions).toBe(true);
 		expect(entry?.settings).toEqual([{ key: "rich", default: false }]);
 		expect(read).toEqual([false]);
 	});
@@ -108,6 +141,7 @@ describe("listExtensionCatalog", () => {
 				title: "demo",
 				enabled: true,
 				tools: ["alpha", "beta"],
+				hasParentExtensions: true,
 				hasChildExtensions: true,
 				kind: "builtin",
 			},
@@ -116,6 +150,7 @@ describe("listExtensionCatalog", () => {
 				title: "bare",
 				enabled: false,
 				tools: [],
+				hasParentExtensions: false,
 				hasChildExtensions: false,
 				kind: "builtin",
 			},
@@ -136,6 +171,42 @@ describe("listExtensionCatalog", () => {
 		];
 		const [entry] = await listExtensionCatalog(new Set(), entries, []);
 		expect(entry?.tools).toEqual(["static"]);
+	});
+
+	it("lists a declared apiVersion without building the extension's queries", async () => {
+		const queries = mock(() => ({ "sessions.list": () => [] }));
+		const entries: ServerExtensionEntry[] = [
+			{
+				specifier: "@acme/insights/server",
+				extension: { name: "insights", extensions: [], apiVersion: 3, queries },
+			},
+			{
+				specifier: "@acme/unversioned/server",
+				extension: { name: "plain", extensions: [], queries },
+			},
+		];
+		expect(await listExtensionCatalog(new Set(), entries)).toEqual([
+			{
+				name: "insights",
+				title: "insights",
+				enabled: true,
+				tools: [],
+				hasParentExtensions: false,
+				hasChildExtensions: false,
+				apiVersion: 3,
+				kind: "builtin",
+			},
+			{
+				name: "plain",
+				title: "plain",
+				enabled: true,
+				tools: [],
+				hasParentExtensions: false,
+				hasChildExtensions: false,
+				kind: "builtin",
+			},
+		]);
+		expect(queries).not.toHaveBeenCalled();
 	});
 
 	it("lists per-session tools through an inert session that never answers", async () => {
@@ -160,6 +231,7 @@ describe("listExtensionCatalog", () => {
 				title: "asker",
 				enabled: true,
 				tools: ["static", "asked"],
+				hasParentExtensions: true,
 				hasChildExtensions: false,
 				kind: "builtin",
 			},

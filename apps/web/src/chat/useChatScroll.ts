@@ -1,3 +1,4 @@
+import { readingPage } from "@thinkrail/ui/reading";
 import {
 	type PointerEventHandler,
 	type RefCallback,
@@ -57,6 +58,7 @@ export interface ChatScroll {
 	scrollMoving: boolean;
 	scrollToLatest: () => void;
 	scrollPage: (direction: -1 | 1) => void;
+	keyboardScrollBy: (delta: number) => void;
 	armImmediateTurn: () => void;
 	cancelImmediateTurn: (streaming: boolean) => void;
 	cancelAutomaticReveal: () => void;
@@ -82,7 +84,6 @@ const VIRTUOSO_PLACEMENT_WINDOW_MS = 1_300;
 const ROW_MATERIALIZATION_FRAMES = 90;
 const ROW_ALIGNMENT_STABILITY_FRAMES = 4;
 
-const KEYBOARD_PAGE_FRACTION = 0.875;
 const TRANSCRIPT_FOCUS_TARGETS = "[data-transcript-item], [data-transcript-feed]";
 
 const KEYBOARD_SCROLL_KEYS = new Set([
@@ -1376,16 +1377,22 @@ export function useChatScroll(
 		[keyboardScroll, pauseForNativeInput, scheduleTouchSettle],
 	);
 
+	const keyboardScrollBy = useCallback(
+		(delta: number) => {
+			const scroller = scrollerRef.current;
+			if (!scroller || Math.abs(delta) < 0.5) return;
+			if (keyboardScroll(delta < 0 ? "ArrowUp" : "ArrowDown", false) !== "native") return;
+			scroller.scrollTop = boundedScrollTop(scroller) + delta;
+		},
+		[keyboardScroll],
+	);
+
 	const scrollPage = useCallback(
 		(direction: -1 | 1) => {
 			const scroller = scrollerRef.current;
-			if (!scroller || keyboardScroll(direction < 0 ? "PageUp" : "PageDown", false) !== "native") {
-				return;
-			}
-			scroller.scrollTop =
-				boundedScrollTop(scroller) + direction * scroller.clientHeight * KEYBOARD_PAGE_FRACTION;
+			if (scroller) keyboardScrollBy(direction * readingPage(scroller.clientHeight));
 		},
-		[keyboardScroll],
+		[keyboardScrollBy],
 	);
 
 	useEffect(() => {
@@ -1407,6 +1414,7 @@ export function useChatScroll(
 		scrollMoving: snapshot.moving,
 		scrollToLatest,
 		scrollPage,
+		keyboardScrollBy,
 		armImmediateTurn,
 		cancelImmediateTurn,
 		cancelAutomaticReveal,

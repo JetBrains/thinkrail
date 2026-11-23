@@ -79,7 +79,6 @@ export function SettingsFolderRow({
 					size="m"
 					iconLeft={FolderOpen}
 					tabIndex={0}
-					data-setting-side=""
 					data-testid={`${testIdPrefix}-open-folder`}
 					onClick={onRevealFolder}
 				>

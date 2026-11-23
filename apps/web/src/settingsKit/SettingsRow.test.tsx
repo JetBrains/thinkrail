@@ -25,8 +25,14 @@ const render = (changed: boolean | null) =>
 		/>,
 	);
 
-test("a row carries its walk and jump markup and a control slot", () => {
+test("a row is a focusable, labelled group that carries its walk and jump markup and a control slot", () => {
 	const markup = render(false);
+	const row = markup.match(/<fieldset[^>]*>/)?.[0] ?? "";
+	expect(row).toContain('data-setting-row="chat-line-width"');
+	expect(row).toContain('tabindex="-1"');
+	expect(row).toContain("aria-labelledby=");
+	expect(row).toContain("aria-describedby=");
+	expect(row).toContain("focus-visible:focus-ring-row");
 	expect(markup).toContain('data-setting-row="chat-line-width"');
 	expect(markup).toContain('data-setting-id="chat-line-width"');
 	expect(markup).toContain("data-setting-control");
@@ -41,12 +47,11 @@ test("an unchanged row shows neither Changed nor Reset", () => {
 	}
 });
 
-test("a changed row shows a visible Changed tag and a tabbable Reset side", () => {
+test("a changed row shows a visible Changed tag and a tabbable Reset button", () => {
 	const markup = render(true);
 	expect(markup).toContain("Changed");
 	expect(markup).toContain('data-changed="true"');
 	const reset = markup.match(/<button[^>]*data-setting-reset[^>]*>/)?.[0] ?? "";
-	expect(reset).toContain("data-setting-side");
 	expect(reset).toContain('tabindex="0"');
 	expect(reset).toContain('aria-label="Reset Chat line width to default"');
 	expect(reset).toContain('data-testid="settings-reset-chat-line-width"');
@@ -86,7 +91,7 @@ interface ResetProps {
 	"data-setting-reset"?: string;
 }
 
-test("Reset moves focus to the row's stop before it resets, so focus survives the button unmounting", () => {
+test("Reset moves focus to the row before it resets, so focus survives the button unmounting", () => {
 	let rendered: ReactNode = null;
 	function Probe() {
 		rendered = SettingsRow({
@@ -106,5 +111,5 @@ test("Reset moves focus to the row's stop before it resets, so focus survives th
 	resetDom();
 	const button = findProps<ResetProps>(rendered, (props) => props["data-setting-reset"] === "");
 	button?.onClick?.({ currentTarget: named(page, "reset") });
-	expect(dom.log).toEqual(["focus width", "reset"]);
+	expect(dom.log).toEqual(["focus chat-line-width", "reset"]);
 });

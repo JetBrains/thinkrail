@@ -44,6 +44,7 @@ import {
 } from "../agent";
 import { initializeAnalytics, resetAnalyticsForTests, shutdownAnalytics } from "../analytics";
 import { reconcileArtifacts } from "../artifacts";
+import { serverExtensions } from "../extensions";
 import {
 	configureSurveySource,
 	recordAcceptedMessage,
@@ -68,6 +69,7 @@ import {
 import {
 	handleRequest,
 	openReviewForClient,
+	releaseDisabledExtensionQueries,
 	requestMethodDiagnostic,
 	shouldRefreshOpenReview,
 	workspaceCreationHandoff,
@@ -857,6 +859,7 @@ test("extension.list reflects disabledExtensions written through settings.update
 			description: expect.any(String),
 			enabled: true,
 			tools: ["visualize"],
+			hasParentExtensions: true,
 			hasChildExtensions: false,
 			kind: "builtin",
 		},
@@ -866,6 +869,7 @@ test("extension.list reflects disabledExtensions written through settings.update
 			description: expect.any(String),
 			enabled: true,
 			tools: ["ask_user_question"],
+			hasParentExtensions: true,
 			hasChildExtensions: false,
 			settings: [{ key: "richPreviews", default: true }],
 			kind: "builtin",
@@ -876,6 +880,7 @@ test("extension.list reflects disabledExtensions written through settings.update
 			description: expect.any(String),
 			enabled: true,
 			tools: ["web_search", "source_check", "fetch_content", "get_search_content", "web_enable"],
+			hasParentExtensions: true,
 			hasChildExtensions: true,
 			kind: "builtin",
 		},
@@ -885,7 +890,30 @@ test("extension.list reflects disabledExtensions written through settings.update
 			description: expect.any(String),
 			enabled: true,
 			tools: ["suggest_next_steps"],
+			hasParentExtensions: true,
 			hasChildExtensions: false,
+			kind: "builtin",
+		},
+		{
+			name: "outputs",
+			title: "Outputs",
+			description: expect.any(String),
+			enabled: true,
+			tools: ["present_files"],
+			hasParentExtensions: true,
+			hasChildExtensions: false,
+			kind: "builtin",
+		},
+		{
+			name: "session-insights",
+			title: "Session insights",
+			description: expect.any(String),
+			enabled: true,
+			tools: [],
+			hasParentExtensions: false,
+			hasChildExtensions: false,
+			apiVersion: serverExtensions().find((entry) => entry.extension.name === "session-insights")
+				?.extension.apiVersion,
 			kind: "builtin",
 		},
 	]);
@@ -899,6 +927,8 @@ test("extension.list reflects disabledExtensions written through settings.update
 		{ name: "ask-user-question", enabled: true },
 		{ name: "web-access", enabled: false },
 		{ name: "next-steps", enabled: true },
+		{ name: "outputs", enabled: true },
+		{ name: "session-insights", enabled: true },
 	]);
 	await handleRequest("settings.update", { config: { disabledExtensions: [] } }, CTX);
 	expect(await handleRequest("extension.list", {}, CTX)).toMatchObject([
@@ -906,7 +936,106 @@ test("extension.list reflects disabledExtensions written through settings.update
 		{ name: "ask-user-question", enabled: true },
 		{ name: "web-access", enabled: true },
 		{ name: "next-steps", enabled: true },
+		{ name: "outputs", enabled: true },
+		{ name: "session-insights", enabled: true },
 	]);
+});
+
+test("extension.query refuses unknown queries and a switched-off extension with their codes", async () => {
+	await expect(
+		handleRequest("extension.query", { extension: "retired", method: "rows" }, CTX),
+	).rejects.toMatchObject({ code: "UNKNOWN_EXTENSION_QUERY" });
+	await expect(
+		handleRequest("extension.query", { extension: "visualize", method: "rows" }, CTX),
+	).rejects.toMatchObject({ code: "UNKNOWN_EXTENSION_QUERY" });
+	await expect(
+		handleRequest("extension.query", { method: "rows" } as never, CTX),
+	).rejects.toMatchObject({ code: "UNKNOWN_EXTENSION_QUERY" });
+	await handleRequest("settings.update", { config: { disabledExtensions: ["visualize"] } }, CTX);
+	await expect(
+		handleRequest("extension.query", { extension: "visualize", method: "rows" }, CTX),
+	).rejects.toMatchObject({ code: "EXTENSION_DISABLED" });
+	await handleRequest("settings.update", { config: { disabledExtensions: [] } }, CTX);
+	await expect(
+		handleRequest("extension.query", { extension: "visualize", method: "rows" }, CTX),
+	).rejects.toMatchObject({ code: "UNKNOWN_EXTENSION_QUERY" });
+});
+
+test("extension.query answers session insights' sessions.list over the host's sessions, and refuses it while off", async () => {
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify([
+			{ id: "w1", projectId: "p1", name: "Default", worktreePath: repo, createdAt: 1 },
+		]),
+	);
+	const agentDir = process.env.PI_CODING_AGENT_DIR ?? join(dataDir, "pi");
+	const at = Date.parse("2026-11-01T10:00:00.000Z");
+	const fixture = writeFixtureSession(defaultSessionDirFor(agentDir, repo), {
+		cwd: repo,
+		name: "Insights fixture",
+		messages: [
+			{ role: "user", text: "List the sessions", timestamp: at },
+			{ role: "assistant", text: "Done.", timestamp: at + 60_000 },
+		],
+	});
+	const request = {
+		extension: "session-insights",
+		method: "sessions.list",
+		params: { scope: { kind: "project", projectId: "p1" } },
+	};
+	type ListAnswer = {
+		apiVersion: number;
+		state: { phase: string };
+		projects: unknown[];
+		rows: {
+			sessionId: string;
+			workspaceId: string | null;
+			workspaceState: string;
+			title: string | null;
+			live: boolean;
+		}[];
+	};
+	let answer: ListAnswer | undefined;
+	const deadline = Date.now() + 10_000;
+	while (Date.now() < deadline) {
+		answer = (await handleRequest("extension.query", request, CTX)) as ListAnswer;
+		if (answer.state.phase === "ready" && answer.rows.length > 0) break;
+		await Bun.sleep(100);
+	}
+	expect(answer?.apiVersion).toBe(
+		serverExtensions().find((entry) => entry.extension.name === "session-insights")?.extension
+			.apiVersion ?? -1,
+	);
+	expect(answer?.projects).toEqual([{ id: "p1", name: "repo", kind: "repository" }]);
+	expect(answer?.rows).toMatchObject([
+		{
+			sessionId: fixture.id,
+			workspaceId: "w1",
+			workspaceState: "open",
+			title: "Insights fixture",
+			live: false,
+		},
+	]);
+	await expect(
+		handleRequest("extension.query", { ...request, params: { scope: { kind: "nope" } } }, CTX),
+	).rejects.toThrow("Invalid sessions.list params");
+	await handleRequest(
+		"settings.update",
+		{ config: { disabledExtensions: ["session-insights"] } },
+		CTX,
+	);
+	await expect(handleRequest("extension.query", request, CTX)).rejects.toMatchObject({
+		code: "EXTENSION_DISABLED",
+	});
+	releaseDisabledExtensionQueries();
+	await handleRequest("settings.update", { config: { disabledExtensions: [] } }, CTX);
+	let rebuilt: ListAnswer | undefined;
+	while (Date.now() < deadline + 10_000) {
+		rebuilt = (await handleRequest("extension.query", request, CTX)) as ListAnswer;
+		if (rebuilt.state.phase === "ready" && rebuilt.rows.length > 0) break;
+		await Bun.sleep(100);
+	}
+	expect(rebuilt?.rows.map((row) => row.sessionId)).toEqual([fixture.id]);
 });
 
 test("disabled JetBrains quota returns hidden through its handler", async () => {

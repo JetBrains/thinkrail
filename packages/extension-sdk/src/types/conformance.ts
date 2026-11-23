@@ -1,3 +1,4 @@
+import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import type { SharedExportName } from "@thinkrail/extension-api/installed";
 import type * as AppServer from "@thinkrail/extension-api/server";
 import type * as AppWeb from "@thinkrail/extension-api/web";
@@ -28,10 +29,26 @@ type Sdk = "@thinkrail/extension-sdk";
 
 type InstalledSettingCopy = "title" | "description";
 
+type BuiltInOnlyServerFields = "supersedesPackages" | "apiVersion" | "queries";
+type InstalledWorkspaceFiles = Omit<AppServer.WorkspaceFiles, "checkArtifacts">;
+type InstalledSessionServices = Omit<AppServer.ExtensionSessionServices, "workspaceFiles"> & {
+	workspaceFiles: InstalledWorkspaceFiles;
+};
+type InstalledArtifactTool = Omit<AppServer.ArtifactTool, "published">;
+type InstalledServerExtension = Omit<
+	AppServer.ServerExtension,
+	BuiltInOnlyServerFields | "sessionExtensions" | "artifactTools"
+> & {
+	sessionExtensions?: (session: InstalledSessionServices) => ExtensionFactory[];
+	artifactTools?: Record<string, InstalledArtifactTool>;
+};
+
 export type ConformingServer = [
-	Expect<Conforms<Server.ServerExtension, AppServer.ServerExtension>>,
-	Expect<Conforms<Server.ExtensionSessionServices, AppServer.ExtensionSessionServices>>,
-	Expect<Conforms<Server.WorkspaceFiles, AppServer.WorkspaceFiles>>,
+	Expect<Conforms<Server.ServerExtension, InstalledServerExtension>>,
+	Expect<Assignable<Server.ServerExtension, AppServer.ServerExtension>>,
+	Expect<Conforms<Server.ExtensionSessionServices, InstalledSessionServices>>,
+	Expect<Assignable<AppServer.ExtensionSessionServices, Server.ExtensionSessionServices>>,
+	Expect<Conforms<Server.WorkspaceFiles, InstalledWorkspaceFiles>>,
 	Expect<
 		Conforms<
 			Omit<Server.ExtensionBooleanSetting, InstalledSettingCopy>,
@@ -45,7 +62,7 @@ export type ConformingServer = [
 		>
 	>,
 	Expect<Conforms<Server.InteractiveTool, AppServer.InteractiveTool>>,
-	Expect<Conforms<Server.ArtifactTool, AppServer.ArtifactTool>>,
+	Expect<Conforms<Server.ArtifactTool, InstalledArtifactTool>>,
 	Expect<Conforms<Server.ToolResponse, AppServer.ToolResponse>>,
 ];
 
@@ -97,4 +114,10 @@ export type ConformingWeb = [
 	>,
 ];
 
-type BuiltInOnlyWebFields = "title" | "description" | "globalOverlay" | "commands" | "shortcuts";
+type BuiltInOnlyWebFields =
+	| "title"
+	| "description"
+	| "globalOverlay"
+	| "commands"
+	| "shortcuts"
+	| "panels";

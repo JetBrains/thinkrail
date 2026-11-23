@@ -1,6 +1,6 @@
 {
 	"name": "@thinkrail/pi-next-steps",
-	"version": "0.0.0",
+	"version": "0.1.0",
 	"description": "A pi extension adding a `suggest_next_steps` tool: when the agent finishes a turn it offers one-click next messages, sent with Alt+1…9 in the terminal and shown as chips in hosts such as ThinkRail, the agentic IDE built on pi.",
 	"license": "Apache-2.0",
 	"type": "module",

@@ -118,11 +118,12 @@ export function Workbench({
 	onRequestClose,
 	onRenameChat,
 	chatFirstPrompts,
+	chatActions,
 	onNewChat,
 	onNewTerminal,
 	onGestureCanceled,
 	chromeShortcuts,
-	renderLeftRailFooter,
+	leftRailFooter,
 }: WorkbenchProps) {
 	const t = useT();
 	const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -784,10 +785,11 @@ export function Workbench({
 				canRenameChat: onRenameChat !== undefined,
 				worktreePath,
 				chatFirstPrompts,
+				chatActions,
 			});
 			return { tab, location, actions };
 		},
-		[chatFirstPrompts, maxBottomGroups, maxSideGroups, onRenameChat, t, worktreePath],
+		[chatActions, chatFirstPrompts, maxBottomGroups, maxSideGroups, onRenameChat, t, worktreePath],
 	);
 	useEffect(
 		() =>
@@ -869,6 +871,7 @@ export function Workbench({
 		onRenameChat,
 		registerChatRename,
 		chatFirstPrompts,
+		chatActions,
 		canFocusAdjacentGroup,
 		chromeShortcuts,
 	};
@@ -1128,7 +1131,7 @@ export function Workbench({
 					region="left"
 					shared={shared}
 					attention={attention}
-					footer={renderLeftRailFooter}
+					footer={leftRailFooter}
 				/>
 				<div ref={columnsRef} className="min-h-0 min-w-0 flex-1">
 					{workbenchColumns}

@@ -107,12 +107,15 @@ test("a recorded chord runs its command, shows in the cheatsheet and the palette
 	const item = row(page, "group.splitRight");
 	const button = chord(page, "group.splitRight");
 	await item.focus();
+	await expect(button).toHaveCSS("outline-style", "none");
 	await page.keyboard.press("Enter");
 	await expect(button).toContainText("Press a new shortcut… Esc cancels");
+	await expect(button).toHaveCSS("outline-style", "solid");
 	await page.keyboard.press("Control");
 	await expect(button).toContainText("Press a new shortcut… Esc cancels");
 	await pressPlatformShortcut(page, "Alt+KeyS");
 	await expect(button.locator("kbd")).toHaveText(["Ctrl", "Alt", "S"]);
+	await expect(button).toHaveCSS("outline-style", "none");
 	await expect(item).toHaveAttribute("data-custom", "true");
 	await expect(item.getByTestId("keybinding-custom")).toHaveText("Changed");
 	await expect(item.getByTestId("keybinding-default")).toHaveText("Default: Ctrl+\\");
@@ -620,7 +623,10 @@ test("inside a scope a local key conflicts with its neighbours only: Replace, a 
 	await expect(chord(page, "transcript.down").locator("kbd")).toHaveText(["J"]);
 
 	await recordLocal(page, "trees.search", "g");
-	await expect(message(page, "trees.search")).toHaveCount(0);
+	await expect(message(page, "trees.search")).toHaveAttribute("data-kind", "note");
+	await expect(message(page, "trees.search")).toContainText(
+		"G also acts in the chat transcript and a file you read — different elements, so no conflict",
+	);
 	await expect(chord(page, "trees.search").locator("kbd")).toHaveText(["G"]);
 	await closeSettings(page);
 

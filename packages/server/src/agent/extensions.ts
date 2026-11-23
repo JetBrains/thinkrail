@@ -26,11 +26,14 @@ import {
 	extensionSkillRoots,
 	type HostSessionServices,
 	omitDisabledRegistryExtensions,
+	omitSupersededPackages,
 	preferRegistryTools,
 	registryInlineExtensions,
 	type ServerExtensionEntry,
 	STAGED_HOST_SKILLS_ROUTE,
 	serverExtensions,
+	supersedablePackagesIn,
+	supersedingExtension,
 } from "../extensions";
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "../trash";
 import { artifactsGuard } from "./artifactsGuard";
@@ -359,10 +362,33 @@ function loaderPolicyKey(settings = extensionSettings()): string {
 	return `${packagePolicyKey()}\0${extensionSettingsKey(settings)}`;
 }
 
-/** `true` when the loader last resolved under a package policy or extension settings other than the current ones. */
+/** What a loader's last load found of the packages registry extensions supersede, and which it left out. */
+interface SupersededAtLoad {
+	present: ReadonlySet<string>;
+	omitted: string;
+}
+
+const loaderSupersedes = new WeakMap<ResourceLoader, SupersededAtLoad>();
+
+function omittedKey(present: ReadonlySet<string>, isDisabled: (name: string) => boolean): string {
+	return [...present]
+		.filter((name) => supersedingExtension(name, isDisabled) !== undefined)
+		.sort()
+		.join("\n");
+}
+
+/**
+ * `true` when the loader last resolved under a package policy or extension settings other than the
+ * current ones, or when a superseding extension's switch flipped over a package its last load found.
+ */
 export function isLoaderPolicyStale(loader: ResourceLoader): boolean {
 	const recorded = loaderPolicies.get(loader);
-	return recorded !== undefined && recorded !== loaderPolicyKey();
+	if (recorded !== undefined && recorded !== loaderPolicyKey()) return true;
+	const superseded = loaderSupersedes.get(loader);
+	return (
+		superseded !== undefined &&
+		superseded.omitted !== omittedKey(superseded.present, isExtensionDisabled)
+	);
 }
 
 let installedPackagesListener: (() => void) | null = null;
@@ -563,6 +589,7 @@ function createRegistryLoader(
 	let settingsAtReload = extensionSettings();
 	const settingAtReload = (extension: string, key: string): boolean | undefined =>
 		settingsAtReload[extension]?.[key];
+	const builtins = registry.filter((entry) => entry.installed === undefined);
 	const registryFactories = (installed: boolean): InlineExtension[] =>
 		registryInlineExtensions(
 			"extensions",
@@ -588,6 +615,8 @@ function createRegistryLoader(
 		disabledAtReload,
 	);
 	const agentDir = getAgentDir();
+	const superseded: SupersededAtLoad = { present: new Set(), omitted: "" };
+	loaderSupersedes.set(owner, superseded);
 	const common = {
 		cwd,
 		agentDir,
@@ -597,8 +626,14 @@ function createRegistryLoader(
 		extensionsOverride: (result: LoadExtensionsResult) => {
 			recordProviderOwners(result);
 			recordLoadedExtensions(result);
+			superseded.present = supersedablePackagesIn(result, builtins);
+			superseded.omitted = omittedKey(superseded.present, isDisabledAtReload);
 			return preferRegistryTools(
-				omitDisabledRegistryExtensions(result, isDisabledAtReload, registry),
+				omitSupersededPackages(
+					omitDisabledRegistryExtensions(result, isDisabledAtReload, registry),
+					isDisabledAtReload,
+					builtins,
+				),
 				registry,
 			);
 		},

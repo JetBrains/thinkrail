@@ -1,6 +1,6 @@
 import { defineWebExtension } from "@thinkrail/extension-api/web";
 import { SuggestionsList } from "./SuggestionsList";
-import { readSuggestions } from "./suggestions";
+import { isRefused, readSuggestions } from "./suggestions";
 
 export default defineWebExtension({
 	name: "next-steps",
@@ -9,7 +9,9 @@ export default defineWebExtension({
 			renderer: SuggestionsList,
 			options: {
 				summary: ({ args, result }, translate) =>
-					translate("nextSteps.summary", { count: readSuggestions(args, result).length }),
+					isRefused(result)
+						? translate("nextSteps.refused.summary")
+						: translate("nextSteps.summary", { count: readSuggestions(args, result).length }),
 				composerSuggestions: readSuggestions,
 			},
 		},

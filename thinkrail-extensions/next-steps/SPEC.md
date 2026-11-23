@@ -27,8 +27,10 @@ They show as chips above the composer. A click (or Alt+N) sends one as the user'
 - `./web` default-exports a descriptor that registers the tool as a **routine** row (summary "Suggested N
   next steps", the list as its body), plus the `composerSuggestions` reader ([[module-extension-api]]).
   The reader prefers the result's normalized `details.suggestions` and falls back to the call's
-  arguments. It type-imports the details shape from the package's `./core`; the boundary rules allow
-  only type imports of an extension's own pi package. Strings are `nextSteps.*` keys.
+  arguments only when there is no result list; an empty `details.suggestions` still wins, so a refused
+  call ([[module-pi-next-steps]], *Decisions*) offers no chips. Its row reads as a request for the
+  answer instead of "Suggested 0 next steps". It type-imports the details shape from the package's
+  `./core`; the boundary rules allow only type imports of an extension's own pi package. Strings are `nextSteps.*` keys.
 
 ## Decisions
 
@@ -83,9 +85,11 @@ They show as chips above the composer. A click (or Alt+N) sends one as the user'
 
 Package tests cover the descriptor shape and that it composes the published factory with ThinkRail's
 appended guideline, plus the web reader. The tool's own behavior is tested in [[module-pi-next-steps]].
-Chat tests cover the derivation, the chips, their local keys and the done outcome of a reloaded round.
-`e2e/next-steps.spec.ts` covers seeded transcripts: chips, reload (chips and the round's done status),
-click keeps the draft and leaves focus in the input, Alt+N from the input and from the conversation
-but not outside the chat, Shift+click and Shift+Alt+N into the input, and the off switch. `e2e/next-steps.live.spec.ts`
+Chat tests cover the derivation, the numbered chips, the target chat their global keys act in and the
+done outcome of a reloaded round. `e2e/next-steps.spec.ts` covers seeded transcripts: chips and their
+numbers, reload (chips and the round's done status), click keeps the draft and leaves focus in the input,
+Alt+N from the input, the conversation, the Files tree and a workbench tab (another group's too) but not
+inside a dialog, the terminal or Monaco, Shift+click and Shift+Alt+N into the input, the off switch, and a refused call (its row reads as a
+request for the answer, no chips; the retried call's chips show). `e2e/next-steps.live.spec.ts`
 (`@agent`) asks a real agent, explicitly, to suggest next steps after an edit, then checks that the
 chips appear and a click sends one. Unprompted reliability is deliberately not asserted (see above).

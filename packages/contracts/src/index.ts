@@ -1,3 +1,15 @@
+export type * from "./attachments";
+export {
+	attachmentImageType,
+	CHAT_ATTACHMENT_ERROR_CODES,
+	CHAT_ATTACHMENT_MAX_BYTES,
+	CHAT_ATTACHMENT_UPLOAD_HEADER,
+	CHAT_ATTACHMENT_WORKSPACE_PARAM,
+	CHAT_ATTACHMENTS_ROUTE,
+	copiedFilePaths,
+	isChatAttachmentResult,
+	withAttachedFiles,
+} from "./attachments";
 export type * from "./domain";
 export {
 	ACCEPTED_IMAGE_TYPES,

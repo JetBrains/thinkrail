@@ -4,7 +4,7 @@ type: architecture-design
 status: draft
 title: Pi compatibility — host adaptations and upgrade removal gates
 parent: architecture
-references: [submodule-server-agent, submodule-server-agent-mcp, submodule-server-extensions-installed, module-artifact-tests, submodule-server-history, submodule-server-templates, module-cli, module-desktop, submodule-web-chat, module-pi-subagents, module-pi-background-commands, module-pi-delegation]
+references: [submodule-server-agent, submodule-server-agent-mcp, submodule-server-extensions-installed, module-artifact-tests, submodule-server-history, submodule-server-templates, module-cli, module-desktop, submodule-web-chat, module-pi-subagents, module-pi-background-commands, module-pi-delegation, module-pi-session-insights]
 tags: [pi, compatibility]
 ---
 
@@ -87,6 +87,8 @@ entry. A parity failure is evidence of drift, not permission to weaken the test.
 A public SDK replacement must preserve session isolation, cancellation, project trust, durable
 transcripts, and compiled/desktop behavior before the host implementation is removed. Importing a
 private dist path in production is not a replacement; such imports remain confined to parity tests.
+The step-by-step upgrade procedure lives in the repo skill
+`.agents/skills/upgrading-core-dependencies` (`playbooks/pi.md`); this registry stays the list of what it re-checks.
 
 ## MCP adaptations
 
@@ -258,6 +260,20 @@ restart and toggle-reload regressions on upgrades.
   `agentSessionManager.test.ts` (same-name questionnaire before and after reload, and a chat created with
   ours off that re-enables it over the package) and `agent/extensions.test.ts` (an installed extension
   registering every class of host name) on every upgrade.
+- **Superseded vanilla packages** — [[submodule-server-extensions]], `omitSupersededPackages` in the
+  same `extensionsOverride`. It relies on pi letting the override drop entries of a
+  `LoadExtensionsResult` (the disabled filter does too) and on `Extension.resolvedPath` being the loaded
+  file inside the package's install folder, whose nearest `package.json` names the package for npm, git
+  and local installs alike. Remove it when pi offers a host-side package exclusion. Run
+  `extensions/inline.test.ts` and the superseded-package case in `agent/extensions.test.ts` on every
+  upgrade and recheck where pi installs npm and git packages.
+- **`/insights` output per mode** — [[module-pi-session-insights]], `extension.ts`. The report goes
+  through `ctx.ui.notify(…, "info")`, which pi's TUI shows as dim text in the chat (a following status
+  replaces it) and RPC sends as a notification; in print and JSON modes, where `ctx.hasUI` is false and
+  pi redirects `process.stdout` to stderr to keep its own stdout clean, it writes to stderr directly.
+  Argument completions return full replacement values because pi's autocomplete replaces the whole
+  argument text. Recheck `docs/extensions.md` (Mode Behavior, `registerCommand`) on every bump; the
+  parity gate's command cases and `extension.test.ts` cover the modes.
 - **Provider-registration provenance** — [[submodule-server-agent]], `recordProviderOwners` in the
   session loader's `extensionsOverride` ([[module-pi-delegation]] decision #32). Pi keeps no
   provider-to-extension provenance: `LoadExtensionsResult.runtime.pendingProviderRegistrations` /
@@ -377,6 +393,8 @@ restart and toggle-reload regressions on upgrades.
 - **Session discovery and prompt-template parsing** — [[submodule-server-history]],
   [[submodule-server-templates]], [[submodule-web-chat]]. The host mirrors pi's session directory/JSONL
   discovery and prompt-template/frontmatter rules where public APIs cannot serve its read/edit UI.
+  [[module-pi-session-insights]]' `listSessionFiles` mirrors the same directory layout, since pi's
+  `SessionManager.list`/`listAll` parse every file they list.
   Prefer public discovery/parsing APIs when they meet those needs; retain parity coverage in history,
   template and composer tests until then.
 - **Context edits on summarized display turns** — [[submodule-server-history]], `displayTranscript.ts`
@@ -394,6 +412,90 @@ restart and toggle-reload regressions on upgrades.
   helper over entries or a file. Until then `delegation.test.ts` ("the subagent totals mirror matches pi's
   own totals for every spend source") pins parity with pi's `getSessionStats` on one transcript that
   carries every spend source, including off-branch spend; rerun it on every pi bump.
+- **Recorded totals, second mirror** — [[module-pi-session-insights]], `src/totals.ts`. Session insights'
+  headline tokens and cost are the same spend sources summed over a session file (`usage` entries,
+  compaction/branch-summary `usage`, assistant and tool-result message usage, every branch), because
+  `getSessionStats` needs a live `AgentSession`. **Removal gate:** pi exports a totals helper over entries
+  or a file; then this mirror and `subagentUsage.ts` go together. `totals.test.ts` pins parity with
+  `AgentSession.getSessionStats()` on one transcript carrying every spend source, off-branch included;
+  rerun it on every pi bump.
+- **Streaming parse of session files** — [[module-pi-session-insights]], `src/lines.ts`. Pi's exported
+  `parseSessionEntries` is one synchronous pass over a whole file's string, which would stall the host's
+  event loop on a large transcript, so the index mirrors the per-line rule it shares with pi's file
+  loader (split on `\n`, skip blank and unparseable lines, a complete unterminated last line counts) line
+  by line with cooperative yields. **Removal gate:** pi exports an incremental or
+  async parser. `lines.test.ts` compares the entries with `parseSessionEntries` on fixtures, a torn last
+  line included.
+- **Trace timings and the active branch** — [[module-pi-session-insights]], `src/trace.ts`. The trace
+  explorer draws a model call from `AssistantMessage.timestamp` (typed in pi-ai as "when the request
+  started") to `+ durationMs`, and a tool call ending at `ToolResultMessage.timestamp` and starting
+  `durationMs` before it; both `durationMs` fields are typed in pi-ai 1.5.2 but absent from
+  `docs/session-format.md`, and older entries lack them (then the span is approximated from entry
+  timestamps and labelled so). It also mirrors pi's load rule that the file's last entry is the current
+  leaf, following `parentId` to pick the shown branch, because `buildSessionContext` drops the entries a
+  trace needs (tool results' ranges, markers). The session timeline (who-waits bands, packed lanes, turn
+  durations) and the day view's turn bars are built on the same spans, no further field. **Removal gate:**
+  none for the fields (they are pi's record); on every pi bump rerun `trace.test.ts`, `timeline.test.ts` and
+  the golden test, and recheck the two `timestamp` doc comments and the leaf rule in `session-manager.js`.
+- **Skill activations from prompts** — [[module-pi-session-insights]], `src/facts.ts`. Session insights
+  reads a `/skill:name` prompt as a skill activation from the block pi's `AgentSession` expands it into
+  (`<skill name="…" location="…">`, `dist/core/agent-session.js`), which is not part of
+  `docs/session-format.md`; a successful `read` of `…/SKILL.md` counts too. **Removal gate:** pi records a
+  skill activation as an entry of its own. On every pi bump rerun `analysis.test.ts` and the golden test
+  (its fixture reads two `SKILL.md` files) and recheck the expansion's opening tag.
+- **Request reconstruction and composition replay** — [[module-pi-session-insights]],
+  `src/requestDiff.ts` and `src/ledger.ts`. The adjacent-request diff rebuilds a model call's request with
+  pi's exported `buildSessionProjection` (the projection behind `buildSessionContext`) at the call's
+  parent entry, read-only — nothing is assembled for or sent to a model — and then replays the system
+  messages in it the way pi-ai's `getCurrentSystemMessage` does (content appended, `sections` patched by
+  name with `null` removing one, `toolsAdded` / `toolsRemoved` by name), because pi-ai is not one of the
+  core's dependencies. The per-call composition estimate replays the same rules incrementally over the
+  active branch (the latest compaction's `firstKeptEntryId` and `systemMessage` checkpoint, `context_edit`
+  omissions and replacements) with pi's four-characters-a-token estimate, since rebuilding the projection
+  for every one of thousands of calls would be quadratic. A compaction without a `systemMessage` (older
+  entries) reconstructs without a system prompt, as pi's projection does. **Removal gate:** pi exports
+  the system-message replay through `pi-coding-agent`, or an incremental projection; on every pi bump rerun
+  `requestDiff.test.ts` and `context.test.ts` and recheck `buildContextEntries` and pi-ai's
+  `utils/transcript.js`.
+- **Edit and write facts** — [[module-pi-session-insights]], `src/facts.ts`. The files matrix counts
+  lines from an `edit` result's `details.patch` (pi's `EditToolDetails`, unified diff), falling back to the
+  numbered display `details.diff` (`+12 text` / `-12 text`), and a `write`'s `content` argument; these are
+  analytics only and badged "from tool calls". **Removal gate:** none (pi's record); on every pi bump rerun
+  `files.test.ts` and recheck `EditToolDetails` in `dist/core/tools/edit.d.ts`.
+- **Tool paths in the session's own flavor** — [[module-pi-session-insights]], `src/paths.ts`. A `read`,
+  `edit` or `write` path argument is stored as the model wrote it, and pi's tools resolve it against the
+  session's cwd with the platform's `path` (`resolveToCwd` in `dist/core/tools/path-utils.js`: `@`
+  dropped, `~` the home); the header records that cwd as pi's `process.cwd()`, so a Windows session's is a
+  drive-letter or UNC path. Session insights reads that prefix as the flavor (`path.win32`,
+  case-insensitive, else `path.posix`) rather than the host's, so a session copied to another OS keys its
+  files and `SKILL.md` reads as it did where it ran. **Removal gate:** none (pi's record); on every pi bump
+  rerun `paths.test.ts` and recheck `resolveToCwd` and the header's `cwd` in `SessionManager`.
+- **Persisted skills list and shell exit codes** — [[module-pi-session-insights]], `src/trace.ts`. The
+  statistics read which skills a session listed from the persisted system prompt's `skills` section (and a
+  compaction's `systemMessage` checkpoint), parsing the `<available_skills>` / `<skill><name>` markup pi's
+  `formatSkillsForPrompt` writes (`dist/core/skills.js`, not in `docs/session-format.md`), and size each
+  entry at pi's four characters a token. A `bash` result's exit code comes from the trailer pi's bash tool
+  appends (`Command exited with code N`, `Command timed out` / `aborted`), which the trace already read.
+  **Removal gate:** pi records the listed skills (or an exit code) as structured fields. On every pi bump
+  rerun `usage.test.ts` and `findings.test.ts` (both build pi-format lists and trailers) and recheck the
+  markup in `formatSkillsForPrompt` and the bash tool's trailer.
+- **Byte prefilter over session lines** — [[module-pi-session-insights]], `src/searchScan.ts`. Search
+  across sessions skips parsing a line unless its bytes hold a free-text term in the form a JSON string
+  holds it, which relies on pi writing each entry with `JSON.stringify` (non-ASCII characters and `/`
+  unescaped, `"`, `\` and control characters escaped as `JSON.stringify` does) — the format of
+  `SessionManager`'s appends, not stated in `docs/session-format.md`. A writer that `\u`-escaped non-ASCII
+  text would make such terms miss, never match wrongly. **Removal gate:** none (pi's record); on every pi
+  bump rerun `search.test.ts`, whose prefilter test compares against a full parse and searches a file pi's
+  `SessionManager` wrote (quotes, a backslash, Cyrillic and an emoji).
+- **Fixture cut of a session file** — [[module-pi-session-insights]], `src/fixture.ts`. The e2e fixture
+  export writes a loadable session by keeping the header and the `parentId` chain from the root to the
+  cut entry, in file order, and relies on pi's load rule that the last entry is the leaf (as the trace
+  does) and on every entry of a current-format file carrying `id` / `parentId`; strings are redacted and
+  the header's `cwd` replaced, which pi does not validate on open (the workflow harness rewrites it
+  anyway). A first-format file without ids is cut by position. **Removal gate:** pi exports a "fork at
+  entry" writer (pi's `SessionManager` forks copy whole branches into a new file, with a new id and a
+  `parentSession`, which a fixture must not carry). On every pi bump rerun `exports.test.ts` and recheck
+  the leaf rule and the entry fields in `docs/session-format.md`.
 - **Cut-back of a failed usage append** — [[submodule-server-agent]], `recordSessionUsage`. Since pi 1.5
   (`#11460`) a failed `_persist` removes the entry from memory and restores the leaf, so the host's leaf
   restore is gone and a failed append reports `false`. Pi still appends with one `appendFileSync`, which

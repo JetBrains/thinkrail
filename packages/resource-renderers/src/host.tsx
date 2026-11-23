@@ -120,6 +120,10 @@ export function useResourceScope(): ResourceScope | null {
 	return useContext(ResourceScopeContext);
 }
 
+export function useFocusHome(): boolean {
+	return useContext(ResourceEnvironmentContext)?.focusHome === true;
+}
+
 export function useResourceEnvironment(): ResourceEnvironment {
 	const environment = useContext(ResourceEnvironmentContext);
 	if (!environment) throw new Error("Resource renderers need a ResourceEnvironmentProvider");

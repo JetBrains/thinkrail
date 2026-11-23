@@ -24,7 +24,10 @@ private and unchanged. It imports no pi value at runtime.
   `WorkspaceFiles`, `ExtensionSetting` / `ExtensionBooleanSetting` (`{ type: "boolean", default, title?,
   description? }` — an installed extension's setting carries its own, untranslated copy), `InteractiveTool`,
   `ArtifactTool`, `ToolResponse`. Runtime is `dist/server.js`; pi types come from the optional peer
-  `@earendil-works/pi-coding-agent`.
+  `@earendil-works/pi-coding-agent`. It is the installed subset of the built-ins' `extension-api/server`:
+  the host-only hooks — `queries` with its `apiVersion`, `supersedesPackages`, `WorkspaceFiles.checkArtifacts`
+  and `ArtifactTool.published` — are not in API 1.0 (the host refuses an installed descriptor that
+  declares `queries` or `supersedesPackages`, [[submodule-server-extensions-installed]]).
 - `./web`, `./resources`, `./ui/button`, `./ui/theme`, `./ui/utils` — **type declarations** of the
   shared set. At runtime these specifiers are the app's own modules on
   `globalThis.__thinkrailExtensionHost = { api, modules }`, keyed by exactly these specifiers plus
@@ -44,8 +47,8 @@ private and unchanged. It imports no pi value at runtime.
   `ToolStatus`, `ToolInteraction`, `ToolInteractionState`, `ToolPlacement`, `ToolSummary`,
   `ToolChrome`, `ToolProminence`, `ToolWidth`, `ComposerSuggestionsReader` and the helpers `strArg`,
   `numArg`, `resultText`. The built-in-only fields and their types (`title`, `description`,
-  `globalOverlay`, `commands`, `shortcuts`, `GlobalOverlayProps`, `ExtensionCommand`, `ExtensionChord`,
-  `ExtensionShortcut`, `ExtensionShortcutKey`, `MessageKey`) and the dropped helpers
+  `globalOverlay`, `commands`, `shortcuts`, `panels`, `GlobalOverlayProps`, `ExtensionCommand`,
+  `ExtensionChord`, `ExtensionShortcut`, `ExtensionShortcutKey`, `PanelDeclaration`, `MessageKey`) and the dropped helpers
   (`languageFromPath`, `parseToolResultContent`, `toolValueText`, `ParsedToolResultContent`) do not
   appear in the generated declarations at all: `src/types/web.ts` is a curated façade re-exporting
   named members, never `export *`, and so are `src/types/ui/*.ts`.
@@ -197,7 +200,9 @@ reprint-only toolchain diff; `--print` shows the current surface. The snapshot i
   hast globals into authors' programs and v1 promises only the tab actions and markdown of
   `ResourceHost`; `./web` and `./ui/*` re-export named members of the in-repo modules.
   `src/types/conformance.ts` type-checks the forked `./server` and `./resources` types against the
-  in-repo sources (mutual assignability and equal key sets, per union variant), each façade's value
+  in-repo sources (mutual assignability and equal key sets, per union variant; for `./server` against
+  the installed subset — the in-repo types minus the host-only hooks above — plus an SDK descriptor
+  assignable to the in-repo one and the host's session services to the SDK's), each façade's value
   exports against the allow-list, and the narrowed `./web` contract against the built-ins' one. The build
   fails if any output imports a private `@thinkrail/*` package, declares globals or keeps a triple-slash
   reference.

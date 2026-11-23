@@ -10,7 +10,7 @@ import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
 import { Fragment, useEffect, useState } from "react";
-import { useWebExtensionLoads, webOnlyExtensions } from "@/extensions";
+import { useWebExtensionLoads, webExtensionTitle, webOnlyExtensions } from "@/extensions";
 import {
 	SETTINGS_ROWS,
 	SettingsGroup,
@@ -51,6 +51,7 @@ import { UPDATE_CHECK_KEY, usePiPackages } from "./usePiPackages";
 
 const BUNDLED_DESCRIPTIONS: Readonly<Record<string, MessageKey>> = {
 	"next-steps": "settings.extensions.next-steps.description",
+	"session-insights": "settings.extensions.session-insights.description",
 	visualize: "settings.extensions.visualize.description",
 	"web-access": "settings.extensions.web-access.description",
 };
@@ -58,6 +59,12 @@ const BUNDLED_DESCRIPTIONS: Readonly<Record<string, MessageKey>> = {
 function bundledDescription(t: Translator, entry: ExtensionCatalogEntry): string {
 	const key = BUNDLED_DESCRIPTIONS[entry.name];
 	return key ? t(key) : (entry.description ?? "");
+}
+
+/** The web half's translated title for a bundled extension, else the host's copy. */
+function extensionTitle(t: Translator, entry: { name: string; title: string }): string {
+	const key = webExtensionTitle(entry.name);
+	return key ? t(key) : entry.title;
 }
 
 export function withWebOnlyEntries(
@@ -174,6 +181,7 @@ export function ExtensionsCatalog({
 		return (
 			<SettingsNotice
 				variant="error"
+				rowId="extensions-failed"
 				testId="extensions-failed"
 				action={
 					onRetry ? (
@@ -204,6 +212,7 @@ export function ExtensionsCatalog({
 		<div data-setting-id={SETTING.bundledExtensions.id} className={SETTINGS_ROWS}>
 			{entries.map((entry) => {
 				const enabled = !disabled.includes(entry.name);
+				const title = extensionTitle(t, entry);
 				const reset: SettingsReset = {
 					changed: !enabled,
 					onReset: () => onToggle(entry.name, true),
@@ -213,7 +222,7 @@ export function ExtensionsCatalog({
 						<SettingsRow
 							rowId={`extension-${entry.name}`}
 							testId={`extension-row-${entry.name}`}
-							label={entry.title}
+							label={title}
 							description={
 								entry.description || entry.tools.length > 0 ? (
 									<span className="flex flex-col gap-2">
@@ -225,7 +234,7 @@ export function ExtensionsCatalog({
 							control={
 								<Switch
 									checked={enabled}
-									label={t("settings.extensions.enable", { title: entry.title })}
+									label={t("settings.extensions.enable", { title })}
 									testId={`extension-toggle-${entry.name}`}
 									tabIndex={0}
 									onCheckedChange={(next) => onToggle(entry.name, next)}
@@ -340,7 +349,7 @@ export function ExtensionsSettings() {
 								{t("settings.extensions.install")}
 							</Button>
 						}
-						sides={<GalleryLinks side extensions={installedSupported} />}
+						sides={<GalleryLinks extensions={installedSupported} />}
 					/>
 				</SettingsGroup>
 			) : null}

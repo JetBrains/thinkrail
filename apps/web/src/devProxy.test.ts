@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
+	CHAT_ATTACHMENTS_ROUTE,
 	EXTENSION_ASSETS_ROUTE,
 	IMAGES_ROUTE,
 	SPEECH_SOCKET_ROUTE,
@@ -19,6 +20,7 @@ test("every host route the app composes is proxied by the Vite dev server", () =
 		USER_FONTS_ROUTE.replace(/\/$/, ""),
 		EXTENSION_ASSETS_ROUTE.replace(/\/$/, ""),
 		IMAGES_ROUTE.replace(/\/$/, ""),
+		CHAT_ATTACHMENTS_ROUTE.replace(/\/$/, ""),
 	]) {
 		expect(config).toContain(`"${route}"`);
 	}

@@ -445,7 +445,10 @@ function CommentRow({
 					</span>
 				</span>
 			</button>
-			<span className="absolute top-4 right-8 flex items-center gap-4 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 has-[[data-state=open]]:opacity-100">
+			<span
+				data-hint-reveal
+				className="absolute top-4 right-8 flex items-center gap-4 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 has-[[data-state=open]]:opacity-100"
+			>
 				{isDraft && (
 					<>
 						<IconButton
@@ -531,7 +534,10 @@ function ResolvedRow({
 			>
 				{comment.body}
 			</span>
-			<span className="flex shrink-0 items-center gap-4 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+			<span
+				data-hint-reveal
+				className="flex shrink-0 items-center gap-4 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100"
+			>
 				{comment.sessionId && (
 					<IconButton
 						variant="ghost"

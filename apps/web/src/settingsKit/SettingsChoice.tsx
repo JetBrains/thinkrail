@@ -5,6 +5,7 @@ import { type LocalKeyEvent, useLocalKeys } from "@thinkrail/ui/local-keys";
 import { cn } from "@thinkrail/ui/utils";
 import { useId, useState } from "react";
 import { LOCAL_KEY_DEFAULTS } from "../keybindings";
+import { focusUnitStop, type WalkElement } from "./settingsWalk";
 
 export interface SettingsChoiceOption<T extends string> {
 	id: T;
@@ -35,6 +36,8 @@ const STEPS: Readonly<Record<SettingsChoiceLayout, Readonly<Record<string, 1 | -
 	list: { ArrowUp: -1, ArrowDown: 1 },
 	cards: { ArrowUp: -1, ArrowDown: 1 },
 };
+
+const DONE_KEYS = new Set(["Enter", " "]);
 
 const OPTION = '[role="option"]';
 
@@ -68,10 +71,12 @@ export function choiceFocus<T extends string>(
 	);
 }
 
+const EDITING = "has-[:focus-visible]:focus-ring-editing";
+
 const GROUP_CLASS: Record<SettingsChoiceLayout, string> = {
 	segmented: "inline-flex h-32 max-w-full overflow-hidden rounded-sm bg-control-bg",
-	list: "flex flex-col gap-2",
-	cards: "flex flex-col gap-4",
+	list: "flex flex-col gap-2 rounded-sm",
+	cards: "flex flex-col gap-4 rounded-md",
 };
 
 function optionClass(layout: SettingsChoiceLayout, selected: boolean): string {
@@ -138,7 +143,7 @@ export function SettingsChoiceGroup<T extends string>({
 				data-testid={testId}
 				data-layout={layout}
 				data-cost={cost}
-				className={GROUP_CLASS[layout]}
+				className={cn(GROUP_CLASS[layout], EDITING)}
 				onKeyDown={onKeyDown}
 				onBlur={(event) => {
 					if (!event.currentTarget.contains(event.relatedTarget)) onLeave?.();
@@ -157,7 +162,6 @@ export function SettingsChoiceGroup<T extends string>({
 							aria-describedby={isPending ? hintId : undefined}
 							tabIndex={focus ? 0 : -1}
 							disabled={disabled || option.disabled === true}
-							data-setting-stop={focus ? "" : undefined}
 							data-active={selected}
 							data-pending={isPending || undefined}
 							data-testid={option.testId}
@@ -214,7 +218,7 @@ export interface SettingsChoiceState<T extends string, E> {
 	onLeave: () => void;
 }
 
-export function useSettingsChoice<T extends string, E extends { focus(): void }>({
+export function useSettingsChoice<T extends string, E extends WalkElement<E>>({
 	options,
 	value,
 	onSelect,
@@ -247,18 +251,29 @@ export function useSettingsChoice<T extends string, E extends { focus(): void }>
 		const twin = twinArrow(keys.match(press));
 		const plain = !(press.altKey || press.ctrlKey || press.metaKey || press.shiftKey);
 		const key = twin ?? (plain ? press.key : null);
-		if (key === "Escape" && waiting !== null) {
+		const focused = choices.find((choice) => choice === event.target);
+		const index = focused ? choices.indexOf(focused) : -1;
+		const done = () => {
 			event.preventDefault();
+			if (focused) focusUnitStop(focused);
+		};
+		if (key === "Escape" && waiting !== null) {
 			pend(null);
-			choices[options.findIndex((option) => option.id === value)]?.focus();
-			return;
+			return done();
+		}
+		if (key !== null && DONE_KEYS.has(key) && twin === undefined) {
+			const option = options[index];
+			if (option && enabled(option, disabled)) apply(option.id);
+			return done();
 		}
 		const delta = key === null ? undefined : STEPS[layout][key];
 		if (delta === undefined) return;
-		const focused = options.find((_, index) => choices[index] === event.target);
-		const from = focused?.id ?? choiceFocus(options, value, waiting);
+		const from = options[index]?.id ?? choiceFocus(options, value, waiting);
 		const next = choiceStep(options, from, delta, disabled);
-		if (next === null) return;
+		if (next === null) {
+			if (layout !== "segmented") event.preventDefault();
+			return;
+		}
 		event.preventDefault();
 		if (cost === "cheap") apply(next);
 		else pend(next === value ? null : next);

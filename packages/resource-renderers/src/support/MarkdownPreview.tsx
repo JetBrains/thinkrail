@@ -28,6 +28,7 @@ import {
 	type PreviewReturnFocus,
 } from "./PreviewCommenting";
 import { ReviewThreadCard } from "./ReviewThreadCard";
+import { READING_SURFACE_CLASS, useReadingSurface } from "./readingSurface";
 import {
 	frontmatterOffset,
 	indivisibleSpans,
@@ -208,6 +209,7 @@ export default function MarkdownPreview({
 		[attach],
 	);
 	const articleRef = useRef<HTMLElement>(null);
+	const reading = useReadingSurface({ label: path });
 	const revealLine = reveal?.line;
 	const revealTick = reveal?.tick;
 	const revealHandled = useEffectEvent((tick: number) => onRevealHandled?.(tick));
@@ -219,7 +221,12 @@ export default function MarkdownPreview({
 	if (!review) {
 		return (
 			<MarkdownPreviewFrame scroller={scroller}>
-				<div ref={attachScroller} data-testid="markdown-preview" className={PREVIEW_SCROLLER}>
+				<div
+					ref={attachScroller}
+					data-testid="markdown-preview"
+					{...reading}
+					className={`${PREVIEW_SCROLLER} ${READING_SURFACE_CLASS}`}
+				>
 					<article ref={articleRef} className="mx-auto max-w-[78ch] px-24 py-16">
 						<MarkdownDocument
 							content={text}

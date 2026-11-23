@@ -147,7 +147,7 @@ test("Esc leaves a panel's text field for the panel, which keeps its accent line
 		.toBe(true);
 });
 
-test("Esc in a Settings filter clears it, then goes to the section list, then closes Settings", async ({
+test("Esc in a Settings filter clears it, then returns to its row, then goes to the section list, then closes Settings", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -160,6 +160,8 @@ test("Esc in a Settings filter clears it, then goes to the section list, then cl
 	await page.keyboard.press("Escape");
 	await expect(filter).toHaveValue("");
 	await expect(filter).toBeFocused();
+	await page.keyboard.press("Escape");
+	await expect(page.locator('[data-setting-row="keyboard-filter"]')).toBeFocused();
 	await page.keyboard.press("Escape");
 	await expect(nav).toBeFocused();
 	await expect(page.getByTestId("settings-dialog")).toBeVisible();
@@ -242,7 +244,7 @@ test("Esc on a side or bottom rail's tool button climbs to the chat feed", async
 	}
 });
 
-test("Esc on a Files row or a tab lands in the editor of the file the center shows, and Monaco keeps its Esc", async ({
+test("Esc on a Files row or a tab lands in the editor of the file the center shows, and Esc in the read-only editor goes back to its row", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -269,7 +271,8 @@ test("Esc on a Files row or a tab lands in the editor of the file the center sho
 	await expect(notes).toHaveAttribute("data-active", "true");
 
 	await page.keyboard.press("Escape");
-	await expect.poll(inEditor).toBe(true);
+	await expect(row).toHaveText(/^notes\.txt/);
+	await expect(notes).toHaveAttribute("data-active", "true");
 
 	await notes.getByRole("tab").focus();
 	await page.keyboard.press("Escape");

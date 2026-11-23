@@ -28,6 +28,7 @@ import type {
 import {
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
+	EXTENSION_QUERY_PROTOCOL_VERSION,
 	EXTENSION_SETTINGS_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
@@ -77,6 +78,10 @@ export function updateKeybindings(keybindings: KeybindingOverrides): Promise<boo
 	return getTransport()
 		.request("settings.update", { config: { keybindings } })
 		.then(() => true);
+}
+
+export function supportsExtensionQuery(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= EXTENSION_QUERY_PROTOCOL_VERSION;
 }
 
 export function supportsPiPackages(protocolVersion: number | null): boolean {

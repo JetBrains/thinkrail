@@ -3,6 +3,7 @@ import { useT } from "@thinkrail/locales/react";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { Switch } from "@thinkrail/ui/switch";
+import { useTreeItem } from "@thinkrail/ui/tree-item";
 import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, type MouseEvent, useMemo, useState } from "react";
 import { formatContext, groupByProvider } from "@/chat/modelPicker";
@@ -17,7 +18,7 @@ import {
 	stopRowClick,
 } from "./ModelProviderTree";
 import { SETTING } from "./settingsCatalog";
-import { Tree, useTreeItem } from "./treeNavigation";
+import { Tree } from "./treeNavigation";
 
 export type Shown = "all" | "some" | "none";
 
@@ -65,7 +66,7 @@ function ProviderShownToggle({
 			aria-pressed={PRESSED[state]}
 			aria-label={label}
 			tabIndex={tabIndex}
-			data-setting-side=""
+			data-setting-toggle=""
 			data-testid="visible-models-provider-toggle"
 			data-provider={provider}
 			data-state={state}
@@ -150,7 +151,6 @@ function ModelVisibilityItem({
 					label={t("settings.visibleModels.show", { name: model.name })}
 					testId={`model-visibility-${model.provider}-${model.id}`}
 					tabIndex={tabIndex ?? 0}
-					data-setting-side=""
 					onClick={stopRowClick}
 					onCheckedChange={(visible) => setVisible(model, visible)}
 				/>
@@ -257,7 +257,10 @@ export function VisibleModelsTree({
 			testId="visible-models-group"
 		>
 			{groups.length === 0 ? (
-				<p data-setting-id={SETTING.visibleModels.id} className="py-12 text-text-muted tr-text-ui">
+				<p
+					data-setting-id={SETTING.visibleModels.id}
+					className="px-8 py-12 text-text-muted tr-text-ui"
+				>
 					{t("settings.visibleModels.noModels")}
 				</p>
 			) : (

@@ -50,10 +50,22 @@ lookup, skill roots — defaults to it, so an installed extension is composed ex
   `checkWorkspaceFile` + `MOCKUP_DIR` (`contracts`' `WORKSPACE_MOCKUP_DIR` with a trailing slash, the one
   name the UI also uses to run mockup scripts): a path must be relative, stay inside the session cwd lexically and
   after resolving links, name a regular file and stay out of `.git`, the paths the host's `fs.readFile`
-  then serves; `extension-api` stays contract-only, so the check lives here, not in the SDK; plus
+  then serves; `extension-api` stays contract-only, so the check lives here, not in the SDK; its
+  `checkArtifacts` delegates to the artifact index's batch rule, which `host` installs with
+  `setArtifactFileCheck` because this module may not reach `artifacts` (it rejects until then); plus
   `ensureArtifactsDir`, which is `shared`'s `seedArtifactsDir` on the session cwd), `omitDisabledRegistryExtensions(result, isDisabled)` (drops a disabled
   extension's `<inline:…>` entries from a pi `LoadExtensionsResult`, for the parent loader's
   `extensionsOverride`, so a disabled extension is absent rather than present-and-empty),
+  `omitSupersededPackages(result, isDisabled, builtins)` (composed between the two: drops the extensions of the
+  npm packages an enabled **built-in** names in `supersedesPackages` — `agent` passes the built-ins, and
+  the installed loader refuses a descriptor that declares the field — identified by the `name` of the
+  nearest `package.json` above each loaded file — memoized per folder — so an npm, git or local install
+  of the package is left out alike; inline entries are never touched, and a disabled superseding
+  extension lets the package load again. The catalog still lists the package with what a load recorded,
+  since recording runs first; `agent` marks its row `supersededBy` through `supersedingExtension(name,
+  isDisabled)` — the enabled extension naming that package — and keys an open chat's reload on what
+  `supersedablePackagesIn(result)` — the loaded packages any extension supersedes, on or off — found, so a
+  switch flip reloads only chats that actually load such a package),
   `preferRegistryTools(result)` (also composed into that override, after the disabled filter). It moves a
   **built-in** directly ahead of the first other extension that registers one of its tool names, so a
   user-installed same-name package never takes over a tool whose host UI and lifecycle key on the name —
@@ -73,7 +85,8 @@ lookup, skill roots — defaults to it, so an installed extension is composed ex
   one row per installed declaration from the runtime's records, so a failed or incompatible extension is
   listed with `state` / `error` and no tools; per entry `name`, `title` — an installed one's manifest
   title, else its descriptor's, else `name` — optional `description` (an installed one's package
-  description first), `hasChildExtensions`, `enabled = !disabled.has(name)`, `kind`, for installed
+  description first), `hasParentExtensions` (the descriptor declares `extensions` or
+  `sessionExtensions`), `hasChildExtensions`, `enabled = !disabled.has(name)`, `kind`, for installed
   `source` / `version` / `state` / `error` / `web` (`webHalfOf`), the declared
   `settings` (`key` + `default`, plus an installed setting's own `title` / `description`), and the tool names
   its **parent** factories register against a recording stub `ExtensionAPI` whose every other member is
@@ -82,7 +95,20 @@ lookup, skill roots — defaults to it, so an installed extension is composed ex
   or is still running after `EXTENSION_LOAD_TIMEOUT_MS`, keeps the tools it recorded until then; a
   `sessionExtensions` that throws or answers anything but a list adds none (a promise among such answers has
   its rejection observed, here and in a session's flatten, so it never reaches the crash handler) — so no
-  third-party code holds `extension.list` or the status file for longer than that bound), `skillPackageRoots(extensionEntry, extension)` (the
+  third-party code holds `extension.list` or the status file for longer than that bound; plus the declared
+  `apiVersion` — the catalog never builds `queries(host)`), `createExtensionQueries({ isDisabled, services, entries? })` →
+  `ExtensionQueries { query, releaseDisabled }` (`query` is the `extension.query` dispatcher over
+  `serverExtensions()` read at each call: each
+  extension's `queries(host)` is built lazily on its first query, with that extension's
+  `ExtensionHostServices` from the injected `services(name, signal)`, the signal its own
+  `AbortController`'s; an unknown extension, one without `queries`, an unknown method or a malformed
+  request is `UNKNOWN_EXTENSION_QUERY`, a disabled one `EXTENSION_DISABLED` — checked on every call, before
+  anything is built — and an error a query throws propagates unchanged. `releaseDisabled()` aborts, with
+  an `EXTENSION_DISABLED` reason, and forgets the table of every extension now off, so its background work
+  stops and its memory goes; the first query after it is back on builds a new table with a fresh signal.
+  The host calls it on a switch rather than the dispatcher on its next call, because a switched-off
+  extension receives no next call. Only a built-in answers: the installed loader refuses a descriptor
+  that declares `queries`), `skillPackageRoots(extensionEntry, extension)` (the
   shared owner-scoped resolver: each `skillPackages` manifest via `createRequire(extensionEntry)`,
   returning its `pi.skills` directories; a named package with no skills fails loudly — the installed
   loader calls it once per load, so an unresolvable skill package is a failed row, not a broken chat),
@@ -118,19 +144,30 @@ lookup, skill roots — defaults to it, so an installed extension is composed ex
   as a string precisely because a descriptor holds functions, which yield no module identity.
 - **Public surface (barrel):** `serverExtensions`, `builtinServerExtensions`, `ServerExtensionEntry`,
   `registryInlineExtensions`,
-  `RegistryExtensionKind`, `ExtensionDisabled`, `omitDisabledRegistryExtensions`, `preferRegistryTools`,
+  `RegistryExtensionKind`, `ExtensionDisabled`, `omitDisabledRegistryExtensions`, `omitSupersededPackages`, `preferRegistryTools`,
   `registryExtensionName`, `extensionSessionServices`, `HostSessionServices`, `ExtensionSettingValue`,
-  `checkWorkspaceFile`, `workspaceFiles`, `MOCKUP_DIR`,
+  `checkWorkspaceFile`, `workspaceFiles`, `setArtifactFileCheck`, `MOCKUP_DIR`, `supersedablePackagesIn`,
+  `supersedingExtension`,
   `listExtensionCatalog`,
   `resolveExtensionSkillRoots`, `skillPackageRoots`, `STAGED_HOST_SKILLS_ROUTE`,
   `stagedExtensionSkillRoute`, `extensionSkillRoots`, `interactiveTools`, `InteractiveTools`,
   `artifactTools`, `ArtifactTools`, `ExtensionSessionServices`, `InteractiveTool`, `ArtifactTool`,
-  `ToolResponse`, `startInstalledExtensions`, `InstalledExtensionsHostOptions`, `InstalledExtensions`,
+  `ToolResponse`, `createExtensionQueries`,
+  `ExtensionQueries`, `ExtensionHostServicesFor`, `ExtensionHostServices`, `ExtensionSessionView`, `ExtensionSessionPlacement`,
+  `ExtensionHostProject`, `ExtensionHostWorkspace`, `ExtensionSessionStatus`, `ExtensionMessageAnchor`,
+  `ExtensionTurnReceipt`, `ExtensionTurnTree`, `ExtensionTreeFile`, `ExtensionArtifactsDir`, `ExtensionLog`,
+  `ExtensionQuery`, `startInstalledExtensions`, `InstalledExtensionsHostOptions`, `InstalledExtensions`,
   `InstalledExtensionRecord`, `StagedExtension`, `ExtensionSourceKind`, `installedExtensions`,
   `resolveExtensionAsset`, `withForcedJitiTransform`, `EXTENSION_LOAD_TIMEOUT_MS`.
 - **Re-exported from the installed sub-module:** the last eight names of the surface above.
 - **Session-seam types:** `ExtensionSessionServices`, `InteractiveTool` and `ToolResponse` are re-exported
   from `extension-api/server` so that `agent` can type the services it builds through this barrel.
+- **Query-seam types:** `ExtensionHostServices` and its value types (`ExtensionSessionView`,
+  `ExtensionSessionPlacement`, `ExtensionHostProject`, `ExtensionHostWorkspace`, `ExtensionSessionStatus`,
+  `ExtensionMessageAnchor`, `ExtensionTurnReceipt`, `ExtensionTurnTree`, `ExtensionTreeFile`,
+  `ExtensionArtifactsDir`, `ExtensionLog`, `ExtensionQuery`) are re-exported the same way, beside `ExtensionHostServicesFor`, so
+  `host` builds each extension's services through this barrel. This module never builds them: the
+  services arrive as a parameter, so there is no edge to `projects`, `workspaces` or `agent`.
 - **Interactive tools (`interactive.ts`):** `interactiveTools(isDisabled)` folds the enabled registry
   extensions' `interactiveTools` declarations into one name → `InteractiveTool` map (first declaration of a
   name wins). It is the only tool knowledge `agent` holds for restart repair, transcript-derived
@@ -141,7 +178,7 @@ lookup, skill roots — defaults to it, so an installed extension is composed ex
   headless-search policy: it compensates for the host's UI for any copy of `pi-web-access`, so it is not
   the extension's to own.
 - **Allowed deps:** `@thinkrail/extension-api/server` (types), every `@thinkrail/ext-*/server`,
-  `@thinkrail/shared` (`paths`, `artifactsDir`),
+  `@thinkrail/shared` (`paths`, `artifactsDir`, `codedError`),
   `@earendil-works/pi-coding-agent` (types only), `@thinkrail/contracts` (the `ExtensionCatalogEntry` type),
   `log`, Node `module`/`fs`/`path`; the `installed` sub-module through its barrel (it holds the pi value
   imports, the install root and the loader, and never imports back — the reserved names and the skill
@@ -152,8 +189,10 @@ lookup, skill roots — defaults to it, so an installed extension is composed ex
 
 ## Consumers
 
-`host` answers `extension.list` with `listExtensionCatalog` over the `disabledExtensions` setting, starts
-the installed runtime at server start, serves `resolveExtensionAsset` on its `/extensions/` route and
+`host` answers `extension.list` with `listExtensionCatalog` over the `disabledExtensions` setting, and
+`extension.query` with one `createExtensionQueries` over the same setting and its per-extension host
+services, releasing a switched-off extension's table on each change of that setting; it starts the
+installed runtime at server start, serves `resolveExtensionAsset` on its `/extensions/` route and
 answers `extensions.*`; `agent` runs the install-time kind detection (`stage` / `adopt`) and its pi
 runtime build shares `withForcedJitiTransform`.
 `agent/extensions.ts` composes the flattened parent set into every resource loader and the child set
