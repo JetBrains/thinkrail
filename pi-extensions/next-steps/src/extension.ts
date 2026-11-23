@@ -2,13 +2,11 @@ import type {
 	ExtensionAPI,
 	ExtensionContext,
 	ExtensionFactory,
-	SessionEntry,
 	ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import type { KeyId } from "@earendil-works/pi-tui";
 import { type Static, Type } from "typebox";
 import {
-	isNextStepsDetails,
 	NEXT_STEPS_TOOL_NAME,
 	type NextStepsDetails,
 	normalizeSuggestions,
@@ -32,14 +30,14 @@ export const NextStepsSchema = Type.Object({
 export type NextStepsParams = Static<typeof NextStepsSchema>;
 
 export const DEFAULT_DESCRIPTION =
-	"Offer the user one-click next messages after you finish a turn. The user sees them as quick replies (keyboard shortcuts in the terminal, buttons in a GUI host); picking one sends it as the user's next message. Ends your turn.";
+	"Offer the user one-click next messages when your turn's work is finished. The user sees them as quick replies (keyboard shortcuts in the terminal, buttons in a GUI host); picking one sends it as the user's next message. Call it right before your final message, then write that message as the last thing in your turn.";
 
 export const DEFAULT_PROMPT_SNIPPET =
-	"Offer one-click next messages as the last action of a finished turn";
+	"Offer one-click next messages once a turn's work is finished, right before the final message";
 
 export const DEFAULT_PROMPT_GUIDELINES: readonly string[] = [
-	"When a turn's work is finished, write your final message first, then call suggest_next_steps alone as the very last action of the turn: it ends the turn, so never call it before you are done (for example while plan steps remain) or alongside other tools.",
-	'Each suggestion is a message the user would plausibly send next, in their voice and language — e.g. "Run the e2e suite", "Also handle the empty state", "Open a PR". When your final message ends with a question, offer short answers to it, e.g. "Yes, go ahead" or "Use option B".',
+	"When a turn's work is finished, call suggest_next_steps alone, then write your final message to the user as plain text: the last thing in your turn, with no tool call after it. Write none of that message before the call, where it can reach the user cut to a short summary. Never call it before you are done (for example while plan steps remain) or alongside other tools.",
+	'Each suggestion is a message the user would plausibly send next, in their voice and language — e.g. "Run the e2e suite", "Also handle the empty state", "Open a PR". When your final message will end with a question, offer short answers to it, e.g. "Yes, go ahead" or "Use option B".',
 	"Offer only genuinely useful next steps, best first, usually about three. Skip the call entirely when nothing meaningful applies, while you are waiting on the user's answer to a question tool or on background work you started, or when the turn ended in an error.",
 ];
 
@@ -53,37 +51,10 @@ export interface NextStepsExtensionOptions {
 	guidance?: NextStepsGuidance;
 }
 
-export const MISSING_ANSWER_TEXT =
-	"Your answer was not shown to the user: write it as a normal text reply (not in thinking), then call suggest_next_steps again.";
+export const WRITE_ANSWER_TEXT =
+	"Now write your final message to the user as plain text: the last thing in your turn, with no tool call after it.";
 
 const WIDGET_KEY = "next-steps";
-
-function refusesMissingAnswer(branch: readonly SessionEntry[], toolCallId: string): boolean {
-	const index = branch.findLastIndex(
-		(entry) =>
-			entry.type === "message" &&
-			entry.message.role === "assistant" &&
-			entry.message.content.some((block) => block.type === "toolCall" && block.id === toolCallId),
-	);
-	const calling = branch[index];
-	if (calling?.type !== "message" || calling.message.role !== "assistant") return false;
-	if (calling.message.content.some((block) => block.type === "text" && block.text.trim() !== ""))
-		return false;
-	for (let earlier = index - 1; earlier >= 0; earlier--) {
-		const entry = branch[earlier];
-		if (entry?.type !== "message") continue;
-		const { message } = entry;
-		if (message.role === "user") return true;
-		if (
-			message.role === "toolResult" &&
-			message.toolName === NEXT_STEPS_TOOL_NAME &&
-			isNextStepsDetails(message.details) &&
-			message.details.refused
-		)
-			return false;
-	}
-	return true;
-}
 
 const SHORTCUTS = [
 	"alt+1",
@@ -108,21 +79,17 @@ export function createSuggestNextStepsTool(
 		promptSnippet: guidance.promptSnippet ?? DEFAULT_PROMPT_SNIPPET,
 		promptGuidelines: [...(guidance.promptGuidelines ?? DEFAULT_PROMPT_GUIDELINES)],
 		parameters: NextStepsSchema,
-		async execute(toolCallId, params: NextStepsParams, _signal, _onUpdate, ctx) {
-			const branch = ctx?.sessionManager?.getBranch();
-			if (branch && refusesMissingAnswer(branch, toolCallId)) {
-				return {
-					content: [{ type: "text", text: MISSING_ANSWER_TEXT }],
-					details: { suggestions: [], refused: true },
-					terminate: false,
-				};
-			}
+		async execute(_toolCallId, params: NextStepsParams) {
 			const suggestions = normalizeSuggestions(params.suggestions);
-			const text =
+			const outcome =
 				suggestions.length > 0
-					? "Shown to the user as one-click next messages. Your turn is over."
-					: "No usable suggestions were given. Your turn is over.";
-			return { content: [{ type: "text", text }], details: { suggestions }, terminate: true };
+					? "Saved: the user sees them as one-click next messages under your final message."
+					: "No usable suggestions were given.";
+			return {
+				content: [{ type: "text", text: `${outcome} ${WRITE_ANSWER_TEXT}` }],
+				details: { suggestions },
+				terminate: false,
+			};
 		},
 		renderCall: (args, theme) => renderNextStepsCall(args, theme),
 		renderResult: (result, _options, theme) => renderNextStepsResult(result, theme),

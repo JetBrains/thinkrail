@@ -10,7 +10,7 @@ import defaultFactory, {
 	normalizeSuggestions,
 	suggestionsOnBranch,
 } from "./index.ts";
-import { MISSING_ANSWER_TEXT } from "./src/extension.ts";
+import { WRITE_ANSWER_TEXT } from "./src/extension.ts";
 import { renderNextStepsResult, SuggestionRow, shortcutLabel } from "./src/tui.ts";
 
 type ExecResult = {
@@ -98,13 +98,26 @@ describe("suggest_next_steps tool", () => {
 		expect(typeof defaultFactory).toBe("function");
 	});
 
-	test("normalizes suggestions and ends the turn", async () => {
+	test("normalizes suggestions and asks for the final message instead of ending the turn", async () => {
 		const { tool } = load();
 		const result = await tool.execute("c1", {
 			suggestions: ["  Run the   e2e suite ", "", "run the e2e suite", "Open a PR"],
 		});
-		expect(result.details.suggestions).toEqual(["Run the e2e suite", "Open a PR"]);
-		expect(result.terminate).toBe(true);
+		expect(result.details).toEqual({ suggestions: ["Run the e2e suite", "Open a PR"] });
+		expect(result.terminate).toBe(false);
+		expect(result.content[0]?.text).toEndWith(WRITE_ANSWER_TEXT);
+	});
+
+	test("blank suggestions still ask for the final message", async () => {
+		const { tool } = load();
+		const result = await tool.execute("c1", { suggestions: ["  "] });
+		expect([result.details, result.terminate]).toEqual([{ suggestions: [] }, false]);
+		expect(result.content[0]?.text).toBe(`No usable suggestions were given. ${WRITE_ANSWER_TEXT}`);
+	});
+
+	test("the guidance puts the final message after the call", () => {
+		expect(DEFAULT_PROMPT_GUIDELINES[0]).toContain("call suggest_next_steps alone, then write");
+		expect(DEFAULT_PROMPT_GUIDELINES[0]).toContain("Write none of that message before the call");
 	});
 
 	test("an embedder's guidance replaces only what it names", () => {
@@ -130,102 +143,8 @@ describe("suggest_next_steps tool", () => {
 	});
 });
 
-function entry(id: string, message: Record<string, unknown>): SessionEntry {
-	return { type: "message", id, parentId: null, timestamp: "", message } as SessionEntry;
-}
-
-const ask = entry("u", { role: "user", content: "Fix the bug", timestamp: 0 });
-
-function callMessage(id: string, answer: string | null, extraCalls: string[] = []): SessionEntry {
-	return entry(`a-${id}`, {
-		role: "assistant",
-		content: [
-			{ type: "thinking", thinking: "Fixed it; tests pass." },
-			...(answer === null ? [] : [{ type: "text", text: answer }]),
-			{
-				type: "toolCall",
-				id,
-				name: NEXT_STEPS_TOOL_NAME,
-				arguments: { suggestions: ["Open a PR"] },
-			},
-			...extraCalls.map((callId) => ({
-				type: "toolCall",
-				id: callId,
-				name: "read",
-				arguments: {},
-			})),
-		],
-		timestamp: 1,
-	});
-}
-
-function resultOf(id: string, toolName: string, details: unknown): SessionEntry {
-	return entry(`r-${id}`, {
-		role: "toolResult",
-		toolCallId: id,
-		toolName,
-		content: [],
-		details,
-		isError: false,
-		timestamp: 2,
-	});
-}
-
-const onBranch = (entries: SessionEntry[]) => ({ sessionManager: { getBranch: () => entries } });
-const PARAMS = { suggestions: ["Open a PR"] };
-
-describe("a call whose message carries no text answer", () => {
-	test("a call after a text answer ends the turn", async () => {
-		const { tool } = load();
-		const ctx = onBranch([ask, callMessage("c1", "Fixed: the parser now skips blanks.")]);
-		const result = await tool.execute("c1", PARAMS, undefined, undefined, ctx);
-		expect([result.terminate, result.details]).toEqual([true, { suggestions: ["Open a PR"] }]);
-	});
-
-	test("a call after only thinking is refused once, without ending the turn or offering chips", async () => {
-		const { tool } = load();
-		const branch = [ask, callMessage("c1", "  ")];
-		const result = await tool.execute("c1", PARAMS, undefined, undefined, onBranch(branch));
-		expect(result.terminate).toBe(false);
-		expect(result.details).toEqual({ suggestions: [], refused: true });
-		expect(result.content).toEqual([{ type: "text", text: MISSING_ANSWER_TEXT }]);
-		expect(
-			suggestionsOnBranch([...branch, resultOf("c1", NEXT_STEPS_TOOL_NAME, result.details)]),
-		).toEqual([]);
-	});
-
-	test("a second textless call in the same turn is accepted, so it cannot loop", async () => {
-		const { tool } = load();
-		const refused = resultOf("c1", NEXT_STEPS_TOOL_NAME, { suggestions: [], refused: true });
-		const ctx = onBranch([ask, callMessage("c1", null), refused, callMessage("c2", null)]);
-		const result = await tool.execute("c2", PARAMS, undefined, undefined, ctx);
-		expect([result.terminate, result.details]).toEqual([true, { suggestions: ["Open a PR"] }]);
-	});
-
-	test("a refusal in an earlier turn does not excuse this one", async () => {
-		const { tool } = load();
-		const refused = resultOf("c1", NEXT_STEPS_TOOL_NAME, { suggestions: [], refused: true });
-		const ctx = onBranch([ask, callMessage("c1", null), refused, ask, callMessage("c2", null)]);
-		const result = await tool.execute("c2", PARAMS, undefined, undefined, ctx);
-		expect(result.terminate).toBe(false);
-	});
-
-	test("the calling message is found by id, not as the leaf", async () => {
-		const { tool } = load();
-		const sibling = resultOf("c2", "read", undefined);
-		const answered = onBranch([ask, callMessage("c1", "Done.", ["c2"]), sibling]);
-		const silent = onBranch([ask, callMessage("c1", null, ["c2"]), sibling]);
-		expect((await tool.execute("c1", PARAMS, undefined, undefined, answered)).terminate).toBe(true);
-		expect((await tool.execute("c1", PARAMS, undefined, undefined, silent)).terminate).toBe(false);
-	});
-
-	test("a branch without the calling message keeps the call", async () => {
-		const { tool } = load();
-		const result = await tool.execute("c1", PARAMS, undefined, undefined, onBranch([ask]));
-		expect(result.terminate).toBe(true);
-	});
-
-	test("the refused result renders as a request for the answer", () => {
+describe("legacy refused results", () => {
+	test("a result refused by 0.1.0 still renders as a request for the answer", () => {
 		const component = renderNextStepsResult(
 			{ content: [], details: { suggestions: [], refused: true } },
 			plainTheme,
@@ -233,6 +152,22 @@ describe("a call whose message carries no text answer", () => {
 		expect(component.render(80).join("\n")).toContain("Asked for the answer as text first.");
 	});
 });
+
+function finalMessage(overrides: Record<string, unknown> = {}): SessionEntry {
+	return {
+		type: "message",
+		id: "a2",
+		parentId: "e1",
+		timestamp: "",
+		message: {
+			role: "assistant",
+			content: [{ type: "text", text: "Fixed: the parser now skips blanks." }],
+			stopReason: "stop",
+			timestamp: 3,
+			...overrides,
+		},
+	} as SessionEntry;
+}
 
 describe("suggestionsOnBranch", () => {
 	test("reads only a successful suggest_next_steps result", () => {
@@ -255,6 +190,22 @@ describe("suggestionsOnBranch", () => {
 			"Open a PR",
 		]);
 		expect(suggestionsOnBranch([leaf(["Open a PR"]), later as SessionEntry])).toEqual([]);
+	});
+
+	test("reads through the final text message written after the call", () => {
+		expect(suggestionsOnBranch([leaf(["Open a PR"]), finalMessage()])).toEqual(["Open a PR"]);
+	});
+
+	test("a later tool call or an unfinished final message hides the suggestions", () => {
+		const working = finalMessage({
+			content: [{ type: "toolCall", id: "c2", name: "read", arguments: {} }],
+			stopReason: "toolUse",
+		});
+		expect(suggestionsOnBranch([leaf(["Open a PR"]), working])).toEqual([]);
+		expect(suggestionsOnBranch([leaf(["Open a PR"]), finalMessage({ stopReason: "error" })])).toEqual(
+			[],
+		);
+		expect(suggestionsOnBranch([finalMessage()])).toEqual([]);
 	});
 });
 
