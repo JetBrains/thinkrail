@@ -89,6 +89,7 @@ Chat tests cover the derivation, the numbered chips, the target chat their globa
 done outcome of a reloaded round. `e2e/next-steps.spec.ts` covers seeded transcripts: chips and their
 numbers, reload (chips and the round's done status), click keeps the draft and leaves focus in the input,
 Alt+N from the input, the conversation, the Files tree and a workbench tab (another group's too) but not
-inside a dialog, the terminal or Monaco, Shift+click and Shift+Alt+N into the input, and the off switch. `e2e/next-steps.live.spec.ts`
+inside a dialog, the terminal or Monaco, Shift+click and Shift+Alt+N into the input, the off switch, and a refused call (its row reads as a
+request for the answer, no chips; the retried call's chips show). `e2e/next-steps.live.spec.ts`
 (`@agent`) asks a real agent, explicitly, to suggest next steps after an edit, then checks that the
 chips appear and a click sends one. Unprompted reliability is deliberately not asserted (see above).
