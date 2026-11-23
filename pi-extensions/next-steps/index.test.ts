@@ -202,9 +202,9 @@ describe("suggestionsOnBranch", () => {
 			stopReason: "toolUse",
 		});
 		expect(suggestionsOnBranch([leaf(["Open a PR"]), working])).toEqual([]);
-		expect(suggestionsOnBranch([leaf(["Open a PR"]), finalMessage({ stopReason: "error" })])).toEqual(
-			[],
-		);
+		expect(
+			suggestionsOnBranch([leaf(["Open a PR"]), finalMessage({ stopReason: "error" })]),
+		).toEqual([]);
 		expect(suggestionsOnBranch([finalMessage()])).toEqual([]);
 	});
 });
