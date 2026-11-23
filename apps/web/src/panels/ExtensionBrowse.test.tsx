@@ -87,16 +87,17 @@ test("listings are one keyboard list after the search field, said in visible tex
 	const markup = render(loaded([WEATHER, CARDS, JIRA]));
 	expect(markup).toContain('data-setting-id="extension-browse"');
 	expect(markup).toMatch(
-		/data-setting-row="extension-browse-search"[^>]*>[\s\S]*data-setting-stop=""/,
+		/data-setting-row="extension-browse-search"[^>]*>[\s\S]*data-testid="extension-browse-search"/,
 	);
 	expect(markup).toContain('data-focus-list="extension-browse"');
 	expect(markup).toContain(`data-focus-row="${WEATHER.name}"`);
-	expect(markup).toMatch(/data-focus-row-primary=""[^>]*aria-haspopup="dialog"/);
+	expect(markup).toMatch(/<li[^>]*data-setting-row="extension-browse\/[^"]+"[^>]*tabindex="-1"/);
+	expect(markup).toMatch(/data-setting-primary=""[^>]*aria-haspopup="dialog"/);
 	expect(markup).toMatch(
-		/aria-disabled="true"[^>]*data-focus-row-primary=""|data-focus-row-primary=""[^>]*aria-disabled="true"/,
+		/aria-disabled="true"[^>]*data-setting-primary=""|data-setting-primary=""[^>]*aria-disabled="true"/,
 	);
-	expect(markup).toMatch(/data-setting-side=""[^>]*data-testid="extension-browse-install"/);
-	expect(markup).toMatch(/data-setting-side=""[^>]*data-testid="extension-browse-npm"/);
+	expect(markup).toMatch(/tabindex="(0|-1)"[^>]*data-testid="extension-browse-install"/);
+	expect(markup).toMatch(/tabindex="(0|-1)"[^>]*data-testid="extension-browse-npm"/);
 	expect(markup).not.toContain("truncate");
 	expect(markup).not.toContain(" title=");
 });
@@ -113,7 +114,9 @@ test("the search narrows by title, name, description or author and says when not
 
 test("an empty catalog links to the authoring guide", () => {
 	const markup = render(loaded([]));
-	expect(markup).toContain('data-testid="extension-browse-empty"');
+	expect(markup).toMatch(
+		/data-setting-row="extension-browse-empty"[^>]*data-testid="extension-browse-empty"/,
+	);
 	expect(markup).toContain(`href="${AUTHORING_GUIDE_URL}"`);
 	expect(markup).not.toContain("extension-browse-search");
 });
@@ -123,6 +126,9 @@ test("an unreachable, offline or invalid catalog says so with a retry", () => {
 	expect(unreachable).toContain("Can&#x27;t reach the extension catalog.");
 	expect(unreachable).toContain("Your installed extensions keep working.");
 	expect(unreachable).toContain('data-testid="extension-browse-retry"');
+	expect(unreachable).toMatch(
+		/data-testid="extension-browse-failed"[^>]*data-setting-row="extension-browse-failed"/,
+	);
 	expect(render({ status: "failed", code: undefined })).toContain(
 		"Can&#x27;t reach the extension catalog.",
 	);

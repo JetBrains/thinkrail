@@ -222,12 +222,11 @@ test("a past palette call renders its card, keeps it while switched off and fall
 
 	await openExtensionsSettings(page);
 	const row = installedRow(page, PALETTE_NAME);
-	const primary = row.locator("[data-focus-row-primary]");
-	await primary.focus();
+	await row.focus();
 	await page.keyboard.press("ArrowRight");
-	await expect(row.getByTestId(`extension-toggle-${PALETTE_NAME}`)).toBeFocused();
+	await expect(row.getByTestId("installed-extension-menu")).toBeFocused();
 	await page.keyboard.press("ArrowLeft");
-	await expect(primary).toBeFocused();
+	await expect(row).toBeFocused();
 	await page.keyboard.press("Shift+F10");
 	await expect(page.getByTestId("installed-extension-menu-remove")).toBeVisible();
 	await page.keyboard.press("Escape");

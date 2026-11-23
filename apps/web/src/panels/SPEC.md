@@ -1638,9 +1638,10 @@ a project picker, the prompt hero, and the reused
   opens its ⋯ menu and shows title · kind tag · source tag (`npm` / `git` / `local`, read from the declaration) ·
   **Update available** (from `extensions.checkUpdates`) · one provenance line (package name · source ·
   "<version> installed" · description) · what it brings (tool-name chips and a **Chat cards** mark when the
-  host lists a `web` half); its sides are the switch (`extension-toggle-<name>`, the same `disabledExtensions`
-  key as a built-in, by package name), the menu (**Update** — always: a folder source reloads in place — and
-  **Remove…**; Shift+F10) and its declared boolean settings, nested underneath with the descriptor's own
+  host lists a `web` half); its **switch** (Space on the row; `extension-toggle-<name>`, the same
+  `disabledExtensions` key as a built-in, by package name), then as its buttons the menu (**Update** — always:
+  a folder source reloads in place — and **Remove…**; Shift+F10) and its declared boolean settings' switches,
+  nested underneath with the descriptor's own
   `title` / `description` (shown as is, never locale keys; disabled while the extension is off;
   `extension-setting-<name>-<key>`; no Reset — Delete on the row is its Remove). Delete asks to remove it
   through `ConfirmDialog` (`installed-extension-remove-confirm`: removing drops it for every project, and past
@@ -1684,7 +1685,8 @@ a project picker, the prompt hero, and the reused
   contacts thinkrail.ai. The hook reads on mount and again, from the host's cache, whenever the store catalog
   changes (so the **Installed** marks follow installs and removals); **Retry** forces a refetch; the latest read
   wins. The group's description states plainly that listings are automatic and unreviewed and that an extension
-  runs code on this machine and in the app. A search field row (Esc clears a query) narrows by title, name,
+  runs code on this machine and in the app. A search field row (Enter enters the field, ↓ leaves it for the
+  listings, Esc clears a query and then returns to the row) narrows by title, name,
   description and author ("No extensions match …") over one `SettingsList` (`extension-browse`) of listing
   rows — no preview image: an author-chosen image URL would expose every user's IP to its host, so Browse
   never reads a listing's `image` and no catalog entry makes the app request another origin (pinned by
@@ -1692,10 +1694,10 @@ a project picker, the prompt hero, and the reused
   **Chat cards** from `halves`, package name · author, description, and an **Installed** mark or an
   incompatible mark (`extensionApiFit`) with its reason as visible text — which opens the install dialog's
   confirm step with the listing's `npm:<name>` (inert, `aria-disabled`, when the listing cannot be installed),
-  with npm and repository links and **Install** as sides. An empty catalog links to the authoring guide
-  (`https://thinkrail.ai/docs/build-an-extension/`); an unreachable, offline or invalid catalog — or a host
-  that does not answer — says it cannot reach the catalog, that installed extensions keep working, and offers
-  Retry, while the rest of the page is unaffected.
+  with npm and repository links and **Install** as its buttons. An empty catalog is a row linking to the
+  authoring guide (`https://thinkrail.ai/docs/build-an-extension/`); an unreachable, offline or invalid
+  catalog — or a host that does not answer — is a notice row saying it cannot reach the catalog, that
+  installed extensions keep working, with Retry as its button, while the rest of the page is unaffected.
   **`EnvironmentSettings`** (the **Environment** section, nav `settings-nav-environment`, listed only at
   `protocolVersion >= HOST_ENVIRONMENT_PROTOCOL_VERSION`) edits the stored host environment
   ([[submodule-server-environment]]) as a `SettingsPage`: a **Pi configuration** group (scope tag *This

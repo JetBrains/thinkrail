@@ -125,19 +125,20 @@ test("update available, busy and an inline action error render on the row", () =
 	expect(markup).not.toMatch(/data-testid="extension-toggle-[^"]+"[^>]* disabled=""/);
 });
 
-test("the row is a list row: the menu opener is its primary, the switches and the menu are sides", () => {
+test("the row is a list row: the menu opener is its primary, then its switch, the menu and the setting switches", () => {
 	const markup = render();
 	expect(markup).toContain(`data-focus-row="extension:${PALETTE.source}"`);
 	expect(markup).toContain(`data-setting-id="installed-extension-${PALETTE.name}"`);
 	expect(markup).toContain(`data-setting-id="extension-setting-${PALETTE.name}-contrast"`);
-	expect(markup).toMatch(/data-focus-row-primary=""[^>]*aria-haspopup="menu"/);
+	expect(markup).toMatch(/<li[^>]*data-setting-row="extension:[^"]+"[^>]*tabindex="-1"/);
+	expect(markup).toMatch(/data-setting-primary=""[^>]*aria-haspopup="menu"/);
+	expect(markup).toMatch(/tabindex="-1"[^>]*role="switch"[^>]*data-testid="extension-toggle-/);
 	expect(markup).toMatch(
-		/data-setting-side=""[^>]*role="switch"[^>]*data-testid="extension-toggle-/,
+		/tabindex="-1"[^>]*role="switch"[^>]*data-testid="extension-setting-toggle-/,
 	);
-	expect(markup).toMatch(
-		/data-setting-side=""[^>]*role="switch"[^>]*data-testid="extension-setting-toggle-/,
+	expect(markup.match(/<button[^>]*data-testid="installed-extension-menu"[^>]*>/)?.[0]).toContain(
+		'tabindex="-1"',
 	);
-	expect(markup).toMatch(/data-setting-side=""[^>]*data-testid="installed-extension-menu"/);
 	expect(markup).not.toContain("truncate");
 	expect(markup).not.toContain(`title="${PALETTE.source}"`);
 });

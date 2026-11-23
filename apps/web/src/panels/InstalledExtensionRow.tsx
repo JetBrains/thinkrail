@@ -14,6 +14,8 @@ import { cn } from "@thinkrail/ui/utils";
 import { EXTENSION_API_VERSION, extensionApiFit, type WebExtensionLoadResult } from "@/extensions";
 import {
 	SETTINGS_LIST_PRIMARY,
+	SETTINGS_ROW_FOCUS,
+	SETTINGS_ROW_INSET,
 	SETTINGS_TAG,
 	SettingsNotice,
 	useSettingsListRow,
@@ -123,7 +125,11 @@ export function InstalledExtensionRow({
 			data-name={entry.name}
 			data-state={state}
 			data-enabled={enabled ? "true" : "false"}
-			className="flex flex-col gap-4 border-border-muted border-b py-6 last:border-b-0"
+			className={cn(
+				"flex flex-col gap-4 border-border-muted border-b py-6 last:border-b-0",
+				SETTINGS_ROW_INSET,
+				SETTINGS_ROW_FOCUS,
+			)}
 		>
 			<div className="flex flex-wrap items-center gap-8">
 				<button

@@ -113,9 +113,7 @@ test("Browse lists the catalog with search, installed and incompatible marks, in
 	await expect(browse.getByTestId("extension-browse-card")).toHaveCount(3);
 	await search.focus();
 	await page.keyboard.press("ArrowDown");
-	await expect(
-		browse.getByTestId("extension-browse-card").first().locator("[data-focus-row-primary]"),
-	).toBeFocused();
+	await expect(browse.getByTestId("extension-browse-card").first()).toBeFocused();
 	await search.fill("zzz");
 	await search.press("Escape");
 	await expect(search).toHaveValue("");

@@ -13,9 +13,12 @@ import { cn } from "@thinkrail/ui/utils";
 import { extensionApiFit } from "@/extensions";
 import {
 	SETTINGS_LIST_PRIMARY,
+	SETTINGS_ROW_FOCUS,
+	SETTINGS_ROW_INSET,
 	SETTINGS_ROWS,
 	SETTINGS_TAG,
 	SettingsGroup,
+	SettingsLine,
 	SettingsList,
 	SettingsNotice,
 	useSettingsListRow,
@@ -92,7 +95,11 @@ export function ExtensionBrowseCard({
 			{...rowProps}
 			data-testid="extension-browse-card"
 			data-name={entry.name}
-			className="flex flex-wrap items-start gap-8 border-border-muted border-b py-6 last:border-b-0"
+			className={cn(
+				"flex flex-wrap items-start gap-8 border-border-muted border-b py-6 last:border-b-0",
+				SETTINGS_ROW_INSET,
+				SETTINGS_ROW_FOCUS,
+			)}
 		>
 			<button
 				type="button"
@@ -220,9 +227,10 @@ export function ExtensionBrowse({
 			>
 				{read.status === "loading" ? <LoadingRegion rows={2} className="py-8" /> : null}
 				{read.status === "failed" ? (
-					<div data-setting-row="extension-browse-failed" className="py-8">
+					<div className="py-8">
 						<SettingsNotice
 							variant="error"
+							rowId="extension-browse-failed"
 							testId="extension-browse-failed"
 							action={
 								<Button
@@ -251,9 +259,9 @@ export function ExtensionBrowse({
 					</div>
 				) : null}
 				{read.status === "loaded" && entries.length === 0 ? (
-					<div
-						data-testid="extension-browse-empty"
-						data-setting-row="extension-browse-empty"
+					<SettingsLine
+						rowId="extension-browse-empty"
+						testId="extension-browse-empty"
 						className="flex flex-col items-start gap-2 py-8"
 					>
 						<span className="tr-text-ui text-text-default">
@@ -267,38 +275,39 @@ export function ExtensionBrowse({
 							label={t("settings.extensionBrowse.guide")}
 							testId="extension-browse-guide"
 						/>
-					</div>
+					</SettingsLine>
 				) : null}
 				{read.status === "loaded" && entries.length > 0 ? (
 					<>
-						<div
-							data-setting-row="extension-browse-search"
-							className="relative flex items-center border-border-muted border-b py-8"
+						<SettingsLine
+							rowId="extension-browse-search"
+							className="border-border-muted border-b py-8"
 						>
-							<RiSearchLine
-								aria-hidden
-								className="pointer-events-none absolute left-8 size-14 text-text-muted"
-							/>
-							<input
-								data-testid="extension-browse-search"
-								data-setting-stop=""
-								type="text"
-								tabIndex={0}
-								aria-label={t("settings.extensionBrowse.searchLabel")}
-								className={INPUT_CLASS}
-								value={query}
-								placeholder={t("settings.extensionBrowse.searchPlaceholder")}
-								spellCheck={false}
-								autoComplete="off"
-								onChange={(event) => onQueryChange(event.currentTarget.value)}
-								onKeyDown={(event) => {
-									if (event.key !== "Escape" || query === "") return;
-									if (isImeComposing(event.nativeEvent)) return;
-									event.preventDefault();
-									onQueryChange("");
-								}}
-							/>
-						</div>
+							<div className="relative flex items-center">
+								<RiSearchLine
+									aria-hidden
+									className="pointer-events-none absolute left-8 size-14 text-text-muted"
+								/>
+								<input
+									data-testid="extension-browse-search"
+									type="text"
+									tabIndex={0}
+									aria-label={t("settings.extensionBrowse.searchLabel")}
+									className={INPUT_CLASS}
+									value={query}
+									placeholder={t("settings.extensionBrowse.searchPlaceholder")}
+									spellCheck={false}
+									autoComplete="off"
+									onChange={(event) => onQueryChange(event.currentTarget.value)}
+									onKeyDown={(event) => {
+										if (event.key !== "Escape" || query === "") return;
+										if (isImeComposing(event.nativeEvent)) return;
+										event.preventDefault();
+										onQueryChange("");
+									}}
+								/>
+							</div>
+						</SettingsLine>
 						{shown.length === 0 ? (
 							<p
 								data-testid="extension-browse-no-match"
