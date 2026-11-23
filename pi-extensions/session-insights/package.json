@@ -43,7 +43,8 @@
 	"pi": {
 		"extensions": [
 			"./extension.ts"
-		]
+		],
+		"video": "https://github.com/JetBrains/thinkrail/raw/refs/heads/main/.github/readme-assets/pi-packages/session-insights.mp4"
 	},
 	"scripts": {
 		"typecheck": "tsc --noEmit",
