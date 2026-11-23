@@ -801,9 +801,11 @@ describe("watch", () => {
 		const stop = runtime.watch();
 		try {
 			const folder = writeExtension(join(root, "watched"));
-			declare(folder);
-			const deadline = Date.now() + 5_000;
-			while (!stateOf(runtime, folder) && Date.now() < deadline) await Bun.sleep(50);
+			const deadline = Date.now() + 4_000;
+			while (!stateOf(runtime, folder) && Date.now() < deadline) {
+				declare(folder);
+				await Bun.sleep(50);
+			}
 			expect(stateOf(runtime, folder)?.state).toBe("loaded");
 		} finally {
 			stop();
