@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, jest } from "bun:test";
 import { join } from "node:path";
 import type {
 	Extension,
@@ -19,6 +19,7 @@ import {
 	supersedablePackagesIn,
 	supersedingExtension,
 } from "./inline";
+import { EXTENSION_LOAD_TIMEOUT_MS } from "./installed";
 import type { ServerExtensionEntry } from "./registry";
 
 function entry(name: string, parents: number, children = 0): ServerExtensionEntry {
@@ -36,6 +37,10 @@ function entry(name: string, parents: number, children = 0): ServerExtensionEntr
 			...(children ? { childExtensions: factories("c", children) } : {}),
 		},
 	};
+}
+
+function installed(name: string, parents: number): ServerExtensionEntry {
+	return { ...entry(name, parents), installed: { skillRoots: [] } };
 }
 
 async function registered(inline: InlineExtension): Promise<string[]> {
@@ -60,6 +65,15 @@ describe("registryInlineExtensions", () => {
 		expect(registryInlineExtensions("childExtensions", undefined, entries).map(nameOf)).toEqual([
 			"multi",
 		]);
+	});
+
+	it("names an installed extension's factories in their own namespace", () => {
+		expect(
+			registryInlineExtensions("extensions", undefined, [
+				installed("mcp", 1),
+				installed("two", 2),
+			]).map(nameOf),
+		).toEqual(["ext:mcp", "ext:two#1", "ext:two#2"]);
 	});
 
 	it("decides at load time whether a factory registers anything", async () => {
@@ -145,6 +159,77 @@ describe("registryInlineExtensions with per-session factories", () => {
 		expect(seen).toEqual([]);
 	});
 
+	it("turns a throwing sessionExtensions into that extension's load error, not a failed flatten", async () => {
+		const entries: ServerExtensionEntry[] = [
+			{
+				specifier: "/installed/server/index.ts",
+				extension: {
+					name: "throws",
+					extensions: [],
+					sessionExtensions: (services) => (services.setting("typo") ? [] : []),
+				},
+			},
+			sessionEntry("asker", 0, []),
+		];
+		const inline = registryInlineExtensions("extensions", undefined, entries, session("a"));
+		expect(inline.map(nameOf)).toEqual(["throws", "asker"]);
+		const [throws] = inline;
+		if (!throws || typeof throws === "function") throw new Error("missing throws");
+		await expect(Promise.resolve(throws.factory({} as ExtensionAPI))).rejects.toThrow(
+			'extension throws has no setting "typo"',
+		);
+	});
+
+	it("turns a sessionExtensions that returns no list into that extension's load error", async () => {
+		const entries: ServerExtensionEntry[] = [
+			{
+				specifier: "/installed/server/index.ts",
+				extension: {
+					name: "single",
+					extensions: [],
+					sessionExtensions: (() => () => {}) as unknown as () => [],
+				},
+			},
+		];
+		const [single] = registryInlineExtensions("extensions", () => true, entries, session("a"));
+		if (!single || typeof single === "function") throw new Error("missing single");
+		expect(single.name).toBe("single");
+		await expect(Promise.resolve(single.factory({} as ExtensionAPI))).resolves.toBeUndefined();
+		const [enabled] = registryInlineExtensions("extensions", undefined, entries, session("a"));
+		if (!enabled || typeof enabled === "function") throw new Error("missing single");
+		await expect(Promise.resolve(enabled.factory({} as ExtensionAPI))).rejects.toThrow(
+			"sessionExtensions must return a list of factories",
+		);
+	});
+
+	it("observes a sessionExtensions promise that rejects and reports a load error instead", async () => {
+		const unhandled: unknown[] = [];
+		const onUnhandled = (reason: unknown) => unhandled.push(reason);
+		process.on("unhandledRejection", onUnhandled);
+		try {
+			const entries: ServerExtensionEntry[] = [
+				{
+					specifier: "/installed/server/index.ts",
+					extension: {
+						name: "rejects",
+						extensions: [],
+						sessionExtensions: (async (services: ExtensionSessionServices) =>
+							services.setting("undeclared") ? [] : []) as unknown as () => [],
+					},
+				},
+			];
+			const [inline] = registryInlineExtensions("extensions", undefined, entries, session("a"));
+			if (!inline || typeof inline === "function") throw new Error("missing rejects");
+			await expect(Promise.resolve(inline.factory({} as ExtensionAPI))).rejects.toThrow(
+				"sessionExtensions must return a list of factories",
+			);
+			await Bun.sleep(20);
+			expect(unhandled).toEqual([]);
+		} finally {
+			process.off("unhandledRejection", onUnhandled);
+		}
+	});
+
 	it("gates session factories on the extension switch at load time", async () => {
 		const disabled = new Set(["asker"]);
 		const [asker] = registryInlineExtensions(
@@ -158,6 +243,50 @@ describe("registryInlineExtensions with per-session factories", () => {
 		disabled.clear();
 		expect(await registered(asker)).toEqual(["asker-session-a"]);
 	});
+});
+
+describe("an installed factory that never settles", () => {
+	const hang = () => new Promise<void>(() => {});
+	const installed = (name: string, factories: ServerExtensionEntry["extension"]) => ({
+		specifier: `/installed/${name}/server/index.ts`,
+		extension: factories,
+		installed: { skillRoots: [] },
+	});
+
+	it.each([
+		["a static factory", { name: "hung", extensions: [hang] }],
+		["a per-session factory", { name: "hung", extensions: [], sessionExtensions: () => [hang] }],
+	])(
+		"fails %s as that extension's load error once the load timeout passes",
+		async (_, extension) => {
+			const [inline] = registryInlineExtensions(
+				"extensions",
+				undefined,
+				[installed("hung", extension)],
+				{
+					expectToolResponse: () => {},
+					awaitToolResponse: async () => ({ kind: "deferred" }),
+					workspaceFiles: {
+						check: async () => {},
+						checkArtifacts: async (paths) => paths.map((path) => ({ path })),
+						ensureArtifactsDir: async () => {},
+						scratchDir: "",
+						artifactsDir: "",
+					},
+				},
+			);
+			if (!inline || typeof inline === "function") throw new Error("missing hung");
+			jest.useFakeTimers();
+			try {
+				const loading = Promise.resolve(inline.factory({} as ExtensionAPI));
+				for (let tick = 0; tick < 20; tick += 1) await Promise.resolve();
+				jest.advanceTimersByTime(EXTENSION_LOAD_TIMEOUT_MS);
+				await expect(loading).rejects.toThrow("hung did not finish loading within 10 s");
+			} finally {
+				jest.useRealTimers();
+			}
+		},
+	);
 });
 
 describe("omitDisabledRegistryExtensions", () => {
@@ -261,6 +390,15 @@ describe("registryExtensionName", () => {
 		expect(registryExtensionName("<inline:3>", entries)).toBeUndefined();
 		expect(registryExtensionName("/disk/solo.ts", entries)).toBeUndefined();
 	});
+
+	it("never confuses an installed extension with a built-in or a host inline of the same name", () => {
+		const mixed = [entry("solo", 1), installed("mcp", 1), installed("solo", 1)];
+		expect(registryExtensionName("<inline:mcp>", mixed)).toBeUndefined();
+		expect(registryExtensionName("<inline:ext:mcp>", mixed)).toBe("mcp");
+		expect(registryExtensionName("<inline:ext:mcp#2>", mixed)).toBe("mcp");
+		expect(registryExtensionName("<inline:solo>", [installed("solo", 1)])).toBeUndefined();
+		expect(registryExtensionName("<inline:ext:solo>", [entry("solo", 1)])).toBeUndefined();
+	});
 });
 
 describe("preferRegistryTools", () => {
@@ -301,6 +439,55 @@ describe("preferRegistryTools", () => {
 			loaded("/user/later.ts", ["shared"]),
 		);
 		expect(preferRegistryTools(untouched, entries)).toBe(untouched);
+	});
+
+	const ownerOf = (next: LoadExtensionsResult, tool: string) =>
+		next.extensions.find((extension) => extension.tools.has(tool))?.path;
+
+	it("never promotes an installed extension: a pi package keeps its tool and a built-in its own", () => {
+		const registry = [entry("asker", 0), installed("weather-ext", 0)];
+		const loadedSet = result(
+			loaded("/user/pi-weather.ts", ["weather"]),
+			loaded("<inline:asker>", ["ask_user_question"]),
+			loaded("<inline:3>", ["host"]),
+			loaded("<inline:ext:weather-ext>", ["weather", "ask_user_question"]),
+		);
+		const next = preferRegistryTools(loadedSet, registry);
+		expect(next).toBe(loadedSet);
+		expect(ownerOf(next, "ask_user_question")).toBe("<inline:asker>");
+		expect(ownerOf(next, "weather")).toBe("/user/pi-weather.ts");
+	});
+
+	it("moves a built-in past a rival without carrying an installed extension along", () => {
+		const registry = [entry("asker", 0), installed("weather-ext", 0)];
+		const next = preferRegistryTools(
+			result(
+				loaded("/user/pi-asker.ts", ["ask_user_question"]),
+				loaded("<inline:asker>", ["ask_user_question"]),
+				loaded("<inline:ext:weather-ext>", ["ask_user_question"]),
+			),
+			registry,
+		);
+		expect(paths(next)).toEqual([
+			"<inline:asker>",
+			"/user/pi-asker.ts",
+			"<inline:ext:weather-ext>",
+		]);
+	});
+
+	it("keeps the first of two registry extensions ahead when a rival contests the second", () => {
+		const registry = [entry("first", 0), entry("second", 0)];
+		const next = preferRegistryTools(
+			result(
+				loaded("/user/pi.ts", ["weather"]),
+				loaded("<inline:first>", ["shared"]),
+				loaded("<inline:second>", ["shared", "weather"]),
+			),
+			registry,
+		);
+		expect(paths(next)).toEqual(["<inline:first>", "<inline:second>", "/user/pi.ts"]);
+		expect(ownerOf(next, "shared")).toBe("<inline:first>");
+		expect(ownerOf(next, "weather")).toBe("<inline:second>");
 	});
 
 	it("returns the result untouched when no tool names collide", () => {

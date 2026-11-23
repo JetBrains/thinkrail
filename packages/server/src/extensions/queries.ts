@@ -50,7 +50,6 @@ export function createExtensionQueries(options: {
 	services: ExtensionHostServicesFor;
 	entries?: readonly ServerExtensionEntry[];
 }): ExtensionQueries {
-	const entries = options.entries ?? serverExtensions;
 	const tables = new Map<ServerExtension, BuiltTable>();
 
 	const tableOf = (extension: ServerExtension): QueryTable | undefined => {
@@ -70,7 +69,9 @@ export function createExtensionQueries(options: {
 	return {
 		async query(request) {
 			const { extension: name, method, params } = parseRequest(request);
-			const extension = entries.find((entry) => entry.extension.name === name)?.extension;
+			const extension = (options.entries ?? serverExtensions()).find(
+				(entry) => entry.extension.name === name,
+			)?.extension;
 			if (!extension) throw unknownQuery(`No extension named ${name}`);
 			if (options.isDisabled(name)) throw disabledError(name);
 			const table = tableOf(extension);

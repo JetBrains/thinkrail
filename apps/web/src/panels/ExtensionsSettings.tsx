@@ -10,7 +10,7 @@ import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
 import { Fragment, useEffect, useState } from "react";
-import { webExtensionTitle, webOnlyExtensions } from "@/extensions";
+import { useWebExtensionLoads, webExtensionTitle, webOnlyExtensions } from "@/extensions";
 import {
 	SETTINGS_ROWS,
 	SettingsGroup,
@@ -19,13 +19,34 @@ import {
 	type SettingsReset,
 	SettingsRow,
 } from "@/settingsKit";
-import { selectActiveRepoWorkspaceId, toast, useAppStore } from "@/store";
-import { getTransport, supportsExtensionSettings, supportsPiPackages } from "@/transport";
+import {
+	selectActiveRepoWorkspaceId,
+	selectBuiltinExtensions,
+	selectInstalledExtensions,
+	selectSupportsExtensionBrowse,
+	selectSupportsInstalledExtensions,
+	toast,
+	useAppStore,
+} from "@/store";
+import {
+	getTransport,
+	refreshExtensionCatalog,
+	supportsExtensionSettings,
+	supportsPiPackages,
+} from "@/transport";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { InstallPackageDialog } from "./InstallPackageDialog";
-import { GalleryLink, PiBuiltinsGroup, PiPackagesGroup } from "./PiPackagesSettings";
+import { ExtensionBrowse } from "./ExtensionBrowse";
+import {
+	InstalledExtensionRow,
+	installedExtensionKey,
+	installedExtensionRowId,
+} from "./InstalledExtensionRow";
+import { InstallPackageDialog, type InstallPreset } from "./InstallPackageDialog";
+import { GalleryLinks, PiBuiltinsGroup, PiPackagesGroup } from "./PiPackagesSettings";
 import { saveSettings } from "./saveSettings";
 import { SETTING, settingProps } from "./settingsCatalog";
+import { useExtensionBrowse } from "./useExtensionBrowse";
+import { useInstalledExtensions } from "./useInstalledExtensions";
 import { UPDATE_CHECK_KEY, usePiPackages } from "./usePiPackages";
 
 const BUNDLED_DESCRIPTIONS: Readonly<Record<string, MessageKey>> = {
@@ -250,31 +271,38 @@ export function ExtensionsSettings() {
 	const workspaceId = useAppStore(selectActiveRepoWorkspaceId);
 	const packagesSupported = supportsPiPackages(protocolVersion);
 	const settingsSupported = supportsExtensionSettings(protocolVersion);
-	const [entries, setEntries] = useState<ExtensionCatalogEntry[] | "loading" | "failed">("loading");
-	const [catalogAttempt, setCatalogAttempt] = useState(0);
+	const catalogRead = useAppStore((state) => state.extensionCatalog);
+	const welcomeGeneration = useAppStore((state) => state.welcomeGeneration);
+	const entries = selectBuiltinExtensions(catalogRead);
+	const installed = selectInstalledExtensions(catalogRead);
+	const installedSupported = selectSupportsInstalledExtensions({ protocolVersion });
+	const webLoads = useWebExtensionLoads();
+	const browseSupported = selectSupportsExtensionBrowse({ protocolVersion });
 	const [packagesAttempt, setPackagesAttempt] = useState(0);
 	const [installOpen, setInstallOpen] = useState(false);
+	const [installPreset, setInstallPreset] = useState<InstallPreset | null>(null);
+	const [installKey, setInstallKey] = useState(0);
+	const [browseQuery, setBrowseQuery] = useState("");
+	const browse = useExtensionBrowse({ enabled: browseSupported, installedCatalog: catalogRead });
+	const openInstall = (preset: InstallPreset | null) => {
+		setInstallPreset(preset);
+		setInstallKey((key) => key + 1);
+		setInstallOpen(true);
+	};
 	const packages = usePiPackages({
 		enabled: packagesSupported,
 		workspaceId,
 		packagesVersion: packagesVersion + packagesAttempt,
 		disabledPackages,
 	});
+	const extensions = useInstalledExtensions({
+		enabled: installedSupported,
+		disabledExtensions: disabled,
+	});
 
 	useEffect(() => {
-		let current = true;
-		getTransport()
-			.request("extension.list", {})
-			.then((result) => {
-				if (current) setEntries(result);
-			})
-			.catch(() => {
-				if (current) setEntries("failed");
-			});
-		return () => {
-			current = false;
-		};
-	}, [catalogAttempt]);
+		if (welcomeGeneration > 0) void refreshExtensionCatalog();
+	}, [welcomeGeneration]);
 
 	const toggle = (name: string, enabled: boolean) => {
 		const next = enabled
@@ -316,12 +344,12 @@ export function ExtensionsSettings() {
 								size="m"
 								tabIndex={0}
 								data-testid="packages-install"
-								onClick={() => setInstallOpen(true)}
+								onClick={() => openInstall(null)}
 							>
 								{t("settings.extensions.install")}
 							</Button>
 						}
-						sides={<GalleryLink />}
+						sides={<GalleryLinks extensions={installedSupported} />}
 					/>
 				</SettingsGroup>
 			) : null}
@@ -335,26 +363,70 @@ export function ExtensionsSettings() {
 					onToggle={toggle}
 					settings={extensionSettings}
 					onSetting={settingsSupported ? changeSetting : undefined}
-					onRetry={() => {
-						setEntries("loading");
-						setCatalogAttempt((value) => value + 1);
-					}}
+					onRetry={() => void refreshExtensionCatalog()}
 				/>
 			</SettingsGroup>
 			{packagesSupported ? (
 				<PiPackagesGroup
 					catalog={catalog}
 					updates={packages.updates}
-					checkingUpdates={packages.checkingUpdates}
-					checkError={packages.errors.get(UPDATE_CHECK_KEY)}
+					extraUpdates={extensions.updates.size}
+					checkingUpdates={packages.checkingUpdates || extensions.checkingUpdates}
+					checkError={packages.errors.get(UPDATE_CHECK_KEY) ?? extensions.checkError}
 					busy={packages.busy}
 					errors={packages.errors}
 					expanded={packages.expanded}
 					onToggleExpanded={packages.toggleExpanded}
 					onAction={packages.onAction}
-					onUpdateAll={packages.updateAll}
-					onCheckUpdates={packages.checkUpdates}
+					onUpdateAll={() => {
+						packages.updateAll();
+						extensions.updateFlagged(installed);
+					}}
+					onCheckUpdates={() => {
+						packages.checkUpdates();
+						if (installedSupported) extensions.checkUpdates();
+					}}
 					onRetry={() => setPackagesAttempt((value) => value + 1)}
+					extensionRows={installed.map((entry) => {
+						const key = installedExtensionKey(entry);
+						return {
+							id: installedExtensionRowId(entry),
+							onRemove: () => {
+								if (!extensions.busy.has(key)) extensions.onAction({ kind: "remove", entry });
+							},
+							render: (menu) => (
+								<InstalledExtensionRow
+									entry={entry}
+									enabled={!disabled.includes(entry.name)}
+									settings={extensionSettings[entry.name]}
+									settingsSupported={settingsSupported}
+									webLoad={webLoads.get(entry.name)}
+									updateAvailable={extensions.updates.has(key)}
+									busy={extensions.busy.has(key)}
+									error={extensions.errors.get(key)}
+									{...menu}
+									onAction={extensions.onAction}
+								/>
+							),
+						};
+					})}
+				/>
+			) : null}
+			{packagesSupported && browseSupported ? (
+				<ExtensionBrowse
+					read={browse.read}
+					query={browseQuery}
+					onQueryChange={setBrowseQuery}
+					onRetry={browse.retry}
+					onInstall={(entry) =>
+						openInstall({
+							source: entry.install,
+							title: entry.title ?? entry.name,
+							version: entry.version,
+							author: entry.author,
+							description: entry.description,
+						})
+					}
 				/>
 			) : null}
 			{protocolVersion !== null && protocolVersion >= OTHER_AGENT_SKILLS_PROTOCOL_VERSION ? (
@@ -410,12 +482,29 @@ export function ExtensionsSettings() {
 						confirmTestId="package-remove-confirm"
 						onConfirm={packages.removeNow}
 					/>
+					<ConfirmDialog
+						open={extensions.removeTarget !== null}
+						onOpenChange={(open) => {
+							if (!open) extensions.cancelRemove();
+						}}
+						title={t("settings.packages.removeTitle", {
+							name: extensions.removeTarget?.title ?? "",
+						})}
+						description={t("settings.installedExtensions.removeDescription")}
+						confirmLabel={t("settings.installedExtensions.removeConfirm")}
+						destructive
+						confirmTestId="installed-extension-remove-confirm"
+						onConfirm={extensions.removeNow}
+					/>
 					<InstallPackageDialog
+						key={installKey}
+						preset={installPreset}
 						open={installOpen}
 						onOpenChange={setInstallOpen}
 						catalog={loaded}
 						workspaceId={workspaceId ?? null}
 						install={packages.install}
+						extensionsSupported={installedSupported}
 					/>
 				</>
 			) : null}

@@ -1,6 +1,7 @@
 import { describe, expect, it, mock } from "bun:test";
 import { isAbsolute } from "node:path";
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
+import * as server from "@thinkrail/extension-api/server";
 import {
 	defineServerExtension,
 	type ExtensionHostServices,
@@ -136,5 +137,9 @@ describe("defineServerExtension", () => {
 		expect(build.success).toBe(true);
 		expect(imports).toEqual([]);
 		expect(await build.outputs[0]?.text()).toContain("defineServerExtension");
+	});
+
+	it("leaves the installed-extension contract to its own entry", () => {
+		expect(Object.keys(server).sort()).toEqual(["defineServerExtension"]);
 	});
 });

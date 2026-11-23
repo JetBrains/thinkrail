@@ -5,13 +5,15 @@ import sessionInsights from "@thinkrail/ext-session-insights/server";
 import visualize from "@thinkrail/ext-visualize/server";
 import webAccess from "@thinkrail/ext-web-access/server";
 import type { ServerExtension } from "@thinkrail/extension-api/server";
+import { type InstalledServerExtension, installedExtensions } from "./installed";
 
 export interface ServerExtensionEntry {
 	readonly specifier: string;
 	readonly extension: ServerExtension;
+	readonly installed?: { readonly skillRoots: readonly string[] };
 }
 
-export const serverExtensions: readonly ServerExtensionEntry[] = [
+export const builtinServerExtensions: readonly ServerExtensionEntry[] = [
 	{ specifier: "@thinkrail/ext-visualize/server", extension: visualize },
 	{ specifier: "@thinkrail/ext-ask-user-question/server", extension: askUserQuestion },
 	{ specifier: "@thinkrail/ext-web-access/server", extension: webAccess },
@@ -19,3 +21,46 @@ export const serverExtensions: readonly ServerExtensionEntry[] = [
 	{ specifier: "@thinkrail/ext-outputs/server", extension: outputs },
 	{ specifier: "@thinkrail/ext-session-insights/server", extension: sessionInsights },
 ];
+
+const WEB_ONLY_BUILTIN_EXTENSION_NAMES: readonly string[] = ["hint-mode"];
+
+export function builtinExtensionNames(): string[] {
+	return [
+		...builtinServerExtensions.map((entry) => entry.extension.name),
+		...WEB_ONLY_BUILTIN_EXTENSION_NAMES,
+	];
+}
+
+const installedEntries = new WeakMap<InstalledServerExtension, ServerExtensionEntry>();
+let current: {
+	servers: readonly InstalledServerExtension[];
+	entries: readonly ServerExtensionEntry[];
+} = { servers: [], entries: builtinServerExtensions };
+
+function entryOf(server: InstalledServerExtension): ServerExtensionEntry {
+	let entry = installedEntries.get(server);
+	if (!entry) {
+		entry = {
+			specifier: server.entry,
+			extension: server.extension,
+			installed: { skillRoots: server.skillRoots },
+		};
+		installedEntries.set(server, entry);
+	}
+	return entry;
+}
+
+/** Built-ins first, then the loaded installed extensions; the same array until that set changes. */
+export function serverExtensions(): readonly ServerExtensionEntry[] {
+	const servers = installedExtensions()?.servers() ?? [];
+	if (servers !== current.servers) {
+		current = {
+			servers,
+			entries:
+				servers.length === 0
+					? builtinServerExtensions
+					: [...builtinServerExtensions, ...servers.map(entryOf)],
+		};
+	}
+	return current.entries;
+}

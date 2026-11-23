@@ -3,6 +3,7 @@ import type {
 	AppSurvey,
 	ChatContinuation,
 	ComposerGrowthLimit,
+	ExtensionCatalogEntry,
 	ExtUiRequest,
 	FontChoice,
 	GitDiffScope,
@@ -156,6 +157,8 @@ import {
 	supportsChatResources,
 	supportsWorkspaceSettling,
 } from "./selectors";
+
+export type ExtensionCatalogRead = ExtensionCatalogEntry[] | "loading" | "failed";
 
 export interface FileTab {
 	kind: "file";
@@ -1221,6 +1224,7 @@ interface AppState {
 	templatesVersion: number;
 	/** Bumped on `packages.changed`; the Extensions page re-lists installed pi packages when it moves. */
 	packagesVersion: number;
+	extensionCatalog: ExtensionCatalogRead;
 	modelsRefreshing: boolean;
 	modelsFresh: boolean;
 	changesRequest: {
@@ -1623,6 +1627,7 @@ interface AppState {
 	installProviderStatus: (version: number, report: ProviderStatusReport | null) => void;
 	bumpTemplatesVersion: () => void;
 	bumpPackagesVersion: () => void;
+	installExtensionCatalog: (catalog: ExtensionCatalogEntry[] | "failed") => void;
 	beginModelsRefresh: () => number;
 	finishModelsRefresh: (providerVersion: number, result: RefreshedModels | null) => void;
 	dropModelsFreshness: () => void;
@@ -2716,6 +2721,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	providerStatus: { version: -1, report: null, failed: false },
 	templatesVersion: 0,
 	packagesVersion: 0,
+	extensionCatalog: "loading",
 	modelsRefreshing: false,
 	modelsFresh: false,
 	changesRequest: null,
@@ -3011,6 +3017,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 				...pruneExpandedProjects(state, openProjects),
 				welcomeGeneration: state.welcomeGeneration + 1,
 				providerStatusVersion: state.providerStatusVersion + 1,
+				...(state.welcomeProtocolVersion === protocolVersion
+					? {}
+					: { extensionCatalog: "loading" as const }),
 			};
 		}),
 	applyHostUpdate: (hostUpdate) => set({ hostUpdate }),
@@ -4953,6 +4962,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		),
 	bumpTemplatesVersion: () => set((s) => ({ templatesVersion: s.templatesVersion + 1 })),
 	bumpPackagesVersion: () => set((s) => ({ packagesVersion: s.packagesVersion + 1 })),
+	installExtensionCatalog: (extensionCatalog) => set({ extensionCatalog }),
 	beginModelsRefresh: () => {
 		const providerVersion = get().providerVersion;
 		set({ modelsRefreshing: true });

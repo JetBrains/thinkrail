@@ -1,15 +1,15 @@
 #!/usr/bin/env bun
-// Bootstrap publish helper; see pi-extensions/SPEC.md → Release.
+// Bootstrap publish helper for every published package; see pi-extensions/SPEC.md → Release.
 import { mkdirSync } from "node:fs";
 import { basename, join, relative } from "node:path";
-import { packPiPackage, publishablePiPackages, repoRoot } from "./pi-packages.ts";
+import { packPiPackage, publishablePackages, repoRoot } from "./pi-packages.ts";
 
 const [, , dirName] = process.argv;
-const packages = publishablePiPackages();
+const packages = publishablePackages();
 const pkg = packages.find((candidate) => basename(candidate.dir) === dirName);
 if (!pkg) {
 	console.error(
-		`usage: bun scripts/pack-pi-package.ts <pi-extensions dir>\navailable: ${packages.map((candidate) => basename(candidate.dir)).join(", ") || "none"}`,
+		`usage: bun scripts/pack-pi-package.ts <package dir name>\navailable: ${packages.map((candidate) => basename(candidate.dir)).join(", ") || "none"}`,
 	);
 	process.exit(1);
 }

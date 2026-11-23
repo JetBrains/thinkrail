@@ -1,11 +1,12 @@
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it, jest, mock } from "bun:test";
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import type { ExtensionCatalogEntry } from "@thinkrail/contracts";
-import { listExtensionCatalog } from "./catalog";
+import { extensionToolNames, listExtensionCatalog, setHostToolFactories } from "./catalog";
+import { EXTENSION_LOAD_TIMEOUT_MS, type InstalledExtensionRecord } from "./installed";
 import { type ServerExtensionEntry, serverExtensions } from "./registry";
 
 function shippedApiVersion(name: string): Pick<ExtensionCatalogEntry, "apiVersion"> {
-	const apiVersion = serverExtensions.find((entry) => entry.extension.name === name)?.extension
+	const apiVersion = serverExtensions().find((entry) => entry.extension.name === name)?.extension
 		.apiVersion;
 	return apiVersion === undefined ? {} : { apiVersion };
 }
@@ -28,6 +29,7 @@ describe("listExtensionCatalog", () => {
 				tools: ["visualize"],
 				hasParentExtensions: true,
 				hasChildExtensions: false,
+				kind: "builtin",
 			},
 			{
 				name: "ask-user-question",
@@ -38,6 +40,7 @@ describe("listExtensionCatalog", () => {
 				hasParentExtensions: true,
 				hasChildExtensions: false,
 				settings: [{ key: "richPreviews", default: true }],
+				kind: "builtin",
 			},
 			{
 				name: "web-access",
@@ -47,6 +50,7 @@ describe("listExtensionCatalog", () => {
 				tools: ["web_search", "source_check", "fetch_content", "get_search_content", "web_enable"],
 				hasParentExtensions: true,
 				hasChildExtensions: true,
+				kind: "builtin",
 			},
 			{
 				name: "next-steps",
@@ -56,6 +60,7 @@ describe("listExtensionCatalog", () => {
 				tools: ["suggest_next_steps"],
 				hasParentExtensions: true,
 				hasChildExtensions: false,
+				kind: "builtin",
 			},
 			{
 				name: "outputs",
@@ -65,6 +70,7 @@ describe("listExtensionCatalog", () => {
 				tools: ["present_files"],
 				hasParentExtensions: true,
 				hasChildExtensions: false,
+				kind: "builtin",
 			},
 			{
 				name: "session-insights",
@@ -75,6 +81,7 @@ describe("listExtensionCatalog", () => {
 				hasParentExtensions: false,
 				hasChildExtensions: false,
 				...shippedApiVersion("session-insights"),
+				kind: "builtin",
 			},
 		]);
 		const [visualize, ask] = await listExtensionCatalog(new Set(["visualize", "retired"]));
@@ -136,6 +143,7 @@ describe("listExtensionCatalog", () => {
 				tools: ["alpha", "beta"],
 				hasParentExtensions: true,
 				hasChildExtensions: true,
+				kind: "builtin",
 			},
 			{
 				name: "bare",
@@ -144,9 +152,25 @@ describe("listExtensionCatalog", () => {
 				tools: [],
 				hasParentExtensions: false,
 				hasChildExtensions: false,
+				kind: "builtin",
 			},
 		]);
 		expect(child).not.toHaveBeenCalled();
+	});
+
+	it("lists the static tools of an extension whose per-session factories throw", async () => {
+		const entries: ServerExtensionEntry[] = [
+			{
+				specifier: "/x/server/index.ts",
+				extension: {
+					name: "throws",
+					extensions: [tool("static")],
+					sessionExtensions: (session) => [tool(String(session.setting("typo")))],
+				},
+			},
+		];
+		const [entry] = await listExtensionCatalog(new Set(), entries, []);
+		expect(entry?.tools).toEqual(["static"]);
 	});
 
 	it("lists a declared apiVersion without building the extension's queries", async () => {
@@ -170,6 +194,7 @@ describe("listExtensionCatalog", () => {
 				hasParentExtensions: false,
 				hasChildExtensions: false,
 				apiVersion: 3,
+				kind: "builtin",
 			},
 			{
 				name: "plain",
@@ -178,6 +203,7 @@ describe("listExtensionCatalog", () => {
 				tools: [],
 				hasParentExtensions: false,
 				hasChildExtensions: false,
+				kind: "builtin",
 			},
 		]);
 		expect(queries).not.toHaveBeenCalled();
@@ -207,8 +233,117 @@ describe("listExtensionCatalog", () => {
 				tools: ["static", "asked"],
 				hasParentExtensions: true,
 				hasChildExtensions: false,
+				kind: "builtin",
 			},
 		]);
 		await expect(response).rejects.toThrow("no session");
+	});
+
+	it("never waits longer than the load timeout for a factory that hangs against the stub", async () => {
+		const hanging: ExtensionFactory = (pi) => {
+			pi.registerTool({ name: "before_hang" } as Parameters<ExtensionAPI["registerTool"]>[0]);
+			return new Promise(() => {});
+		};
+		const hung = {
+			name: "hung",
+			extensions: [hanging, tool("static")],
+			sessionExtensions: () => [() => new Promise<void>(() => {})],
+		};
+		const entries: ServerExtensionEntry[] = [
+			{ specifier: "/x/hung/server/index.ts", extension: hung },
+		];
+		jest.useFakeTimers();
+		try {
+			const listing = listExtensionCatalog(new Set(), entries, []);
+			for (let tick = 0; tick < 20; tick += 1) await Promise.resolve();
+			jest.advanceTimersByTime(EXTENSION_LOAD_TIMEOUT_MS);
+			const [entry] = await listing;
+			expect(entry?.tools).toEqual(["before_hang", "static"]);
+			expect(await extensionToolNames(hung)).toEqual({
+				tools: ["before_hang", "static"],
+				shadowed: [],
+			});
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	it("observes a sessionExtensions promise that rejects, and keeps the static tools", async () => {
+		const unhandled: unknown[] = [];
+		const onUnhandled = (reason: unknown) => unhandled.push(reason);
+		process.on("unhandledRejection", onUnhandled);
+		try {
+			const entries: ServerExtensionEntry[] = [
+				{
+					specifier: "/x/rejects/server/index.ts",
+					extension: {
+						name: "rejects",
+						extensions: [tool("static")],
+						sessionExtensions: (async (session: { setting: (key: string) => boolean }) => [
+							tool(String(session.setting("undeclared"))),
+						]) as unknown as () => ExtensionFactory[],
+					},
+				},
+			];
+			const [entry] = await listExtensionCatalog(new Set(), entries, []);
+			expect(entry?.tools).toEqual(["static"]);
+			await Bun.sleep(20);
+			expect(unhandled).toEqual([]);
+		} finally {
+			process.off("unhandledRejection", onUnhandled);
+		}
+	});
+
+	it("lists the static tools of a sessionExtensions that answers a promise", async () => {
+		const entries: ServerExtensionEntry[] = [
+			{
+				specifier: "/x/async/server/index.ts",
+				extension: {
+					name: "async-session",
+					extensions: [tool("static")],
+					sessionExtensions: (() => new Promise(() => {})) as unknown as () => ExtensionFactory[],
+				},
+			},
+		];
+		const [entry] = await listExtensionCatalog(new Set(), entries, []);
+		expect(entry?.tools).toEqual(["static"]);
+	});
+
+	it("leaves the names the host owns out of an installed extension's tools", async () => {
+		const builtin: ServerExtensionEntry = {
+			specifier: "@acme/builtin/server",
+			extension: {
+				name: "builtin",
+				extensions: [tool("builtin_tool")],
+				sessionExtensions: () => [tool("session_tool")],
+			},
+		};
+		const extension = {
+			name: "shadowing",
+			extensions: [tool("own"), tool("builtin_tool"), tool("host_tool"), tool("session_tool")],
+		};
+		const record: InstalledExtensionRecord = {
+			source: "/x/shadowing",
+			sourceKind: "folder",
+			name: "shadowing",
+			title: "shadowing",
+			state: "loaded",
+			server: { extension, entry: "/x/shadowing/server/index.ts", skillRoots: [] },
+		};
+		setHostToolFactories([tool("host_tool")]);
+		try {
+			const [, entry] = await listExtensionCatalog(new Set(), [builtin], [record]);
+			expect(entry).toMatchObject({ name: "shadowing", kind: "installed", tools: ["own"] });
+			expect(await extensionToolNames(extension, [builtin])).toEqual({
+				tools: ["own"],
+				shadowed: ["builtin_tool", "host_tool", "session_tool"],
+			});
+			expect(await extensionToolNames(extension)).toEqual({
+				tools: ["own", "builtin_tool", "session_tool"],
+				shadowed: ["host_tool"],
+			});
+		} finally {
+			setHostToolFactories([]);
+		}
 	});
 });

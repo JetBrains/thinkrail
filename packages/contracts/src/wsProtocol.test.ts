@@ -36,6 +36,7 @@ import {
 	customMessageText,
 	DEFAULT_CACHE_WARMING_MODE,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
+	EXTENSION_BROWSE_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
 	EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION,
 	EXTENSION_QUERY_PROTOCOL_VERSION,
@@ -46,6 +47,7 @@ import {
 	GITHUB_STAR_PROTOCOL_VERSION,
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
+	INSTALLED_EXTENSIONS_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
 	isCacheWarmingMode,
 	isCustomEndpointId,
@@ -385,6 +387,21 @@ test("host search and its previews are pinned to v106", () => {
 	expect(SEARCH_PROTOCOL_VERSION).toBe(106);
 	expect(WS_METHODS.searchQuery).toBe("search.query");
 	expect(WS_METHODS.searchPreview).toBe("search.preview");
+});
+
+test("the community catalog is pinned to v132", () => {
+	expect(PROTOCOL_VERSION).toBe(132);
+	expect(EXTENSION_BROWSE_PROTOCOL_VERSION).toBe(132);
+	expect(WS_METHODS.extensionsBrowse).toBe("extensions.browse");
+});
+
+test("installed extensions are pinned to v131", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(INSTALLED_EXTENSIONS_PROTOCOL_VERSION);
+	expect(INSTALLED_EXTENSIONS_PROTOCOL_VERSION).toBe(131);
+	expect(WS_METHODS.extensionsRemove).toBe("extensions.remove");
+	expect(WS_METHODS.extensionsUpdate).toBe("extensions.update");
+	expect(WS_METHODS.extensionsCheckUpdates).toBe("extensions.checkUpdates");
+	expect(WS_CHANNELS.extensionsChanged).toBe("extensions.changed");
 });
 
 test("spec sections in search are pinned to v113", () => {

@@ -106,6 +106,7 @@ import { SkillsDialog } from "./SkillsDialog";
 import { SubagentTranscriptDialog, SubagentTranscriptPane } from "./SubagentTranscriptDialog";
 import { SuggestionChips, type SuggestionShortcut } from "./SuggestionChips";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
+import { useToolRegistry } from "./toolRegistry";
 import { useChatResources, useCommandLog } from "./useChatResources";
 import { useModelCatalog } from "./useModelCatalog";
 import { useModelPreferences } from "./useModelPreferences";
@@ -164,8 +165,11 @@ export default function ChatView({
 		[imageDraft, sessionId],
 	);
 	const queue = useAppStore((s) => s.sessions[sessionId]?.queue ?? EMPTY_RUNTIME.queue);
+	const toolRegistry = useToolRegistry();
 	const suggestions = useAppStore(
-		useShallow((s) => deriveComposerSuggestions(s.sessions[sessionId], s.disabledExtensions)),
+		useShallow((s) =>
+			deriveComposerSuggestions(s.sessions[sessionId], s.disabledExtensions, toolRegistry),
+		),
 	);
 	const sessionModel = useAppStore((s) => s.sessions[sessionId]?.model ?? null);
 	const thinkingLevel = useAppStore(

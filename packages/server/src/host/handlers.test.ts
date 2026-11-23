@@ -861,6 +861,7 @@ test("extension.list reflects disabledExtensions written through settings.update
 			tools: ["visualize"],
 			hasParentExtensions: true,
 			hasChildExtensions: false,
+			kind: "builtin",
 		},
 		{
 			name: "ask-user-question",
@@ -871,6 +872,7 @@ test("extension.list reflects disabledExtensions written through settings.update
 			hasParentExtensions: true,
 			hasChildExtensions: false,
 			settings: [{ key: "richPreviews", default: true }],
+			kind: "builtin",
 		},
 		{
 			name: "web-access",
@@ -880,6 +882,7 @@ test("extension.list reflects disabledExtensions written through settings.update
 			tools: ["web_search", "source_check", "fetch_content", "get_search_content", "web_enable"],
 			hasParentExtensions: true,
 			hasChildExtensions: true,
+			kind: "builtin",
 		},
 		{
 			name: "next-steps",
@@ -889,6 +892,7 @@ test("extension.list reflects disabledExtensions written through settings.update
 			tools: ["suggest_next_steps"],
 			hasParentExtensions: true,
 			hasChildExtensions: false,
+			kind: "builtin",
 		},
 		{
 			name: "outputs",
@@ -898,6 +902,7 @@ test("extension.list reflects disabledExtensions written through settings.update
 			tools: ["present_files"],
 			hasParentExtensions: true,
 			hasChildExtensions: false,
+			kind: "builtin",
 		},
 		{
 			name: "session-insights",
@@ -907,8 +912,9 @@ test("extension.list reflects disabledExtensions written through settings.update
 			tools: [],
 			hasParentExtensions: false,
 			hasChildExtensions: false,
-			apiVersion: serverExtensions.find((entry) => entry.extension.name === "session-insights")
+			apiVersion: serverExtensions().find((entry) => entry.extension.name === "session-insights")
 				?.extension.apiVersion,
+			kind: "builtin",
 		},
 	]);
 	await handleRequest(
@@ -997,7 +1003,7 @@ test("extension.query answers session insights' sessions.list over the host's se
 		await Bun.sleep(100);
 	}
 	expect(answer?.apiVersion).toBe(
-		serverExtensions.find((entry) => entry.extension.name === "session-insights")?.extension
+		serverExtensions().find((entry) => entry.extension.name === "session-insights")?.extension
 			.apiVersion ?? -1,
 	);
 	expect(answer?.projects).toEqual([{ id: "p1", name: "repo", kind: "repository" }]);

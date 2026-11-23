@@ -3,6 +3,7 @@ import {
 	CACHE_WARMING_SETTINGS_PROTOCOL_VERSION,
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
 	CUSTOM_ENDPOINTS_PROTOCOL_VERSION,
+	EXTENSION_BROWSE_PROTOCOL_VERSION,
 	EXTENSION_SETTINGS_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
 	type HostPlatform,
@@ -210,7 +211,7 @@ export const SETTING = {
 		section: SettingsSection.Extensions,
 		label: "settings.packages.installDialog.title",
 		description: "settings.packages.installDialog.description",
-		keywords: ["pi package", "npm", "gallery"],
+		keywords: ["pi package", "thinkrail extension", "npm", "git", "folder", "gallery"],
 		requiresProtocolVersion: PI_PACKAGES_PROTOCOL_VERSION,
 	},
 	bundledExtensions: {
@@ -237,10 +238,18 @@ export const SETTING = {
 	installedPackages: {
 		id: "installed-packages",
 		section: SettingsSection.Extensions,
-		label: "settings.catalog.installedPackages.label",
+		label: "settings.extensions.group.installed",
 		description: "settings.extensions.group.installedDescription",
-		keywords: ["pi package", "npm", "git", "update"],
+		keywords: ["pi package", "thinkrail extension", "chat cards", "npm", "git", "update", "remove"],
 		requiresProtocolVersion: PI_PACKAGES_PROTOCOL_VERSION,
+	},
+	extensionBrowse: {
+		id: "extension-browse",
+		section: SettingsSection.Extensions,
+		label: "settings.extensionBrowse.title",
+		description: "settings.extensionBrowse.description",
+		keywords: ["community", "catalog", "discover", "thinkrail extension", "install"],
+		requiresProtocolVersion: EXTENSION_BROWSE_PROTOCOL_VERSION,
 	},
 	otherAgentSkills: {
 		id: "other-agent-skills",

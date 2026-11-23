@@ -10,7 +10,9 @@ import {
 	isDockedTool,
 	registerToolRenderer,
 	registerToolRendererPrefix,
+	removeInstalledToolRenderers,
 	resolveProminence,
+	setInstalledToolRenderers,
 } from "./toolRegistry";
 
 const props = (args: Record<string, unknown>): ToolRenderProps => ({
@@ -169,6 +171,23 @@ describe("prefix registrations (one resolver for every registry read)", () => {
 	it("never lets an empty prefix capture every tool", () => {
 		registerToolRendererPrefix("", () => null);
 		expect(getToolRenderer("some-unregistered-tool")).toBe(DefaultToolRenderer);
+	});
+
+	it("gives an app prefix's tools to an installed card only when its server half does not register them", () => {
+		const installed = () => null;
+		setInstalledToolRenderers(
+			"installed-ext",
+			{
+				pfx__served: { renderer: installed },
+				pfx__elsewhere: { renderer: installed },
+				own_tool: { renderer: installed },
+			},
+			["pfx__served", "own_tool"],
+		);
+		expect(getToolRenderer("pfx__served")).toBe(prefixRenderer);
+		expect(getToolRenderer("pfx__elsewhere")).toBe(installed);
+		expect(getToolRenderer("own_tool")).toBe(installed);
+		removeInstalledToolRenderers("installed-ext");
 	});
 });
 

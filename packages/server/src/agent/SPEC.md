@@ -98,7 +98,8 @@ re-opened transcripts provider-valid.
     `refresh({ allowNetwork: false })` as `createAgentSessionServices` does (skipped otherwise: the strict
     pass's services call has just run it). Ids it registered are `extensionProviderIds`.
     Unlike the strict pass it never fails a candidate: a failed load or a rejected registration skips only
-    that item, and the pass, refresh included, is bounded by 10 s: a load still running then is abandoned
+    that item, and the pass, refresh included, is bounded by 10 s (`EXTENSION_LOAD_TIMEOUT_MS`, the installed
+    loader's bound too): a load still running then is abandoned
     and nothing it queued is applied, so a factory that hangs asynchronously cannot hold boot or a Central
     rebuild (a late completion only fills the abandoned loader's queue), and a refresh still running is no
     longer awaited (it only settles the runtime's snapshot). Its diagnostics are closed counts: no extension
@@ -1012,6 +1013,34 @@ re-opened transcripts provider-valid.
     prompt section after pi-spec-graph wrote it (inline extensions load after path and bundled ones), and
     `childExtensionFactories(workspaceId)` leaves pi-spec-graph out of their delegated children. Only
     the tool is gated — the `startPlanReview` button path is a separate host seam. See `submodule-server-host-plan-review`.
+    **The registry is a runtime list** (`serverExtensions()` of [[submodule-server-extensions]]: the
+    built-ins, then installed ThinkRail extensions as they load). pi copies a loader's inline factories at
+    construction, so `buildResourceLoader` returns **one stable `ResourceLoader`** that delegates to an
+    inner pi loader and, at a reload that finds a different registry array than it was built with,
+    builds a fresh inner loader with the current factories (same inputs, same `cwd`) before reloading
+    it; the policy key is recorded on the stable outer loader. The host's `onChange` for installed
+    extensions calls `refreshInstalledExtensions()` (`bumpPackagesRevision` + `refreshExtensionTools`),
+    so every chat's loader is stale and rebuilds when its turn ends, exactly as a pi package change.
+    `enabledExtensionMissing`, owner lookup and skill roots read the same getter; skill roots are memoised
+    per registry entry. **Composition order — host-owned tools always win.** A parent's inline factories
+    are the bundled factories (bundled mode), the built-in registry extensions, the host's own factories
+    (`HOST_INLINE_FACTORIES`, headless-search policy through `skillCarryover`; `host` also hands the list to
+    `startInstalledExtensions`, so an installed extension's same-named tools are listed as shadowed), the caller's `extraFactories` (subagents, background
+    commands, the MCP host and its `mcp` / `tool-search` slots, usage policy, spec rule), and **then** the
+    installed extensions; pi gives a duplicate tool to its first registration, so an installed extension
+    never takes a host tool, and `preferRegistryTools` promotes built-ins only. A user's pi package and the
+    `builtin:` slots load before every inline factory, so they too beat an installed extension on a shared
+    name. Because pi drops a replaceable slot that another extension shares a name with, the installed
+    factories see a view of `pi` that silently refuses any tool, command or flag the host's slots
+    registered earlier in the same load (recorded per reload), so an installed `tool_search` or `/mcp`
+    never replaces the host's (registered in [[pi-compatibility]] § Registry tool precedence). The child
+    set keeps the same rule: `childExtensionFactories` ends with the registry's child factories, built-ins
+    before installed ones; `pi-delegation` appends its own (`dropCancelledPrompt`, a DAG resource's worker
+    factories) after that list, so an installed child factory can still shadow a DAG worker tool until
+    `pi-delegation` places resource factories ahead of the installed child set. `piPackagesInstall` applies the kind rule ([[submodule-server-agent-packages]]
+    § Kind detection) and returns `{ installed: "package" | "extension", … }`. The pi runtime build forces
+    jiti's transform through the shared `withForcedJitiTransform`, serialized with installed-extension
+    loads because the env is process-wide.
     **Registry extensions** follow the same shape, keyed by extension name instead of workspace. A
     host-injected `setDisabledExtensionsResolver(() => ReadonlySet<string>)` (global — no `agent` →
     settings edge; a throwing resolver means nothing disabled) is read by `buildResourceLoader` at **every
@@ -1081,9 +1110,12 @@ re-opened transcripts provider-valid.
     `isLoaderPolicyStale` is one more predicate of the reconciliation `applyExtensionTools` runs at
     registration, after every reload and on `refreshExtensionTools`, so a session prepared under an older
     policy or older setting values reloads when it registers (or once its turn ends) and a change
-    mid-reload re-reloads — the fan-out alone would miss both. It also compares the **superseded
-    packages** a loader's last load left out (`omitSupersededPackages`, recorded with what that load found
-    of the packages any registry extension supersedes, `supersedablePackagesIn`) with what the current
+    mid-reload re-reloads — the fan-out alone would miss both. The loader's `extensionsOverride` composes
+    `preferRegistryTools(omitSupersededPackages(omitDisabledRegistryExtensions(result, …, registry), …,
+    builtins), registry)`: only a built-in supersedes a package (the installed loader refuses the field).
+    It also compares the **superseded
+    packages** a loader's last load left out (`omitSupersededPackages`, recorded on the stable outer loader
+    with what that load found of the packages a built-in supersedes, `supersedablePackagesIn`) with what the current
     switches would leave out of the same packages: switching a superseding extension reloads exactly the
     chats that load such a package (a user's vanilla `@thinkrail/pi-session-insights`, whose `/insights`
     then appears or goes), under the same end-of-turn rule, and no other chat. Keying the disabled set
@@ -1274,7 +1306,7 @@ re-opened transcripts provider-valid.
     `on` beats a group disable). `skillsGate` filters + relabels in one `skillsOverride`; only `load` skills
     reach the system prompt / `/skill:` list. A **disabled registry extension's** skill roots
     (`extensionSkillRoots`: source roots in dev, the `extensions/<name>` folder of the staged root when
-    bundled) are left out of `additionalSkillPaths` itself — rebuilt in place from the disabled set
+    bundled, an installed extension's roots resolved from its own entry in every mode) are left out of `additionalSkillPaths` itself — rebuilt in place from the disabled set
     snapshotted at each reload — never filtered from pi's result: pi resolves same-name skills first-wins
     before any override runs, so dropping a winner afterwards would also lose the personal or project skill
     it shadowed. `listSkillCommands` (whose cache key includes the disabled set) and `listSkillCatalog`
@@ -1302,9 +1334,9 @@ re-opened transcripts provider-valid.
       **lazily on first use** (never at module load: the resolve requires `node_modules`, which a
       compiled binary lacks). The workspace packages' `pi.skills` manifests aren't auto-discovered for
       file-path entries — their `skills/` dirs (`pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`), the
-      host's own skills (`packages/server/skills`: ThinkRail-only guidance such as
-      `managing-mcp-servers`, which would be wrong under vanilla pi and so cannot live in a portable
-      package) plus the registry extensions' owner-resolved skill roots are wired via
+      host's own skills (`packages/server/skills`: ThinkRail-only guidance — `managing-mcp-servers` and
+      `making-thinkrail-extensions`, which would be wrong under vanilla pi and so cannot live in a portable
+      package; a skill folder may carry reference files and plain-Node scripts, staged with it, never tests) plus the registry extensions' owner-resolved skill roots are wired via
       **`additionalSkillPaths`**; `build-support`'s `skillRoots` lists the same host root for both bundles.
       Registry extensions themselves are never path-loaded: they are the same named inline factories in
       both modes (one composition mode; `{ name, factory }` keeps `<inline:visualize>` in diagnostics).

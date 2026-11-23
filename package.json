@@ -5,6 +5,7 @@
 	"workspaces": {
 		"packages": [
 			"apps/*",
+			"extension-examples/*",
 			"packages/*",
 			"pi-extensions/*",
 			"thinkrail-extensions/*"
@@ -24,6 +25,8 @@
 			"@resvg/resvg-js": "2.6.2",
 			"@remixicon/react": "4.9.0",
 			"@pierre/highlights": "0.4.0",
+			"@tailwindcss/node": "4.3.3",
+			"@tailwindcss/oxide": "4.3.3",
 			"@tailwindcss/vite": "4.3.3",
 			"@types/bun": "1.4.4",
 			"@types/react": "19.3.0",
@@ -57,6 +60,8 @@
 		"dev:server": "turbo run dev --filter=@thinkrail/server",
 		"dev:web": "turbo run dev --filter=@thinkrail/web",
 		"build:web": "turbo run build --filter=@thinkrail/web",
+		"build:e2e": "turbo run build --filter=@thinkrail/web --filter=@thinkrail/example-extension-palette",
+		"build:extension-fixtures": "turbo run build --filter=@thinkrail/example-extension-palette",
 		"posthog-cli": "bun apps/web/posthogCli.ts",
 		"build:binary": "bun run build:web && bun apps/cli/scripts/build-binary.ts",
 		"smoke:binary": "bun packages/artifact-tests/smoke-binary.ts",
@@ -94,6 +99,7 @@
 		"check:i18n": "bun test scripts/checkI18n.test.ts scripts/i18nRenderReach.test.ts && bun scripts/check-i18n.ts",
 		"check:compiler": "bun --filter @thinkrail/web compiler:census:check",
 		"check:pi-packages": "bun scripts/check-pi-packages.ts",
+		"check:extension-packages": "bun scripts/check-extension-packages.ts",
 		"ci:flakes": "bun scripts/ci-flakes.ts",
 		"changeset": "changeset",
 		"release:version": "changeset version && bun install --no-frozen-lockfile",

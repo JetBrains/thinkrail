@@ -786,7 +786,8 @@ a project picker, the prompt hero, and the reused
   gates over `useSettingsCatalogContext`: the protocol, an active workspace, the host platform, and the
   states without which a row does not render at all — a signed-in provider, voice files on disk, a launched
   survey), kept to the sections the nav shows (`availableSettings`), plus the `searchEntries` shell
-  injects (one per shortcut, [[submodule-web-shell]]). `settingsSearch.ts` ranks them with contracts' tiered matcher over label, description, section name and
+  injects (one per shortcut, [[submodule-web-shell]]) and the dialog's own entries for each installed
+  extension and the settings it declares (`installedExtensionSearchEntries`, from the store's catalog). `settingsSearch.ts` ranks them with contracts' tiered matcher over label, description, section name and
   keywords. While a query is active its results replace the content pane: a listbox whose options name
   their section and highlight the matched ranges (`components/highlightRanges`); ↓ enters it from the field,
   ↑/↓ (j/k) and Home/End walk it, ↑ on the first returns to the field, ← goes to the tabs, Enter, Space or →
@@ -834,7 +835,7 @@ a project picker, the prompt hero, and the reused
     download; the Windows shell; the settle period). Enter, or Esc keeping a cheap value, returns to the row.
     A click applies at once either way.
   - **Deletions confirm through `ConfirmDialog`** (MCP servers, custom servers, templates, layout presets,
-    packages, voice files), from the row's Delete key and its button alike — never a `ConfirmPopover`,
+    packages, installed extensions, voice files), from the row's Delete key and its button alike — never a `ConfirmPopover`,
     never unasked; focus recovery then lands on the neighbouring row, else on the list's
     `data-focus-fallback` (the empty state's add button).
   - **Nothing is said only on hover:** what a `title=` tooltip or a "?" icon carried is visible text (the
@@ -1516,11 +1517,16 @@ a project picker, the prompt hero, and the reused
   **`ExtensionsSettings`** (the **Extensions & skills** section in Agent, next to MCP servers and Prompt
   templates; nav `settings-nav-extensions`, listed only at
   `protocolVersion >= EXTENSION_CATALOG_PROTOCOL_VERSION`) is one `SettingsPage` of rows, not cards, in up
-  to five groups. Its description carries the page's only statement about chats — "Changes apply to open
+  to six groups. Its description carries the page's only statement about chats — "Changes apply to open
   chats when their current turn ends."; there is no dynamic notice about which chats are pending.
-  **Packages** is the **Install a pi package** row (`packages-install`, with **Browse the pi package
-  gallery** as its button). **Built into ThinkRail** is the host-registry catalog: `extension.list` each time the
-  section mounts (static per host process, so section-local state; a failure shows **Retry**), rendered by
+  **Packages** is the **Install an extension or pi package** row (`packages-install`, with two
+  buttons from `GalleryLinks`: **Browse ThinkRail extensions** (`extensions-gallery-link`, the website's
+  showcase, only when the host supports installed extensions) first, then **Browse the pi package
+  gallery**; the install dialog's form repeats both in that order). **Built into ThinkRail** is the host-registry catalog, read from the store's
+  `extensionCatalog` (`selectBuiltinExtensions`: every row of an older host, `kind: "builtin"` from v131) —
+  `transport`'s `refreshExtensionCatalog` re-lists on each mount and each welcome while the page is open, so
+  an older host or a page opened while disconnected still lands its rows, and a failure shows **Retry**,
+  which re-lists — rendered by
   the props-driven `ExtensionsCatalog` as one `SettingsRow` per entry — title (the web half's translated
   `title` when it declares one, `extensions`' `webExtensionTitle`, else the host's), description and its
   tools as visible text ("Tools: a, b", each `extension-tool-<tool>`) with a `@thinkrail/ui/switch`
@@ -1541,7 +1547,7 @@ a project picker, the prompt hero, and the reused
   `protocolVersion >= OTHER_AGENT_SKILLS_PROTOCOL_VERSION`) is **Skills from other agents**,
   `other-agent-skills-toggle`, over `store.otherAgentSkills`, writing `settings.update { otherAgentSkills }`,
   with no Reset (see the rules above); per-project choices made in the Skills dialog still win over it.
-  **Installed packages** and **pi built-in**
+  **Installed** and **pi built-in**
   (`PiPackagesSettings.tsx`, props-driven; every `packages.*` request and the row state live in the
   **`usePiPackages`** hook, `usePiPackages.ts`, so the page component only composes) exist only while
   `supportsPiPackages(protocolVersion)` holds — against an older host the page is the bundled group
@@ -1554,11 +1560,11 @@ a project picker, the prompt hero, and the reused
   workspace-change reads pass `force`, so the host rebuilds its catalog: an extension file dropped into a
   scanned folder by hand changes nothing the host watches, and a cached list would hide it for minutes. The update check
   is guarded the same way: a check started later (a workspace switch, a manual check, the re-check
-  after an update) wins, and only the latest clears "Checking…" or re-flags rows. **Installed packages**
+  after an update) wins, and only the latest clears "Checking…" or re-flags rows. **Installed**
   opens with an **Updates** row (Check for updates; Update all as a button while the last check flagged rows;
-  that check's error as visible text) over one `SettingsList` (`packages`) of package rows then loose-file
-  rows. A **package row** (`PackageRow`, row id `<scope>:<source>`) has as its primary (Enter) the expand
-  control — name ·
+  that check's error as visible text) over one `SettingsList` (`packages`) of installed ThinkRail extension
+  rows, then package rows, then loose-file rows. A **package row** (`PackageRow`, row id `<scope>:<source>`) has as its primary (Enter) the expand
+  control — name · a **pi package** type tag ·
   kind / scope tags (`npm` / `git` / `local`, Global / Repository) · an **Update available** or **Not
   installed** tag · one provenance line (declared source · "<version> installed" · description) ·
   tool and `/command` chips of its extensions as a chat's loader last recorded them (a file no chat has
@@ -1622,6 +1628,79 @@ a project picker, the prompt hero, and the reused
   offered only with an active workspace whose project is pi-trusted,
   with the reason shown otherwise, and the hints show the real settings paths from the catalog. Disabling
   never unregisters a tool renderer ([[submodule-web-extensions]]), so past transcripts still render.
+
+  **Installed ThinkRail extensions** (from `INSTALLED_EXTENSIONS_PROTOCOL_VERSION`, v131) are the first rows of
+  the **Installed** list (`PiPackagesGroup`'s `extensionRows`: each a list row id `extension:<source>`, its
+  markup and its Delete; they also keep showing, as the list alone, while `packages.list` loads or fails), from
+  `selectInstalledExtensions` in host order; every extension row carries a **ThinkRail extension** tag and every
+  pi package row a **pi package** tag, so each row is marked with its kind. **`InstalledExtensionRow`**
+  (`InstalledExtensionRow.tsx`, props-driven) is a list row like a loose file's: its primary (nothing to expand)
+  opens its ⋯ menu and shows title · kind tag · source tag (`npm` / `git` / `local`, read from the declaration) ·
+  **Update available** (from `extensions.checkUpdates`) · one provenance line (package name · source ·
+  "<version> installed" · description) · what it brings (tool-name chips and a **Chat cards** mark when the
+  host lists a `web` half); its **switch** (Space on the row; `extension-toggle-<name>`, the same
+  `disabledExtensions` key as a built-in, by package name), then as its buttons the menu (**Update** — always:
+  a folder source reloads in place — and **Remove…**; Shift+F10) and its declared boolean settings' switches,
+  nested underneath with the descriptor's own
+  `title` / `description` (shown as is, never locale keys; disabled while the extension is off;
+  `extension-setting-<name>-<key>`; no Reset — Delete on the row is its Remove). Delete asks to remove it
+  through `ConfirmDialog` (`installed-extension-remove-confirm`: removing drops it for every project, and past
+  calls show as plain rows — the follower unloads its web half). No switch disables itself while a request is
+  in flight (the writes converge on the broadcast); Update and Remove wait. States, each with no switch where
+  it cannot work: **failed** — a "Failed to load" tag and the host's error verbatim with a fix-or-remove hint,
+  nothing listed as running; **incompatible** — a tag and a notice saying "Needs a newer ThinkRail" or "Built
+  for an older ThinkRail" (`extensionApiFit` over the entry's `api`; an unreadable `api` reads as needing a
+  newer app), the host's reason and an update hint; and a **web half that failed in this window**
+  (`useWebExtensionLoads`) — a warning that its cards could not load here: its tools still run and their
+  calls show as plain rows, but a tool that waits for an answer cannot be answered in this window until the
+  cards load (interactivity comes from the renderer registration, which failed), so it says to reload the
+  window or choose Update; the switch is kept. One sentence for every extension: the row cannot tell which
+  tools are interactive without the web half that failed. **Search** finds them as the pi packages are found (the catalog's `installed-packages`, whose
+  keywords name ThinkRail extensions too) and, beyond the static catalog, each installed extension and each
+  setting it declares by its own words: `SettingsDialog` injects `installedExtensionSearchEntries`
+  (`settingsSearch.ts`) from the store's catalog, jumping to the row (`installed-extension-<name>`) or to the
+  setting (`extension-setting-<name>-<key>`, landing on its row). **`useInstalledExtensions`**
+  (`useInstalledExtensions.ts`) owns every `extensions.*` and switch/setting request of these rows, keyed
+  `extension\0<source>` for busy and inline errors (never a toast), runs the update check on mount and with the
+  **Updates** row's Check for updates (its count and Update all include flagged extensions), joins **Update
+  all** (sequential `extensions.update`), and re-lists the store catalog after each mutation; its requests
+  outwait the transport's default (ten minutes for a mutation, two for the update check), since an npm or
+  git reinstall outlasts it, and the host still finishes a run the page stopped waiting for; the
+  `extensions.changed` push does the same for changes made elsewhere (the agent skill editing
+  `extensions.json`). The page's one statement that changes reach open chats when their current turn ends
+  covers extensions too.
+
+  **The install dialog installs extensions too.** Its result step reads `PackageInstallResult`: the kind line
+  (`install-package-kind`) says whether a ThinkRail extension or a pi package landed — decided by
+  `installed`, the attached `extension` entry feeding only the chips — and an extension shows its title ·
+  version, tool chips, **Chat cards** and its declared settings, with "open chats pick it up when their
+  current turn ends". An extension is always global: when **This repository only** was chosen and the host
+  answers `EXTENSION_SCOPE_UNSUPPORTED`, the dialog moves to a `scopeUnsupported` step explaining that and
+  offering **Install globally** (one click, re-submitted at user scope) or Back. A `preset` (`InstallPreset`:
+  source, title, version, author, description) opens the dialog at a **confirm** step — the source, the
+  catalog metadata, the trust statement and Install, with no scope choice — read on mount, so the page
+  remounts the dialog (`key`) per opening.
+
+  **Browse** (`ExtensionBrowse.tsx`, props-driven; `useExtensionBrowse.ts` owns the request; catalog
+  `extension-browse`) is a group shown from `EXTENSION_BROWSE_PROTOCOL_VERSION` (v132), after Installed. The
+  host fetches the catalog (`extensions.browse`, [[submodule-server-extension-catalog]]); the browser never
+  contacts thinkrail.ai. The hook reads on mount and again, from the host's cache, whenever the store catalog
+  changes (so the **Installed** marks follow installs and removals); **Retry** forces a refetch; the latest read
+  wins. Its own 30 s request bound only catches a host that stopped answering: the host's fetch has a shorter
+  timeout of its own. The group's description states plainly that listings are automatic and unreviewed and that an extension
+  runs code on this machine and in the app. A search field row (Enter enters the field, ↓ leaves it for the
+  listings, Esc clears a query and then returns to the row) narrows by title, name,
+  description and author ("No extensions match …") over one `SettingsList` (`extension-browse`) of listing
+  rows — no preview image: an author-chosen image URL would expose every user's IP to its host, so Browse
+  never reads a listing's `image` and no catalog entry makes the app request another origin (pinned by
+  `e2e/extension-browse.spec.ts`) — the primary: title, version, **Agent tools** /
+  **Chat cards** from `halves`, package name · author, description, and an **Installed** mark or an
+  incompatible mark (`extensionApiFit`) with its reason as visible text — which opens the install dialog's
+  confirm step with the listing's `npm:<name>` (inert, `aria-disabled`, when the listing cannot be installed),
+  with npm and repository links and **Install** as its buttons. An empty catalog is a row linking to the
+  authoring guide (`https://thinkrail.ai/docs/build-an-extension/`); an unreachable, offline or invalid
+  catalog — or a host that does not answer — is a notice row saying it cannot reach the catalog, that
+  installed extensions keep working, with Retry as its button, while the rest of the page is unaffected.
   **`EnvironmentSettings`** (the **Environment** section, nav `settings-nav-environment`, listed only at
   `protocolVersion >= HOST_ENVIRONMENT_PROTOCOL_VERSION`) edits the stored host environment
   ([[submodule-server-environment]]) as a `SettingsPage`: a **Pi configuration** group (scope tag *This

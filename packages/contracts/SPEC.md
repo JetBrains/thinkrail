@@ -307,7 +307,8 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
     `apiVersion` (absent when undeclared, and below `EXTENSION_QUERY_PROTOCOL_VERSION` = v130) the version
     of the payloads its server half answers through `extension.query`. Neither query methods nor panels are
     in the catalog: the extension's own halves agree on the methods, and the web registry is the panels' one
-    authority.
+    authority. From `INSTALLED_EXTENSIONS_PROTOCOL_VERSION` (v131) an entry also says its `kind` and, for an
+    installed one, its install state (§ Installed extensions).
     `ASK_DISCUSS_PROTOCOL_VERSION` (v105) is the host version that renders `ask_user_question`
     `kind: "discuss"` answers; the card withholds Discuss below it.
   - **`SessionSummary`** — a chat session as the host reports it for hydration (read side); `live`
@@ -1038,7 +1039,8 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   frames to the workspaces whose diff base that ref is, so their git-derived reads re-converge) / **`skills.state`** (`SkillCatalogEntry[]` — full catalog +
   per-skill `decision` + `group` — for a `workspaceId`) / **`extension.list`** (`ExtensionCatalogEntry[]`,
   no params — the host registry joined with `disabledExtensions`; v82, **`EXTENSION_CATALOG_PROTOCOL_VERSION`**;
-  there is no write method — the Settings switch writes `settings.update { disabledExtensions }`) /
+  the Settings switch writes `settings.update { disabledExtensions }`; installed extensions add
+  `extensions.*`, § Installed extensions) /
   **`extension.query`** (`ExtensionQueryParams` `{ extension, method, params? }` → `unknown`; v130,
   **`EXTENSION_QUERY_PROTOCOL_VERSION`**: one query of a host-registry extension's server half (reads, and
   writes only to the extension's own data folder or the workspace's Artifacts).
@@ -1503,6 +1505,64 @@ and what it loaded, never pi's own types.
   the host could not produce the row; of the install codes only `PACKAGE_SOURCE_INVALID`,
   `PACKAGE_OFFLINE`, `PACKAGE_UNTRUSTED`, `PACKAGE_INSTALL_FAILED` and `PACKAGE_SETTINGS_WRITE_FAILED`
   are raised before anything is written, and a client may claim "nothing was added" only for those.
+
+## Installed extensions
+
+`INSTALLED_EXTENSIONS_PROTOCOL_VERSION` (131) gates what the host adds for extensions authored outside
+the repository ([[module-thinkrail-extensions]] § Installed extensions): the extra `extension.list`
+fields, the `extensions.*` methods, the `extensions.changed` channel and `packages.install`'s `installed`
+kind. Below it a client sees installed extensions as ordinary `extension.list` rows; built-in rows mean
+what they always did.
+
+- **`ExtensionCatalogEntry`** gains `kind` (`builtin` | `installed`; absent from an older host, read as
+  built in). An installed entry adds `source` (the declaration in `extensions.json`, exactly as written —
+  the target of the methods below), `version`, `state` (`InstalledExtensionState`: `loaded` — also a
+  web-only extension; `failed` — install or load error, a duplicate name; `incompatible` — the manifest's
+  `api` is not this host's major or is a newer minor), `error` (the reason, the host's or pi's text) and
+  `web` (`ExtensionWebHalf`, `{ url, styles?, shadowed? }`: host-relative URLs, only when the extension is
+  loaded, compatible and has a web half, whether switched on or off; `shadowed` names the tools its server
+  half registers that the host keeps, which the client never draws with this web half's renderers). `name` is the npm package name — the key of
+  `disabledExtensions` and `extensionSettings` as for a built-in; `title` is the manifest's, else the
+  name; `description` the package's. An installed entry's `settings` carry the extension's own `title` /
+  `description` (`ExtensionSettingDescriptor`), which a client shows instead of locale keys.
+- **Web half route:** `GET /extensions/<encodeURIComponent(name)>/<token>/<manifest path>`
+  (`EXTENSION_ASSETS_ROUTE`, a value export, is the `/extensions/` prefix) — the token
+  changes with the files, so the response is immutable; a client uses the URLs as given.
+- **`packages.install`** returns `PackageInstallResult`: the pi package row with `installed: "package"`,
+  or for a package whose `package.json` carries a `thinkrail` manifest `installed: "extension"`, the
+  `extension` entry, and the same fields shaped as a user-scope row with no resources (so an older
+  client's dialog still names what landed). Like a package, a confirmed extension install turns it on:
+  its `name` leaves `disabledExtensions` (its `extensionSettings` values are kept). The host fetches and
+  inspects first and declares last, so for an extension `PACKAGE_SOURCE_INVALID`, `PACKAGE_OFFLINE`,
+  `PACKAGE_INSTALL_FAILED`, **`EXTENSION_SCOPE_UNSUPPORTED`** (an extension asked for at repository
+  scope) and **`EXTENSIONS_FILE_INVALID`** are all raised before `extensions.json` is written.
+- **`extensions.remove { source }`** (drops the declaration; the host-owned install folder goes at the
+  next host start; a folder source's own folder is never touched) / **`extensions.update { source }`** (a fresh install of the
+  source in a new folder, or a re-load in place for a folder source; the old install stays when the new
+  one fails) / **`extensions.checkUpdates { force? }`** (the npm and git `{ source }`s with a newer
+  version, cached briefly unless `force`) — each resolves `Ack` / the list once the host reconciled.
+  Codes: **`EXTENSION_UNKNOWN`** (no such declaration), **`EXTENSIONS_FILE_INVALID`** (`extensions.json`
+  does not parse, so the host will not rewrite it), and the package codes `PACKAGE_SOURCE_INVALID`,
+  `PACKAGE_OFFLINE`, `PACKAGE_INSTALL_FAILED`, `PACKAGE_UPDATE_FAILED` for the install pipeline both share.
+- **`extensions.changed`** (no payload) follows every reconcile that changed what `extension.list`
+  reports; a client re-lists.
+
+### Community catalog (Browse)
+
+`EXTENSION_BROWSE_PROTOCOL_VERSION` (132) adds the in-app Browse read and one field:
+
+- **`extensions.browse { force? }` → `ExtensionBrowseResult`** (`{ generatedAt, extensions:
+  ExtensionBrowseEntry[] }`): the website's `catalog.json` ([[module-thinkrail-extensions]] § Catalog) as the
+  host fetched and validated it ([[submodule-server-extension-catalog]]), each `ExtensionListing` (`name`,
+  `version`, `title?`, `description`, `author?`, `api`, `halves` ⊆ `server`/`web`, `install`
+  = `npm:<name>`, `npm`, `repository?`, `publishedAt`) plus **`installed`** — an installed extension already
+  has that name. A listing carries no image: the host ignores a catalog entry's `image`
+  ([[submodule-server-extension-catalog]]), so no author-chosen URL reaches a client. The host caches the file for minutes; `force` refetches. Codes: **`EXTENSION_CATALOG_OFFLINE`**
+  (`PI_OFFLINE`), **`EXTENSION_CATALOG_UNREACHABLE`** (network, timeout, HTTP status) and
+  **`EXTENSION_CATALOG_INVALID`** (not the expected shape). `api` is passed through uninterpreted; the client
+  decides whether this app can load it.
+- An installed **`ExtensionCatalogEntry`** also carries **`api`** (the manifest's, when it was read), so a
+  client can say whether an `incompatible` extension needs a newer ThinkRail or was built for an older one.
 
 ## Voice input
 

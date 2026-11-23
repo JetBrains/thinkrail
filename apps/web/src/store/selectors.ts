@@ -9,8 +9,11 @@ import {
 	CHATS_PROTOCOL_VERSION,
 	canMarkCompletionUnread,
 	DEFAULT_WORKSPACE_NAME,
+	EXTENSION_BROWSE_PROTOCOL_VERSION,
+	type ExtensionCatalogEntry,
 	firstPromptOfTexts,
 	type GitDiffScope,
+	INSTALLED_EXTENSIONS_PROTOCOL_VERSION,
 	isLiveResource,
 	isSessionWorking,
 	MCP_PROTOCOL_VERSION,
@@ -70,6 +73,7 @@ import type {
 	ClosedChat,
 	ComposerFocusRequest,
 	EditorTab,
+	ExtensionCatalogRead,
 	FilesTreeView,
 	MarkedUnread,
 	PanelViewEntry,
@@ -196,6 +200,55 @@ export function selectOnboardingActive(
 ): boolean {
 	if (state.onboardingWizard === "shown") return !hasRepoProject(state.projects);
 	return state.onboardingWizard === "pending" && selectOnboardingEligible(state);
+}
+
+export function selectSupportsInstalledExtensions(state: ProtocolState): boolean {
+	return (
+		state.protocolVersion !== null && state.protocolVersion >= INSTALLED_EXTENSIONS_PROTOCOL_VERSION
+	);
+}
+
+export function selectSupportsExtensionBrowse(state: ProtocolState): boolean {
+	return (
+		state.protocolVersion !== null && state.protocolVersion >= EXTENSION_BROWSE_PROTOCOL_VERSION
+	);
+}
+
+export function selectBuiltinExtensions(catalog: ExtensionCatalogRead): ExtensionCatalogRead {
+	return Array.isArray(catalog) ? catalog.filter((entry) => entry.kind !== "installed") : catalog;
+}
+
+export function selectInstalledExtensions(catalog: ExtensionCatalogRead): ExtensionCatalogEntry[] {
+	return Array.isArray(catalog) ? catalog.filter((entry) => entry.kind === "installed") : [];
+}
+
+export interface InstalledWebHalf {
+	name: string;
+	url: string;
+	styles?: string;
+	shadowed?: string[];
+	serverTools?: string[];
+}
+
+export function selectInstalledWebHalves(
+	state: ProtocolState & { extensionCatalog: ExtensionCatalogRead },
+): InstalledWebHalf[] | null {
+	if (state.protocolVersion === null) return null;
+	if (!selectSupportsInstalledExtensions(state)) return [];
+	if (!Array.isArray(state.extensionCatalog)) return null;
+	return state.extensionCatalog.flatMap((entry) =>
+		entry.kind === "installed" && entry.web
+			? [
+					{
+						name: entry.name,
+						url: entry.web.url,
+						...(entry.web.styles ? { styles: entry.web.styles } : {}),
+						...(entry.web.shadowed?.length ? { shadowed: entry.web.shadowed } : {}),
+						...(entry.tools.length ? { serverTools: entry.tools } : {}),
+					},
+				]
+			: [],
+	);
 }
 
 export function selectSupportsMcp(state: ProtocolState): boolean {

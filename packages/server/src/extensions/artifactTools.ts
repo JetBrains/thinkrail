@@ -6,7 +6,7 @@ export type ArtifactTools = ReadonlyMap<string, ArtifactTool>;
 
 export function artifactTools(
 	isDisabled: ExtensionDisabled,
-	entries: readonly ServerExtensionEntry[] = serverExtensions,
+	entries: readonly ServerExtensionEntry[] = serverExtensions(),
 ): ArtifactTools {
 	const tools = new Map<string, ArtifactTool>();
 	for (const { extension } of entries) {

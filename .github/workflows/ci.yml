@@ -83,8 +83,8 @@ jobs:
       - run: bun run test
 
   pi-packages:
-    name: Pi package parity (vanilla pi under Node)
-    timeout-minutes: 10
+    name: Published packages (vanilla pi and the extension SDK outside the repo)
+    timeout-minutes: 15
     needs: changes
     if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
@@ -99,6 +99,7 @@ jobs:
           node-version: 22
       - run: bun install --frozen-lockfile
       - run: bun run check:pi-packages
+      - run: bun run check:extension-packages
 
   e2e-shard:
     name: E2E (no-agent) shard ${{ matrix.shard }}/3

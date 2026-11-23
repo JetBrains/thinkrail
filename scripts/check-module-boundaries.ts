@@ -60,6 +60,19 @@ const MODULE_RULES: readonly ModuleRule[] = [
 	},
 ];
 
+const SDK_ROOT = "packages/extension-sdk";
+const SDK_SOURCES = [
+	"packages/contracts",
+	"packages/extension-api",
+	"packages/ui",
+	"packages/resource-renderers",
+];
+const EXAMPLES = "extension-examples/";
+const INSTALLED_CONTRACT_SOURCES: Readonly<Record<string, RegExp>> = {
+	"apps/web": /^src\/extensions\//,
+	"packages/server": /^src\/extensions\/installed\//,
+};
+
 const DEPENDENCY_SECTIONS = [
 	"dependencies",
 	"devDependencies",
@@ -84,7 +97,13 @@ function normalized(path: string): string {
 
 function workspacePackages(root: string): Map<string, string> {
 	const packages = new Map<string, string>();
-	for (const base of ["apps", "packages", "pi-extensions", "thinkrail-extensions"]) {
+	for (const base of [
+		"apps",
+		"extension-examples",
+		"packages",
+		"pi-extensions",
+		"thinkrail-extensions",
+	]) {
 		const basePath = join(root, base);
 		if (!existsSync(basePath)) continue;
 		for (const entry of readdirSync(basePath, { withFileTypes: true })) {
@@ -102,6 +121,16 @@ function workspacePackages(root: string): Map<string, string> {
 function moduleRules(packages: ReadonlyMap<string, string>): ModuleRule[] {
 	const roots = [...packages.values()];
 	const extensions = roots.filter((root) => root.startsWith("thinkrail-extensions/"));
+	const rules = declaredRules(roots, extensions);
+	const ruled = new Set(rules.map((rule) => rule.root));
+	const publicRoots = roots.filter((root) => root !== SDK_ROOT && !root.startsWith(EXAMPLES));
+	return [
+		...rules,
+		...roots.filter((root) => !ruled.has(root)).map((root) => ({ root, allowed: publicRoots })),
+	];
+}
+
+function declaredRules(roots: readonly string[], extensions: readonly string[]): ModuleRule[] {
 	return [
 		...MODULE_RULES.map((rule) =>
 			rule.root === "apps/web" || rule.root === "packages/server"
@@ -135,6 +164,10 @@ function moduleRules(packages: ReadonlyMap<string, string>): ModuleRule[] {
 				piExtensionRoot(root),
 			],
 		})),
+		...roots.filter((root) => root === SDK_ROOT).map((root) => ({ root, allowed: SDK_SOURCES })),
+		...roots
+			.filter((root) => root.startsWith(EXAMPLES))
+			.map((root) => ({ root, allowed: [SDK_ROOT] })),
 	];
 }
 
@@ -273,6 +306,9 @@ function sourceHalf(subpath: string): "web" | "server" | undefined {
 }
 
 function sourceRule(rule: ModuleRule, subpath: string): ModuleRule {
+	if (rule.root === SDK_ROOT) {
+		return /^(?:src\/types|tools)\//.test(subpath) ? rule : { ...rule, allowed: [] };
+	}
 	if (!rule.root.startsWith("thinkrail-extensions/")) return rule;
 	switch (sourceHalf(subpath)) {
 		case "web":
@@ -294,16 +330,25 @@ function sourceRule(rule: ModuleRule, subpath: string): ModuleRule {
 	}
 }
 
+function sdkEntries(half: "web" | "server" | undefined, exports: readonly string[]): string[] {
+	const entries = exports.filter((key) => !/\.(?:json|css)$/.test(key));
+	if (half === "server") return entries.filter((key) => key === "./server");
+	if (half === "web") return entries.filter((key) => key !== "./server");
+	return entries;
+}
+
 function sourceViolation(
 	rule: ModuleRule,
 	subpath: string,
 	{ specifier, typeOnly }: SourceImport,
 	target: WorkspaceTarget | undefined,
+	sdkExports: readonly string[],
 ): string | undefined {
 	if (target && !allowedEdge(sourceRule(rule, subpath), target.root)) {
 		return `creates forbidden ${rule.root} -> ${target.root} edge`;
 	}
-	const extension = rule.root.startsWith("thinkrail-extensions/");
+	const example = rule.root.startsWith(EXAMPLES);
+	const extension = rule.root.startsWith("thinkrail-extensions/") || example;
 	const half = sourceHalf(subpath);
 	const sdk = rule.root === "packages/extension-api";
 	const sdkHalf = sourceHalf(subpath.replace(/^src\//, ""));
@@ -320,6 +365,12 @@ function sourceViolation(
 		) {
 			return "leaks extension-api's server half into browser sources";
 		}
+		if (example && target.root === SDK_ROOT) {
+			const entries = sdkEntries(half, sdkExports);
+			if (!entries.some((entry) => specifier === `${target.name}${entry.slice(1)}`)) {
+				return `may use only ${entries.map((entry) => `${target.name}${entry.slice(1)}`).join(", ")}`;
+			}
+		}
 		let publicEntry: "web" | "server" | undefined;
 		if (target.root.startsWith("thinkrail-extensions/")) {
 			if (rule.root === "apps/web") publicEntry = "web";
@@ -329,8 +380,15 @@ function sourceViolation(
 			if (rule.root === "packages/server" || (extension && half === "server"))
 				publicEntry = "server";
 		}
-		if (publicEntry && specifier !== `${target.name}/${publicEntry}`) {
-			return `may use only public ${target.name}/${publicEntry}`;
+		if (publicEntry) {
+			const entries = [`${target.name}/${publicEntry}`];
+			if (
+				target.root === "packages/extension-api" &&
+				INSTALLED_CONTRACT_SOURCES[rule.root]?.test(subpath)
+			) {
+				entries.push(`${target.name}/installed`);
+			}
+			if (!entries.includes(specifier)) return `may use only public ${entries.join(", ")}`;
 		}
 	}
 	const browserSafe =
@@ -340,6 +398,7 @@ function sourceViolation(
 		rule.root === "packages/contracts" ||
 		rule.root === "packages/locales" ||
 		sdk ||
+		rule.root === SDK_ROOT ||
 		(extension && half === "web");
 	const piPackage =
 		target?.root.startsWith("pi-extensions/") ||
@@ -353,6 +412,13 @@ export function moduleBoundaryViolations(root: string): string[] {
 	const absoluteRoot = resolve(root);
 	const packages = workspacePackages(absoluteRoot);
 	const violations: string[] = [];
+	const sdkManifest = join(absoluteRoot, SDK_ROOT, "package.json");
+	const sdkExports = existsSync(sdkManifest)
+		? Object.keys(
+				(JSON.parse(readFileSync(sdkManifest, "utf8")) as { exports?: Record<string, unknown> })
+					.exports ?? {},
+			)
+		: [];
 	for (const rule of moduleRules(packages)) {
 		const modulePath = join(absoluteRoot, rule.root);
 		const manifestPath = join(modulePath, "package.json");
@@ -380,6 +446,7 @@ export function moduleBoundaryViolations(root: string): string[] {
 					normalized(relative(modulePath, path)),
 					sourceImport,
 					target,
+					sdkExports,
 				);
 				if (violation) {
 					violations.push(`${file}: import ${JSON.stringify(sourceImport.specifier)} ${violation}`);

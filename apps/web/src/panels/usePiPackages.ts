@@ -1,4 +1,5 @@
 import type {
+	PackageInstallResult,
 	PiBuiltinExtension,
 	PiPackageScope,
 	PiPackageSummary,
@@ -7,7 +8,7 @@ import type {
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { errorText, getTransport } from "@/transport";
+import { errorText, getTransport, refreshExtensionCatalog } from "@/transport";
 import { type PiPackageAction, piPackageKey } from "./PiPackagesSettings";
 
 /** npm installs outlast the transport's default; the host still finishes a run that outlasts this. */
@@ -32,7 +33,7 @@ export interface PiPackagesController {
 	toggleBuiltin: (builtin: PiBuiltinExtension, enabled: boolean) => void;
 	cancelRemove: () => void;
 	removeNow: () => void;
-	install: (request: { source: string; scope: PiPackageScope }) => Promise<PiPackageSummary>;
+	install: (request: { source: string; scope: PiPackageScope }) => Promise<PackageInstallResult>;
 }
 
 /** Off adds the row's key; on clears every key of the package, including those of pi-equivalent declarations. */
@@ -294,6 +295,7 @@ export function usePiPackages({
 				)
 				.then((summary) => {
 					void listPackages();
+					if (summary.installed === "extension") void refreshExtensionCatalog();
 					return summary;
 				}),
 	};

@@ -3,6 +3,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { buildExtensionFixtures } from "./extensionFixtures";
 import { holdE2eIdleSleep } from "./idleSleep";
 import { laneShard, parseJobShard } from "./shardPlan";
 import { shardTestListArgs } from "./shardTestLists";
@@ -10,6 +11,8 @@ import { shardTestListArgs } from "./shardTestLists";
 async function main(): Promise<number> {
 	await holdE2eIdleSleep();
 	const playwrightArgs = ["-c", "e2e/playwright.binary.config.ts", ...process.argv.slice(2)];
+	const built = await buildExtensionFixtures(playwrightArgs);
+	if (built !== 0) return built;
 	const listDir = mkdtempSync(join(tmpdir(), "thinkrail-e2e-test-lists-"));
 	try {
 		const [testListArgs = []] = await shardTestListArgs(

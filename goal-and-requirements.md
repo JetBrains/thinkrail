@@ -179,6 +179,13 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   with their tools, hand-dropped extension files, and pi's built-ins — switching any of them off in pi's
   own settings format, a whole package through a ThinkRail setting. Changes reach open chats when their
   turn ends ([[submodule-server-agent-packages]], [[submodule-web-panels]]).
+- **ThinkRail extensions** — install an extension by npm name, git URL or folder from Settings, or from
+  the in-app Browse of the community catalog; it adds agent tools, skills, boolean settings, interactive
+  tools and its own chat cards, is installed for the user in every project, and is switched off or
+  removed in Settings. Anyone can build and publish one with the extension SDK, and a published one is
+  listed on thinkrail.ai/extensions automatically; asked to, the agent writes one and installs it itself
+  ([[module-thinkrail-extensions]], [[submodule-server-extensions-installed]],
+  [[submodule-web-extensions]], [[submodule-web-panels]], [[module-extension-sdk]], [[module-website]]).
 - **MCP servers** — pi's built-in MCP, read from the user's `mcp.json`, managed from Settings and
   inspectable per chat next to background commands and subagents (each server's state, last status and
   that chat's calls to it); a confirm in the chat, on the call, before calls

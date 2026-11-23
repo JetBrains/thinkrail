@@ -606,12 +606,60 @@ remain app-local. A registration is:
   **`resolveProminence`** seam — where a per-user override map (settings) can plug in later.
 
 Every registry read (renderer, summary, chrome, width, prominence) goes through one resolver: the exact tool
-name, else the longest app-local prefix registration (`registerToolRendererPrefix` — today only `mcp__`,
-because pi names MCP tools per server), else the default. Exact names always win, an empty prefix never
-matches, and extension descriptors stay exact-name only.
+name — a built-in registration first, else, among installed extensions whose renderers are currently
+registered, the one listed first by the host (the accepted loading window is in
+[[submodule-web-extensions]]) — else the longest app-local prefix registration
+(`registerToolRendererPrefix` — today only `mcp__`, because pi names MCP tools per server), else the
+default. A built-in exact name always wins, an empty prefix never matches, and
+extension descriptors stay exact-name only. An installed exact name that the extension's own server half
+registers never takes a name under an app prefix — the host's MCP tools beat an installed one on the
+server — and the loader never registers an installed renderer for a name the host keeps over that
+extension's server half (its `web.shadowed`). A card for a tool the extension's server half does not
+register is the extension's documented purpose and is accepted: a web half may draw a host MCP tool
+(`mcp__<server>__<tool>`) or a host tool that has no card of its own (`set_title`, `grep`), while the host
+still runs the tool; only a built-in card is never replaced.
+The order mirrors which tool the server actually runs (built-in
+tool-name precedence, host-owned tools before installed ones, then pi's first registration wins), so a
+card does not draw over another tool's result outside that window.
 
-Unregistered tools fall back to `DefaultToolRenderer`. A tool that needs user input mid-run takes one of
-two routes:
+**The registry is subscribable.** Installed web halves register after first render
+([[submodule-web-extensions]]): `reserveInstalledOwner(owner)` fixes an owner's precedence slot when its
+load starts (host-list order, independent of which bundle finishes first),
+`setInstalledToolRenderers(owner, toolRenderers)` replaces that owner's set atomically in its slot, and
+`removeInstalledToolRenderers(owner)` drops it and its slot, revealing the next owner of the same name (a
+failed load instead keeps an empty set in its slot).
+Every change publishes a new immutable `ToolRegistry` snapshot (with a `revision`). Readers take it through
+`useSyncExternalStore` hooks — `useToolRegistry()` for derivations, `useToolRenderer(name)` for the
+renderer itself, `useToolRegistryRevision()` — and pass the snapshot as the optional trailing `registry`
+argument of every resolver and derivation (`deriveRows`, `deriveInteractionStates`,
+`latestPendingInteraction` / `dockedInteraction` / `pendingInteraction`, `sessionGlance`,
+`estimateChatRowHeights`, `deriveMessageActions`, `deriveComposerSuggestions`, summaries, chrome, width,
+prominence, docking). A version counter beside an
+unchanged `getToolRenderer(name)` call is not enough: the React Compiler memoizes that call by its
+arguments, so the snapshot has to be an argument. The structure matters too: an unregistered tool is a
+routine step inside a collapsed activity group, so a late primary registration turns it into a card row
+and its removal turns it back. Without the argument the live snapshot is read, which keeps imperative
+callers and tests unchanged. Built-in registration at bootstrap behaves as before. In dev, registry state
+lives in `import.meta.hot.data`, so a hot update of the registry keeps every registration.
+
+Unregistered tools fall back to `DefaultToolRenderer`. **Every renderer renders inside its own
+`ToolRendererBoundary`** — in `ToolRendererBody`, in the composer dock (`DockedTool`) and on the plan page
+alike, built-in or installed: a
+renderer that throws shows `DefaultToolRenderer` for that one row (chat wraps it in
+`data-testid="tool-renderer-fallback"`) while the card chrome, result images and every other row keep
+working. The boundary gives the renderer another try when the renderer identity (an update), the
+`toolCallId`, the call's `status` or its `streaming` flag changes — so a card that threw on partial arguments
+renders once streaming ends or the result arrives (a result lands with the status change) — but not on
+other prop changes such as each streamed argument delta, so a permanently broken card retries a bounded
+number of times per call rather than on every render. It reports
+through `components`' `reportBoundaryError` (reportId `tool-renderer`, classifier only) **once per renderer
+function**, so a broken card in fifty rows is one report. A registration's `summary` runs outside any
+boundary (card headers, activity steps), so a throwing summary reads as no summary and reports once
+(`tool-summary`); a throwing `composerSuggestions` reader likewise reads as no suggestions
+(`tool-composer-suggestions`). Effects and event handlers are not caught by a boundary; they reach the window-level
+error reports. A new render site of a registered renderer must keep the boundary.
+
+A tool that needs user input mid-run takes one of two routes:
 - the extension-UI bridge (`pi.extensionUi` → `ExtUiPrompt`, below);
 - for a rich inline card, rendering from its `toolCall` args and replying through the props-only
   **`ToolRenderProps.interaction`**. `ToolRendererBody` fills it through `useToolInteraction`
@@ -2117,7 +2165,7 @@ Unknown custom messages retain their existing behavior.
 
 ## Boundary
 
-- **Public surface:** the registry API (`toolRegistry`), the shared workspace-file target canonicalizer
+- **Public surface:** the registry API (`toolRegistry`, plus `ToolRendererBoundary` for any other render site of a registered renderer), the shared workspace-file target canonicalizer
   (`fileTargets`), and the renderers (incl. the presentational
   `Markdown` — GFM + code highlighting, no store/transport; the rendering is fixed but the **prose skin** is the
   caller's via an optional `className` — chat uses the compact bubble skin (`tr-prose-chat`),

@@ -28,8 +28,8 @@ import {
 	useSettingsKeyboard,
 	walkKey,
 } from "@/settingsKit";
-import { SettingsSection, useAppStore } from "@/store";
-import { loadInAppSurvey } from "@/transport";
+import { SettingsSection, selectInstalledExtensions, useAppStore } from "@/store";
+import { loadInAppSurvey, supportsExtensionSettings } from "@/transport";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { ChatSettings } from "./ChatSettings";
 import { EnvironmentSettings } from "./EnvironmentSettings";
@@ -48,6 +48,7 @@ import { SubagentsSettings } from "./SubagentsSettings";
 import { useSettingsCatalogContext } from "./settingsCatalog";
 import { resolveSettingsSection, settingsNavGroups } from "./settingsNav";
 import {
+	installedExtensionSearchEntries,
 	type SettingsSearchEntry,
 	searchSettings,
 	settingsSearchEntries,
@@ -152,6 +153,7 @@ function SettingsFrame({
 	const target = useAppStore((s) => s.settingsTarget);
 	const catalogContext = useSettingsCatalogContext();
 	const { protocolVersion } = catalogContext;
+	const extensionCatalog = useAppStore((s) => s.extensionCatalog);
 	useProviderStatus();
 	const resultKeys = useLocalKeys("settings", LOCAL_KEY_DEFAULTS.settings);
 	const groups = settingsNavGroups(protocolVersion, updateSettings !== undefined);
@@ -167,7 +169,13 @@ function SettingsFrame({
 	const results = showResults
 		? searchSettings(
 				query,
-				settingsSearchEntries(t, groups, catalogContext, searchEntries),
+				settingsSearchEntries(t, groups, catalogContext, [
+					...(searchEntries ?? []),
+					...installedExtensionSearchEntries(
+						selectInstalledExtensions(extensionCatalog),
+						supportsExtensionSettings(protocolVersion),
+					),
+				]),
 				sectionLabels,
 			)
 		: [];

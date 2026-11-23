@@ -1,0 +1,22 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"declaration": true,
+		"emitDeclarationOnly": true,
+		"noEmit": false,
+		"jsx": "react-jsx",
+		"lib": ["ES2023", "DOM", "DOM.Iterable"],
+		"types": [],
+		"rootDir": "..",
+		"outDir": "dist/.declarations"
+	},
+	"include": [
+		"src/server.ts",
+		"src/types",
+		"../ui/*.ts",
+		"../ui/*.tsx",
+		"../extension-api/src",
+		"../contracts/src"
+	],
+	"exclude": ["src/types/conformance.ts", "../**/*.test.ts", "../**/*.test.tsx"]
+}

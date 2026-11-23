@@ -32,6 +32,7 @@ export {
 	type PiPackageTarget,
 	type PiResourceToggle,
 	removePiPackage,
+	resolvePiInstallSource,
 	setPiResourceEnabled,
 	updatePiPackages,
 } from "./mutations";

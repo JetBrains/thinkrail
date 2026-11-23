@@ -33,17 +33,29 @@ export {
 	supersedablePackagesIn,
 	supersedingExtension,
 } from "./inline";
+export {
+	EXTENSION_LOAD_TIMEOUT_MS,
+	type ExtensionSourceKind,
+	type InstalledExtensionRecord,
+	InstalledExtensions,
+	installedExtensions,
+	resolveExtensionAsset,
+	type StagedExtension,
+	withForcedJitiTransform,
+} from "./installed";
+export { type InstalledExtensionsHostOptions, startInstalledExtensions } from "./installedHost";
 export { type InteractiveTools, interactiveTools } from "./interactive";
 export {
 	createExtensionQueries,
 	type ExtensionHostServicesFor,
 	type ExtensionQueries,
 } from "./queries";
-export { type ServerExtensionEntry, serverExtensions } from "./registry";
+export { builtinServerExtensions, type ServerExtensionEntry, serverExtensions } from "./registry";
 export {
 	extensionSkillRoots,
 	resolveExtensionSkillRoots,
 	STAGED_HOST_SKILLS_ROUTE,
+	skillPackageRoots,
 	stagedExtensionSkillRoute,
 } from "./skills";
 export {

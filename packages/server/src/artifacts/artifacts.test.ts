@@ -788,7 +788,7 @@ test("a prompt delivered inside a run starts its own round: changes and the earl
 
 test("chats taking turns on a file record each round once, so earlier rounds keep their marker", async () => {
 	await observeArtifactSessionEvent("w1", "s0", { type: "agent_start" });
-	write(`${CONTEXT}/shared.md`, "v0");
+	write(`${CONTEXT}/shared.md`, "start");
 	await observeArtifactSessionEvent("w1", "s0", { type: "agent_settled" });
 	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
 	await observeArtifactSessionEvent("w1", "s2", { type: "agent_start" });

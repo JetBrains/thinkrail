@@ -1,20 +1,29 @@
 import { describe, expect, it } from "bun:test";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+	builtinServerExtensions,
 	extensionSkillRoots,
 	registryInlineExtensions,
 	resolveExtensionSkillRoots,
 	type ServerExtensionEntry,
-	serverExtensions,
 	stagedExtensionSkillRoute,
 } from "./index";
+import { builtinExtensionNames } from "./registry";
 
 describe("server extension registry", () => {
+	it("reserves the name of every built-in extension, including those with no server half", () => {
+		const root = new URL("../../../../thinkrail-extensions/", import.meta.url);
+		const packages = readdirSync(root, { withFileTypes: true })
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => entry.name);
+		expect(builtinExtensionNames().sort()).toEqual(packages.sort());
+	});
+
 	it("lists each extension with its public server specifier bound to the imported descriptor", async () => {
-		const specifiers = serverExtensions.map((entry) => entry.specifier);
+		const specifiers = builtinServerExtensions.map((entry) => entry.specifier);
 		expect(specifiers).toEqual([
 			"@thinkrail/ext-visualize/server",
 			"@thinkrail/ext-ask-user-question/server",
@@ -24,12 +33,12 @@ describe("server extension registry", () => {
 			"@thinkrail/ext-session-insights/server",
 		]);
 		expect(new Set(specifiers).size).toBe(specifiers.length);
-		for (const entry of serverExtensions) {
+		for (const entry of builtinServerExtensions) {
 			const resolved = createRequire(import.meta.url).resolve(entry.specifier);
 			const loaded = (await import(resolved)) as { default: unknown };
 			expect(loaded.default).toBe(entry.extension);
 		}
-		expect(serverExtensions.map((entry) => entry.extension.name)).toEqual([
+		expect(builtinServerExtensions.map((entry) => entry.extension.name)).toEqual([
 			"visualize",
 			"ask-user-question",
 			"web-access",
@@ -41,8 +50,8 @@ describe("server extension registry", () => {
 
 	it("flattens parent and child factories into named inline extensions", () => {
 		const names = (session?: Parameters<typeof registryInlineExtensions>[3]) =>
-			registryInlineExtensions("extensions", undefined, serverExtensions, session).map((inline) =>
-				typeof inline === "function" ? "fn" : inline.name,
+			registryInlineExtensions("extensions", undefined, builtinServerExtensions, session).map(
+				(inline) => (typeof inline === "function" ? "fn" : inline.name),
 			);
 		expect(names()).toEqual(["web-access", "next-steps"]);
 		expect(
@@ -131,7 +140,7 @@ describe("resolveExtensionSkillRoots", () => {
 	});
 
 	it("resolves the shipped registry without error", () => {
-		for (const entry of serverExtensions) {
+		for (const entry of builtinServerExtensions) {
 			expect(() => resolveExtensionSkillRoots(entry)).not.toThrow();
 		}
 	});
@@ -153,7 +162,7 @@ describe("extensionSkillRoots", () => {
 	});
 
 	it("resolves source roots when nothing is staged", () => {
-		for (const shipped of serverExtensions) {
+		for (const shipped of builtinServerExtensions) {
 			expect(extensionSkillRoots(shipped)).toEqual(resolveExtensionSkillRoots(shipped));
 		}
 	});

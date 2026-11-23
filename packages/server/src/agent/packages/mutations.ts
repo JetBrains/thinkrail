@@ -148,26 +148,32 @@ function declaredAsInput(ctx: PiPackageHostContext, target: PiPackageTarget): st
 	return resolveLocalSource(source, settingsBaseDir(ctx.cwd, ctx.agentDir, target.scope));
 }
 
-/** Installs, then persists the declaration; a relative local source reads like `pi install ./x` from the workspace. */
+export function resolvePiInstallSource(ctx: PiPackageHostContext, target: PiPackageTarget): string {
+	assertScope(target.scope);
+	const base = ctx.cwd ?? ctx.agentDir;
+	const input = parsePiPackageInput(target.source);
+	const raw =
+		input.bareName !== undefined && existsSync(resolveLocalSource(input.bareName, base))
+			? input.bareName
+			: input.source;
+	if (!raw) throw new CodedError("PACKAGE_SOURCE_INVALID", "A package source is required.");
+	assertScopeWritable(ctx, target.scope);
+	const kind = piPackageSourceKind(raw);
+	const source = kind === "local" ? resolveLocalSource(raw, base) : raw;
+	if (kind === "local" && !existsSync(source)) {
+		throw new CodedError("PACKAGE_SOURCE_INVALID", `No such folder or file: ${source}`);
+	}
+	return source;
+}
+
 export function installPiPackage(
 	ctx: PiPackageHostContext,
 	target: PiPackageTarget,
-): Promise<string> {
+	isForeign?: (installedPath: string) => boolean,
+): Promise<string | undefined> {
 	return enqueue(async () => {
-		assertScope(target.scope);
-		const base = ctx.cwd ?? ctx.agentDir;
-		const input = parsePiPackageInput(target.source);
-		const raw =
-			input.bareName !== undefined && existsSync(resolveLocalSource(input.bareName, base))
-				? input.bareName
-				: input.source;
-		if (!raw) throw new CodedError("PACKAGE_SOURCE_INVALID", "A package source is required.");
-		assertScopeWritable(ctx, target.scope);
-		const kind = piPackageSourceKind(raw);
-		const source = kind === "local" ? resolveLocalSource(raw, base) : raw;
-		if (kind === "local" && !existsSync(source)) {
-			throw new CodedError("PACKAGE_SOURCE_INVALID", `No such folder or file: ${source}`);
-		}
+		const source = resolvePiInstallSource(ctx, target);
+		const kind = piPackageSourceKind(source);
 		if (kind !== "local" && isOfflineMode()) {
 			throw new CodedError(
 				"PACKAGE_OFFLINE",
@@ -176,12 +182,26 @@ export function installPiPackage(
 		}
 		const local = target.scope === "project";
 		const { settings, packageManager } = openSettings(ctx, target.scope);
+		const heldBefore =
+			kind === "local" ? undefined : packageManager.getInstalledPath(source, target.scope);
 		try {
 			await packageManager.install(source, { local });
 		} catch (error) {
 			throw new CodedError("PACKAGE_INSTALL_FAILED", messageOf(error));
 		}
 		assertScopeWritable(ctx, target.scope);
+		const installedPath =
+			kind === "local" ? undefined : packageManager.getInstalledPath(source, target.scope);
+		if (installedPath !== undefined && isForeign?.(installedPath)) {
+			if (heldBefore === undefined) {
+				try {
+					await packageManager.remove(source, { local });
+				} catch (error) {
+					throw new CodedError("PACKAGE_REMOVE_FAILED", messageOf(error));
+				}
+			}
+			return undefined;
+		}
 		await settings.reload();
 		assertScopeLoaded(settings, target.scope);
 		packageManager.addSourceToSettings(source, { local });

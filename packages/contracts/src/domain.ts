@@ -1623,6 +1623,19 @@ export type ExtensionSettingValues = Record<string, Record<string, boolean>>;
 export interface ExtensionSettingDescriptor {
 	key: string;
 	default: boolean;
+	title?: string;
+	description?: string;
+}
+
+/** Absent from a host below `INSTALLED_EXTENSIONS_PROTOCOL_VERSION`, where every entry is built in. */
+export type ExtensionKind = "builtin" | "installed";
+
+export type InstalledExtensionState = "loaded" | "failed" | "incompatible";
+
+export interface ExtensionWebHalf {
+	url: string;
+	styles?: string;
+	shadowed?: string[];
 }
 
 export interface ExtensionCatalogEntry {
@@ -1638,6 +1651,14 @@ export interface ExtensionCatalogEntry {
 	settings?: ExtensionSettingDescriptor[];
 	/** The server half's payload version for its `extension.query` methods; absent when undeclared or before `EXTENSION_QUERY_PROTOCOL_VERSION`. */
 	apiVersion?: number;
+	kind?: ExtensionKind;
+	source?: string;
+	version?: string;
+	state?: InstalledExtensionState;
+	error?: string;
+	web?: ExtensionWebHalf;
+	/** Installed only, from `EXTENSION_BROWSE_PROTOCOL_VERSION`: the manifest's `api`, when it was read. */
+	api?: string;
 }
 
 export interface ExtensionQueryParams {
@@ -1647,6 +1668,36 @@ export interface ExtensionQueryParams {
 	method: string;
 	/** The extension's own payload, validated by the extension. */
 	params?: unknown;
+}
+
+export type ExtensionHalf = "server" | "web";
+
+export interface ExtensionListing {
+	name: string;
+	version: string;
+	title?: string;
+	description: string;
+	author?: string;
+	api: string;
+	halves: ExtensionHalf[];
+	install: string;
+	npm: string;
+	repository?: string;
+	publishedAt: string;
+}
+
+export interface ExtensionBrowseEntry extends ExtensionListing {
+	installed: boolean;
+}
+
+export interface ExtensionBrowseResult {
+	generatedAt: string;
+	extensions: ExtensionBrowseEntry[];
+}
+
+export interface PackageInstallResult extends PiPackageSummary {
+	installed?: "package" | "extension";
+	extension?: ExtensionCatalogEntry;
 }
 
 /** How many recently chosen models the host remembers. */
@@ -1922,6 +1973,9 @@ export interface InstalledFontsResult {
 
 /** Serves (`GET`) and accepts (`PUT`) user font files by base name. */
 export const USER_FONTS_ROUTE = "/fonts/";
+
+/** The host route that serves an installed extension's web half (§ Installed extensions). */
+export const EXTENSION_ASSETS_ROUTE = "/extensions/";
 /** Required on `PUT` uploads: a non-simple header forces a CORS preflight the host never answers. */
 export const USER_FONT_UPLOAD_HEADER = {
 	name: "X-ThinkRail-Request",

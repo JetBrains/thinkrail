@@ -149,7 +149,7 @@ test("agent run plan ignores ambient skip, trusts only internal build readiness,
 		PLAYWRIGHT_BLOB_OUTPUT_FILE: "/tmp/report.zip",
 	};
 	const plan = createAgentRunPlan("/developer/bin/bun", ["e2e/agent.live.spec.ts"], sourceEnv);
-	expect(plan.buildCommand).toEqual(["/developer/bin/bun", "run", "build:web"]);
+	expect(plan.buildCommand).toEqual(["/developer/bin/bun", "run", "build:e2e"]);
 	expect(plan.playwrightCommand).toEqual([
 		"/developer/bin/bun",
 		"x",

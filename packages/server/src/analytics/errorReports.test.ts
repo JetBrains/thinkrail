@@ -313,6 +313,38 @@ test("client errors keep WebKit stacks parseable and their frames web-relative",
 	expect(JSON.stringify(frames)).not.toContain("evil.example");
 });
 
+test("nothing of an installed extension reaches PostHog, from its web half or its server half", async () => {
+	const sent: BatchEntry[] = [];
+	const inside = join(import.meta.dir, "fixture-extension");
+	boot(sent, { foreignFrameRoots: () => [inside] });
+	reportClientError({
+		kind: "render",
+		boundary: "tool-renderer",
+		type: "TypeError",
+		stack:
+			"renderSecretWeather@http://localhost:4317/extensions/secret-weather/1.2.0-0123456789ab/dist/web.js:10:5\nrender@http://127.0.0.1:4317/assets/index-abc.js:3:1",
+	});
+	const error = new Error("weather failed");
+	error.stack = `Error: weather failed\n    at fetchSecretWeather (${inside}/server/index.ts:3:4)\n    at ${import.meta.path}:1:1`;
+	reportError(error, { source: "host_crash", handled: false, scope: "unhandledRejection" });
+	await shutdownAnalytics();
+	const wire = JSON.stringify(exceptions(sent));
+	expect(exceptions(sent)).toHaveLength(2);
+	for (const forbidden of [
+		"secret-weather",
+		"1.2.0",
+		"0123456789ab",
+		"renderSecretWeather",
+		"fetchSecretWeather",
+		"fixture-extension",
+		"extensions/",
+	]) {
+		expect(wire).not.toContain(forbidden);
+	}
+	expect(wire).toContain("web/assets/index-abc.js");
+	expect(wire).toContain("packages/server/src/analytics/errorReports.test.ts");
+});
+
 test("chunk ids reach PostHog: registered bundles via the SDK, browser chunks via the report", async () => {
 	const id = "01a15438-b3fb-7af1-a9d9-5a7475549eac";
 	const webId = "ab8fcdab-5c22-55ed-bec8-0f9acb6a407e";

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
 	CHAT_ATTACHMENTS_ROUTE,
+	EXTENSION_ASSETS_ROUTE,
 	IMAGES_ROUTE,
 	SPEECH_SOCKET_ROUTE,
 	USER_FONTS_ROUTE,
@@ -17,6 +18,7 @@ test("every host route the app composes is proxied by the Vite dev server", () =
 		FILES_ROUTE,
 		BLOB_ROUTE,
 		USER_FONTS_ROUTE.replace(/\/$/, ""),
+		EXTENSION_ASSETS_ROUTE.replace(/\/$/, ""),
 		IMAGES_ROUTE.replace(/\/$/, ""),
 		CHAT_ATTACHMENTS_ROUTE.replace(/\/$/, ""),
 	]) {
