@@ -802,6 +802,8 @@
 	"mcp.transport.http": "HTTP",
 	"mcp.transport.stdio": "stdio",
 	"nextSteps.list.empty": "沒有可用的建議。",
+	"nextSteps.refused.body": "回覆中沒有可見的回答，因此在建議後續步驟前已要求代理先寫出回答。",
+	"nextSteps.refused.summary": "已要求先以文字給出回答",
 	"nextSteps.summary_one": "建議了 {{count}} 個後續步驟",
 	"nextSteps.summary_other": "建議了 {{count}} 個後續步驟",
 	"notifications.aggregate.body_one": "有 {{count}} 個工作樹需要你留意",

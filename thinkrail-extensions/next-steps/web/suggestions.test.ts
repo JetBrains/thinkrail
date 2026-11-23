@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readSuggestions } from "./suggestions";
+import { isRefused, readSuggestions } from "./suggestions";
 
 describe("readSuggestions", () => {
 	test("prefers the tool's normalized result details", () => {
@@ -19,5 +19,14 @@ describe("readSuggestions", () => {
 
 	test("reads nothing from malformed input", () => {
 		expect(readSuggestions({}, { details: "nope" })).toEqual([]);
+	});
+
+	test("a refused call offers nothing, even though its arguments hold suggestions", () => {
+		const refused = { details: { suggestions: [], refused: true } };
+		expect(readSuggestions({ suggestions: ["Open a PR"] }, refused)).toEqual([]);
+		expect([isRefused(refused), isRefused({ details: { suggestions: ["Open a PR"] } })]).toEqual([
+			true,
+			false,
+		]);
 	});
 });

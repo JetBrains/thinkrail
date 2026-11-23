@@ -937,6 +937,8 @@
 	"mcp.transport.http": "HTTP",
 	"mcp.transport.stdio": "stdio",
 	"nextSteps.list.empty": "No usable suggestions.",
+	"nextSteps.refused.body": "The reply had no visible answer, so the agent was asked to write one before suggesting next steps.",
+	"nextSteps.refused.summary": "Asked for the answer as text first",
 	"nextSteps.summary_one": "Suggested {{count}} next step",
 	"nextSteps.summary_other": "Suggested {{count}} next steps",
 	"notifications.aggregate.body_one": "{{count}} worktree needs your attention",

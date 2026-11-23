@@ -849,6 +849,8 @@
 	"mcp.transport.http": "HTTP",
 	"mcp.transport.stdio": "stdio",
 	"nextSteps.list.empty": "No hay sugerencias utilizables.",
+	"nextSteps.refused.body": "La respuesta no tenía texto visible, así que se pidió al agente que la escribiera antes de sugerir los pasos siguientes.",
+	"nextSteps.refused.summary": "Pidió primero la respuesta como texto",
 	"nextSteps.summary_many": "Sugirió {{count}} pasos siguientes",
 	"nextSteps.summary_one": "Sugirió {{count}} paso siguiente",
 	"nextSteps.summary_other": "Sugirió {{count}} pasos siguientes",

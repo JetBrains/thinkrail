@@ -983,6 +983,8 @@
 	"mcp.transport.http": "HTTP",
 	"mcp.transport.stdio": "stdio",
 	"nextSteps.list.empty": "Нет подходящих предложений.",
+	"nextSteps.refused.body": "В ответе не было видимого текста, поэтому агента попросили написать его, прежде чем предлагать следующие шаги.",
+	"nextSteps.refused.summary": "Сначала запрошен ответ текстом",
 	"nextSteps.summary_few": "Предложено {{count}} следующих шага",
 	"nextSteps.summary_many": "Предложено {{count}} следующих шагов",
 	"nextSteps.summary_one": "Предложен {{count}} следующий шаг",
