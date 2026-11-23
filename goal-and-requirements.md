@@ -56,7 +56,9 @@ Durable decisions every feature follows; [[architecture]] carries the structure 
   model registry, system prompt, skills/extensions, compaction, cost, and session state.
 - **Influence by feeding, never by assembling.** Features shape the agent only through what they feed
   `pi` — prompt context, files, pi's own skills/extensions — and the flags a session starts with.
-- **Expose, don't recompute.** The host shows what `pi` reports rather than deriving its own copy.
+- **Expose, don't recompute.** The host shows what `pi` reports rather than deriving its own copy, so
+  pi's numbers stay the headline. Analysis derived from pi-recorded facts — subagent spend outside pi's
+  own total, an estimate — is computed by the host, never the browser, and always labelled with its origin.
 - **The user's own tools and credentials.** Git, GitHub, and model access go through the user's `git`,
   `gh`, `central` CLI, and pi's provider auth; ThinkRail keeps no accounts or tokens of its own.
 - **Trust is explicit.** What a cloned repository could inject into the agent — its committed skill
@@ -106,6 +108,20 @@ What ThinkRail does, at product level; the linked spec owns the detail.
 - **Chats** — concurrent `pi` sessions per workspace, each with its own model, pi-reported token/cost,
   steering and follow-ups mid-run, skill and prompt-template autocomplete, and history search
   ([[submodule-web-chat]], [[submodule-server-agent]]).
+- **Session insights** — a local, on-demand breakdown of past sessions per project: a list with
+  pi-recorded tokens/cost, tool calls, errors, subagents and outcomes, every number with its origin, and
+  per session a trace of its turns, model and tool calls on a shared timeline with redacted call details
+  and a jump into the chat, each call's context and cache with a read-only diff of adjacent requests, why
+  it was expensive, and the files it touched; across sessions, rule-based "what to do" findings with their
+  evidence, usage and cost by day, model, project, tool and skill, file hotspots with one action each,
+  action sequences (a transition matrix, a process map, what follows a failed call), two slices compared
+  with bootstrap intervals, two sessions' calls aligned step by step, and faceted search of events
+  across sessions that opens the analysis at a hit; the user's labels and notes on sessions (kept by
+  ThinkRail, never in pi's files) to filter and compare by; and exports into the workspace's Artifacts —
+  a self-contained HTML page with best-effort secret masking, a Chrome-trace file and an e2e fixture cut;
+  nothing is applied and nothing leaves the machine. Vanilla `pi` gets the findings, the usage summary and
+  a one-session summary as an `/insights` command from the same core, a pi package not yet on npm
+  ([[module-ext-session-insights]], [[module-pi-session-insights]]).
 - **Existing skills reused** — portable Agent Skills kept for other coding agents are read in place;
   `pi` stays the parser and runtime ([[submodule-server-agent]]).
 - **Plans with per-step review** — a shared TODO plan the agent works and the user edits; a completed step

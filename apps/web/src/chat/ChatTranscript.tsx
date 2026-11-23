@@ -37,6 +37,7 @@ import {
 import { errorText, getTransport, respondToTool } from "@/transport";
 import { ACTIVITY_BREADCRUMB_HEIGHT, ActivityBreadcrumbTrail } from "./activityBreadcrumbs";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
+import { locateChatRow } from "./chatLocation";
 import type { ChatMessageOrder } from "./chatPreferences";
 import { refreshContinuation, requestContinuation } from "./continuations";
 import { PendingExtUiContext, PendingExtUiPrompt } from "./ExtUiPrompt";
@@ -53,13 +54,11 @@ import {
 import { deriveMessageActions } from "./messageActions";
 import { openWorkspace } from "./openWorkspace";
 import { usePendingExtUi } from "./pendingExtUi";
-import { turnAnchorText } from "./recentPrompts";
 import { estimateChatRowHeights } from "./rowHeightEstimates";
 import {
 	type ChatRow,
 	deriveRows,
 	projectRows,
-	rowIndexForTurn,
 	rowsHaveToolCall,
 	sessionRoundArtifacts,
 	stabilizeRows,
@@ -553,17 +552,13 @@ const ChatTranscript = forwardRef<
 		}
 		if (useAppStore.getState().chatLocationRequest !== chatLocationRequest) return;
 		if (activeChatLocationReveal.current === chatLocationRequest) return;
-		const { messageIndex, anchorText } = chatLocationRequest;
 		const currentRows = locationRowsRef.current;
-		const currentTurns = locationTurnsRef.current;
-		const prefix = anchorText.slice(0, 40);
-		const mappedId = locationTurnMapRef.current?.[messageIndex];
-		const mapped = mappedId ? currentTurns.find((t) => t.id === mappedId) : undefined;
-		const target =
-			mapped && turnAnchorText(mapped).includes(prefix)
-				? mapped
-				: currentTurns.findLast((t) => turnAnchorText(t).includes(prefix));
-		const index = target ? rowIndexForTurn(currentRows, target.id) : -1;
+		const { index, nearest } = locateChatRow(
+			chatLocationRequest,
+			currentRows,
+			locationTurnsRef.current,
+			locationTurnMapRef.current,
+		);
 		if (index === -1) {
 			toast.error(translate("chat.transcript.locateFailed"));
 			useAppStore.getState().clearChatLocation();
@@ -588,6 +583,7 @@ const ChatTranscript = forwardRef<
 				if (result === "found") {
 					setFlashRowId(rowId);
 					navigation.focusRow(rowId);
+					if (nearest) toast.info(translate("chat.transcript.locatedNearest"));
 				} else if (result === "missing") toast.error(translate("chat.transcript.locateFailed"));
 				useAppStore.getState().clearChatLocation();
 			},

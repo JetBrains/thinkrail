@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { type FolderChainNode, resolveFolderChain } from "./folderChains";
+import { type FolderChainNode, resolveFolderChain } from "./folder-chains";
 
 function dir(name: string, path = name): FolderChainNode {
 	return { kind: "dir", name, path };

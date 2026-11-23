@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, type Page, type Route, test } from "@playwright/test";
 import type { NativeClipboardContent, Workspace } from "@thinkrail/contracts";
@@ -48,16 +48,23 @@ async function attach(page: Page, files: { name: string; mimeType: string; buffe
 	await page.getByTestId("composer-attach-input").setInputFiles(files);
 }
 
-async function holdUploads(page: Page): Promise<() => void> {
+async function holdUploads(page: Page) {
 	let release = () => {};
 	const gate = new Promise<void>((resolve) => {
 		release = resolve;
 	});
+	const held: Route[] = [];
 	await page.route("**/attachments/**", async (route: Route) => {
+		held.push(route);
 		await gate;
-		await route.continue().catch(() => undefined);
+		const pass = route.request().failure() === null ? route.continue() : route.abort();
+		await pass.catch(() => undefined);
 	});
-	return release;
+	return {
+		held: () => held.length,
+		cancelled: () => held.filter((route) => route.request().failure() !== null).length,
+		release,
+	};
 }
 
 function frameOf(message: string | Buffer): Record<string, unknown> | null {
@@ -479,7 +486,7 @@ test("while Create copies the files, the dialog's chips take no removals or addi
 }) => {
 	const startCreate = await holdSocket(page, "workspace.startCreate", "request");
 	await openFixtureProject(page);
-	const release = await holdUploads(page);
+	const uploads = await holdUploads(page);
 	await page.getByTestId("add-workspace").first().click();
 	const dialog = page.getByTestId("new-workspace-dialog");
 	const prompt = dialog.getByTestId("ws-prompt");
@@ -513,6 +520,7 @@ test("while Create copies the files, the dialog's chips take no removals or addi
 	});
 	await expect(chips).toHaveCount(2);
 	await expect(dialog.getByTestId("ws-attach")).toBeDisabled();
+	await expect.poll(uploads.held).toBe(1);
 
 	await page.keyboard.press("Escape");
 	await expect(uploading).toHaveCount(0);
@@ -521,8 +529,9 @@ test("while Create copies the files, the dialog's chips take no removals or addi
 	await expect(prompt).toHaveValue("Start from the plan and the notes");
 	await expect(chips).toHaveCount(2);
 	await expect(page.getByTestId("toast").filter({ hasText: "Couldn't copy" })).toHaveCount(0);
+	await expect.poll(uploads.cancelled).toBe(1);
 
-	release();
+	uploads.release();
 	await page.unroute("**/attachments/**");
 	await page.getByTestId("create-workspace").click();
 	await expect.poll(startCreate.seen).toBe(1);
@@ -534,11 +543,20 @@ test("while Create copies the files, the dialog's chips take no removals or addi
 	startCreate.release();
 	await expect(dialog).toBeHidden();
 
-	const added = readdirSync(stored).filter((entry) => !before.has(entry));
-	expect(added.sort()).toEqual(["plan-notes.md", "plan.pdf"]);
 	const sent = lastUserMessage(page);
-	await expect(sent).toContainText(`- ${join(stored, "plan.pdf")}`);
-	await expect(sent).toContainText(`- ${join(stored, "plan-notes.md")}`);
+	const body = sent.getByTestId("user-message-body");
+	await expect(body).toContainText("Attached files:");
+	const listed = [...((await body.textContent()) ?? "").matchAll(/^- (.+)$/gm)].map(
+		([, path]) => path ?? "",
+	);
+	expect(listed.map((path) => dirname(path))).toEqual([stored, stored]);
+	const [pdf = "", notes = ""] = listed;
+	expect(basename(pdf)).toMatch(/^plan(-\d+)?\.pdf$/);
+	expect(basename(notes)).toMatch(/^plan-notes(-\d+)?\.md$/);
+	expect(readFileSync(pdf)).toEqual(PDF);
+	expect(readFileSync(notes, "utf8")).toBe("# notes\n");
+	const added = readdirSync(stored).filter((entry) => !before.has(entry));
+	expect(added.sort()).toEqual(listed.map((path) => basename(path)).sort());
 	await expect(sent).not.toContainText("late.txt");
 	await expect(sent).not.toContainText("pasted.txt");
 });
@@ -548,7 +566,7 @@ test("a slow copy holds the draft: text put in meanwhile stays after the send, a
 }) => {
 	const workspace = await openChatComposer(page);
 	seedExternalCwdSessions();
-	const release = await holdUploads(page);
+	const uploads = await holdUploads(page);
 	const input = page.getByTestId("chat-input");
 	await attach(page, [{ name: "design.pdf", mimeType: "application/pdf", buffer: PDF }]);
 	await input.fill("With the file");
@@ -571,7 +589,7 @@ test("a slow copy holds the draft: text put in meanwhile stays after the send, a
 	await expect(input).toHaveValue("fix the flaky watcher test\n\nWith the file");
 	await expect(page.getByTestId("composer-files-uploading")).toBeVisible();
 
-	release();
+	uploads.release();
 	const sent = lastUserMessage(page);
 	await expect(sent).toContainText("With the file");
 	await expect(sent).toContainText(`- ${ATTACHMENTS}/design.pdf`);
@@ -585,7 +603,7 @@ test("a slow copy holds the draft: text put in meanwhile stays after the send, a
 
 test("Esc or × stops a slow copy and leaves the draft as it was", async ({ page }) => {
 	const workspace = await openChatComposer(page);
-	const release = await holdUploads(page);
+	const uploads = await holdUploads(page);
 	const input = page.getByTestId("chat-input");
 	const uploading = page.getByTestId("composer-files-uploading");
 	await attach(page, [{ name: "design.pdf", mimeType: "application/pdf", buffer: PDF }]);
@@ -593,6 +611,7 @@ test("Esc or × stops a slow copy and leaves the draft as it was", async ({ page
 
 	await input.press("Enter");
 	await expect(uploading).toBeVisible();
+	await expect.poll(uploads.held).toBe(1);
 	await input.press("Escape");
 	await expect(uploading).toHaveCount(0);
 	await expect(input).toBeFocused();
@@ -603,13 +622,15 @@ test("Esc or × stops a slow copy and leaves the draft as it was", async ({ page
 
 	await input.press("Enter");
 	await expect(uploading).toBeVisible();
+	await expect.poll(uploads.held).toBe(2);
 	await page.getByTestId("composer-files-uploading-cancel").click();
 	await expect(uploading).toHaveCount(0);
 	await expect(input).toHaveValue("Keep this draft");
 	await expect(page.getByTestId("composer-file")).toContainText("design.pdf");
 	await expect(page.getByTestId("composer-command-error")).toHaveCount(0);
+	await expect.poll(uploads.cancelled).toBe(2);
 
-	release();
+	uploads.release();
 	await page.unroute("**/attachments/**");
 	await input.press("Enter");
 	await expect(lastUserMessage(page)).toContainText(`- ${ATTACHMENTS}/design.pdf`);
@@ -754,13 +775,14 @@ test("while a slow copy holds the draft, recall and @-mention keys leave it alon
 	await expect(lastUserMessage(page)).toContainText("Read the design");
 	await expect(page.getByTestId("chat-composer")).toHaveAttribute("data-streaming", "false");
 
-	const release = await holdUploads(page);
+	const uploads = await holdUploads(page);
 	await input.press("ArrowUp");
 	await expect(input).toHaveValue("Read the design");
 	await attach(page, [{ name: "design.pdf", mimeType: "application/pdf", buffer: PDF }]);
 	await expect(input).toBeFocused();
 	await input.press("Enter");
 	await expect(uploading).toBeVisible();
+	await expect.poll(uploads.held).toBe(1);
 	await input.press("ArrowDown");
 	await expect(input).toHaveValue("Read the design");
 	await input.press("ArrowUp");
@@ -775,6 +797,7 @@ test("while a slow copy holds the draft, recall and @-mention keys leave it alon
 	await expect(mentions).toBeVisible();
 	await input.press("ControlOrMeta+Enter");
 	await expect(uploading).toBeVisible();
+	await expect.poll(uploads.held).toBe(2);
 	await expect(mentions).toHaveCount(0);
 	await input.press("Enter");
 	await expect(input).toHaveValue("See @READ");
@@ -786,8 +809,9 @@ test("while a slow copy holds the draft, recall and @-mention keys leave it alon
 	await expect(uploading).toHaveCount(0);
 	await expect(input).toHaveValue("See @READ");
 	await expect(mentions).toBeVisible();
+	await expect.poll(uploads.cancelled).toBe(2);
 
-	release();
+	uploads.release();
 	await page.unroute("**/attachments/**");
 	await input.press("Escape");
 	await expect(mentions).toHaveCount(0);

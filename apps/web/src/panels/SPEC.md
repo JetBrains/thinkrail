@@ -35,7 +35,11 @@ treatment.
   `lib`'s `chatLabel` over the host's `SessionStateRecord.title` and the conversation's first prompt
   (`selectChatWorkspaceFirstPrompt`) — an unnamed chat reads as its first prompt, with `data-title-source`
   and the full first line as tooltip, else "Chat" — with the shared attention dot / running icon, the
-  active highlight, and a menu of Open in / Copy path / Reveal / Mark read / **Delete chat…** — the
+  active highlight, and a menu of Open in / Copy path / Reveal / the shell's chat actions / Mark read /
+  **Delete chat…** — the chat actions (`ProjectTree`'s `chatActions` prop, `lib`'s `ChatAction`, such as
+  an extension's *Analyze session*, [[submodule-web-shell]] § Extension panels) are offered for the
+  conversation the row stands for (`selectChatWorkspaceSession`: its first chat with a session file), and
+  for none while it has none; the
   confirmation (`ChatDeleteDialog`, shared with the topbar's chat menu) names the folder's file count
   from `chat.inspect` ("…with 3 files move to the Trash"), is bound to the chat it was opened for and
   closes when that chat is removed, starts deleting elsewhere, or (topbar) stops being the active chat;
@@ -378,9 +382,10 @@ treatment.
   The `ChangesPanel` secondary toolbar paints **no surface of its own**: like the right-panel tab strip
   it shows the panel's `container-sidebar-bg`, so the two chrome rows read as one continuous surface. The **file-style tree row** (chevron/spacer
   lead, folder/file icon, truncated label, trailing slot; `min-w-0` so a row can shrink when it shares a
-  flex line with a trailing control) is the shared **`TreeRow`**, used by `FileTree`, `ChangesTree`
-  and the Artifacts tree so the trees stay identical; its optional `icon` replaces the file glyph (the
-  Artifacts tree's type icons). `TreeRow`'s optional `onWarm` reports
+  flex line with a trailing control) is the shared **`TreeRow`** (`@thinkrail/ui/tree-row`; it moved to
+  [[module-ui]] with `DiffStatBadge` and `folderChains` when the session-insights heat tree became their
+  second consumer), used by `FileTree`, `ChangesTree` and the Artifacts tree so the trees stay identical;
+  its optional `icon` replaces the file glyph (the Artifacts tree's type icons). `TreeRow`'s optional `onWarm` reports
   `hover` (pointer enter) or `focus`. `FileTree` file rows warm at once on focus and through
   `warmOnHover` on hover, which keeps one pending row and fires after the pointer rests 150 ms, so a
   sweep across the tree loads nothing. A warm preloads the code view
@@ -394,7 +399,8 @@ treatment.
   one child and that child is another directory, and the compact row expands/collapses the deepest
   directory as one unit. `ChangesTree` evaluates this against the changed-file tree; `FileTree` resolves
   only visible compact runs through its existing client-side directory reads, so the wire remains a plain
-  immediate-directory listing. The **`+N −M` diff-count badge** is the shared **`DiffStatBadge`**, used
+  immediate-directory listing (the run logic is `@thinkrail/ui/folder-chains`). The **`+N −M` diff-count
+  badge** is the shared **`DiffStatBadge`** (`@thinkrail/ui/diff-stat-badge`), used
   only inside Changes: the flat list's file rows, the tree's file rows, and a tree folder's aggregate only
   while it is collapsed (an expanded folder's children already show those counts).
   `ChangesTree`'s tree build + `+/−` aggregation + shared status glyphs live in the pure
@@ -733,7 +739,8 @@ a project picker, the prompt hero, and the reused
   failed chat start toasts instead. `retryDraft` (Edit & retry) reopens the dialog prefilled with the failed
   creation's prompt, images, model + effort and base branch.
   **`WorkspaceCreation.tsx`** renders a creation in the two places the user waits: `WorkspaceCreationRow`
-  under its project in `ProjectTree` (spinner + `Creating… N%` + a `<progress>` bar while running; failed:
+  under its project in `ProjectTree` — inside the live list right after the Default row(s), newest first,
+  i.e. exactly where its workspace lands, so the handoff never moves the row (spinner + `Creating… N%` + a `<progress>` bar while running; failed:
   `Couldn't create` in the error colour, interrupted: `Interrupted at N%` in the warning colour, the reason in a
   tooltip, with Retry, Edit & retry (failed only) and Dismiss/Discard; **a running creation has no
   actions** — there is no cancel), and `WorkspaceCreationView`, the shell's main pane for the selected creation
@@ -1514,8 +1521,9 @@ a project picker, the prompt hero, and the reused
   **Packages** is the **Install a pi package** row (`packages-install`, with **Browse the pi package
   gallery** as its button). **Built into ThinkRail** is the host-registry catalog: `extension.list` each time the
   section mounts (static per host process, so section-local state; a failure shows **Retry**), rendered by
-  the props-driven `ExtensionsCatalog` as one `SettingsRow` per entry — title, description and its tools as
-  visible text ("Tools: a, b", each `extension-tool-<tool>`) with a `@thinkrail/ui/switch`
+  the props-driven `ExtensionsCatalog` as one `SettingsRow` per entry — title (the web half's translated
+  `title` when it declares one, `extensions`' `webExtensionTitle`, else the host's), description and its
+  tools as visible text ("Tools: a, b", each `extension-tool-<tool>`) with a `@thinkrail/ui/switch`
   (`extension-toggle-<name>`) whose state is **`store.disabledExtensions`**, not the catalog's snapshot; a
   row switched off is Changed and its Reset turns it back on. A toggle writes the whole list through
   `settings.update { disabledExtensions }` and converges on the broadcast. Unknown names already in the list are carried through. Once the catalog has loaded, the group
@@ -1565,7 +1573,10 @@ a project picker, the prompt hero, and the reused
   control; it renders the host's `enabled` (closed over pi's package equivalence) and writes
   `settings.update { disabledPackages }` — on removes every key in the row's `switchKeys`, off adds its
   `identity` (`nextDisabledPackages`); an off row dims
-  its text and chips; a user declaration the repository shadows says so under its provenance line. There is no status column and no "installing" row. A declaration with no install
+  its text and chips; a user declaration the repository shadows says so under its provenance line, and a
+  row the host marks `supersededBy` says "Replaced by {extension} while it is on." there
+  (`package-superseded`, the extension named by its web `title` when it has one), so a package a
+  ThinkRail extension leaves out of chats never reads as merely enabled. There is no status column and no "installing" row. A declaration with no install
   on disk (`installedPath` absent) is a **Not installed** row: a warning tag, the source and one hint
   line ("pi retries when a chat starts; remove it if that keeps failing"), no switch, no expand, a menu
   with Remove only. The one row-level problem of an installed package is an extension that failed to
@@ -2510,7 +2521,9 @@ own section. The kebab menu (`plan-menu`, a
   until hovered or open. The heading "Outputs" is the panel's stronger section title, without a count.
   Rows keep the shared menu, open gestures, inline rename, hover title (path and change time) and focus
   markup; a deleted output leaves the list (List and Tree keep it with Restore). With none published it
-  reads "No outputs yet" and offers **Show all N files**, which switches to List.
+  reads "No outputs yet" and offers **Show all N files**, which switches to List; an extension panel's
+  *Open in Artifacts* (`artifactActions.revealArtifactsListing`) leaves Outputs for List the same way,
+  since what an extension writes is not published.
   List answers *what is
   new*: newest first, a two-line row — the name, then the folder inside the artifacts folder — or
   `Task spec · <status>` joined from the spec snapshot by path — and a chip naming the writing chat that
@@ -2884,7 +2897,9 @@ menu has closed, because a closing menu returns focus to its row; disabled
   convergence, and promote-by-keyboard/touch.
 - **Sidebar trees share one keyboard model (`treeNavigation.tsx`).** Files, Changes (both views), Specs,
   Chats, Projects and the Artifacts tool's two sections are each a `Tree` — a `div role=tree` with **one Tab stop** (roving tabindex) — whose
-  rows' focusable controls are `useTreeItem` treeitems (`aria-level`, `aria-expanded` on expandables,
+  rows' focusable controls are `useTreeItem` treeitems (`@thinkrail/ui/tree-item`, the item half `TreeRow`
+  needs in [[module-ui]]; it reads the roving cursor and search marks `Tree` provides through
+  `TreeItemScopeContext`) (`aria-level`, `aria-expanded` on expandables,
   `aria-current` for the selected row) under `li role=none`; the tree is a `div role=tree` and every
   list inside it is `role=none`, so the hierarchy is the explicit `aria-level` (VS Code's flat-tree
   markup) rather than nested `group`s, which Biome's semantic-element rules reject on lists. Chats and

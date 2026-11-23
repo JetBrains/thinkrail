@@ -18,6 +18,7 @@ import {
 	rendererImplementationKey,
 } from "@thinkrail/resource-renderers";
 import { Button, IconButton } from "@thinkrail/ui/button";
+import { DiffStatBadge } from "@thinkrail/ui/diff-stat-badge";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -43,7 +44,6 @@ import {
 	stackedDiffBounded,
 	statusNameClass,
 } from "./changesModel";
-import { DiffStatBadge } from "./DiffStatBadge";
 import { DiffSurfaceBody, useDiffSurface } from "./DiffSurface";
 import { HeaderIconButton } from "./HeaderIconButton";
 import { openDiffInTab } from "./openTabs";

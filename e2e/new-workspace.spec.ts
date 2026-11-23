@@ -311,10 +311,16 @@ test("a slow checkout runs in the background while the rest of the app stays usa
 }) => {
 	await openAppFresh(page);
 	const { repo } = seedRemoteProject("slow-checkout");
+	const dialog = await openPickedProjectWorkspaceDialog(page, repo);
+	await page.getByTestId("create-workspace").click();
+	await expect(dialog).toBeHidden();
+	await expect(worktreeRows(page)).toHaveCount(1);
+	await expect(page.getByTestId("workspace-creation-row")).toHaveCount(0);
 	const hook = join(repo, ".git", "hooks", "post-checkout");
 	writeFileSync(hook, "#!/bin/sh\nsleep 3\n");
 	chmodSync(hook, 0o755);
-	const dialog = await openPickedProjectWorkspaceDialog(page, repo);
+	await page.getByTestId("add-workspace").first().click();
+	await expect(dialog).toBeVisible();
 	await dialog.getByTestId("ws-prompt").fill("Start in the new checkout");
 
 	await page.getByTestId("create-workspace").click();
@@ -322,6 +328,15 @@ test("a slow checkout runs in the background while the rest of the app stays usa
 	const row = page.getByTestId("workspace-creation-row");
 	await expect(row).toHaveAttribute("data-state", "running");
 	await expect(row).toHaveAttribute("data-active", "true");
+	const creationId = await row.getAttribute("data-focus-row");
+	const liveRowIds = () =>
+		page
+			.locator('[data-focus-list^="workspaces:"] > li [data-focus-row]:not([data-kind="default"])')
+			.evaluateAll((rows) => rows.map((r) => r.getAttribute("data-focus-row")));
+	const idsWhileCreating = await liveRowIds();
+	expect(idsWhileCreating).toHaveLength(2);
+	expect(idsWhileCreating[0]).toBe(creationId);
+	await expect(row.locator("xpath=following::*[@data-testid='settled-shelf']")).toHaveCount(1);
 	const view = page.getByTestId("workspace-creation-view");
 	await expect(view.getByTestId("workspace-creation-prompt")).toHaveText(
 		"Start in the new checkout",
@@ -333,7 +348,8 @@ test("a slow checkout runs in the background while the rest of the app stays usa
 	await expect(view).toBeVisible();
 
 	await expect(row).toHaveCount(0, { timeout: 30_000 });
-	await expect(worktreeRows(page)).toHaveCount(1);
+	await expect(worktreeRows(page)).toHaveCount(2);
+	expect(await liveRowIds()).toEqual(idsWhileCreating);
 	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toContainText(
 		"Start in the new checkout",
 	);

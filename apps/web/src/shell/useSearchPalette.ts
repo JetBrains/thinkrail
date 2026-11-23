@@ -68,6 +68,11 @@ import {
 	toggleLeftSide,
 	toggleRightSide,
 } from "./chordActions";
+import {
+	openExtensionPanel,
+	openExtensionPanelInProject,
+	useOpenableExtensionPanels,
+} from "./extensionPanelHost";
 import { useResolvedKeybindings } from "./keybindingState";
 import { collectCenterGroups } from "./layout";
 import { readNativePageZoomBridge } from "./nativePageZoom";
@@ -177,6 +182,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	const keybindings = useResolvedKeybindings();
 	const [pageZoom] = useState(readNativePageZoomBridge);
 	const [tabActions] = useState(activeTabActions);
+	const openablePanels = useOpenableExtensionPanels();
 
 	const online = useAppStore(selectHostReachable);
 	const hostSearch = useAppStore(selectHostSearchAvailable);
@@ -275,6 +281,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			settingsGroups,
 			settingEntries,
 			tabActions,
+			extensionPanels: openablePanels,
 			actions: {
 				newWorkspace: options.openNewWorkspace,
 				newProjectlessChat: () => void startProjectlessChat(),
@@ -289,6 +296,9 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				toggleRight: toggleRightSide,
 				toggleBottom: toggleBottomPanel,
 				showTool: (workspaceId, tool) => store().requestToolView(workspaceId, tool),
+				openExtensionPanel,
+				openExtensionPanelInProject: (projectId, panel) =>
+					void openExtensionPanelInProject(projectId, panel),
 				showFiles,
 				focusRegion: focusAdjacentRegion,
 				focusComposer: focusChatComposer,
@@ -358,6 +368,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		keybindings,
 		pageZoom,
 		tabActions,
+		openablePanels,
 		options,
 		contextProject,
 		contextRepoProject,

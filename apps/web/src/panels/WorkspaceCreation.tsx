@@ -9,12 +9,13 @@ import type { WorkspaceCreation } from "@thinkrail/contracts";
 import { type Translator, t as translate, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
+import { useTreeItem } from "@thinkrail/ui/tree-item";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect } from "react";
 import { toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { openChatInTab } from "./openChat";
-import { treeRowControlProps, useTreeItem } from "./treeNavigation";
+import { treeRowControlProps } from "./treeNavigation";
 
 const HOVER_CONTROL_CLASS =
 	"shrink-0 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100";

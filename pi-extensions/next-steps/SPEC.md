@@ -29,7 +29,10 @@ draws its own chips.
   - `details` = `{ suggestions }`, normalized (whitespace collapsed; empty and case-insensitive duplicate
     items dropped; at most `MAX_SHORTCUTS` = 9, one per Alt+N, extras dropped rather than rejected so an
     over-long list still ends the turn);
-  - `terminate: true`.
+  - `terminate: true`;
+  - except for one refusal per turn (see *Decisions*): a non-error result with `terminate: false` and
+    `details` = `{ suggestions: [], refused: true }`, so every reader of `details.suggestions` shows
+    nothing for it.
 
   Changing this contract breaks every renderer, including ThinkRail's.
 - **`./core`**, import-free at runtime: the name, types, `normalizeSuggestions`, and
@@ -41,6 +44,22 @@ draws its own chips.
   [[module-ext-next-steps]]. That rationale is host-independent. pi ends a turn early only when every
   result in the batch terminates, so a call made beside other tools leaves the turn running. The
   guidance says "alone" for this reason.
+- **A call whose message has no text answer is refused once per turn.** `execute` reads
+  `ctx.sessionManager.getBranch()` and finds the assistant message carrying this call by `toolCallId`
+  (not the leaf: sibling results may already follow it). pi persists that message on `message_end`,
+  which it awaits before executing tools. When the message has no non-empty `text` block and no
+  refused call appears since the last user message, the result asks the model to write its answer as
+  a normal text reply and call again, and does not end the turn. A second textless call in that turn is
+  accepted, so the refusal can never loop. Without a session manager, or when the calling message is
+  not on the branch, the call is accepted as before.
+  *Post-mortem:* with Claude Opus 5.5 through `claude-bridge`, half of the calls (19 of 38 in local
+  sessions) came in a message with no text — 17 of them carried the final answer as a thinking block
+  whose signature is tagged `narration`. The terminating call then ended the turn, and the user saw a
+  folded Thinking step and chips but no answer. No plain `stop` turn (0 of 634) lacked text, so the
+  terminating tool is what lost the answer.
+  *Trade-off:* only the calling message counts. A turn whose answer sits in an earlier message (beside
+  another tool call) is refused once, costing a round trip and possibly a repeated answer; counting any
+  earlier text would let interim narration ("Let me check…") excuse a lost final answer.
 - **"The session ends with suggestions" is one rule over the current branch.** Walking back from the
   leaf, the rule skips bookkeeping entries (thinking-level and model changes, usage, custom entries,
   labels, session info). The first remaining entry must be a successful `suggest_next_steps` result.
@@ -63,6 +82,8 @@ draws its own chips.
 
 Package tests cover:
 - normalization (including the nine-item cap) and `terminate`;
+- the missing-answer refusal: text present, thinking only, the second call accepted, an earlier turn's
+  refusal not counted, the calling message found by id rather than as the leaf;
 - an embedder's `guidance` replacing only what it names;
 - the branch rule, including skipped bookkeeping entries;
 - the row's lifecycle through a fake pi: settle shows it, Alt+N sends and clears it, abort and the next

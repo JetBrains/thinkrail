@@ -211,6 +211,7 @@ import { setFsNudgePublisher } from "./fsNudge";
 import { applyGitCeiling } from "./gitCeiling";
 import {
 	handleRequest,
+	releaseDisabledExtensionQueries,
 	requestErrorReport,
 	requestMethodDiagnostic,
 	workspaceCreationHandoff,
@@ -1092,6 +1093,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		if (appliedUpdate.subagentMaxConcurrent !== undefined) refreshSubagentConcurrency();
 		if (appliedUpdate.agentReviewEnabled !== undefined) refreshAgentReviewTool();
 		if (appliedUpdate.disabledPackages !== undefined) bumpPackageSwitchGeneration();
+		if (appliedUpdate.disabledExtensions !== undefined) releaseDisabledExtensionQueries();
 		if (
 			appliedUpdate.disabledExtensions !== undefined ||
 			appliedUpdate.extensionSettings !== undefined ||
@@ -1099,7 +1101,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		) {
 			refreshExtensionTools();
 		}
-		if (appliedUpdate.disabledPackages !== undefined) publishPiPackagesChanged();
+		if (
+			appliedUpdate.disabledPackages !== undefined ||
+			appliedUpdate.disabledExtensions !== undefined
+		) {
+			publishPiPackagesChanged();
+		}
 		if (appliedUpdate.otherAgentSkills !== undefined) void refreshSkillAdmission();
 	});
 

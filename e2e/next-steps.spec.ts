@@ -1,5 +1,6 @@
 import { realpathSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
+import type { AssistantMessage } from "@thinkrail/contracts";
 import {
 	closeSettings,
 	enterDefaultWorkspace,
@@ -71,6 +72,59 @@ function seedSuggestedTurn(name: string, offset: number): void {
 				isError: false,
 				timestamp: ts + 2_000,
 			},
+		],
+	});
+}
+
+type SeedMessage = Parameters<typeof seedWorkspaceSession>[1]["messages"][number];
+const ANSWER = "Fixed: the debounce window now outlasts the poll interval.";
+
+function seedRefusedTurn(name: string, offset: number, retried: boolean): void {
+	const ts = BASE_TS + offset;
+	const call = (
+		id: string,
+		answer: AssistantMessage["content"][number],
+		at: number,
+	): SeedMessage => ({
+		role: "assistant",
+		content: [
+			answer,
+			{ type: "toolCall", id, name: "suggest_next_steps", arguments: { suggestions: SUGGESTIONS } },
+		],
+		stopReason: "toolUse",
+		timestamp: at,
+	});
+	const result = (id: string, details: unknown, text: string, at: number): SeedMessage => ({
+		role: "toolResult",
+		toolCallId: id,
+		toolName: "suggest_next_steps",
+		content: [{ type: "text", text }],
+		details,
+		isError: false,
+		timestamp: at,
+	});
+	seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name,
+		messages: [
+			{ role: "user", text: "Fix the flaky watcher test.", timestamp: ts },
+			call(`refused-${offset}`, { type: "thinking", thinking: ANSWER }, ts + 1_000),
+			result(
+				`refused-${offset}`,
+				{ suggestions: [], refused: true },
+				"Your answer was not shown to the user.",
+				ts + 2_000,
+			),
+			...(retried
+				? [
+						call(`retried-${offset}`, { type: "text", text: ANSWER }, ts + 3_000),
+						result(
+							`retried-${offset}`,
+							{ suggestions: SUGGESTIONS },
+							"Shown to the user as one-click next messages.",
+							ts + 4_000,
+						),
+					]
+				: []),
 		],
 	});
 }
@@ -152,11 +206,14 @@ test("Alt+N does nothing inside a dialog, then sends from the Files tree, where 
 	await pressPlatformShortcut(page, "Shift+E");
 	const row = page.locator('[data-testid="file-node"]:focus');
 	await expect(row).toHaveCount(1);
-	const focused = await row.textContent();
+	const item = await row.getAttribute("data-tree-item");
+	expect(item).toBeTruthy();
+	const focused = page.locator(`[data-testid="file-node"][data-tree-item="${item}"]`);
+	await expect(focused).toBeFocused();
 	await page.keyboard.press("Alt+Digit2");
 	await expect.poll(() => promptTexts(frames)).toEqual(["Open a PR"]);
 	await expect(chips).toHaveCount(0);
-	await expect(row).toHaveText(focused ?? "");
+	await expect(focused).toBeFocused();
 	await expect(page.getByTestId("chat-input")).toHaveValue("");
 });
 
@@ -287,4 +344,30 @@ test("switching the extension off hides the chips while the transcript row stays
 		await setNextSteps(page, true);
 	}
 	await expect(page.getByTestId("composer-suggestion")).toHaveCount(2);
+});
+
+async function openRefusedChat(page: Page, title: string, offset: number, retried: boolean) {
+	await openFixtureProject(page);
+	seedRefusedTurn(title, offset, retried);
+	await enterDefaultWorkspace(page);
+	await openPersistedChat(page, title);
+	const activity = page.getByTestId("activity-group").first();
+	await activity.getByTestId("activity-group-toggle").click();
+	await activity.getByTestId("thinking-group").first().getByTestId("thinking-group-toggle").click();
+	return activity.locator('[data-testid="activity-step"][data-tool="suggest_next_steps"]').first();
+}
+
+test("a call refused for a missing answer offers no chips and reads as a request for the answer", async ({
+	page,
+}) => {
+	const row = await openRefusedChat(page, "Refused next steps", 80_000, false);
+	await expect(row).toContainText("Asked for the answer as text first");
+	await expect(page.getByTestId("composer-suggestions")).toHaveCount(0);
+});
+
+test("after a refused call, the retried call's chips show", async ({ page }) => {
+	const row = await openRefusedChat(page, "Retried next steps", 90_000, true);
+	await expect(row).toContainText("Asked for the answer as text first");
+	await expect(page.getByTestId("composer-suggestion-text")).toHaveText(SUGGESTIONS);
+	await shot(page.getByTestId("chat-view"), "next-steps", "refused-then-retried");
 });

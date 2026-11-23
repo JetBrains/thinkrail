@@ -27,6 +27,8 @@ export function renderNextStepsCall(
 }
 
 export function renderNextStepsResult(result: AgentToolResult<unknown>, theme: Theme): Component {
+	if (isNextStepsDetails(result.details) && result.details.refused)
+		return new Text(theme.fg("muted", "Asked for the answer as text first."), 0, 0);
 	const suggestions = isNextStepsDetails(result.details) ? result.details.suggestions : [];
 	if (suggestions.length === 0) return new Text(theme.fg("muted", "No usable suggestions."), 0, 0);
 	return new Text(

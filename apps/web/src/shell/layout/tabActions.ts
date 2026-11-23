@@ -50,6 +50,7 @@ export type TabActionSection =
 
 export type TabActionEffect =
 	| { readonly kind: "apply"; readonly result: () => LayoutOperationResult }
+	| { readonly kind: "run"; readonly run: () => void }
 	| { readonly kind: "select"; readonly keep: boolean }
 	| { readonly kind: "rename" }
 	| { readonly kind: "focusGroup"; readonly delta: -1 | 1 }
@@ -69,6 +70,14 @@ export interface TabAction {
 	readonly effect: TabActionEffect;
 }
 
+export interface ChatTabAction {
+	readonly id: string;
+	readonly label: string;
+	readonly run: () => void;
+}
+
+export type ChatTabActions = Readonly<Record<string, readonly ChatTabAction[]>>;
+
 export interface TabActionContext {
 	readonly document: WorkspaceLayoutDocument;
 	readonly tab: LayoutTab;
@@ -82,6 +91,7 @@ export interface TabActionContext {
 	readonly canRenameChat: boolean;
 	readonly worktreePath: string;
 	readonly chatFirstPrompts?: ChatFirstPrompts | undefined;
+	readonly chatActions?: ChatTabActions | undefined;
 }
 
 export interface TabActionHandlers {
@@ -221,6 +231,18 @@ function primaryActions(t: Translator, context: TabActionContext): TabAction[] {
 			label: t("workbench.tab.renameChat"),
 			effect: { kind: "rename" },
 		});
+	}
+	if (tab.kind === "chat") {
+		for (const action of context.chatActions?.[tab.sessionId] ?? []) {
+			actions.push({
+				id: `tab.chatAction.${action.id}`,
+				section: "tab",
+				surface: "both",
+				label: action.label,
+				testId: "tab-chat-action",
+				effect: { kind: "run", run: action.run },
+			});
+		}
 	}
 	actions.push(
 		{
@@ -498,6 +520,9 @@ export function performTabAction(action: TabAction, handlers: TabActionHandlers)
 			if (!isLayoutUnavailable(result)) handlers.apply(result);
 			return;
 		}
+		case "run":
+			effect.run();
+			return;
 		case "select":
 			handlers.select(effect.keep);
 			return;

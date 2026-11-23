@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { PiLooseExtension, PiPackageSummary, PiPackagesCatalog } from "@thinkrail/contracts";
+import { applyLocale } from "@thinkrail/locales/react";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup as renderMarkup } from "react-dom/server";
@@ -244,6 +245,36 @@ test("a shadowed declaration says so", () => {
 		/>,
 	);
 	expect(shadowed).toContain('data-testid="package-shadowed"');
+});
+
+test("a package a ThinkRail extension replaces says so, with the extension's translated title", async () => {
+	const row = (summary: PiPackageSummary) =>
+		renderToStaticMarkup(
+			<PackageRow
+				summary={summary}
+				updateAvailable={false}
+				expanded={false}
+				busy={false}
+				error={undefined}
+				onToggleExpanded={noop}
+				onAction={noop}
+			/>,
+		);
+	const superseded: PiPackageSummary = {
+		...JIRA,
+		supersededBy: { name: "session-insights", title: "Host copy" },
+	};
+	expect(row(JIRA)).not.toContain('data-testid="package-superseded"');
+	expect(row(superseded)).toContain("Replaced by Session insights while it is on.");
+	expect(row({ ...JIRA, supersededBy: { name: "retired", title: "Retired tool" } })).toContain(
+		"Replaced by Retired tool while it is on.",
+	);
+	await applyLocale("ru", {});
+	try {
+		expect(row(superseded)).toContain("Заменён на «Разбор сессий», пока оно включено.");
+	} finally {
+		await applyLocale("en", {});
+	}
 });
 
 test("a failed update check renders under the group header", () => {

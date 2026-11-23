@@ -2,6 +2,7 @@ import { RiInboxLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { outputFileIcon } from "@thinkrail/resource-renderers";
 import { Button } from "@thinkrail/ui/button";
+import { useTreeItem } from "@thinkrail/ui/tree-item";
 import { cn } from "@thinkrail/ui/utils";
 import { firstClickOnly } from "../lib";
 import { openArtifact } from "./artifactActions";
@@ -9,7 +10,6 @@ import { ArtifactEntryMenu, type RequestRemoval } from "./artifactRowParts";
 import { artifactTimeLabel, type OutputEntry } from "./artifactsModel";
 import { renameEntry } from "./fileTreeActions";
 import { type OpenTabOptions, treeOpenFocus } from "./openTabs";
-import { useTreeItem } from "./treeNavigation";
 import { useInlineRename } from "./workspaceActions";
 
 export function ArtifactsOutputs({

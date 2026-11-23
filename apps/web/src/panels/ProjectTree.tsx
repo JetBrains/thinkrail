@@ -57,12 +57,13 @@ import {
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { useTreeItem } from "@thinkrail/ui/tree-item";
 import { cn } from "@thinkrail/ui/utils";
 import { type MouseEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
-import { copyText } from "@/lib";
+import { type ChatAction, copyText } from "@/lib";
 import { useNow } from "../components/useNow";
 import {
 	isChatWorkspace,
@@ -109,7 +110,6 @@ import {
 	treeRowControlProps,
 	treeRowKey,
 	treeToggleProps,
-	useTreeItem,
 	useTreeKeys,
 } from "./treeNavigation";
 import { useOpenProject } from "./useOpenProject";
@@ -157,11 +157,17 @@ function groupCreationsByProject(
 	for (const creation of Object.values(creations)) {
 		grouped[creation.projectId] = [...(grouped[creation.projectId] ?? []), creation];
 	}
-	for (const list of Object.values(grouped)) list.sort((a, b) => a.startedAt - b.startedAt);
+	for (const list of Object.values(grouped)) list.sort((a, b) => b.startedAt - a.startedAt);
 	return grouped;
 }
 
-export function ProjectTree({ newWorkspaceShortcut }: { newWorkspaceShortcut: readonly string[] }) {
+export function ProjectTree({
+	newWorkspaceShortcut,
+	chatActions,
+}: {
+	newWorkspaceShortcut: readonly string[];
+	chatActions?: readonly ChatAction[] | undefined;
+}) {
 	const t = useT();
 	const projects = useAppStore(useShallow(selectRepoProjects));
 	const recentProjects = useAppStore((s) => s.recentProjects);
@@ -346,7 +352,7 @@ export function ProjectTree({ newWorkspaceShortcut }: { newWorkspaceShortcut: re
 
 	return (
 		<nav data-testid="project-tree" className="flex flex-col gap-4">
-			<ChatsSection />
+			<ChatsSection chatActions={chatActions} />
 			<header className="flex h-panel-row items-center justify-between pr-4 pl-8">
 				<span className="tr-text-eyebrow text-text-muted">{t("panels.projectTree.title")}</span>
 				<AddProjectMenu
@@ -393,6 +399,14 @@ export function ProjectTree({ newWorkspaceShortcut }: { newWorkspaceShortcut: re
 						const isExpanded = expandedProjectIds[project.id] === true;
 						const list = workspaces[project.id];
 						const stateProjection = { sessionStateByWorkspace };
+						const creationRows = creationsByProject[project.id]?.map((creation) => (
+							<WorkspaceCreationRow
+								key={creation.id}
+								creation={creation}
+								isActive={activeCreationId === creation.id}
+								onSelect={() => useAppStore.getState().selectCreation(creation.id)}
+							/>
+						));
 						const previous = projects[index - 1];
 						const next = projects[index + 1];
 						return (
@@ -445,7 +459,14 @@ export function ProjectTree({ newWorkspaceShortcut }: { newWorkspaceShortcut: re
 									onMoveDown={next ? () => void move(project, next.id, "after", true) : undefined}
 								/>
 								{isExpanded && list === undefined && (
-									<LoadingRegion rows={2} className="py-4 pr-8 pl-16" />
+									<>
+										<LoadingRegion rows={2} className="py-4 pr-8 pl-16" />
+										{creationRows ? (
+											<ul role="none" data-focus-list={`workspaces:${project.id}`}>
+												{creationRows}
+											</ul>
+										) : null}
+									</>
 								)}
 								{isExpanded && list !== undefined && (
 									<SettledPartition
@@ -454,6 +475,7 @@ export function ProjectTree({ newWorkspaceShortcut }: { newWorkspaceShortcut: re
 										partition={selectWorkspacePartition(partitionState, project.id, now)}
 										shelfExpanded={settledShelfExpanded[project.id] === true}
 										shelfShown={settledShelfShown[project.id] ?? SETTLED_SHELF_PAGE}
+										creations={creationRows}
 										renderRow={(ws, settled) =>
 											workspaceCreations[ws.id] ? null : (
 												<WorkspaceRow
@@ -486,18 +508,6 @@ export function ProjectTree({ newWorkspaceShortcut }: { newWorkspaceShortcut: re
 											)
 										}
 									/>
-								)}
-								{isExpanded && (creationsByProject[project.id]?.length ?? 0) > 0 && (
-									<ul role="none" data-focus-list={`workspaces:${project.id}`}>
-										{creationsByProject[project.id]?.map((creation) => (
-											<WorkspaceCreationRow
-												key={creation.id}
-												creation={creation}
-												isActive={activeCreationId === creation.id}
-												onSelect={() => useAppStore.getState().selectCreation(creation.id)}
-											/>
-										))}
-									</ul>
 								)}
 							</li>
 						);
@@ -583,6 +593,7 @@ function SettledPartition({
 	partition,
 	shelfExpanded,
 	shelfShown,
+	creations,
 	renderRow,
 }: {
 	enabled: boolean;
@@ -590,9 +601,19 @@ function SettledPartition({
 	partition: ReturnType<typeof selectWorkspacePartition>;
 	shelfExpanded: boolean;
 	shelfShown: number;
+	creations: ReactNode;
 	renderRow: (workspace: Workspace, settled: SettledReason | null) => ReactNode;
 }) {
 	const t = useT();
+	const firstNonDefault = partition.live.findIndex((workspace) => !isDefaultWorkspace(workspace));
+	const defaultCount = firstNonDefault === -1 ? partition.live.length : firstNonDefault;
+	const liveRows = (
+		<>
+			{partition.live.slice(0, defaultCount).map((workspace) => renderRow(workspace, null))}
+			{creations}
+			{partition.live.slice(defaultCount).map((workspace) => renderRow(workspace, null))}
+		</>
+	);
 	const settledCount = partition.settled.length;
 	const shown = partition.settled.slice(0, shelfShown);
 	const remaining = settledCount - shown.length;
@@ -614,14 +635,14 @@ function SettledPartition({
 				data-focus-list={`workspaces:${projectId}`}
 				className="mt-2 flex flex-col gap-2 motion-safe:animate-reveal"
 			>
-				{partition.live.map((workspace) => renderRow(workspace, null))}
+				{liveRows}
 			</ul>
 		);
 	}
 	return (
 		<div className="mt-2 flex flex-col gap-2 motion-safe:animate-reveal">
 			<ul role="none" data-focus-list={`workspaces:${projectId}`} className="flex flex-col gap-2">
-				{partition.live.map((ws) => renderRow(ws, null))}
+				{liveRows}
 			</ul>
 			<div
 				data-testid="settled-shelf"
