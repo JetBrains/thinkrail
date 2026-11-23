@@ -143,6 +143,91 @@ describe("suggest_next_steps tool", () => {
 	});
 });
 
+function calling(id: string, blocks: Array<Record<string, unknown>>, extraCalls: string[] = []) {
+	return {
+		type: "message",
+		id: `a-${id}`,
+		parentId: null,
+		timestamp: "",
+		message: {
+			role: "assistant",
+			content: [
+				...blocks,
+				{
+					type: "toolCall",
+					id,
+					name: NEXT_STEPS_TOOL_NAME,
+					arguments: { suggestions: ["Open a PR"] },
+				},
+				...extraCalls.map((callId) => ({
+					type: "toolCall",
+					id: callId,
+					name: "read",
+					arguments: {},
+				})),
+			],
+			stopReason: "toolUse",
+			timestamp: 1,
+		},
+	} as SessionEntry;
+}
+
+const onBranch = (entries: SessionEntry[]) => ({ sessionManager: { getBranch: () => entries } });
+const PARAMS = { suggestions: ["Open a PR"] };
+const ANSWER = { type: "text", text: "Fixed: the parser now skips blanks." };
+
+describe("whether the turn waits for the final message", () => {
+	test("an answer already written as text in the calling message ends the turn, so it is not repeated", async () => {
+		const { tool } = load();
+		const ctx = onBranch([calling("c1", [{ type: "thinking", thinking: "" }, ANSWER])]);
+		const result = await tool.execute("c1", PARAMS, undefined, undefined, ctx);
+		expect([result.terminate, result.details]).toEqual([true, { suggestions: ["Open a PR"] }]);
+		expect(result.content[0]?.text).toContain("Your turn is over.");
+	});
+
+	test("a calling message with only thinking or blank text asks for the final message", async () => {
+		const { tool } = load();
+		const narrated = [
+			{ type: "thinking", thinking: "All tests pass now." },
+			{ type: "text", text: "  " },
+		];
+		const result = await tool.execute(
+			"c1",
+			PARAMS,
+			undefined,
+			undefined,
+			onBranch([calling("c1", narrated)]),
+		);
+		expect(result.terminate).toBe(false);
+		expect(result.content[0]?.text).toEndWith(WRITE_ANSWER_TEXT);
+	});
+
+	test("the calling message is found by id, not as the leaf", async () => {
+		const { tool } = load();
+		const sibling = {
+			...leaf([], { toolCallId: "c2", toolName: "read" }),
+			id: "r-c2",
+		} as SessionEntry;
+		const answered = onBranch([calling("c1", [ANSWER], ["c2"]), sibling]);
+		const silent = onBranch([calling("c1", [], ["c2"]), sibling]);
+		expect((await tool.execute("c1", PARAMS, undefined, undefined, answered)).terminate).toBe(true);
+		expect((await tool.execute("c1", PARAMS, undefined, undefined, silent)).terminate).toBe(false);
+	});
+
+	test("an earlier message's text does not count", async () => {
+		const { tool } = load();
+		const earlier = calling("c0", [ANSWER]);
+		const result = await tool.execute(
+			"c1",
+			PARAMS,
+			undefined,
+			undefined,
+			onBranch([earlier, calling("c1", [])]),
+		);
+		expect(result.terminate).toBe(false);
+	});
+});
+
 describe("legacy refused results", () => {
 	test("a result refused by 0.1.0 still renders as a request for the answer", () => {
 		const component = renderNextStepsResult(

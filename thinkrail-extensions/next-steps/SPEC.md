@@ -39,11 +39,13 @@ They show as chips above the composer. A click (or Alt+N) sends one as the user'
   helper model sees too little: the same lesson that moved chat naming to `set_title`
   ([[submodule-server-assist]]). The second call adds 2–5 s and a full-context cache read per turn. The
   tool costs its prompt text and ~50–100 output tokens. Since the answer moved after the call (below),
-  it also costs one more request per turn: the same cache read, but the answer is still written only
-  once, by the model that did the work. Persistence and clearing come free from the transcript.
+  it also costs one more request per turn whose answer wasn't already written as text: the same cache
+  read, but the answer is still written only once, by the model that did the work. Persistence and clearing come free from the transcript.
 - **Call alone, then write the final message.** The answer goes after the call because text before a
   tool call can reach the user only as a server summary ([[module-pi-next-steps]], *Decisions*). The
   chat then shows the routine row "Suggested N next steps" above the answer, and the chips under it.
+  A call made after an answer the model already wrote as text ends the turn without another request,
+  so the answer isn't repeated.
 - **Only when nothing continues.** Because the call closes the work, the guidance keeps the package's
   "after you finish a turn" framing and adds two clauses: never before the work is done (for example
   while plan steps remain), and skip it while waiting on background work the agent started (besides a

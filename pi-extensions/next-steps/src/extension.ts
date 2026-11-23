@@ -2,6 +2,7 @@ import type {
 	ExtensionAPI,
 	ExtensionContext,
 	ExtensionFactory,
+	SessionEntry,
 	ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import type { KeyId } from "@earendil-works/pi-tui";
@@ -56,6 +57,23 @@ export const WRITE_ANSWER_TEXT =
 
 const WIDGET_KEY = "next-steps";
 
+function callingMessageHasText(
+	branch: readonly SessionEntry[] | undefined,
+	toolCallId: string,
+): boolean {
+	const calling = branch?.findLast(
+		(entry) =>
+			entry.type === "message" &&
+			entry.message.role === "assistant" &&
+			entry.message.content.some((block) => block.type === "toolCall" && block.id === toolCallId),
+	);
+	return (
+		calling?.type === "message" &&
+		calling.message.role === "assistant" &&
+		calling.message.content.some((block) => block.type === "text" && block.text.trim() !== "")
+	);
+}
+
 const SHORTCUTS = [
 	"alt+1",
 	"alt+2",
@@ -79,12 +97,18 @@ export function createSuggestNextStepsTool(
 		promptSnippet: guidance.promptSnippet ?? DEFAULT_PROMPT_SNIPPET,
 		promptGuidelines: [...(guidance.promptGuidelines ?? DEFAULT_PROMPT_GUIDELINES)],
 		parameters: NextStepsSchema,
-		async execute(_toolCallId, params: NextStepsParams) {
+		async execute(toolCallId, params: NextStepsParams, _signal, _onUpdate, ctx) {
 			const suggestions = normalizeSuggestions(params.suggestions);
-			const outcome =
-				suggestions.length > 0
-					? "Saved: the user sees them as one-click next messages under your final message."
-					: "No usable suggestions were given.";
+			const saved = suggestions.length > 0;
+			if (callingMessageHasText(ctx?.sessionManager?.getBranch(), toolCallId)) {
+				const text = saved
+					? "Shown to the user as one-click next messages. Your turn is over."
+					: "No usable suggestions were given. Your turn is over.";
+				return { content: [{ type: "text", text }], details: { suggestions }, terminate: true };
+			}
+			const outcome = saved
+				? "Saved: the user sees them as one-click next messages under your final message."
+				: "No usable suggestions were given.";
 			return {
 				content: [{ type: "text", text: `${outcome} ${WRITE_ANSWER_TEXT}` }],
 				details: { suggestions },

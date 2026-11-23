@@ -13,8 +13,9 @@ pi install npm:@thinkrail/pi-next-steps
 - **`suggest_next_steps` tool.** When its work is done, the agent calls the tool alone with a short
   list of suggestions, then writes its final message as the last thing in the turn. Newer Claude models
   return text written right before a tool call as a short server-side summary, so the answer comes
-  after the call, where it always arrives in full. When nothing useful applies, the agent skips the call
-  and you see nothing.
+  after the call, where it always arrives in full. If the agent already wrote its answer as text before
+  the call, the turn simply ends. When nothing useful applies, the agent skips the call and you see
+  nothing.
 - **A row above the editor.** After the turn settles, the suggestions appear above pi's input with their
   keys:
 
@@ -45,15 +46,15 @@ to Tab 1…9* in Preferences → Shortcuts.
 
 ## Cost
 
-Each turn that offers suggestions spends roughly 50–100 extra output tokens and one more model request
-(the final message comes after the tool result), plus the tool's short prompt text in every request.
+Each turn that offers suggestions spends roughly 50–100 extra output tokens, one more model request
+when the final message comes after the tool result, plus the tool's short prompt text in every request.
 
 ## For hosts
 
 `@thinkrail/pi-next-steps/core` is import-free at runtime and exports the tool name, the result type,
 `normalizeSuggestions` and `suggestionsOnBranch(entries)`, the rule for "this session currently ends with
 suggestions" (the final text message after the call and bookkeeping entries such as model or
-thinking-level changes are skipped). The tool never ends the turn itself. Version 0.1.0 could refuse a
+thinking-level changes are skipped). The tool ends the turn only when the calling message already holds a text answer. Version 0.1.0 could refuse a
 call with `details: { suggestions: [], refused: true }`; sessions recorded then may still hold one. The row is drawn
 only in pi's interactive terminal mode (`ctx.mode === "tui"`), so a host binding pi in RPC mode never
 shows it twice. To add your own rules, compose `createNextStepsExtension({ guidance: { promptGuidelines:

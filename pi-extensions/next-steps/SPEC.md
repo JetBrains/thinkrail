@@ -28,8 +28,9 @@ draws its own chips.
   - the arguments `{ suggestions: string[] }`;
   - `details` = `{ suggestions }`, normalized (whitespace collapsed; empty and case-insensitive duplicate
     items dropped; at most `MAX_SHORTCUTS` = 9, one per Alt+N, extras dropped rather than rejected);
-  - `terminate: false`. The result text asks for the final message as plain text with no tool call after
-    it (`WRITE_ANSWER_TEXT`);
+  - `terminate: false`, with a result text that asks for the final message as plain text and no tool
+    call after it (`WRITE_ANSWER_TEXT`). The exception is a calling message that already holds a
+    non-empty `text` block: then it is `terminate: true` (see *Decisions*);
   - a legacy shape, read but never written: 0.1.0 could return `details` = `{ suggestions: [], refused:
     true }`. Renderers keep it so recorded sessions still read as they did.
 
@@ -61,8 +62,17 @@ draws its own chips.
   about half the time, and each costs a request), and rendering narration blocks as the answer (only the
   summary reaches the client). See [Anthropic: progress updates between tool calls](https://platform.claude.com/docs/en/build-with-claude/thinking#progress-updates)
   and anthropics/claude-code#95764.
-  *Accepted risk (unconfirmed):* a model that still writes its answer before the call out of habit
-  repeats it after the call.
+- **An answer already written as text ends the turn.** Out of habit the model sometimes still writes
+  its full answer before the call. When that arrives as a `text` block, it reached the user intact, and
+  asking for the final message made the model repeat it word for word: a live run on
+  `claude-bridge/claude-opus-5-5` showed 2059 chars before the call and 2193 after. So `execute` reads
+  `ctx.sessionManager.getBranch()` and finds the assistant message carrying this call by `toolCallId`.
+  It looks it up by id, not as the leaf, because sibling results may already follow it; pi persists the
+  message on `message_end`, before tools run. If that message has a non-empty `text` block, the call ends
+  the turn as before. Only a message with no text continues the turn: its answer is missing or narrated.
+  Text in earlier messages doesn't count, since interim narration ("Let me check…") would excuse a lost
+  answer. Without a session manager, or when the message isn't on the branch, the call asks for the
+  final message.
 - **"The session ends with suggestions" is one rule over the current branch.** Walking back from the
   leaf, the rule skips bookkeeping entries (thinking-level and model changes, usage, custom entries,
   labels, session info) and finished text-only assistant messages (`stopReason: "stop"`, no tool call):
@@ -88,6 +98,9 @@ draws its own chips.
 Package tests cover:
 - normalization (including the nine-item cap), `terminate: false` and the request for the final
   message, blank suggestions included;
+- text in the calling message ending the turn, thinking-only or blank text asking for the final
+  message, the calling message found by id rather than as the leaf, and an earlier message's text not
+  counting;
 - the legacy refused result's render;
 - an embedder's `guidance` replacing only what it names;
 - the branch rule, including skipped bookkeeping entries, the final message after the call, and a
@@ -97,6 +110,13 @@ Package tests cover:
 - wrapping.
 
 `check:pi-packages` loads the packed tarball under Node and runs the execute/terminate/render cases.
+
+Live check for the answer order (vanilla pi at the catalog version, the package plus ThinkRail's
+guideline loaded with `-e`, `claude-bridge/claude-opus-5-5` at `high`, a scratch repo with four failing
+invoice tests). In a multi-step fix turn, the model wrote a short narrated preview, then the call, then
+its full 1811-char answer as the final `stop` text, and `suggestionsOnBranch` read the chips through it.
+A follow-up question turn in the same session showed the text-before-the-call duplication described in
+*Decisions*.
 
 Manual terminal check with real model turns, run for the first release when the call still ended the
 turn (tmux, pi at the catalog version, the packed tarball loaded with `-e`, Claude Sonnet 5.5):
