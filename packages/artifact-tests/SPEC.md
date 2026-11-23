@@ -5,7 +5,7 @@ status: active
 title: Native artifact test harnesses
 parent: architecture
 depends-on: [module-cli, module-server, module-shared]
-references: [module-desktop, module-browser-e2e, module-ci-release, module-ext-visualize, module-ext-ask-user-question]
+references: [module-desktop, module-browser-e2e, module-ci-release, module-ext-visualize, module-ext-ask-user-question, module-ext-session-insights]
 tags: [testing, artifacts, public-surface-checked]
 ---
 
@@ -45,8 +45,13 @@ fixture value-imports a bare `@earendil-works/pi-coding-agent` specifier and sur
 its model name, so the load exercises pi's virtual-module mapping through the transform path the host
 forces — a bundle missing the `PI_BUNDLED_NODE` define fails this probe; [[submodule-server-agent]] owns
 the seam),
-exercise the bundled factories/skills (`extension.list` must report a tool for every registry extension,
-so an extension entry the bundle cannot load — `pi-web-access`'s lazily imported `dist` included — fails),
+exercise the bundled factories/skills (`extension.list` must report a tool for every registry extension
+whose descriptor composes parent factories — `hasParentExtensions` — so an extension entry the bundle
+cannot load — `pi-web-access`'s lazily imported `dist` included — fails) and queries (an extension whose
+catalog entry declares `apiVersion` must have a query probe here, and one with neither factories nor
+queries fails: session-insights' `sessions.list` over every scope, `fresh`, must reach a `ready` index
+`state` whose rows list the probe's own chat within 30 s, so the bundled core builds its query table and
+parses a real pi session file in the artifact; its sessions root is the disposable agent directory),
 run **two scripted provider turns** — the fixture also registers a
 pi-ai faux `streamSimple` under its own `api` name that calls `visualize` with a dangling flowchart edge,
 so the probe asserts the strict mermaid parse error reaches the transcript as an `isError` tool result

@@ -385,6 +385,7 @@
 	"chat.transcript.inputNeeded": "入力が必要です: {{title}}",
 	"chat.transcript.latest": "最新",
 	"chat.transcript.locateFailed": "メッセージを特定できませんでした。セッションが変更された可能性があります",
+	"chat.transcript.locatedNearest": "最も近いメッセージを表示しています。この呼び出し自体はこのチャットに表示されません",
 	"chat.transcript.refreshFailed": "このチャットを更新できませんでした",
 	"chat.trust.enablesLoads": "信頼すると、{{loads}}を読み込みます。",
 	"chat.trust.enablesLoadsAndRuns": "信頼すると、{{loads}}を読み込み、{{runs}}がこのマシン上でコードを実行できるようになります。",

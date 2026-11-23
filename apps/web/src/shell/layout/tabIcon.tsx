@@ -1,4 +1,6 @@
 import {
+	RiApps2Fill,
+	RiApps2Line,
 	RiBookOpenFill,
 	RiBookOpenLine,
 	RiChat2Fill,
@@ -41,6 +43,8 @@ export function tabIcon(tab: LayoutTab, active = false, cls = "size-14 shrink-0"
 			return active ? <RiChat2Fill className={cls} /> : <RiChat2Line className={cls} />;
 		case "document":
 			return <RiListCheck3 className={cls} />;
+		case "extension":
+			return active ? <RiApps2Fill className={cls} /> : <RiApps2Line className={cls} />;
 		case "terminal":
 			return active ? <RiTerminalBoxFill className={cls} /> : <RiTerminalBoxLine className={cls} />;
 		case "tool":

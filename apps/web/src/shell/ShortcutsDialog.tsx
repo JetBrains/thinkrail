@@ -1,5 +1,6 @@
 import { RiAlertLine, RiKeyboardLine, RiSearchLine } from "@remixicon/react";
-import { useT } from "@thinkrail/locales/react";
+import type { WebExtension } from "@thinkrail/extension-api/web";
+import { type Translator, useT } from "@thinkrail/locales/react";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { Keycaps } from "@thinkrail/ui/keycaps";
@@ -25,13 +26,49 @@ import { AuxiliaryRailActionButton, type AuxiliaryRailControlProps } from "./lay
 import { shortcutSurfaceOf } from "./shortcutSurface";
 import { hasNativeShortcuts } from "./useAppShortcuts";
 
-function useShortcutRows(desktop: boolean): ShortcutRow[] {
+interface ShortcutSectionRows {
+	readonly key: string;
+	readonly surface: ShortcutSurface | null;
+	readonly extension: string | null;
+	readonly title: string;
+	readonly rows: readonly ShortcutRow[];
+}
+
+function useShortcutRows(desktop: boolean): {
+	rows: ShortcutRow[];
+	extensions: readonly WebExtension[];
+} {
 	const keybindings = useResolvedKeybindings();
 	const disabled = useAppStore((state) => state.disabledExtensions);
-	const extra = enabledWebExtensions(disabled).flatMap(({ shortcuts = [] }) =>
-		shortcuts.map((shortcut) => ({ ...shortcut, surface: "general" as const })),
+	const extensions = enabledWebExtensions(disabled);
+	const extra = extensions.flatMap(({ name, shortcuts = [] }) =>
+		shortcuts.map((shortcut) => ({ ...shortcut, surface: "general" as const, extension: name })),
 	);
-	return shortcutRows({ desktop, keybindings, extra });
+	return { rows: shortcutRows({ desktop, keybindings, extra }), extensions };
+}
+
+/** The catalog's surfaces in order, then one section per enabled extension, titled like its Keyboard area. */
+export function shortcutSections(
+	t: Translator,
+	rows: readonly ShortcutRow[],
+	extensions: readonly WebExtension[],
+): ShortcutSectionRows[] {
+	return [
+		...SHORTCUT_SURFACES.map((surface) => ({
+			key: surface,
+			surface,
+			extension: null,
+			title: t(SHORTCUT_SURFACE_TITLES[surface]),
+			rows: rows.filter((row) => row.extension === undefined && row.surface === surface),
+		})),
+		...extensions.map(({ name, title }) => ({
+			key: `extension:${name}`,
+			surface: null,
+			extension: name,
+			title: title ? t(title) : name,
+			rows: rows.filter((row) => row.extension === name),
+		})),
+	].filter((section) => section.rows.length > 0);
 }
 
 const SCROLL_PAGES: ReadonlyMap<string, number> = new Map([
@@ -42,26 +79,26 @@ const SCROLL_PAGES: ReadonlyMap<string, number> = new Map([
 ]);
 
 function ShortcutSection({
-	surface,
-	rows,
+	section,
 	current,
 	winner,
 	ref,
 }: {
-	surface: ShortcutSurface;
-	rows: readonly ShortcutRow[];
+	section: ShortcutSectionRows;
 	current: boolean;
 	winner: (command: string) => string;
 	ref?: Ref<HTMLElement>;
 }) {
 	const t = useT();
 	const headingId = useId();
+	const { rows } = section;
 	return (
 		<section
 			ref={ref}
 			aria-labelledby={headingId}
 			data-testid="shortcuts-section"
-			data-surface={surface}
+			data-surface={section.surface ?? "extension"}
+			data-extension={section.extension ?? undefined}
 			data-current={current ? "true" : undefined}
 			className="flex break-inside-avoid flex-col gap-4 pb-16 last:pb-0"
 		>
@@ -69,7 +106,7 @@ function ShortcutSection({
 				id={headingId}
 				className={cn("tr-text-eyebrow", current ? "text-text-default" : "text-text-muted")}
 			>
-				{t(SHORTCUT_SURFACE_TITLES[surface])}
+				{section.title}
 				{current ? (
 					<span className="ml-8 tr-text-metadata text-text-muted">
 						{t("shortcuts.currentSurface")}
@@ -119,7 +156,7 @@ function ShortcutSection({
 function ShortcutsReference({ current }: { current: ShortcutSurface | null }) {
 	const t = useT();
 	const [desktop] = useState(hasNativeShortcuts);
-	const rows = useShortcutRows(desktop);
+	const { rows, extensions } = useShortcutRows(desktop);
 	const keybindingList = useKeybindingList(desktop);
 	const [query, setQuery] = useState("");
 	const list = useRef<HTMLDivElement>(null);
@@ -133,10 +170,7 @@ function ShortcutsReference({ current }: { current: ShortcutSurface | null }) {
 						t(row.title).toLocaleLowerCase().includes(needle) ||
 						row.chords.some((chord) => chord.label.toLocaleLowerCase().includes(needle)),
 				);
-	const sections = SHORTCUT_SURFACES.flatMap((surface) => {
-		const surfaceRows = shown.filter((row) => row.surface === surface);
-		return surfaceRows.length === 0 ? [] : [{ surface, rows: surfaceRows }];
-	});
+	const sections = shortcutSections(t, shown, extensions);
 	useEffect(() => {
 		if (current === null) return;
 		currentSection.current?.scrollIntoView({ block: "nearest" });
@@ -180,11 +214,12 @@ function ShortcutsReference({ current }: { current: ShortcutSurface | null }) {
 					<div className="columns-2xs gap-x-24">
 						{sections.map((section) => (
 							<ShortcutSection
-								key={section.surface}
-								ref={section.surface === current ? currentSection : null}
-								surface={section.surface}
-								rows={section.rows}
-								current={section.surface === current}
+								key={section.key}
+								ref={
+									section.surface !== null && section.surface === current ? currentSection : null
+								}
+								section={section}
+								current={section.surface !== null && section.surface === current}
 								winner={(command) => commandTitle(t, keybindingList, command)}
 							/>
 						))}

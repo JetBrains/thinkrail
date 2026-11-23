@@ -189,7 +189,7 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
   `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`,
   `supportsUserThemes`, `supportsFonts`, `supportsExtensionSettings`, `supportsKeybindings`,
-  `updateKeybindings`, `supportsSpeech`, `openSpeechSocket`,
+  `updateKeybindings`, `supportsExtensionQuery`, `supportsSpeech`, `openSpeechSocket`,
   `hostUrl`, `uploadUserFont`, `supportsChatAttachments`, `uploadPromptFiles`, `attachmentFailureText`,
   `supportsToolResponses`, `respondToTool`,
   `supportsTextSearch` (v112 — Find in Files asks `search.text` and listens on `search.textResults` only of a
@@ -222,7 +222,9 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `shell` ignores stored overrides below it — and `updateKeybindings(map)` is the one write: it resolves
   `false` without sending to an older host (which would reject the unknown key), else sends the whole map as
   one `settings.update { keybindings }` and resolves `true` once accepted, the store converging on the
-  `settings.changed` broadcast (no optimistic write); a host refusal rejects (`KEYBINDINGS_INVALID`). `openSpeechSocket()`
+  `settings.changed` broadcast (no optimistic write); a host refusal rejects (`KEYBINDINGS_INVALID`); `supportsExtensionQuery` (v130) lets the shell's extension
+  panel body show its placeholder, and its `PanelHost` refuse a query locally, against a host without
+  `extension.query`. `openSpeechSocket()`
   opens the dictation side socket (`/speech?protocol=`) on the same endpoint for [[submodule-web-speech]].
   It carries binary audio and never a request. `server.welcome`'s `speech` seed and every `speech.changed`
   push install the store's `speech` status whole; `supportsSpeech` (v107) gates the same way.

@@ -36,6 +36,7 @@
 		"@thinkrail/ext-hint-mode": "workspace:*",
 		"@thinkrail/ext-next-steps": "workspace:*",
 		"@thinkrail/ext-outputs": "workspace:*",
+		"@thinkrail/ext-session-insights": "workspace:*",
 		"@thinkrail/ext-visualize": "workspace:*",
 		"@thinkrail/extension-api": "workspace:*",
 		"@thinkrail/locales": "workspace:*",

@@ -46,6 +46,7 @@ import type { EditorInfo, NativePageZoomBridge, Workspace } from "@thinkrail/con
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import type { Command, CommandShortcut } from "../commands";
+import type { RegisteredPanel } from "../extensions";
 import {
 	DESKTOP_KEYS,
 	FOCUS_GROUP_BINDINGS,
@@ -99,6 +100,7 @@ export interface PaletteCatalogDeps {
 	readonly settingsGroups: readonly SettingsNavGroup[];
 	readonly settingEntries: readonly SettingEntry[];
 	readonly tabActions: readonly TabAction[];
+	readonly extensionPanels: readonly RegisteredPanel[];
 	readonly actions: PaletteCatalogActions;
 }
 
@@ -115,6 +117,8 @@ export interface PaletteCatalogActions {
 	readonly toggleRight: () => void;
 	readonly toggleBottom: () => void;
 	readonly showTool: (workspaceId: string, tool: PaletteTool) => void;
+	readonly openExtensionPanel: (workspaceId: string, panel: RegisteredPanel) => void;
+	readonly openExtensionPanelInProject: (projectId: string, panel: RegisteredPanel) => void;
 	readonly showFiles: (mode: "all" | "changed") => void;
 	readonly focusRegion: (delta: 1 | -1) => void;
 	readonly focusComposer: () => void;
@@ -137,7 +141,7 @@ export interface PaletteCatalogActions {
 
 function shortcutOf(
 	{ keybindings, nativeShortcuts }: PaletteCatalogDeps,
-	id: KeybindingId,
+	id: string,
 ): { shortcut?: CommandShortcut } {
 	const shortcut = keybindingShortcut(keybindings, id, { browser: !nativeShortcuts });
 	return shortcut ? { shortcut } : {};
@@ -373,6 +377,33 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 				...(tool === "files"
 					? { ...shortcutOf(deps, "view.files"), run: () => actions.showFiles("all") }
 					: { run: () => actions.showTool(activeWorkspace.id, tool) }),
+			});
+		}
+	}
+	const { contextProjectId } = deps;
+	const openPanel = activeWorkspace
+		? (panel: RegisteredPanel) => actions.openExtensionPanel(activeWorkspace.id, panel)
+		: contextProjectId !== null
+			? (panel: RegisteredPanel) => actions.openExtensionPanelInProject(contextProjectId, panel)
+			: null;
+	if (openPanel) {
+		for (const panel of deps.extensionPanels) {
+			const { declaration } = panel;
+			if (!declaration.scopes.includes("project")) continue;
+			commands.push({
+				id: `view.extension.${panel.extension}.${panel.panel}`,
+				title: t("commands.view.openPanel", { panel: t(declaration.title) }),
+				group: "view",
+				icon: declaration.icon,
+				keywords: [
+					"panel",
+					"extension",
+					panel.extension,
+					panel.panel,
+					...(declaration.keywords ? [t(declaration.keywords)] : []),
+				],
+				...(declaration.rail?.command ? shortcutOf(deps, declaration.rail.command) : {}),
+				run: () => openPanel(panel),
 			});
 		}
 	}

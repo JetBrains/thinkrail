@@ -3,8 +3,9 @@ import askUserQuestion from "@thinkrail/ext-ask-user-question/web";
 import hintMode from "@thinkrail/ext-hint-mode/web";
 import nextSteps from "@thinkrail/ext-next-steps/web";
 import outputs from "@thinkrail/ext-outputs/web";
+import sessionInsights from "@thinkrail/ext-session-insights/web";
 import visualize, { MermaidView } from "@thinkrail/ext-visualize/web";
-import type { ToolRenderProps } from "@thinkrail/extension-api/web";
+import type { PanelDeclaration, ToolRenderProps, WebExtension } from "@thinkrail/extension-api/web";
 import { EN } from "@thinkrail/locales";
 import { currentTranslator } from "@thinkrail/locales/react";
 import {
@@ -17,9 +18,12 @@ import {
 	readComposerSuggestions,
 	resolveProminence,
 } from "../chat/toolRegistry";
-import { matchKeybinding, resolveKeybindings, SHORTCUT_CATALOG } from "../keybindings";
+import { matchKeybinding, matchLocal, resolveKeybindings, SHORTCUT_CATALOG } from "../keybindings";
+import { isMessageKey } from "../lib";
 import {
 	enabledWebExtensions,
+	extensionPanels,
+	findExtensionPanel,
 	registerWebExtensions,
 	webExtensionCommands,
 	webExtensions,
@@ -36,7 +40,14 @@ const props: ToolRenderProps = {
 };
 
 test("the ordered web registry composes the public visualize descriptor without replacing fallback", () => {
-	expect(webExtensions).toEqual([visualize, askUserQuestion, hintMode, nextSteps, outputs]);
+	expect(webExtensions).toEqual([
+		visualize,
+		askUserQuestion,
+		hintMode,
+		nextSteps,
+		outputs,
+		sessionInsights,
+	]);
 	expect(typeof MermaidView).toBe("function");
 	for (let i = 0; i < 2; i++) {
 		registerWebExtensions();
@@ -99,19 +110,22 @@ test("the switch decides which global contributions mount; tool renderers stay r
 		hintMode,
 		nextSteps,
 		outputs,
+		sessionInsights,
 	]);
 	expect(enabledWebExtensions(["hint-mode", "visualize"])).toEqual([
 		askUserQuestion,
 		nextSteps,
 		outputs,
+		sessionInsights,
 	]);
 	registerWebExtensions();
 	expect(getToolRenderer("visualize")).toBe(visualize.toolRenderers.visualize.renderer);
 });
 
-test("Settings lists only the titled web extensions without tools that the server catalog lacks", () => {
+test("Settings lists only the titled web extensions without tools or panels that the server catalog lacks", () => {
 	const server = new Set(["visualize", "ask-user-question", "web-access"]);
 	expect(askUserQuestion.title).toBe("tools.ask.extensionTitle");
+	expect(sessionInsights.title).toBe("sessionInsights.panel.title");
 	expect(webOnlyExtensions(server).map((extension) => extension.name)).toEqual(["hint-mode"]);
 	expect(webOnlyExtensions(new Set([...server, "hint-mode"]))).toEqual([]);
 	expect(webOnlyExtensions(new Set()).map((extension) => extension.name)).toEqual(["hint-mode"]);
@@ -121,10 +135,12 @@ test("commands are listed for every extension in registry order, the switched-of
 	expect(webExtensionCommands([])).toEqual([
 		{ extension: "ask-user-question", enabled: true, commands: askUserQuestion.commands },
 		{ extension: "hint-mode", enabled: true, commands: hintMode.commands },
+		{ extension: "session-insights", enabled: true, commands: sessionInsights.commands },
 	]);
 	expect(webExtensionCommands(["hint-mode"])).toEqual([
 		{ extension: "ask-user-question", enabled: true, commands: askUserQuestion.commands },
 		{ extension: "hint-mode", enabled: false, commands: hintMode.commands },
+		{ extension: "session-insights", enabled: true, commands: sessionInsights.commands },
 	]);
 });
 
@@ -140,6 +156,77 @@ test("the question card's keys are local to the card, titled, and its locked key
 	]);
 	const ids = rows.map(({ id }) => id);
 	expect(new Set(ids).size).toBe(ids.length);
+});
+
+test("the session insights views' keys share one local scope, are titled, and its locked keys are listed", () => {
+	const rows = [...sessionInsights.commands, ...sessionInsights.shortcuts];
+	expect(rows.every((row) => Object.hasOwn(EN, row.title))).toBe(true);
+	const local = sessionInsights.commands.filter(({ scope }) => scope !== undefined);
+	expect(new Set(local.map(({ scope }) => scope))).toEqual(new Set(["session-insights.panel"]));
+	expect(local.map(({ id }) => id)).toEqual([
+		"session-insights.search",
+		"session-insights.nextMatch",
+		"session-insights.previousMatch",
+		"session-insights.nextError",
+		"session-insights.previousError",
+		"session-insights.nextRetry",
+		"session-insights.previousRetry",
+		"session-insights.zoomToSelection",
+		"session-insights.zoomIn",
+		"session-insights.zoomOut",
+		"session-insights.zoomFit",
+	]);
+	const ids = rows.map(({ id }) => id);
+	expect(new Set(ids).size).toBe(ids.length);
+	const chords = sessionInsights.commands.flatMap((command) => command.chords);
+	expect(chords.filter((chord) => chord.code === "KeyF")).toEqual([]);
+});
+
+test("session insights opens its list from the rail with ⌃⌥I / Ctrl+Alt+I and a session's analysis for a chat", () => {
+	const global = sessionInsights.commands.filter(({ scope }) => scope === undefined);
+	expect(global).toEqual([
+		{
+			id: "session-insights.openSessions",
+			title: "sessionInsights.keys.openSessions",
+			chords: [{ code: "KeyI", key: "I", ctrl: true, alt: true }],
+		},
+	]);
+	const { sessions, session, compare } = sessionInsights.panels;
+	expect(sessions.rail).toEqual({ command: "session-insights.openSessions" });
+	expect(sessions).not.toHaveProperty("chatAction");
+	expect(session).not.toHaveProperty("rail");
+	expect(compare).not.toHaveProperty("rail");
+	expect(compare).not.toHaveProperty("chatAction");
+	expect(session.chatAction.menuLabel).toBe("sessionInsights.session.analyze");
+	expect(session.chatAction).not.toHaveProperty("label");
+	expect(Object.hasOwn(EN, session.chatAction.menuLabel)).toBe(true);
+	expect(
+		session.chatAction.params({ projectId: "p1", workspaceId: "w1", sessionId: "s1" }),
+	).toEqual({ sessionId: "s1" });
+	for (const platform of PLATFORMS) {
+		const resolved = resolveKeybindings({ platform, extensions: webExtensionCommands([]) });
+		const press = { code: "KeyI", key: "i", altKey: true, shiftKey: false };
+		expect(matchKeybinding(resolved, { ...press, ctrlKey: true, metaKey: false })).toBe(
+			"session-insights.openSessions",
+		);
+		expect(matchKeybinding(resolved, { ...press, ctrlKey: false, metaKey: true })).toBeNull();
+		const scopes = [...resolved.local.keys()];
+		expect(scopes.length).toBeGreaterThan(0);
+		expect(matchLocal(resolved, scopes, { ...press, ctrlKey: true, metaKey: false })).toBeNull();
+	}
+});
+
+test("a panel's rail command is one of its own extension's global commands", () => {
+	for (const { extension, declaration } of extensionPanels()) {
+		const command = declaration.rail?.command;
+		if (command === undefined) continue;
+		const owner = webExtensions.find(({ name }) => name === extension);
+		expect([extension, owner?.commands?.find(({ id }) => id === command)?.scope]).toEqual([
+			extension,
+			undefined,
+		]);
+		expect(owner?.commands?.some(({ id }) => id === command)).toBe(true);
+	}
 });
 
 test("the bundled extensions' default chords conflict with nothing on any platform", () => {
@@ -225,4 +312,60 @@ test("suggest_next_steps registers a routine row whose result feeds the composer
 	).toBe("Suggested 2 next steps");
 	expect(readComposerSuggestions("suggest_next_steps", {}, result, ["next-steps"])).toBeNull();
 	expect(readComposerSuggestions("visualize", {}, result)).toBeNull();
+});
+
+function panel(load = () => Promise.resolve({ default: () => null })): PanelDeclaration {
+	return { title: "common.retry", icon: () => null, scopes: ["project"], load };
+}
+
+test("panels are read in registry and declaration order, and looked up by extension and panel", () => {
+	const overview = panel();
+	const detail = panel();
+	const other = panel();
+	const extensions: WebExtension[] = [
+		{ name: "first", panels: { overview, detail } },
+		{ name: "tools-only", toolRenderers: {} },
+		{ name: "second", panels: { overview: other } },
+	];
+
+	expect(extensionPanels(extensions)).toEqual([
+		{ extension: "first", panel: "overview", declaration: overview },
+		{ extension: "first", panel: "detail", declaration: detail },
+		{ extension: "second", panel: "overview", declaration: other },
+	]);
+	expect(findExtensionPanel("second", "overview", extensions)?.declaration).toBe(other);
+	expect(findExtensionPanel("first", "missing", extensions)).toBeUndefined();
+	expect(findExtensionPanel("tools-only", "overview", extensions)).toBeUndefined();
+	expect(findExtensionPanel("absent", "overview", extensions)).toBeUndefined();
+});
+
+test("the bundled registry's panel list is read once, and every bundled panel has a title of this build and a scope", () => {
+	expect(extensionPanels()).toBe(extensionPanels());
+	for (const registered of extensionPanels()) {
+		expect(findExtensionPanel(registered.extension, registered.panel)).toBe(registered);
+		expect(isMessageKey(registered.declaration.title)).toBe(true);
+		expect(registered.declaration.scopes.length).toBeGreaterThan(0);
+	}
+});
+
+test("session insights declares its project-scoped Sessions panel, a per-session analysis panel and a two-session comparison, lazily loaded and tool-free", async () => {
+	expect(sessionInsights).not.toHaveProperty("toolRenderers");
+	const registered = findExtensionPanel("session-insights", "sessions");
+	expect(registered?.declaration.title).toBe("sessionInsights.panel.title");
+	expect(registered?.declaration.scopes).toEqual(["project"]);
+	const session = findExtensionPanel("session-insights", "session");
+	expect(session?.declaration.title).toBe("sessionInsights.session.title");
+	expect(session?.declaration.scopes).toEqual(["session"]);
+	const compare = findExtensionPanel("session-insights", "compare");
+	expect(compare?.declaration.title).toBe("sessionInsights.compare.title");
+	expect(compare?.declaration.scopes).toEqual(["session"]);
+	expect(extensionPanels().map((panel) => `${panel.extension}/${panel.panel}`)).toEqual([
+		"session-insights/sessions",
+		"session-insights/session",
+		"session-insights/compare",
+	]);
+	for (const declaration of [registered?.declaration, session?.declaration, compare?.declaration]) {
+		const loaded = await declaration?.load();
+		expect(typeof loaded?.default).toBe("function");
+	}
 });

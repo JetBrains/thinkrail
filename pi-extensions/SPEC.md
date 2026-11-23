@@ -33,7 +33,11 @@ host — two copies coexist on purpose and the wiring PR deletes the old one. A 
 - **Two shapes.** An *installable pi extension* carries a `pi` manifest (`extensions: ["./index.ts"]`,
   `skills` where present, and a `video` gallery preview) and the `pi-package` keyword. A *portable
   library* (e.g. delegation) has named exports only — no manifest, no keyword, never a no-op factory —
-  and is verified through its packed consumer.
+  and is verified through its packed consumer. A library may carry a runtime-import-free `./core`
+  contract (types and constants) beside its engine root, so a browser half can type-import its shapes
+  without pulling `node:` modules into its type graph. A library that also ships a real factory is both:
+  its root stays the engine its consumers import, and the manifest names a separate entry
+  (session-insights: `extensions: ["./extension.ts"]`, also exported as `./extension`).
 - **Raw TypeScript, no build step** (pi loads entrypoints through jiti). `files` is a package-specific
   whitelist of everything the entrypoints and `exports` transitively import, tests excluded; `exports`
   preserves every subpath an existing consumer uses (e.g. `./core`). Pi SDK packages are
@@ -47,7 +51,7 @@ host — two copies coexist on purpose and the wiring PR deletes the old one. A 
 Required before a package's first publish, and the definition of "works in vanilla pi":
 
 - Installs from its **packed tarball** with dependencies resolved by npm, loads through pi's own
-  resolver/loader with zero diagnostics, and registers its tools and skills. (A local-path `pi install`
+  resolver/loader with zero diagnostics, and registers its tools, commands and skills. (A local-path `pi install`
   installs nothing — it only records the path — so the gate never uses it.)
 - **Dual runtime.** Vanilla pi is an npm CLI under Node ≥ 22.19 with jiti; ThinkRail runs the same code
   under Bun. Shipped code uses `node:` builtins and standard ESM only — no `Bun.*`, `bun:*`, or
@@ -68,7 +72,11 @@ Required before a package's first publish, and the definition of "works in vanil
   case may script the UI the tool sees: `ui.mode` (`tui` or `rpc`), `ui.replies` answering `select`
   (a number picks that choice) and `input` in order with `null` dismissing, and `ui.keys` as raw terminal
   input fed to the component a `ui.custom` factory returns; cases without `ui` get an empty context.
-  *Session-bound* tools (registered
+  Slash commands get their own table (`commands`, `commandCases`): the runner calls the registered
+  handler with a scripted context in `tui`, `rpc` or `print` mode, collects its notifications (print
+  mode has no UI, so stderr is captured instead), asserts their level and text, that no status is left
+  behind, and the files the run must leave under the agent dir; `seed(cwd)` writes files (e.g. session
+  JSONL for the fixture project) into the agent dir before pi loads. *Session-bound* tools (registered
   in `session_start`, e.g. subagents, background-commands) will need a mode that binds an isolated
   `AgentSession` on pi's faux provider — added with the first wave that ships one. Token-backed smokes
   stay on-demand.
@@ -99,9 +107,13 @@ allow `npm publish` (npm's post-2026-09 default is stage-only) and is validated 
 publish within 48 hours of its creation — the manual bootstrap does not count — so it is created right
 before the package's next version PR merges, not at bootstrap. Operational detail: `pi-extensions/README.md`.
 
-Order: visualize → ask-user-question → next-steps → delegation + subagents → background-commands → spec-graph →
-todos. Not published:
-`pi-thinkrail-workflow` (workspace-internal), `pi-dag` (until it has a consumer).
+Order: visualize → ask-user-question → next-steps → session-insights → delegation + subagents →
+background-commands → spec-graph → todos. **session-insights is publish-ready, not published:** it ships
+the vanilla-pi `/insights` command, so it left `private` (which also puts it under the parity gate) and
+carries its first changeset at `0.0.0`. Nothing publishes until a human cuts the version PR and an
+npm-org owner bootstraps the first version (`release:pack session-insights`); its gallery `video` is still
+to be recorded before that. Not published: `pi-thinkrail-workflow` (workspace-internal), `pi-dag` (until
+it has a consumer).
 
 ## Boundary
 
@@ -117,3 +129,4 @@ todos. Not published:
 | `visualize` | extension | `visualize` tool; `lovely-mermaid` for TUI box-drawing and the best-effort vanilla validation; exports `createVisualizeExtension({ validateMermaid })` so an embedder can inject a strict validator — ThinkRail does, from [[module-ext-visualize]]. Detail: [[module-pi-visualize]]. |
 | `ask-user-question` | extension | `ask_user_question` tool: a terminal questionnaire in pi's interactive mode, one dialog per question in RPC hosts; exports `createAskUserQuestionExtension({ ask, guidance, filePreviews, checkFile })` so an embedder can answer through its own UI and opt into file previews with its own path check (off in vanilla pi), and a runtime-import-free `./core`. ThinkRail composes it from [[module-ext-ask-user-question]] with an asker over its answer mailbox and the host's workspace-file check. Detail: [[module-pi-ask-user-question]]. |
 | `next-steps` | extension | `suggest_next_steps` tool: one-click next messages at the end of a finished turn, shown in a row above pi's editor and sent with Alt+1…9 (interactive terminal only); ends the turn with `terminate: true`; exports `createNextStepsExtension({ guidance })` so an embedder can add its own wording; a runtime-import-free `./core` carries the branch rule hosts share. ThinkRail composes it from [[module-ext-next-steps]] with one extra guideline and draws chips instead. Detail: [[module-pi-next-steps]]. |
+| `session-insights` | library + extension | Deterministic, LLM-free analysis of pi session files (discovery, index, per-session analyses, statistics, exports) behind injected locators, plus a runtime-import-free `./core` result contract the ThinkRail web half type-imports, and an `./extension.ts` manifest entry: the `/insights` command for vanilla pi over pi's default locations (`createSessionInsightsExtension({ agentDir, locations, command })`). ThinkRail composes the library from [[module-ext-session-insights]] and never loads the command (`supersedesPackages`). Publish-ready, not published (§ Release). Detail: [[module-pi-session-insights]]. |

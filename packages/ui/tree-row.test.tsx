@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { TreeRow } from "./TreeRow";
+import { TreeRow } from "./tree-row";
 
 const render = (props: Omit<Parameters<typeof TreeRow>[0], "testid" | "treeId" | "level">) =>
 	renderToStaticMarkup(<TreeRow testid="row" treeId="src" level={2} {...props} />);

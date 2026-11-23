@@ -53,7 +53,7 @@
 				"properties": {
 					"from": {
 						"type": "string",
-						"description": "A theme manifest key (THEME_COLOR_KEYS). The CSS variable it writes to is derived kebab-case, not tabulated: `borderStrong` -> `--border-strong`."
+						"description": "A theme manifest key (THEME_COLOR_KEYS), or a syntax or ANSI entry as `syntax.<key>` / `ansi.<key>`. The CSS variable it reads is derived kebab-case, not tabulated: `borderStrong` -> `--border-strong`, `syntax.type` -> `--code-type`, `ansi.brightBlack` -> `--ansi-bright-black`."
 					},
 					"alpha": {
 						"type": "string",

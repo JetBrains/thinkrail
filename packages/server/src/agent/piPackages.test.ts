@@ -1,12 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { bumpPackageSwitchGeneration, isLoaderPolicyStale, packagePolicyKey } from "./extensions";
+import { dirname, join } from "node:path";
+import {
+	bumpPackageSwitchGeneration,
+	isLoaderPolicyStale,
+	packagePolicyKey,
+	setDisabledExtensionsResolver,
+} from "./extensions";
 import { watchUserMcpConfig } from "./mcpSessions";
 import {
 	handlePiSettingsFileChanged,
 	handleProjectPiSettingsChanged,
+	piPackagesCatalog,
 	primeProjectPiSettings,
 	primeUserPiSettings,
 	setPiPackagesPublisher,
@@ -60,6 +67,34 @@ describe("pi package settings changes", () => {
 
 		writeFileSync(settingsPath, "{ not json");
 		expect(handlePiSettingsFileChanged(settingsPath)).toBe(true);
+	});
+
+	it("marks an installed package a ThinkRail extension replaces while that extension is on", async () => {
+		const extensionEntry = createRequire(import.meta.url).resolve(
+			"@thinkrail/ext-session-insights/server",
+		);
+		const corePackage = dirname(
+			createRequire(extensionEntry).resolve("@thinkrail/pi-session-insights/package.json"),
+		);
+		writeFileSync(settingsPath, JSON.stringify({ packages: [corePackage] }));
+		let disabled = new Set<string>();
+		setDisabledExtensionsResolver(() => disabled);
+		try {
+			const row = async () =>
+				(await piPackagesCatalog({ projectTrusted: () => false }, new Set())).packages.find(
+					(summary) => summary.name === "@thinkrail/pi-session-insights",
+				);
+			expect((await row())?.supersededBy).toEqual({
+				name: "session-insights",
+				title: "Session insights",
+			});
+			disabled = new Set(["session-insights"]);
+			const off = await row();
+			expect(off?.installedPath).toBe(corePackage);
+			expect(off?.supersededBy).toBeUndefined();
+		} finally {
+			setDisabledExtensionsResolver(null);
+		}
 	});
 
 	it("reads a BOM-prefixed settings file like pi does", () => {

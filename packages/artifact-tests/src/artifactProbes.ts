@@ -309,14 +309,76 @@ async function assertAskUserQuestionRoundTrip(
 	);
 }
 
-async function assertRegistryExtensionsRegisterTools(socket: WebSocket): Promise<void> {
-	const catalog = (await within(rpc(socket, "extension.list", {}), 10_000, "extension.list")) as {
-		name: string;
-		tools: string[];
-	}[];
+interface QueryProbeContext {
+	readonly socket: WebSocket;
+	readonly sessionId: string;
+}
+
+async function assertSessionInsightsListsTheChat({
+	socket,
+	sessionId,
+}: QueryProbeContext): Promise<void> {
+	const until = Date.now() + 30_000;
+	for (;;) {
+		const listed = (await within(
+			rpc(socket, "extension.query", {
+				extension: "session-insights",
+				method: "sessions.list",
+				params: { scope: { kind: "all" }, fresh: true },
+			}),
+			10_000,
+			"session-insights sessions.list",
+		)) as { state?: { phase?: unknown; indexed?: unknown }; rows?: unknown };
+		const { state, rows } = listed;
+		assert(
+			typeof state?.phase === "string" &&
+				["cold", "refreshing", "ready"].includes(state.phase) &&
+				typeof state.indexed === "number",
+			`sessions.list answered without an index state: ${JSON.stringify(listed)}`,
+		);
+		assert(Array.isArray(rows), `sessions.list answered without rows: ${JSON.stringify(listed)}`);
+		const listsChat = rows.some(
+			(row) =>
+				typeof row === "object" &&
+				row !== null &&
+				(row as { sessionId?: unknown }).sessionId === sessionId,
+		);
+		if (state.phase === "ready" && listsChat) return;
+		if (Date.now() > until) {
+			throw new Error(
+				`session-insights never listed the artifact chat ${sessionId}: ${JSON.stringify({ state, rows: rows.length })}`,
+			);
+		}
+		await Bun.sleep(250);
+	}
+}
+
+const QUERY_PROBES: Readonly<Record<string, (context: QueryProbeContext) => Promise<void>>> = {
+	"session-insights": assertSessionInsightsListsTheChat,
+};
+
+async function assertRegistryExtensionsLoad(context: QueryProbeContext): Promise<void> {
+	const catalog = (await within(
+		rpc(context.socket, "extension.list", {}),
+		10_000,
+		"extension.list",
+	)) as { name: string; tools: string[]; hasParentExtensions?: boolean; apiVersion?: number }[];
 	assert(catalog.length > 0, "extension.list returned no registry extensions");
-	for (const { name, tools } of catalog) {
-		assert(tools.length > 0, `registry extension ${name} registered no tools in the artifact`);
+	for (const { name, tools, hasParentExtensions, apiVersion } of catalog) {
+		const factories = hasParentExtensions !== false;
+		const queries = apiVersion !== undefined;
+		assert(
+			factories || queries,
+			`registry extension ${name} declares neither factories nor queries`,
+		);
+		if (factories) {
+			assert(tools.length > 0, `registry extension ${name} registered no tools in the artifact`);
+		}
+		if (queries) {
+			const probe = QUERY_PROBES[name];
+			assert(probe, `registry extension ${name} declares queries but the smoke has no query probe`);
+			await probe(context);
+		}
 	}
 }
 
@@ -633,7 +695,7 @@ export default function syntheticExternalExtension(pi) {
 		);
 		await assertStrictVisualizeValidation(socket, workspace.id, created.sessionId);
 		await assertAskUserQuestionRoundTrip(socket, workspace.id, created.sessionId);
-		await assertRegistryExtensionsRegisterTools(socket);
+		await assertRegistryExtensionsLoad({ socket, sessionId: created.sessionId });
 		await within(
 			rpc(socket, "session.dispose", { sessionId: created.sessionId }),
 			10_000,

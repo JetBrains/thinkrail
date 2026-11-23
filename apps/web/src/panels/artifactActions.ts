@@ -1,7 +1,7 @@
 import type { WorkspaceArtifact } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { fileName, tupleKey } from "../lib";
-import { selectAttentionCenterTab, toast, useAppStore } from "../store";
+import { selectArtifactsView, selectAttentionCenterTab, toast, useAppStore } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
 import { mentionText } from "./artifactsModel";
 import { type OpenTabOptions, openFileInTab } from "./openTabs";
@@ -27,6 +27,12 @@ export function revealArtifact(workspaceId: string, path: string): void {
 	store.setFilesMode("all");
 	store.revealInFiles(workspaceId, path);
 	store.requestToolView(workspaceId, "files");
+}
+
+export function revealArtifactsListing(workspaceId: string): void {
+	const store = useAppStore.getState();
+	if (selectArtifactsView(store) === "outputs") store.setArtifactsView("list");
+	store.requestToolView(workspaceId, "artifacts");
 }
 
 export async function restoreArtifact(workspaceId: string, path: string): Promise<boolean> {

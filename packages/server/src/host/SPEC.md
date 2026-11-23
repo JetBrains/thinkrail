@@ -550,10 +550,39 @@ nudges `fsChanged`. Nothing cleans the folder: sent messages keep naming its fil
   routes a `.pi/settings.json` workspace nudge to `handleProjectPiSettingsChanged` only for a project
   whose pi-level trust is granted — an untrusted repository's file never affects resolution, so it must
   not fan out a reload; a `disabledPackages` change also publishes `packages.changed` so a re-enabled
-  row regains its chips. The channel is subscribed from `PI_PACKAGES_PROTOCOL_VERSION` and published
+  row regains its chips, and so does a `disabledExtensions` change, since a row a ThinkRail extension
+  supersedes carries `supersededBy` only while that extension is on. The channel is subscribed from `PI_PACKAGES_PROTOCOL_VERSION` and published
   through `setPiPackagesPublisher`. The
   two authoritative publishers remain the clients' convergence path; the host-to-agent refresh changes
   runtime capability, not frontend state;
+  **extension queries** are composed here too: `extension.query` goes to one `createExtensionQueries` over
+  the `disabledExtensions` setting, whose `releaseDisabled()` the settings publisher calls
+  (`releaseDisabledExtensionQueries`) on every `disabledExtensions` change, so a switched-off extension's
+  table is aborted and dropped at once rather than at the next query; `extensionHost.ts` builds each
+  extension's `ExtensionHostServices` from projects, workspaces, chats and `agent` — host facts and
+  locations only, it parses no transcript: `signal` is the one its table was built with, `dataDir` is
+  `<dataDir>/extensions/<name>/`, `log` the `extension:<name>` logger scope, `sessionsRoot`
+  the `sessions` folder of pi's agent dir, read live. `sessionScope` reuses `history.search`'s `buildHistoryScope` +
+  `historyHiddenCwd` and places a cwd: a registered workspace is `open`; a cwd under
+  `<dataDir>/worktrees/<project slug>/` of an open project with no record at or above it is `removed`,
+  named by its path below the slug folder (`feat/x`); a chat whose deletion is pending is hidden (`null`);
+  anything else is `none`. `removed` and `none` are in an `all` scope, `removed` also in its project's; a
+  `chat` scope places nothing, since placement is by cwd. `childTranscriptDirs` is the
+  known workspace's delegation folder for the parent, else a scan of `<delegation root>/*/<parentSessionId>`,
+  existing folders only, none for an id that is not a pi session id; `sessionStatus` joins `hasSession`
+  with `agent`'s `sessionCompletionOf`; `messageAnchor(file, entryId)` reads a `.jsonl` strictly under
+  `sessionsRoot` (anything else is `null`) and answers `history`'s `locateEntry` — the entry's place in the
+  same display projection `session.getMessages` sends, or its nearest shown ancestor — so the chat jump
+  never needs a second copy of that pi mirror; `contextWindow(provider, model)` reads the active pi
+  runtime's `getModel(...).contextWindow` (catalog plus `models.json` overrides and custom endpoints),
+  `null` when the runtime has no such model or fails; `turnReceipts(sessionId)` gathers that session's
+  `turns` receipts across the registered workspaces (`listTurns`), oldest first, paths as git reported
+  them; `turnTree(sessionId, startedAt, limits)` finds that receipt and reads its `headTree` from the
+  workspace's repository (`git ls-tree -r --long`, regular files only — no links or submodules —, then
+  each blob), answering `tooLarge` past the file or byte limit before reading any blob and `null` when the
+  receipt, the workspace or the objects are gone; `ensureArtifactsDir(workspaceId)` seeds a registered
+  workspace's `.thinkrail/context/` with `seedArtifactsDir` (as `workspaceFiles.ensureArtifactsDir` does)
+  and answers it absolute and worktree-relative, `null` for an unknown workspace;
   **Review marks are memory-plus-disk, and only the disk half survives a restart.** The serial chain and
   the per-item latches are in-memory; `pending` marks are a disk sidecar. `createServer` calls
   **`reconcilePendingReviewsOnBoot`** once, before the server accepts connections: it walks every project's
@@ -954,7 +983,9 @@ enabled/confirmed choice before entering analytics attribution.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`, `BuildKind`, `reportDesktopError`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
-  `boot.ts`; `codedError`; `paths` — the scratch-dir convention `chat.inspect` leaves uncounted); `persistence` (`dataDir` — where `crashLog.ts` writes); `pi-todos/core` (reduced synchronous
+  `boot.ts`; `codedError`; `paths` — the scratch-dir convention `chat.inspect` leaves uncounted); `persistence` (`dataDir` — where `crashLog.ts` writes,
+  and the extension host's data and worktree roots); `@earendil-works/pi-coding-agent` (`getAgentDir`, the extension host's
+  `sessionsRoot`); `pi-todos/core` (reduced synchronous
   task snapshots, with group status still core-owned); the feature modules it composes (per the parent dependency graph, incl. `fs`'s
   `resolveWorktreeFile`/`resourceMeta` and `git`'s `readBlobStreamAtAsync` for the `/files` + `/blob`
   routes, `fonts`' `fontFileKind`/`saveUserFont` for `/fonts/`); Bun/Node.

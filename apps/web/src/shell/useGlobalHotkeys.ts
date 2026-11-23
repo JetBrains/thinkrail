@@ -8,6 +8,7 @@ import {
 	suggestionKeyAction,
 	suggestionTargetFor,
 } from "../chat/suggestionTargets";
+import type { RegisteredPanel } from "../extensions";
 import {
 	type KeybindingId,
 	type KeyChord,
@@ -22,6 +23,7 @@ import { createDoubleShiftDetector } from "../search";
 import { selectHistoryTarget, useAppStore } from "../store";
 import { openChatHistory } from "./chordActions";
 import { deliverExtensionCommand, extensionHotkey, keyboardClaimed } from "./extensionCommands";
+import { openExtensionPanelHere, railCommandPanel } from "./extensionPanelHost";
 import { currentKeybindings } from "./keybindingState";
 import { matchShortcut, type ShortcutPlatform } from "./shortcutCommands";
 import {
@@ -153,10 +155,12 @@ interface HotkeyContext {
 	readonly inEditorFind: boolean;
 	readonly inCodeEditor: boolean;
 	readonly hasSuggestion: (index: number) => boolean;
+	readonly railPanel?: (extension: string, id: string) => RegisteredPanel | null | undefined;
 }
 
 type HotkeyRoute =
 	| { readonly kind: "extension"; readonly extension: string; readonly id: string }
+	| { readonly kind: "panel"; readonly panel: RegisteredPanel }
 	| { readonly kind: "command"; readonly id: GlobalHotkeyCommand }
 	| ({ readonly kind: "suggestion" } & SuggestionKeyAction)
 	| { readonly kind: "history" };
@@ -182,7 +186,11 @@ export function routeHotkey(
 	const { textEntry } = context;
 	if (matchLocal(keybindings, context.localScopes, event, { textEntry }) !== null) return null;
 	const extension = extensionHotkey(event, keybindings, textEntry);
-	if (extension) return { kind: "extension", ...extension };
+	if (extension) {
+		const panel = context.railPanel?.(extension.extension, extension.id);
+		if (panel === undefined) return { kind: "extension", ...extension };
+		return panel && !context.modalOpen ? { kind: "panel", panel } : null;
+	}
 	const id = globalHotkeyCommand(
 		event,
 		actions,
@@ -251,6 +259,7 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 				inEditorFind: isInEditorFind(event.target),
 				inCodeEditor: isInCodeEditor(event.target),
 				hasSuggestion: (index) => suggestionAt(chips(), index) !== undefined,
+				railPanel: railCommandPanel,
 			});
 			if (route === null) return;
 			event.preventDefault();
@@ -260,7 +269,9 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 				return;
 			}
 			event.stopPropagation();
-			if (route.kind === "command") {
+			if (route.kind === "panel") {
+				if (!event.repeat) openExtensionPanelHere(route.panel);
+			} else if (route.kind === "command") {
 				if (!event.repeat) current[CHORD_ACTIONS[route.id]]?.(route.id);
 			} else if (route.kind === "suggestion") {
 				const owner = chips();

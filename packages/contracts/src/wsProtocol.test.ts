@@ -38,6 +38,7 @@ import {
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
 	EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION,
+	EXTENSION_QUERY_PROTOCOL_VERSION,
 	EXTENSION_SETTINGS_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
@@ -104,6 +105,7 @@ import {
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	WS_CHANNELS,
 	WS_METHODS,
+	type WsErrorCode,
 } from "./wsProtocol";
 
 test("retired workspace activity keeps only its empty snapshot compatibility method", () => {
@@ -780,6 +782,14 @@ test("extension settings are pinned to v105", () => {
 	expect(EXTENSION_SETTINGS_PROTOCOL_VERSION).toBe(105);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(EXTENSION_SETTINGS_PROTOCOL_VERSION);
 	expect(DEFAULT_CONFIG.extensionSettings).toEqual({});
+});
+
+test("extension queries are pinned to v130 with their two refusal codes", () => {
+	expect(EXTENSION_QUERY_PROTOCOL_VERSION).toBe(130);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(EXTENSION_QUERY_PROTOCOL_VERSION);
+	expect(WS_METHODS.extensionQuery).toBe("extension.query");
+	const refusals: WsErrorCode[] = ["EXTENSION_DISABLED", "UNKNOWN_EXTENSION_QUERY"];
+	expect(refusals).toHaveLength(2);
 });
 
 test("ask_user_question discuss answers are pinned to v105, after background workspace creation", () => {
