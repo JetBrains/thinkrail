@@ -111,7 +111,8 @@ before the package's next version PR merges, not at bootstrap. Operational detai
 The same flow, changesets and bootstrap rule also publish the ThinkRail extension SDK,
 `@thinkrail/extension-sdk`, and every public `extension-examples/*` sample: `scripts/pi-packages.ts` lists
 them after the pi packages, and the workflow also runs `check:extension-packages` and builds the SDK
-before publishing. The vanilla-parity bar does not apply to them (a sample is a ThinkRail extension, not
+before publishing. Both stay `private` until their first release changeset, so no version PR publishes
+them at `0.0.0` ([[module-extension-sdk]] § Release and verification). The vanilla-parity bar does not apply to them (a sample is a ThinkRail extension, not
 a pi package); their gate is [[module-extension-sdk]] § Release and verification.
 
 Order: visualize → ask-user-question → next-steps → session-insights → delegation + subagents →

@@ -19,9 +19,9 @@ import {
 	BUN_ONLY,
 	dependenciesFirst,
 	EXTENSION_SDK_DIR,
+	extensionPackages,
 	type PiPackage,
 	packPiPackage,
-	publishableExtensionPackages,
 	repoRoot,
 } from "./pi-packages.ts";
 
@@ -301,9 +301,9 @@ function assertLoads(fixture: string, bundle: string, manifest: string, name: st
 		fail(`${bundle} does not refuse another API major`);
 }
 
-const packages = dependenciesFirst(publishableExtensionPackages());
+const packages = dependenciesFirst(extensionPackages());
 const sdk = packages.find((pkg) => pkg.dir === EXTENSION_SDK_DIR);
-if (!sdk) fail("packages/extension-sdk is not publishable");
+if (!sdk) fail("packages/extension-sdk is missing");
 const samples = packages.filter((pkg) => pkg !== sdk);
 
 const scratch = mkdtempSync(join(tmpdir(), "thinkrail-extension-packages-"));

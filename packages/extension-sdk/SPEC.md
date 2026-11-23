@@ -224,7 +224,10 @@ reprint-only toolchain diff; `--print` shows the current surface. The snapshot i
 
 Released with the portable pi packages ([[module-pi-extensions]] § Release): `scripts/pi-packages.ts`
 lists this package and every public `extension-examples/*` package as publishable (dependencies first, so
-the SDK precedes a sample), and `.github/workflows/release-pi-packages.yml` runs the gate below and builds
+the SDK precedes a sample). Until their first release changeset lands, the SDK and the palette sample are
+`private`, so `release:publish` skips them while `check:extension-packages` (`extensionPackages()`, which
+counts private ones too) still packs and verifies them; the changeset that publishes them also drops
+`private`. `.github/workflows/release-pi-packages.yml` runs the gate below and builds
 the SDK before `release:publish`, since a sample's `prepack` builds with the SDK's `dist/`. Each package
 needs the manual bootstrap publish (`bun run release:pack extension-sdk`, `… palette`) before Trusted
 Publishing can take over. `bun pm pack` runs `prepack` without `node_modules/.bin` on `PATH`, so a sample's

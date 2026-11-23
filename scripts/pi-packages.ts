@@ -21,7 +21,7 @@ export const BUN_ONLY = [
 
 export const EXTENSION_SDK_DIR = join(repoRoot, "packages", "extension-sdk");
 
-function publishableIn(dirs: string[]): PiPackage[] {
+function packagesIn(dirs: string[], withPrivate = false): PiPackage[] {
 	const packages: PiPackage[] = [];
 	for (const dir of dirs) {
 		const manifestPath = join(dir, "package.json");
@@ -33,7 +33,7 @@ function publishableIn(dirs: string[]): PiPackage[] {
 			dependencies?: Record<string, string>;
 			pi?: { extensions?: string[] };
 		};
-		if (manifest.private === true) continue;
+		if (manifest.private === true && !withPrivate) continue;
 		packages.push({
 			dir,
 			name: manifest.name,
@@ -53,11 +53,17 @@ function childDirs(base: string): string[] {
 }
 
 export function publishablePiPackages(): PiPackage[] {
-	return publishableIn(childDirs("pi-extensions"));
+	return packagesIn(childDirs("pi-extensions"));
+}
+
+const extensionPackageDirs = () => [EXTENSION_SDK_DIR, ...childDirs("extension-examples")];
+
+export function extensionPackages(): PiPackage[] {
+	return packagesIn(extensionPackageDirs(), true);
 }
 
 export function publishableExtensionPackages(): PiPackage[] {
-	return publishableIn([EXTENSION_SDK_DIR, ...childDirs("extension-examples")]);
+	return packagesIn(extensionPackageDirs());
 }
 
 export function publishablePackages(): PiPackage[] {
