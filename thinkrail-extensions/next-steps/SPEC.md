@@ -27,7 +27,8 @@ They show as chips above the composer. A click (or Alt+N) sends one as the user'
 - `./web` default-exports a descriptor that registers the tool as a **routine** row (summary "Suggested N
   next steps", the list as its body), plus the `composerSuggestions` reader ([[module-extension-api]]).
   The reader prefers the result's normalized `details.suggestions` and falls back to the call's
-  arguments. It type-imports the details shape from the package's `./core`; the boundary rules allow
+  arguments, so a refused call ([[module-pi-next-steps]], *Decisions*) offers no chips; its row reads
+  as a request for the answer instead of "Suggested 0 next steps". It type-imports the details shape from the package's `./core`; the boundary rules allow
   only type imports of an extension's own pi package. Strings are `nextSteps.*` keys.
 
 ## Decisions
