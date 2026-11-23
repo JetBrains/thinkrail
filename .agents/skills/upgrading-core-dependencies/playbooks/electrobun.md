@@ -1,3 +1,11 @@
+---
+dependency: electrobun
+packages: ["electrobun", "hutch"]
+registry: electrobun-compatibility.md
+current: apps/desktop/package.json → devDependencies.electrobun (Hutch is paired, not pinned)
+latest: npm view electrobun version
+---
+
 # Playbook: upgrading Electrobun
 
 Covers the `electrobun` npm bootstrap and the Hutch toolchain and SDK it pairs with. The registry is

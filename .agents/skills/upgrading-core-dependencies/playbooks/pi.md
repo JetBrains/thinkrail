@@ -1,3 +1,11 @@
+---
+dependency: pi
+packages: ["@earendil-works/pi-agent-core", "@earendil-works/pi-ai", "@earendil-works/pi-coding-agent", "@earendil-works/pi-tui"]
+registry: pi-compatibility.md
+current: root package.json → workspaces.catalog["@earendil-works/pi-coding-agent"]
+latest: npm view @earendil-works/pi-coding-agent version
+---
+
 # Playbook: upgrading pi
 
 Covers `@earendil-works/pi-agent-core`, `pi-ai`, `pi-coding-agent` and `pi-tui`, which always move
@@ -87,7 +95,7 @@ These fail loudly when pi moves. Follow pi's change; never re-baseline blindly.
   as for cache warming and image auto-resize).
 - **Session lifecycle.** Re-check `AgentSession.dispose()` / `reload()` semantics (shutdown emission,
   throwing while streaming) against the host's reload gate and ordered shutdown.
-- **New upstream defaults with cost** (idle cache warming in 1.5.1). Ask the user; see SKILL.md.
+- **New upstream defaults with cost** (idle cache warming in 1.5.1). Ask the user; see `../SKILL.md`.
 
 ## Verification ladder
 

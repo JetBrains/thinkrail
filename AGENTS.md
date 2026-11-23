@@ -11,8 +11,8 @@ session state.
 - For a pi upgrade or a host workaround around pi, read `pi-compatibility.md`: verify every applicable
   removal gate against the installed SDK, update the registry, and report what was removed or retained.
   An Electrobun upgrade or a host workaround around Electrobun/Hutch does the same with
-  `electrobun-compatibility.md`. Run either upgrade with the `upgrading-core-dependencies` skill
-  (`.agents/skills/`).
+  `electrobun-compatibility.md`. Run any core-dependency upgrade with the
+  `upgrading-core-dependencies` skill (`.agents/skills/`), which keeps one playbook per dependency.
 - Read the owning `SPEC.md` when work is governed by or may alter a module boundary, contract,
   invariant, documented behavior, or architecture decision.
 - Localized work does not require unrelated specs or a full repository map.

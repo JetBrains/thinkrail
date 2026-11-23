@@ -78,7 +78,7 @@ A public SDK replacement must preserve session isolation, cancellation, project 
 transcripts, and compiled/desktop behavior before the host implementation is removed. Importing a
 private dist path in production is not a replacement; such imports remain confined to parity tests.
 The step-by-step upgrade procedure lives in the repo skill
-`.agents/skills/upgrading-core-dependencies` (`pi.md`); this registry stays the list of what it re-checks.
+`.agents/skills/upgrading-core-dependencies` (`playbooks/pi.md`); this registry stays the list of what it re-checks.
 
 ## MCP adaptations
 
