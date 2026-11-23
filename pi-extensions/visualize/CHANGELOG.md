@@ -1,5 +1,14 @@
 # @thinkrail/pi-visualize
 
+## 0.3.0
+
+### Minor Changes
+
+- [#1358](https://github.com/JetBrains/thinkrail/pull/1358) [`048f833`](https://github.com/JetBrains/thinkrail/commit/048f83344d2ea16e1d89c754b7d8783cc7c2cd0e) Thanks [@danyaberezun](https://github.com/danyaberezun)! - Hosts can keep what the tool draws: `createVisualizeExtension({ saveVisualization })` receives each diagram
+  or comparison's markdown with the session's `cwd` and returns where it saved it, and the tool result then
+  names that path for the model. Saving is best effort — a saver that throws never fails the tool — and file
+  previews are never saved, since they already are files.
+
 ## 0.2.1
 
 ### Patch Changes
