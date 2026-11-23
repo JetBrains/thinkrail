@@ -100,7 +100,8 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   and bottom tool panels, kept local to each window ([[submodule-web-shell-layout]]). The region that holds
   the keyboard carries an accent line, a keyboard move briefly frames the region it lands in, and
   VS Code-style chords move between regions, into the chat input, Projects, Files and the terminal, from
-  one keybinding table that the palette also shows ([[submodule-web-keybindings]]). The user rebinds those
+  one keybinding table that the palette also shows ([[submodule-web-keybindings]]); one chord hides every
+  side and bottom panel and brings back exactly what it hid. The user rebinds those
   chords and extensions' commands in Settings → Keyboard, stored on the host for every window, and exports
   or imports them as a JSON file. Hint mode, a
   switchable extension, labels everything clickable so a typed label presses it
@@ -110,9 +111,11 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   ([[submodule-web-chat]], [[submodule-server-agent]]).
 - **Session insights** — a local, on-demand breakdown of past sessions per project: a list with
   pi-recorded tokens/cost, tool calls, errors, subagents and outcomes, every number with its origin, and
-  per session a trace of its turns, model and tool calls on a shared timeline with redacted call details
-  and a jump into the chat, each call's context and cache with a read-only diff of adjacent requests, why
-  it was expensive, and the files it touched; across sessions, rule-based "what to do" findings with their
+  per session an overview, a trace of its turns, model and tool calls on a shared timeline with redacted
+  call details and a jump into the chat — opened beside the chat it analyses when that chat is open,
+  where a picked call shows in place, and in its own tab otherwise and from the list —, each call's
+  context and cache with a read-only diff of adjacent requests, why it was expensive, and the files it
+  touched; across sessions, rule-based "what to do" findings with their
   evidence, usage and cost by day, model, project, tool and skill, file hotspots with one action each,
   action sequences (a transition matrix, a process map, what follows a failed call), two slices compared
   with bootstrap intervals, two sessions' calls aligned step by step, and faceted search of events

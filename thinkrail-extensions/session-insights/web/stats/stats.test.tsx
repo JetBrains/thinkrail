@@ -15,18 +15,22 @@ import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { listResult, SOURCES, sessionRow } from "../fixtures.test";
 import {
-	onSessionFocus,
+	followSessionFocus,
 	pendingSessionFocus,
 	requestSessionFocus,
 	settleSessionFocus,
 } from "../focus";
 import { SessionsView } from "../SessionsPanel";
 import { VersionSkew } from "../session/api";
+import { DEFAULT_STATS_VIEW } from "../viewState";
 import { hideFinding, loadFindings, loadHotspots, loadUsage, stillReading } from "./api";
+import { FindingsBadge } from "./FindingsBadge";
 import { FindingsView } from "./FindingsView";
 import { HeatTree, heatTree } from "./HeatTree";
 import { HotspotDetail, HotspotsView } from "./HotspotsView";
+import { StatsView } from "./StatsView";
 import { UsageView } from "./UsageView";
+import { type FindingsControls, tallyFindings } from "./useFindings";
 
 const html = (node: ReactNode) => renderToStaticMarkup(<TooltipProvider>{node}</TooltipProvider>);
 const noop = () => {};
@@ -109,7 +113,7 @@ const RULES: FindingsListResult["rules"] = {
 
 function findingsResult(findings: Finding[]): FindingsListResult {
 	return {
-		apiVersion: 10,
+		apiVersion: 11,
 		state: STATE,
 		digests: { ready: 2, total: 2, stale: 0 },
 		sessions: SESSIONS,
@@ -198,6 +202,73 @@ describe("findings", () => {
 		);
 	});
 
+	test("the Insights badge counts the findings not hidden, in the most severe colour, with a summary", () => {
+		const result = findingsResult([never, failing, hidden, finding({ id: "i", severity: "info" })]);
+		const tally = tallyFindings(result);
+		expect(tally).toEqual({ error: 1, warning: 1, info: 1, total: 3 });
+		const badge = html(<FindingsBadge tally={tally} testId="badge" tooltip />);
+		expect(badge).toContain('data-testid="badge" data-severity="error"');
+		expect(badge).toContain('<span aria-hidden="true">3</span>');
+		expect(badge).toContain("3 findings · 1 error, 1 warning, 1 info");
+		const warnings = tallyFindings(findingsResult([never, { ...failing, severity: "info" }]));
+		expect(html(<FindingsBadge tally={warnings} testId="badge" />)).toContain(
+			'data-severity="warning"',
+		);
+		expect(
+			html(<FindingsBadge tally={tallyFindings(findingsResult([never]))} testId="badge" />),
+		).toContain("1 finding · 1 warning");
+		expect(
+			html(<FindingsBadge tally={tallyFindings(findingsResult([hidden]))} testId="badge" />),
+		).toBe("");
+	});
+
+	test("Insights opens on What to do; its sections are tabs and What to do reads the panel's findings", () => {
+		const findings: FindingsControls = {
+			polled: { view: { kind: "ready", value: findingsResult([never, failing]) }, busy: false },
+			onHide: noop,
+			retry: noop,
+		};
+		const host: PanelHost = {
+			query: () => new Promise(() => {}),
+			openChat: noop,
+			openPanel: noop,
+			renderToolCall: () => null,
+			openFile: noop,
+			scope: { workspaceId: "w1", projectId: "p1" },
+			hostProtocol: 130,
+			hostApiVersion: 11,
+		};
+		const markup = html(
+			<StatsView
+				host={host}
+				scopeKind="project"
+				attempt={0}
+				actions={{ onShowSessions: noop, onOpenSession: noop, onOpenFile: noop }}
+				findings={findings}
+				view={DEFAULT_STATS_VIEW}
+				onView={noop}
+			/>,
+		);
+		expect(markup).toContain('role="tablist" aria-label="Insights sections"');
+		const tabs = [
+			...markup.matchAll(
+				/role="tab"[^>]*aria-selected="(true|false)"[^>]*data-testid="stats-section-([a-z]+)"/g,
+			),
+		].map((match) => `${match[2]}:${match[1]}`);
+		expect(tabs).toEqual([
+			"findings:true",
+			"usage:false",
+			"hotspots:false",
+			"sequences:false",
+			"ab:false",
+		]);
+		expect(markup).toContain(">A/B<");
+		expect(markup).toContain('data-testid="stats-findings-badge" data-severity="error"');
+		expect(markup).toContain('data-testid="findings-view"');
+		expect(markup).toContain("2 skills were never loaded");
+		expect(markup.match(/role="tabpanel"/g)).toHaveLength(1);
+	});
+
 	test("an empty scope says no rule fired", () => {
 		const markup = html(
 			<FindingsView
@@ -253,7 +324,7 @@ function usageResult(): StatsUsageResult {
 	});
 	const claude = series({ key: "anthropic/claude" });
 	return {
-		apiVersion: 10,
+		apiVersion: 11,
 		state: STATE,
 		digests: { ready: 2, total: 2, stale: 0 },
 		sessions: SESSIONS,
@@ -369,7 +440,7 @@ function hotspotsResult(): StatsHotspotsResult {
 		}),
 	];
 	return {
-		apiVersion: 10,
+		apiVersion: 11,
 		state: STATE,
 		digests: { ready: 2, total: 2, stale: 0 },
 		sessions: SESSIONS,
@@ -485,7 +556,7 @@ describe("hotspots", () => {
 				onOpenFile={noop}
 			/>,
 		);
-		expect(markup).toContain("10 edits, 0 writes and 2 reads in 1 sessions.");
+		expect(markup).toContain("10 edits, 0 writes and 2 reads in 1 session.");
 		expect(markup).toContain("10 changes in one session, “Fix the parser”");
 		expect(markup).toContain("More changes than reads");
 		expect(markup).toContain("Rule: 10 or more changes in one session → split the task.");
@@ -559,7 +630,7 @@ describe("statistics queries", () => {
 		openFile: noop,
 		scope: { workspaceId: "w1", projectId: "p1" },
 		hostProtocol: 130,
-		hostApiVersion: 10,
+		hostApiVersion: 11,
 	});
 	const signal = new AbortController().signal;
 
@@ -575,7 +646,7 @@ describe("statistics queries", () => {
 		await expect(
 			loadFindings(host({ ...findingsResult([]), apiVersion: 5 }), { kind: "all" }, signal),
 		).rejects.toBeInstanceOf(VersionSkew);
-		expect(await hideFinding(host({ apiVersion: 10, hidden: ["a"] }), "a", true, signal)).toEqual([
+		expect(await hideFinding(host({ apiVersion: 11, hidden: ["a"] }), "a", true, signal)).toEqual([
 			"a",
 		]);
 		expect(stillReading({ state: STATE, digests: { ready: 1, total: 2, stale: 0 } })).toBe(true);
@@ -585,15 +656,17 @@ describe("statistics queries", () => {
 
 	test("a jump to a call reaches the session's open analysis once", () => {
 		const heard: string[] = [];
-		const stop = onSessionFocus((sessionId) => heard.push(sessionId));
+		const stop = followSessionFocus("s1", (eventId) => heard.push(eventId));
 		requestSessionFocus("s1", "tool:a:0");
-		expect(heard).toEqual(["s1"]);
-		expect(pendingSessionFocus("s1")).toBe("tool:a:0");
-		settleSessionFocus("s1", "tool:a:0");
+		expect(heard).toEqual(["tool:a:0"]);
 		expect(pendingSessionFocus("s1")).toBeNull();
-		stop();
 		requestSessionFocus("s2", "x");
-		expect(heard).toEqual(["s1"]);
+		expect(heard).toEqual(["tool:a:0"]);
+		stop();
+		requestSessionFocus("s1", "tool:b:0");
+		expect(heard).toEqual(["tool:a:0"]);
+		expect(pendingSessionFocus("s1")).toBe("tool:b:0");
+		settleSessionFocus("s1", "tool:b:0");
 		settleSessionFocus("s2", "x");
 	});
 });

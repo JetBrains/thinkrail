@@ -11,12 +11,12 @@ import type {
 } from "@thinkrail/pi-session-insights/core";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { useLocalKeys } from "@thinkrail/ui/local-keys";
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { isBadged } from "../copy";
+import { DetailsSplit } from "../DetailsSplit";
 import { DetailsPanel } from "../details/DetailsPanel";
 import { FigureBadge, FigureDetails, type Sources } from "../FigureCell";
 import {
@@ -188,6 +188,7 @@ export function describeHit(
 			return [
 				bandLabel(t, locale, analysis, { kind: "step", id: step.id }),
 				t("sessionInsights.timeline.tip.stepCalls", {
+					count: step.toolCalls.value ?? 0,
 					calls: formatCount(locale, step.toolCalls.value ?? 0),
 					errors: formatCount(locale, step.errors.value ?? 0),
 				}),
@@ -450,6 +451,8 @@ export function TimelineView({
 	sources,
 	selected,
 	onSelect,
+	stacked = false,
+	toolbarStart,
 }: {
 	host: PanelHost;
 	sessionId: string;
@@ -461,6 +464,10 @@ export function TimelineView({
 	sources: Sources;
 	selected: number;
 	onSelect: (index: number) => void;
+	/** The panel is narrow: the call details stack under the view. */
+	stacked?: boolean;
+	/** Leads the toolbar (the trace's view modes). */
+	toolbarStart?: ReactNode;
 }) {
 	const t = useT();
 	const locale = localeOf(t);
@@ -585,12 +592,16 @@ export function TimelineView({
 					case "tools":
 						return [
 							label,
-							lane.tracks > 1 ? t("sessionInsights.timeline.tracks", { n: lane.tracks }) : null,
+							lane.tracks > 1
+								? t("sessionInsights.timeline.tracks", { count: lane.tracks, n: lane.tracks })
+								: null,
 						];
 					case "subagents":
 						return [
 							label,
-							lane.tracks > 1 ? t("sessionInsights.timeline.tracks", { n: lane.tracks }) : null,
+							lane.tracks > 1
+								? t("sessionInsights.timeline.tracks", { count: lane.tracks, n: lane.tracks })
+								: null,
 						];
 					case "spend":
 						return [
@@ -855,14 +866,16 @@ export function TimelineView({
 
 	return (
 		<div ref={setRoot} data-testid="timeline-view" className="h-full min-h-0">
-			<ResizablePanelGroup direction="horizontal" className="h-full min-h-0">
-				<ResizablePanel defaultSize={68} minSize={40}>
+			<DetailsSplit
+				stacked={stacked}
+				view={
 					<div className="flex h-full min-h-0 flex-col">
 						<div
 							role="toolbar"
 							aria-label={t("sessionInsights.timeline.toolbar")}
 							className="flex shrink-0 flex-wrap items-center gap-8 border-border-default border-b px-12 py-4"
 						>
+							{toolbarStart}
 							<fieldset
 								aria-label={t("sessionInsights.timeline.axis")}
 								className="flex items-center gap-4"
@@ -1008,27 +1021,24 @@ export function TimelineView({
 							))}
 						</Legend>
 					</div>
-				</ResizablePanel>
-				<ResizableHandle />
-				<ResizablePanel defaultSize={32} minSize={22}>
-					<div className="h-full min-h-0 border-border-default border-l">
-						<DetailsPanel
-							host={host}
-							sessionId={sessionId}
-							model={model}
-							index={selected}
-							overview={overview}
-							query=""
-							onSelect={select}
-							onZoom={(index) => {
-								const event = model.at(index);
-								if (event) setView(viewAround(scale, event.t0, event.t1, 0.6));
-							}}
-							tabsRef={tabsRef}
-						/>
-					</div>
-				</ResizablePanel>
-			</ResizablePanelGroup>
+				}
+				details={
+					<DetailsPanel
+						host={host}
+						sessionId={sessionId}
+						model={model}
+						index={selected}
+						overview={overview}
+						query=""
+						onSelect={select}
+						onZoom={(index) => {
+							const event = model.at(index);
+							if (event) setView(viewAround(scale, event.t0, event.t1, 0.6));
+						}}
+						tabsRef={tabsRef}
+					/>
+				}
+			/>
 		</div>
 	);
 }

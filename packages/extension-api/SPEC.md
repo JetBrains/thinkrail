@@ -20,8 +20,8 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   `ToolProminence`, `ToolWidth`, `ComposerSuggestionsReader`, `ToolRegistrationOptions`, `ToolInteraction`,
   `ToolInteractionState`, `ToolPlacement`, `WebExtension`, `GlobalOverlayProps`, `ExtensionCommand`,
   `ExtensionChord`, `ExtensionShortcut`, `ExtensionShortcutKey`, `defineWebExtension`, the panel contract
-  (`PanelDeclaration`, `PanelChatAction`, `PanelRail`, `PanelProps`, `PanelHost`, `PanelChatTarget`,
-  `PanelChatAnchor`, `PanelToolCall`, `PanelHostScope`, `PanelScope`), and the pure argument/result readers from `toolHelpers` and
+  (`PanelDeclaration`, `PanelChatAction`, `PanelRail`, `PanelProps`, `PanelHost`, `PanelPlacement`,
+  `PanelChatTarget`, `PanelChatAnchor`, `PanelToolCall`, `PanelHostScope`, `PanelScope`), and the pure argument/result readers from `toolHelpers` and
   `toolResultContent`.
 - **Images are references.** `parseToolResultContent(result).images` returns `contracts`' `WireImage`s,
   in block order.
@@ -148,6 +148,18 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
     cheatsheet's extension section, on the icon's tooltip and on the panel's palette row like any command.
     A separate shortcut shape was rejected: the command already carries the title, the chords and the
     prefix rule.
+  - `chatPane: true` (meaningful only with a `chatAction`) — the panel opens *beside its chat*: while
+    that chat has a tab in the center of the active workspace's view, every chat entry point opens the
+    panel in a pane inside the chat's own tab, to the right of the conversation, instead of a tab of its
+    own; anywhere else (the chat not open, another workspace, Project Home, a recently closed chat) it
+    opens the tab as before. The chat's header shows its `chatAction` as a toggle, pressed while the pane
+    shows the panel. The host draws no chrome around the pane: the panel renders its own *Open as tab*
+    and close controls from `PanelHost.openAsTab` / `closePane`. A second center group was rejected: two
+    tab strips, an analysis left stale when the user switches chats, a group left behind.
+  - `wide: true` — the panel needs the width: the side and bottom panes are hidden once, when such a
+    panel opens, as a tab or as a chat pane, through the shell's hide-all action (the one the hide-all
+    command restores from); focusing an already open one — its tab, or a pane already showing it — leaves
+    the panes alone, and switching tabs or chats does not hide them again.
 
   The component receives `PanelProps { host, params }`
   (`params` a flat string map the tab persists) and never reaches host state. `PanelHost.query` calls
@@ -167,6 +179,19 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   optional so a panel offers the action only on a host that has one. `scope` is the workspace whose view
   holds the tab. `hostProtocol` and `hostApiVersion` (the server half's declared `apiVersion`) let a
   panel degrade against an older host or server half.
+- **Placement and view state.** `PanelHost.placement` (`PanelPlacement`) is `"tab"` for a center tab and
+  `"chatPane"` for a pane beside its chat; absent means a tab (an older host). Only a pane's host carries
+  `showInChat(at)` — reveal that place in the chat beside the pane, in place: no tab switch, no
+  navigation, focus stays in the pane (the chat opens a folded group around a tool call and highlights
+  the call) —, `openAsTab()` — move the panel to its own center tab, named after the chat like the tab a
+  chat entry point opens, carrying the view state it last saved, and close the pane — and `closePane()` —
+  give the chat its full width back; a panel offers each control only when its member is present.
+  `viewState` is the JSON-like value the panel last saved for this tab or pane through
+  `saveViewState(state)`, read as the panel mounts (`undefined` the first time), so a tab brought back
+  after another one showed — which remounts it — restores its section, mode, folds or scroll. The host
+  keeps one value per tab and per chat pane for the page's lifetime, not across reloads; a panel saves
+  whenever its view changes (saving re-renders nothing) and reads `viewState` only to initialize. All six
+  members are optional so a panel tolerates an older host.
 - `./server` exposes `ServerExtension` and `defineServerExtension`, with pi `ExtensionFactory` types
   only. Descriptors carry `name` (the identity — the Settings on/off switch and `disabledExtensions` key
   on it), optional display copy `title` / `description` for the Settings catalog, `extensions`, optional

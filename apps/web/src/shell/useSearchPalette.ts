@@ -64,6 +64,7 @@ import {
 	focusTerminal,
 	openChatHistory,
 	showFiles,
+	toggleAllPanels,
 	toggleBottomPanel,
 	toggleLeftSide,
 	toggleRightSide,
@@ -295,6 +296,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				toggleLeft: () => toggleLeftSide(options.toggleProjectsHome),
 				toggleRight: toggleRightSide,
 				toggleBottom: toggleBottomPanel,
+				toggleAllPanels,
 				showTool: (workspaceId, tool) => store().requestToolView(workspaceId, tool),
 				openExtensionPanel,
 				openExtensionPanelInProject: (projectId, panel) =>

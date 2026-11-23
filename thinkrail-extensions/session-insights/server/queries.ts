@@ -11,6 +11,7 @@ import {
 	buildErrorDetail,
 	buildFileDetail,
 	buildFindingsList,
+	buildOverviewCards,
 	buildRequestDiff,
 	buildSessionAnalysis,
 	buildSessionCost,
@@ -28,6 +29,7 @@ import {
 	type ChatAnchor,
 	childTranscriptsOf,
 	chromeTraceOutput,
+	composeOverview,
 	DAY_TIMELINE_QUERY,
 	DayRowCache,
 	DigestStore,
@@ -66,6 +68,7 @@ import {
 	labelsView,
 	listSessionFiles,
 	METRIC_SOURCES,
+	type OverviewCards,
 	parseAlignParams,
 	parseCompareParams,
 	parseDayTimelineParams,
@@ -78,6 +81,7 @@ import {
 	parseHotspotsParams,
 	parseLabelsGetParams,
 	parseLabelsSetParams,
+	parseOverviewParams,
 	parseRequestDiffParams,
 	parseSearchParams,
 	parseSequencesParams,
@@ -97,6 +101,7 @@ import {
 	SESSION_COST_QUERY,
 	SESSION_FILES_QUERY,
 	SESSION_INSIGHTS_API_VERSION,
+	SESSION_OVERVIEW_QUERY,
 	SESSION_SUBAGENTS_QUERY,
 	SESSION_SUMMARY_QUERY,
 	SESSION_TIMELINE_QUERY,
@@ -110,9 +115,11 @@ import {
 	type SessionCostResult,
 	type SessionFilesResult,
 	SessionIndex,
+	type SessionOverviewResult,
 	type SessionSubagentsResult,
 	type SessionsAlignResult,
 	type SessionsListInput,
+	type SessionsListScope,
 	type SessionsSearchResult,
 	type SessionTimelineResult,
 	SLICES_COMPARE_QUERY,
@@ -137,6 +144,8 @@ import {
 } from "@thinkrail/pi-session-insights";
 
 const FRESH_BUDGET_MS = 150;
+/** Session files whose latest Overview cards are kept. */
+const OVERVIEW_CARDS_KEPT = 4;
 
 function listProjects(view: ExtensionSessionView): ListProject[] {
 	return view.projects.map(({ id, name, kind }) => ({ id, name, kind }));
@@ -153,6 +162,7 @@ export function sessionInsightsQueries(
 	let store: JsonStore | undefined;
 	let alignments: AlignmentCache | undefined;
 	let searches: SearchJobs | undefined;
+	let overviewCards: Map<string, { revision: string; cards: Promise<OverviewCards> }> | undefined;
 	const { signal } = host;
 	signal.addEventListener(
 		"abort",
@@ -165,6 +175,7 @@ export function sessionInsightsQueries(
 			store = undefined;
 			alignments = undefined;
 			searches = undefined;
+			overviewCards = undefined;
 		},
 		{ once: true },
 	);
@@ -213,13 +224,19 @@ export function sessionInsightsQueries(
 	 */
 	const lookup = async (
 		sessionId: string,
-	): Promise<{ file: string; removed: boolean } | "pending" | null> => {
+	): Promise<{ file: string; removed: boolean; projectId: string | null } | "pending" | null> => {
 		const sessions = sessionIndex();
 		const state = await sessions.ensureFresh(FRESH_BUDGET_MS);
 		const summary = sessions.summaryOf(sessionId);
 		if (!summary) return state.phase === "ready" ? null : "pending";
 		const placement = host.sessionScope({ kind: "all" }).locate(summary.cwd);
-		return placement ? { file: summary.file, removed: placement.workspace === "removed" } : null;
+		return placement
+			? {
+					file: summary.file,
+					removed: placement.workspace === "removed",
+					projectId: placement.projectId,
+				}
+			: null;
 	};
 	/** The shown session, read as not found while it is still pending (for queries asked once it was found). */
 	const shownSession = async (sessionId: string) => {
@@ -237,21 +254,30 @@ export function sessionInsightsQueries(
 		if (child) return child;
 		return sessionIndex().state().phase === "ready" ? null : "pending";
 	};
-	const subagentsInput = async (sessionId: string): Promise<SubagentsInput | null> => {
-		const shown = await shownSession(sessionId);
-		const store = traceStore();
-		const trace = shown ? await store.trace(shown.file) : null;
-		if (!shown || !trace) return null;
+	const subagentsFor = (
+		sessionId: string,
+		shown: { file: string; removed: boolean },
+		trace: BuiltTrace,
+	): SubagentsInput => {
 		activity ??= new SubagentActivityCache();
 		return {
 			trace,
 			file: shown.file,
-			store,
+			store: traceStore(),
 			transcripts: childTranscriptsOf(sessionIndex(), sessionId),
 			removed: shown.removed,
 			activity,
 		};
 	};
+	const subagentsOf = async (
+		sessionId: string,
+		shown: { file: string; removed: boolean } | null,
+	): Promise<SubagentsInput | null> => {
+		const trace = shown ? await traceStore().trace(shown.file) : null;
+		return shown && trace ? subagentsFor(sessionId, shown, trace) : null;
+	};
+	const subagentsInput = async (sessionId: string) =>
+		subagentsOf(sessionId, await shownSession(sessionId));
 
 	const list: ExtensionQuery = async (params) => {
 		const { scope, fresh } = parseSessionsListParams(params);
@@ -477,6 +503,81 @@ export function sessionInsightsQueries(
 			...(withLabels ? { labelsOf: labelLookup(await readLabels(jsonStore())) } : {}),
 		};
 		return { input, state };
+	};
+
+	/** A revision's Overview cards, built once and kept for the latest few files, so a poll only reads the findings. */
+	const cardsOf = (
+		sessionId: string,
+		shown: { file: string; removed: boolean },
+		trace: BuiltTrace,
+	) => {
+		overviewCards ??= new Map();
+		const kept = overviewCards;
+		const { revision } = trace.meta;
+		const cached = kept.get(shown.file);
+		if (cached?.revision === revision) return cached.cards;
+		const cards = buildOverviewCards({
+			trace,
+			contextWindow,
+			subagents: subagentsFor(sessionId, shown, trace),
+			signal,
+		});
+		kept.delete(shown.file);
+		kept.set(shown.file, { revision, cards });
+		while (kept.size > OVERVIEW_CARDS_KEPT) {
+			const oldest = kept.keys().next().value;
+			if (oldest === undefined) break;
+			kept.delete(oldest);
+		}
+		cards.catch(() => {
+			if (kept.get(shown.file)?.cards === cards) kept.delete(shown.file);
+		});
+		return cards;
+	};
+
+	const overview: ExtensionQuery = async (params): Promise<SessionOverviewResult> => {
+		const { sessionId, revision } = parseOverviewParams(params);
+		const found = await lookup(sessionId);
+		signal.throwIfAborted();
+		const shown = found === "pending" ? null : found;
+		const at = shown ? await traceStore().traceAt(shown.file, revision) : null;
+		signal.throwIfAborted();
+		if (!shown || !at)
+			return {
+				apiVersion: SESSION_INSIGHTS_API_VERSION,
+				found: false,
+				pending: found === "pending",
+				overview: null,
+				sources: METRIC_SOURCES,
+			};
+		const cards = await cardsOf(sessionId, shown, at.trace);
+		signal.throwIfAborted();
+		const sessions = sessionIndex();
+		const scope: SessionsListScope = shown.projectId
+			? { kind: "project", projectId: shown.projectId }
+			: { kind: "all" };
+		const findings = await buildFindingsList(
+			{
+				...listInput(sessions, host.sessionScope(scope)),
+				digests: digestStore(),
+				contextWindow,
+				store: jsonStore(),
+				redactor: traceStore().redaction,
+			},
+			sessions.state(),
+		);
+		signal.throwIfAborted();
+		return {
+			apiVersion: SESSION_INSIGHTS_API_VERSION,
+			found: true,
+			pending: false,
+			overview: composeOverview(cards, {
+				sessionId,
+				outcome: host.sessionStatus(sessionId).completion?.outcome ?? null,
+				findings,
+			}),
+			sources: METRIC_SOURCES,
+		};
 	};
 
 	const searchAcross: ExtensionQuery = async (params): Promise<SessionsSearchResult> => {
@@ -735,6 +836,7 @@ export function sessionInsightsQueries(
 	return {
 		[SESSIONS_LIST_QUERY]: list,
 		[SESSION_SUMMARY_QUERY]: summary,
+		[SESSION_OVERVIEW_QUERY]: overview,
 		[SESSION_TRACE_QUERY]: trace,
 		[EVENT_GET_QUERY]: event,
 		[EVENT_ANCHOR_QUERY]: anchor,

@@ -12,11 +12,12 @@ export type Query<T> =
  * One async load per `key` (`null`: not asked yet): a new key aborts the previous load and reads
  * `loading` until its own answer lands; `progress` shows a paged load's growing prefix. An answer
  * `again` holds pending (the host's index has not reached the session yet) is asked again with the
- * polls' backoff, only while the document is visible.
+ * polls' backoff, only while the document is visible; `run` gets the key's last answer, so a poll can
+ * ask for what it read.
  */
 export function useKeyedQuery<T>(
 	key: string | null,
-	run: (signal: AbortSignal, progress: (value: T) => void) => Promise<T>,
+	run: (signal: AbortSignal, progress: (value: T) => void, last: T | undefined) => Promise<T>,
 	again?: (value: T) => boolean,
 ): Query<T> {
 	const [settled, setSettled] = useState<{ key: string; query: Query<T> } | null>(null);
@@ -28,9 +29,11 @@ export function useKeyedQuery<T>(
 		const settle = (query: Query<T>) => {
 			if (!controller.signal.aborted) setSettled({ key, query });
 		};
+		let last: T | undefined;
 		const ask = () => {
-			request(controller.signal, (value) => settle({ kind: "ready", value })).then(
+			request(controller.signal, (value) => settle({ kind: "ready", value }), last).then(
 				(value) => {
+					last = value;
 					settle({ kind: "ready", value });
 					if (!controller.signal.aborted && pending(value)) retry.again();
 				},

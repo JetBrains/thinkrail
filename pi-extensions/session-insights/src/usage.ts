@@ -234,7 +234,13 @@ function markers(calendar: Calendar, byModel: readonly UsageSeries[], outside: U
 		.sort((a, b) => a - b)[0];
 	if (firstSubagent !== undefined)
 		out.push({ day: calendar.days[firstSubagent] ?? "", kind: "subagentSpend", model: null });
-	return out.sort((a, b) => byText(a.day, b.day) || byText(a.kind, b.kind));
+	const spent = [...byModel, ...(outside ? [outside] : [])];
+	const secondDay = calendar.days.filter((_, index) =>
+		spent.some((series) => (series.tokens[index] ?? 0) > 0),
+	)[1];
+	return out
+		.filter((marker) => secondDay !== undefined && byText(marker.day, secondDay) >= 0)
+		.sort((a, b) => byText(a.day, b.day) || byText(a.kind, b.kind));
 }
 
 function durationFigure(value: number | null, origin: Origin = "recorded"): Figure {

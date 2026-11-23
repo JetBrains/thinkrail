@@ -80,7 +80,7 @@ describe("turn segmentation", () => {
 		expect(trace.events.find((event) => event.id === done)?.kind).toBe("mark");
 	});
 
-	test("a marker written long after the last call, like a restored chat's model change, does not stretch the turn", async () => {
+	test("a marker written long after the last call, like a restored chat's model change, stretches neither the turn nor the trace", async () => {
 		const builder = new TranscriptBuilder({ id: "late-mark", start: T0 });
 		builder.user("hi");
 		const reply = builder.assistant({ text: "hello", durationMs: 1000 });
@@ -90,8 +90,8 @@ describe("turn segmentation", () => {
 		const [turn] = turns(trace.events);
 		const call = trace.events.find((event) => event.id === reply);
 		expect(turn?.t1).toBe(call?.t1);
-		expect(trace.meta.end).toBeGreaterThan((call?.t1 ?? 0) + 24 * 3_600_000);
-		expect(trace.meta.gaps.at(-1)?.cause).toBe("idle");
+		expect(trace.meta.end).toBe(call?.t1 ?? 0);
+		expect(trace.meta.gaps).toEqual([]);
 	});
 });
 
@@ -217,6 +217,27 @@ function workSession(id: string) {
 }
 
 describe("the session timeline", () => {
+	test("a restored chat's late settings stay marks but never stretch the trace or the timeline", async () => {
+		const builder = new TranscriptBuilder({
+			id: "restored",
+			start: Date.parse("2024-11-27T10:00:00Z"),
+		});
+		builder.user("Old work");
+		builder.thinkingLevel("high");
+		builder.assistant({ text: "Done.", durationMs: 1000 });
+		const activeEnd = builder.now();
+		builder.advance(725 * 24 * 3600_000);
+		const late = builder.thinkingLevel("medium");
+		const trace = await traceOf("restored", builder);
+		expect(trace.events.map((event) => event.kind)).toEqual(["turn", "mark", "llm", "mark"]);
+		expect(trace.events.at(-1)).toMatchObject({ id: late, mark: "thinkingLevel" });
+		expect(trace.meta.end).toBe(activeEnd);
+		expect(trace.meta.gaps).toEqual([]);
+		const timeline = await buildSessionTimeline(trace);
+		expect(timeline.end).toBe(activeEnd);
+		expect(timeline.bands.at(-1)?.t1).toBe(activeEnd);
+	});
+
 	test("cards, lanes and counters come from the trace with their origins", async () => {
 		const builder = workSession("work");
 		const trace = await traceOf("work", builder);

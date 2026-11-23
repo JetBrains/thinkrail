@@ -45,6 +45,21 @@ describe("the shortcut catalog", () => {
 		);
 	});
 
+	test("lists Hide all panels with its chord right after the side and bottom toggles", () => {
+		const panels = rowsFor(false, LINUX).filter((row) => row.surface === "panels");
+		const ids = panels.map((row) => row.id);
+		expect(ids.slice(ids.indexOf("view.toggleLeft"), ids.indexOf("view.toggleLeft") + 4)).toEqual([
+			"view.toggleLeft",
+			"view.toggleRight",
+			"view.toggleBottom",
+			"view.toggleAllPanels",
+		]);
+		const hideAll = panels.find((row) => row.id === "view.toggleAllPanels");
+		expect(hideAll?.title).toBe("shortcuts.toggleAllPanels");
+		expect(labels(panels, "view.toggleAllPanels")).toEqual(["Ctrl+Shift+F12"]);
+		expect(labels(rowsFor(true, MAC), "view.toggleAllPanels")).toEqual(["⇧⌘F12"]);
+	});
+
 	test("lists the bottom rail's horizontal keys apart from the side rails' vertical ones", () => {
 		const rows = rowsFor(false, LINUX);
 		expect(labels(rows, "rails.up")).toEqual(["↑", "K"]);

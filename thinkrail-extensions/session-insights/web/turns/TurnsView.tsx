@@ -18,12 +18,12 @@ import type {
 	TurnBadges,
 	TurnSummary,
 } from "@thinkrail/pi-session-insights/core";
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { isBadged } from "../copy";
+import { DetailsSplit } from "../DetailsSplit";
 import { DetailsPanel } from "../details/DetailsPanel";
 import { FigureBadge, FigureDetails, type FigureView, type Sources } from "../FigureCell";
 import {
@@ -463,6 +463,8 @@ export function TurnsView({
 	selected,
 	onSelect,
 	onShowInTrace,
+	stacked = false,
+	toolbarStart,
 }: {
 	host: PanelHost;
 	sessionId: string;
@@ -475,6 +477,10 @@ export function TurnsView({
 	selected: number;
 	onSelect: (index: number) => void;
 	onShowInTrace: (index: number) => void;
+	/** The panel is narrow: the call details stack under the view. */
+	stacked?: boolean;
+	/** Leads the toolbar (the trace's view modes). */
+	toolbarStart?: ReactNode;
 }) {
 	const t = useT();
 	const locale = localeOf(t);
@@ -512,14 +518,16 @@ export function TurnsView({
 	};
 	return (
 		<div ref={setRoot} data-testid="turns-view" className="h-full min-h-0">
-			<ResizablePanelGroup direction="horizontal" className="h-full min-h-0">
-				<ResizablePanel defaultSize={68} minSize={40}>
+			<DetailsSplit
+				stacked={stacked}
+				view={
 					<div className="flex h-full min-h-0 flex-col">
 						<div
 							role="toolbar"
 							aria-label={t("sessionInsights.turns.toolbar")}
 							className="flex shrink-0 flex-wrap items-center gap-8 border-border-default border-b px-12 py-4"
 						>
+							{toolbarStart}
 							<fieldset
 								aria-label={t("sessionInsights.turns.filter")}
 								className="flex min-w-0 items-center gap-4"
@@ -587,24 +595,21 @@ export function TurnsView({
 						</div>
 						<Legend model={model} testId="turns-legend" />
 					</div>
-				</ResizablePanel>
-				<ResizableHandle />
-				<ResizablePanel defaultSize={32} minSize={22}>
-					<div className="h-full min-h-0 border-border-default border-l">
-						<DetailsPanel
-							host={host}
-							sessionId={sessionId}
-							model={model}
-							index={selected}
-							overview={overview}
-							query=""
-							onSelect={select}
-							onZoom={onShowInTrace}
-							tabsRef={tabsRef}
-						/>
-					</div>
-				</ResizablePanel>
-			</ResizablePanelGroup>
+				}
+				details={
+					<DetailsPanel
+						host={host}
+						sessionId={sessionId}
+						model={model}
+						index={selected}
+						overview={overview}
+						query=""
+						onSelect={select}
+						onZoom={onShowInTrace}
+						tabsRef={tabsRef}
+					/>
+				}
+			/>
 		</div>
 	);
 }

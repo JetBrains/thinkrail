@@ -801,9 +801,10 @@ details (with the trace's `z` zoom leaving plain `F` to hint mode) and *Open in 
 that holds the call; a failed call folded into a repeat (the command passed, then failed) shown for a
 search jump to it and for the Errors filter; turn cards, the actor timeline and the
 day view; subagent waves, the plan and skill bands and errors as recovery chains (with a retry key rebound
-through `settings.update` acting in the trace and shown in its legend, reset in `afterEach`); context and cache, cost
-and files; statistics (findings, usage by day, hotspots); action sequences, a slice comparison and a
-step-aligned diff of two sessions; faceted search opening a session's analysis at a hit; and labels with
+through `settings.update` acting in the trace and shown in its legend, reset in `afterEach`); context and
+cache — reached through the Overview's Context link, which reveals the context half once, a return to the
+section opening at its top —, cost and files; statistics (findings, usage by day, hotspots); action
+sequences, a slice comparison and a step-aligned diff of two sessions; faceted search opening a session's analysis at a hit; and labels with
 exports of a masked page, a Chrome trace and a fixture into Artifacts. The fixture writer records
 `durationMs` so the spans are pi's. The app reset leaves the delegation folder and the extension's data
 folder (`<data>/extensions/session-insights/`) alone, so the spec removes the delegation folders it wrote

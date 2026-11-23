@@ -281,6 +281,7 @@ function modelColumns(
 					cell={{
 						...durationCell(t, locale, row.latencyP50, "modelLatency"),
 						detail: t("sessionInsights.usage.measured", {
+							count: row.calls.value ?? 0,
 							measured: formatCount(locale, row.measured),
 							total: formatCount(locale, row.calls.value ?? 0),
 						}),
@@ -515,6 +516,7 @@ function toolColumns(
 					cell={{
 						...durationCell(t, locale, row.durationAvg, "toolDuration"),
 						detail: t("sessionInsights.usage.measured", {
+							count: row.calls.value ?? 0,
 							measured: formatCount(locale, row.measured),
 							total: formatCount(locale, row.calls.value ?? 0),
 						}),

@@ -21,10 +21,13 @@ import {
 	findLayoutTab,
 	findPlacedResource,
 	findTabLocation,
+	hideAuxiliaryPanels,
 	hideBottom,
 	hideSide,
+	isAuxiliaryRegionShown,
 	isLayoutUnavailable,
 	keepPreview,
+	type LayoutAuxiliaryRegion,
 	type LayoutCenterTab,
 	type LayoutGroupLocation,
 	type LayoutOperationResult,
@@ -41,6 +44,7 @@ import {
 	setAuxiliaryGroupFolded,
 	showBottom,
 	showSide,
+	toggleAuxiliaryPanels,
 	type WorkspaceLayoutDocument,
 	withAvailablePlacementId,
 } from "../layout";
@@ -204,7 +208,11 @@ export function toLayoutTab(tab: EditorTab): LayoutCenterTab | null {
 
 export function useLayoutIntentProcessing(
 	workspaceId: string,
-	commit: (document: WorkspaceLayoutDocument, attention?: LayoutAttention) => void,
+	commit: (
+		document: WorkspaceLayoutDocument,
+		attention?: LayoutAttention,
+		panelsToRestore?: readonly LayoutAuxiliaryRegion[],
+	) => void,
 	changeAttention: (next: LayoutAttention) => void,
 	requestFocus: (request: LayoutTabFocusRequest) => void,
 ): void {
@@ -262,6 +270,8 @@ export function useLayoutIntentProcessing(
 					focusGroupId?: string;
 					focusTabId?: string;
 					focusOnlyIfLost?: true;
+					select?: readonly { location: LayoutGroupLocation; tabId: string }[];
+					panelsToRestore?: readonly LayoutAuxiliaryRegion[];
 			  }
 			| undefined;
 		switch (layoutIntent.kind) {
@@ -465,10 +475,7 @@ export function useLayoutIntentProcessing(
 				break;
 			}
 			case "toggle-side":
-				if (
-					document[layoutIntent.side].visible &&
-					document[layoutIntent.side].groups.some((group) => !group.folded)
-				) {
+				if (isAuxiliaryRegionShown(document[layoutIntent.side])) {
 					result = hideSide(document, layoutIntent.side, attention);
 				} else {
 					const shown = showSide(document, layoutIntent.side, maxSideGroups, attention);
@@ -476,16 +483,33 @@ export function useLayoutIntentProcessing(
 				}
 				break;
 			case "toggle-bottom":
-				if (document.bottom.visible && document.bottom.groups.some((group) => !group.folded)) {
+				if (isAuxiliaryRegionShown(document.bottom)) {
 					result = hideBottom(document, attention);
 				} else {
 					const shown = showBottom(document, maxSideGroups, maxBottomGroups, attention);
 					if (!isLayoutUnavailable(shown)) result = shown;
 				}
 				break;
+			case "toggle-all-panels":
+				result =
+					toggleAuxiliaryPanels(
+						document,
+						attention,
+						currentState.panelsToRestore,
+						maxSideGroups,
+						maxBottomGroups,
+					) ?? undefined;
+				break;
+			case "hide-all-panels":
+				result =
+					hideAuxiliaryPanels(document, attention, currentState.panelsToRestore) ?? undefined;
+				break;
 		}
 		if (!result) return;
 		let nextAttention = reconcileAttention(result.document, attention, document);
+		for (const { location, tabId } of result.select ?? []) {
+			nextAttention = selectTab(nextAttention, location, tabId, false);
+		}
 		const activateResult =
 			layoutIntent.kind === "open"
 				? layoutIntent.activate !== false && currentRouting?.activate !== false
@@ -533,8 +557,9 @@ export function useLayoutIntentProcessing(
 				}
 			}
 		}
-		if (result.document !== document) commit(result.document, nextAttention);
-		else changeAttention(nextAttention);
+		if (result.document !== document) {
+			commit(result.document, nextAttention, result.panelsToRestore);
+		} else changeAttention(nextAttention);
 	}, [
 		attention,
 		changeAttention,

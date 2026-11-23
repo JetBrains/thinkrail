@@ -449,71 +449,92 @@ function ExportDialog({
 	);
 }
 
-/** The session header's Export menu: HTML, Chrome trace or e2e fixture, each through its options dialog. */
-export function ExportMenu({
-	host,
-	sessionId,
-	turns,
-	defaultTurn,
-	selectedEvent,
-}: {
-	host: PanelHost;
-	sessionId: string;
+export const EXPORT_KINDS: readonly ExportKind[] = ["html", "trace", "fixture"];
+
+/** An export the user picked: its kind, and a count that gives every pick a fresh dialog. */
+export interface ExportRequest {
+	kind: ExportKind;
+	attempt: number;
+}
+
+export interface ExportTarget {
 	turns: readonly ExportTurn[];
 	defaultTurn: number | null;
 	selectedEvent: { id: string; label: string } | null;
-}) {
+}
+
+/** An export kind's icon and name, as the menu lists it. */
+export function ExportKindLabel({ kind }: { kind: ExportKind }) {
 	const t = useT();
-	const [kind, setKind] = useState<ExportKind | null>(null);
-	const [attempt, setAttempt] = useState(0);
+	const Icon = KIND_ICON[kind];
 	return (
 		<>
-			<DropdownMenu>
-				<DropdownMenuTrigger asChild>
-					<Button
-						variant="outline"
-						size="s"
-						iconLeft={RiDownload2Line}
-						iconRight={RiArrowDownSLine}
-						data-testid="session-insights-export"
-					>
-						{t("sessionInsights.export.menu")}
-					</Button>
-				</DropdownMenuTrigger>
-				<DropdownMenuContent align="end">
-					{(["html", "trace", "fixture"] as const).map((item) => {
-						const Icon = KIND_ICON[item];
-						return (
-							<DropdownMenuItem
-								key={item}
-								data-testid="session-insights-export-item"
-								data-kind={item}
-								onSelect={() => {
-									setKind(item);
-									setAttempt(attempt + 1);
-								}}
-							>
-								<Icon aria-hidden className="size-14 shrink-0" />
-								{t(KIND_ITEM[item])}
-							</DropdownMenuItem>
-						);
-					})}
-				</DropdownMenuContent>
-			</DropdownMenu>
-			<Dialog open={kind !== null} onOpenChange={(open) => !open && setKind(null)}>
-				{kind ? (
-					<ExportDialog
-						key={attempt}
-						host={host}
-						sessionId={sessionId}
-						kind={kind}
-						turns={turns}
-						defaultTurn={defaultTurn}
-						selectedEvent={selectedEvent}
-						onClose={() => setKind(null)}
-					/>
-				) : null}
-			</Dialog>
+			<Icon aria-hidden className="size-14 shrink-0" />
+			{t(KIND_ITEM[kind])}
 		</>
+	);
+}
+
+/** The session header's Export button: its menu picks HTML, Chrome trace or e2e fixture. */
+export function ExportTrigger({ onPick }: { onPick: (kind: ExportKind) => void }) {
+	const t = useT();
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button
+					variant="outline"
+					size="s"
+					iconLeft={RiDownload2Line}
+					iconRight={RiArrowDownSLine}
+					data-testid="session-insights-export"
+				>
+					{t("sessionInsights.export.menu")}
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end">
+				{EXPORT_KINDS.map((item) => (
+					<DropdownMenuItem
+						key={item}
+						data-testid="session-insights-export-item"
+						data-kind={item}
+						onSelect={() => onPick(item)}
+					>
+						<ExportKindLabel kind={item} />
+					</DropdownMenuItem>
+				))}
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
+/** The options dialog of the picked export. */
+export function ExportDialogs({
+	host,
+	sessionId,
+	target,
+	request,
+	onClose,
+}: {
+	host: PanelHost;
+	sessionId: string;
+	target: ExportTarget;
+	request: ExportRequest | null;
+	onClose: () => void;
+}) {
+	return (
+		<Dialog open={request !== null} onOpenChange={(open) => !open && onClose()}>
+			{request ? (
+				<ExportDialog
+					key={request.attempt}
+					host={host}
+					sessionId={sessionId}
+					kind={request.kind}
+					turns={target.turns}
+					defaultTurn={target.defaultTurn}
+					selectedEvent={target.selectedEvent}
+					onClose={onClose}
+				/>
+			) : null}
+		</Dialog>
 	);
 }

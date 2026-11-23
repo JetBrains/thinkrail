@@ -20,11 +20,11 @@ import type {
 	TraceEvent,
 } from "@thinkrail/pi-session-insights/core";
 import { Button } from "@thinkrail/ui/button";
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
+import { DetailsSplit, type SplitSizes } from "../DetailsSplit";
 import { CappedTextView } from "../details/CappedTextView";
 import { FigureDetails, type Sources } from "../FigureCell";
 import { formatClock, formatCount, formatDateTime, formatShare, formatSpan } from "../format";
@@ -83,6 +83,7 @@ function chainTitle(t: Translator, chain: RecoveryChain): string {
 			})
 		: t("sessionInsights.errors.toolChain", {
 				tool: chain.name ?? "",
+				count: chain.attempts.length,
 				n: chain.attempts.length,
 			});
 }
@@ -480,6 +481,12 @@ function ChainDetail({
 	);
 }
 
+/** The list keeps most of the room beside its chain's detail and above it alike. */
+const SPLIT: SplitSizes = {
+	view: { defaultSize: 58, minSize: 35 },
+	details: { defaultSize: 42, minSize: 25 },
+};
+
 /** The errors section: recovery rates per tool and after model errors, recovery chains and repeats. */
 export function ErrorsView({
 	host,
@@ -488,6 +495,9 @@ export function ErrorsView({
 	analysis,
 	sources,
 	onShowInTrace,
+	chain: chosen,
+	onChain,
+	stacked = false,
 }: {
 	host: PanelHost;
 	sessionId: string;
@@ -495,14 +505,20 @@ export function ErrorsView({
 	analysis: SessionAnalysis | null;
 	sources: Sources;
 	onShowInTrace: (focus: TraceFocus, first: string) => void;
+	/** The chain whose detail shows (its `index`); `null`: the first retried one. */
+	chain: number | null;
+	onChain: (index: number) => void;
+	/** The panel is narrow: the chain's detail stacks under the list. */
+	stacked?: boolean;
 }) {
 	const t = useT();
 	const locale = localeOf(t);
 	const chains = analysis?.chains ?? [];
 	const retried = chains.filter((chain) => chain.kind === "model" || chain.attempts.length > 1);
 	const single = chains.filter((chain) => chain.kind === "tool" && chain.attempts.length === 1);
-	const [chosen, setChosen] = useState<number | null>(null);
-	const [showSingle, setShowSingle] = useState(false);
+	const [showSingle, setShowSingle] = useState(() =>
+		single.some((chain) => chain.index === chosen),
+	);
 	const current = chains.find((chain) => chain.index === chosen) ?? retried[0] ?? chains[0] ?? null;
 	if (!analysis || (chains.length === 0 && analysis.repeats.length === 0))
 		return (
@@ -522,8 +538,10 @@ export function ErrorsView({
 		/>
 	);
 	return (
-		<ResizablePanelGroup direction="horizontal" className="h-full min-h-0">
-			<ResizablePanel defaultSize={58} minSize={35}>
+		<DetailsSplit
+			stacked={stacked}
+			sizes={SPLIT}
+			view={
 				<div data-testid="errors-view" className="h-full min-h-0 overflow-auto">
 					<div className="flex min-w-0 flex-col gap-12 p-12">
 						<div className="flex flex-wrap items-baseline gap-8">
@@ -677,7 +695,7 @@ export function ErrorsView({
 											chain={chain}
 											model={model}
 											active={current?.index === chain.index}
-											onOpen={() => setChosen(chain.index)}
+											onOpen={() => onChain(chain.index)}
 										/>
 									))}
 								</ul>
@@ -706,7 +724,7 @@ export function ErrorsView({
 												chain={chain}
 												model={model}
 												active={current?.index === chain.index}
-												onOpen={() => setChosen(chain.index)}
+												onOpen={() => onChain(chain.index)}
 											/>
 										))}
 									</ul>
@@ -769,26 +787,23 @@ export function ErrorsView({
 						) : null}
 					</div>
 				</div>
-			</ResizablePanel>
-			<ResizableHandle />
-			<ResizablePanel defaultSize={42} minSize={25}>
-				<div className="h-full min-h-0 border-border-default border-l">
-					{current ? (
-						<ChainDetail
-							key={current.index}
-							host={host}
-							sessionId={sessionId}
-							chain={current}
-							model={model}
-							onShowInTrace={onShowInTrace}
-						/>
-					) : (
-						<p className="p-16 tr-text-metadata text-text-subtle">
-							{t("sessionInsights.errors.pick")}
-						</p>
-					)}
-				</div>
-			</ResizablePanel>
-		</ResizablePanelGroup>
+			}
+			details={
+				current ? (
+					<ChainDetail
+						key={current.index}
+						host={host}
+						sessionId={sessionId}
+						chain={current}
+						model={model}
+						onShowInTrace={onShowInTrace}
+					/>
+				) : (
+					<p className="p-16 tr-text-metadata text-text-subtle">
+						{t("sessionInsights.errors.pick")}
+					</p>
+				)
+			}
+		/>
 	);
 }

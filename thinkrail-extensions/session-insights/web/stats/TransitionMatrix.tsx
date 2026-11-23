@@ -414,7 +414,8 @@ export function TransitionMatrix({
 															source: t(ACTIVITY_LABEL[source]),
 															target: t(ACTIVITY_LABEL[target]),
 															share: formatPercent(locale, cell.share),
-															count: formatCount(locale, cell.count),
+															count: cell.count,
+															n: formatCount(locale, cell.count),
 														})}
 														onFocus={() => setActive({ row, col })}
 														onClick={() => setPicked(cellKey(source, target))}

@@ -1,4 +1,5 @@
 import type { PanelChatTarget, PanelHost } from "@thinkrail/extension-api/web";
+import type { Translator } from "@thinkrail/locales/react";
 import type {
 	SessionInsightsApiVersion,
 	SessionListRow,
@@ -9,7 +10,7 @@ import type {
 } from "@thinkrail/pi-session-insights/core";
 
 export const SESSIONS_LIST: SessionsListQuery = "sessions.list";
-export const API_VERSION: SessionInsightsApiVersion = 10;
+export const API_VERSION: SessionInsightsApiVersion = 11;
 export const SESSION_PANEL = "session";
 export const COMPARE_PANEL = "compare";
 
@@ -78,7 +79,22 @@ export function openAnalysis(host: PanelHost, row: SessionListRow, title: string
 	host.openPanel(SESSION_PANEL, { sessionId: row.sessionId }, title);
 }
 
-/** Opens two sessions side by side in their own tab (one tab per ordered pair). */
-export function openComparison(host: PanelHost, a: string, b: string, title: string): void {
-	host.openPanel(COMPARE_PANEL, { a, b }, title);
+/** A compared side: the session and the name its tab title shows. */
+export interface ComparedSession {
+	sessionId: string;
+	name: string;
+}
+
+/** Opens two sessions side by side in their own tab, named "A ↔ B" (one tab per ordered pair). */
+export function openComparison(
+	host: PanelHost,
+	t: Translator,
+	a: ComparedSession,
+	b: ComparedSession,
+): void {
+	host.openPanel(
+		COMPARE_PANEL,
+		{ a: a.sessionId, b: b.sessionId },
+		t("sessionInsights.compare.tabTitle", { a: a.name, b: b.name }),
+	);
 }

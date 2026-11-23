@@ -10,6 +10,7 @@ import { layoutResourceIdentity } from "../lib";
 import { type ChatLocationRequest, useAppStore } from "../store";
 import { RequestError, wsErrorCode } from "../transport";
 import {
+	type ChatPaneHost,
 	cachedExtensionCatalog,
 	createPanelHost,
 	openableExtensionPanels,
@@ -17,6 +18,7 @@ import {
 	type PanelHostDeps,
 	readExtensionCatalog,
 } from "./extensionPanelHost";
+import type { LayoutExtensionTab } from "./layout";
 
 function deferred<T>() {
 	let resolve: (value: T) => void = () => {};
@@ -41,6 +43,18 @@ function hostDeps(overrides: Partial<PanelHostDeps> = {}): PanelHostDeps {
 		scope: { workspaceId: "w1", projectId: "p1" },
 		hostProtocol: EXTENSION_QUERY_PROTOCOL_VERSION,
 		hostApiVersion: 3,
+		viewState: undefined,
+		saveViewState: () => {},
+		...overrides,
+	};
+}
+
+function paneHost(overrides: Partial<ChatPaneHost> = {}): ChatPaneHost {
+	return {
+		chat: { projectId: "p1", workspaceId: "w1", sessionId: "s1" },
+		reveal: () => {},
+		openAsTab: () => {},
+		closePane: () => {},
 		...overrides,
 	};
 }
@@ -218,6 +232,75 @@ describe("PanelHost", () => {
 		]);
 	});
 
+	test("a tab's host says so and offers no pane members", () => {
+		const host = createPanelHost(hostDeps());
+
+		expect(host.placement).toBe("tab");
+		expect(host.showInChat).toBeUndefined();
+		expect(host.openAsTab).toBeUndefined();
+		expect(host.closePane).toBeUndefined();
+	});
+
+	test("a pane's showInChat reveals the place in its own chat, in place, leaving focus alone", () => {
+		const reveal = mock((_location: ChatLocationRequest) => {});
+		const navigate = mock(() => {});
+		const locate = mock(() => {});
+		const host = createPanelHost(hostDeps({ navigate, locate, pane: paneHost({ reveal }) }));
+
+		expect(host.placement).toBe("chatPane");
+		host.showInChat?.({ messageIndex: 3, anchorText: "Editing it.", toolCallId: "call-2" });
+		host.showInChat?.({ messageIndex: 1, anchorText: "", approximate: true });
+
+		expect(navigate).not.toHaveBeenCalled();
+		expect(locate).not.toHaveBeenCalled();
+		expect(reveal.mock.calls).toEqual([
+			[
+				{
+					workspaceId: "w1",
+					projectId: "p1",
+					sessionId: "s1",
+					messageIndex: 3,
+					anchorText: "Editing it.",
+					toolCallId: "call-2",
+					focus: false,
+				},
+			],
+			[
+				{
+					workspaceId: "w1",
+					projectId: "p1",
+					sessionId: "s1",
+					messageIndex: 1,
+					anchorText: "",
+					approximate: true,
+					focus: false,
+				},
+			],
+		]);
+	});
+
+	test("a pane's openAsTab and closePane go to the shell", () => {
+		const openAsTab = mock(() => {});
+		const closePane = mock(() => {});
+		const host = createPanelHost(hostDeps({ pane: paneHost({ openAsTab, closePane }) }));
+
+		host.openAsTab?.();
+		host.closePane?.();
+
+		expect(openAsTab).toHaveBeenCalledTimes(1);
+		expect(closePane).toHaveBeenCalledTimes(1);
+	});
+
+	test("hands the panel the view state it last saved and keeps what it saves", () => {
+		const saveViewState = mock((_state: unknown) => {});
+		const host = createPanelHost(hostDeps({ viewState: { section: "errors" }, saveViewState }));
+
+		expect(host.viewState).toEqual({ section: "errors" });
+		host.saveViewState?.({ section: "files" });
+
+		expect(saveViewState.mock.calls).toEqual([[{ section: "files" }]]);
+	});
+
 	test("openArtifacts asks the shell to reveal the workspace's Artifacts tool", () => {
 		const openArtifacts = mock(() => {});
 		const host = createPanelHost(hostDeps({ openArtifacts }));
@@ -337,6 +420,7 @@ describe("openExtensionPanel", () => {
 			tabsByWorkspace: {},
 			activeTabByWorkspace: {},
 			layoutIntents: [],
+			layoutDocumentsByWorkspace: {},
 			removedWorkspaceIds: {},
 		});
 	});
@@ -369,6 +453,47 @@ describe("openExtensionPanel", () => {
 			"open",
 			"open",
 		]);
+	});
+
+	test("a wide panel hides the panes when its tab opens, never when an open one is focused", () => {
+		const wide: RegisteredPanel = {
+			extension: "insights",
+			panel: "compare",
+			declaration: { ...declaration, wide: true },
+		};
+		const placed: LayoutExtensionTab = {
+			kind: "extension",
+			id: "compare-tab",
+			name: "Compare",
+			extension: "insights",
+			panel: "compare",
+			titleKey: "common.retry",
+			params: { a: "1" },
+		};
+		const intents = () =>
+			useAppStore.getState().layoutIntents.map(({ kind, workspaceId }) => `${kind}:${workspaceId}`);
+		openExtensionPanel("w1", panel);
+		openExtensionPanel("w1", wide, { a: "1" }, "Compare");
+		expect(intents()).toEqual(["open:w1", "open:w1", "hide-all-panels:w1"]);
+
+		useAppStore.setState({
+			layoutIntents: [],
+			layoutDocumentsByWorkspace: {
+				w1: {
+					version: 2,
+					center: { kind: "group", id: "center", tabs: [placed] },
+					left: { visible: true, width: 0.2, groups: [] },
+					right: { visible: false, width: 0.2, groups: [] },
+					bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+					toolRestoreTargets: {},
+				},
+			},
+		});
+		openExtensionPanel("w1", wide, { a: "1" }, "Compare");
+		openExtensionPanel("w1", wide, { a: "2" }, "Compare");
+
+		expect(useAppStore.getState().tabsByWorkspace.w1).toHaveLength(3);
+		expect(intents()).toEqual(["open:w1", "open:w1", "hide-all-panels:w1"]);
 	});
 
 	test("names the tab with the title it is opened with, keeping one tab per params", () => {

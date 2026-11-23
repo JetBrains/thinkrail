@@ -1,4 +1,9 @@
-import { RiArrowDownSLine, RiFilter3Line, RiInformationLine } from "@remixicon/react";
+import {
+	RiArrowDownSLine,
+	RiArrowLeftRightLine,
+	RiFilter3Line,
+	RiInformationLine,
+} from "@remixicon/react";
 import { localeOf, type Translator, useT } from "@thinkrail/locales/react";
 import type {
 	CompareMetric,
@@ -10,7 +15,7 @@ import type {
 	SliceOption,
 	SlicesCompareResult,
 } from "@thinkrail/pi-session-insights/core";
-import { Button } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -156,6 +161,44 @@ function IntervalChart({ metric }: { metric: CompareMetric }) {
 	);
 }
 
+/** The same slices with A and B swapped; `null` where B cannot become A (the rest, a period). */
+export function swappedChoice(compare: SlicesCompareResult["compare"]): SliceChoice | null {
+	if (compare.by === "period" || compare.b.key === "") return null;
+	return { by: compare.by, a: compare.b.key, b: compare.a.key };
+}
+
+const SIDE_TONE = { a: "text-series-1", b: "text-series-6" } as const;
+
+/** A picker's options: all of them, the other side's (`taken`) shown but not pickable. */
+export function pickerItems(
+	options: readonly SliceOption[],
+	taken: string,
+): { option: SliceOption; taken: boolean }[] {
+	return options.map((option) => ({ option, taken: option.key === taken }));
+}
+
+function SwapButton({
+	choice,
+	onChoice,
+}: {
+	choice: SliceChoice | null;
+	onChoice: (choice: SliceChoice) => void;
+}) {
+	const t = useT();
+	return (
+		<IconButton
+			icon={RiArrowLeftRightLine}
+			size="s"
+			label={t("sessionInsights.slices.swap")}
+			data-testid="compare-swap"
+			disabled={choice === null}
+			onClick={() => {
+				if (choice) onChoice(choice);
+			}}
+		/>
+	);
+}
+
 function OptionPicker({
 	side,
 	value,
@@ -163,6 +206,7 @@ function OptionPicker({
 	label,
 	onPick,
 	rest,
+	taken,
 }: {
 	side: "a" | "b";
 	value: string;
@@ -171,6 +215,8 @@ function OptionPicker({
 	onPick: (key: string) => void;
 	/** Offers "the rest" (an empty key) first, named so. */
 	rest?: string;
+	/** The other side's key: shown, but it cannot be picked here too. */
+	taken: string;
 }) {
 	const t = useT();
 	const locale = localeOf(t);
@@ -190,9 +236,7 @@ function OptionPicker({
 					data-testid={`compare-pick-${side}`}
 					className="max-w-240 min-w-0"
 				>
-					<span className={side === "a" ? "text-series-1" : "text-series-6"}>
-						{side === "a" ? "A" : "B"}
-					</span>
+					<span className={SIDE_TONE[side]}>{side === "a" ? "A" : "B"}</span>
 					<span className="min-w-0 truncate">{shown}</span>
 				</Button>
 			</DropdownMenuTrigger>
@@ -203,10 +247,11 @@ function OptionPicker({
 							<span className="min-w-0 flex-1 truncate">{rest}</span>
 						</DropdownMenuRadioItem>
 					) : null}
-					{options.map((option) => (
+					{pickerItems(options, taken).map(({ option, taken: other }) => (
 						<DropdownMenuRadioItem
 							key={option.key}
 							value={option.key}
+							disabled={other}
 							data-testid="compare-option"
 							data-key={option.key}
 						>
@@ -214,6 +259,11 @@ function OptionPicker({
 							<span className="ml-12 tr-text-caption text-text-subtle">
 								{t("sessionInsights.slices.n", { n: formatCount(locale, option.sessions) })}
 							</span>
+							{other ? (
+								<span className={cn("ml-4 tr-text-caption", SIDE_TONE[side === "a" ? "b" : "a"])}>
+									{side === "a" ? "B" : "A"}
+								</span>
+							) : null}
 						</DropdownMenuRadioItem>
 					))}
 				</DropdownMenuRadioGroup>
@@ -277,6 +327,11 @@ function FilterForm({
 		event.preventDefault();
 		onApply(left.trim(), right.trim());
 	};
+	const swap = () => {
+		setLeft(right);
+		setRight(left);
+		onApply(right.trim(), left.trim());
+	};
 	const field =
 		"w-160 rounded-sm border border-control-border-default bg-control-bg px-8 py-2 tr-text-metadata text-text-default placeholder:text-text-subtle focus-visible:focus-ring";
 	return (
@@ -288,6 +343,14 @@ function FilterForm({
 				value={left}
 				onChange={(event) => setLeft(event.currentTarget.value)}
 				className={field}
+			/>
+			<IconButton
+				icon={RiArrowLeftRightLine}
+				size="s"
+				label={t("sessionInsights.slices.swap")}
+				data-testid="compare-swap"
+				disabled={right.trim() === ""}
+				onClick={swap}
 			/>
 			<input
 				data-testid="compare-filter-b"
@@ -493,7 +556,7 @@ function SessionList({
 }
 
 /**
- * Slice comparison: two slices of the scope's sessions by model, period, project or a text filter,
+ * The A/B slices: two slices of the scope's sessions by model, period, project, label or a text filter,
  * metric by metric with seeded bootstrap intervals, a three-state verdict, the sessions behind each
  * figure and a note when the slices also differ in time or task mix.
  */
@@ -576,14 +639,17 @@ export function CompareView({
 								value={compare.a.key}
 								options={compare.options.models}
 								label={(option) => option.key}
-								onPick={(key) => onChoice({ ...choice, by: "model", a: key, b: compare.b.key })}
+								taken={compare.b.key}
+								onPick={(key) => onChoice({ by: "model", a: key, b: compare.b.key })}
 							/>
+							<SwapButton choice={swappedChoice(compare)} onChoice={onChoice} />
 							<OptionPicker
 								side="b"
 								value={compare.b.key}
 								options={compare.options.models}
 								label={(option) => option.key}
-								onPick={(key) => onChoice({ ...choice, by: "model", a: compare.a.key, b: key })}
+								taken={compare.a.key}
+								onPick={(key) => onChoice({ by: "model", a: compare.a.key, b: key })}
 							/>
 						</>
 					) : compare.by === "project" ? (
@@ -593,13 +659,16 @@ export function CompareView({
 								value={compare.a.key}
 								options={compare.options.projects}
 								label={projectLabel}
+								taken={compare.b.key}
 								onPick={(key) => onChoice({ by: "project", a: key, b: compare.b.key })}
 							/>
+							<SwapButton choice={swappedChoice(compare)} onChoice={onChoice} />
 							<OptionPicker
 								side="b"
 								value={compare.b.key}
 								options={compare.options.projects}
 								label={projectLabel}
+								taken={compare.a.key}
 								onPick={(key) => onChoice({ by: "project", a: compare.a.key, b: key })}
 							/>
 						</>
@@ -611,14 +680,17 @@ export function CompareView({
 									value={compare.a.key}
 									options={compare.options.labels}
 									label={(option) => option.key}
+									taken={compare.b.key}
 									onPick={(key) => onChoice({ by: "label", a: key, b: compare.b.key })}
 								/>
+								<SwapButton choice={swappedChoice(compare)} onChoice={onChoice} />
 								<OptionPicker
 									side="b"
 									value={compare.b.key}
-									options={compare.options.labels.filter((option) => option.key !== compare.a.key)}
+									options={compare.options.labels}
 									label={(option) => option.key}
 									rest={t("sessionInsights.slices.rest")}
+									taken={compare.a.key}
 									onPick={(key) => onChoice({ by: "label", a: compare.a.key, b: key })}
 								/>
 							</>

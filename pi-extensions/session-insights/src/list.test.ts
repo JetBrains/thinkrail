@@ -10,7 +10,12 @@ import {
 	type SessionListRow,
 } from "./core.ts";
 import { listSessionFiles } from "./discovery.ts";
-import { buildSessionsList, parseSessionsListParams, type SessionPlacement } from "./list.ts";
+import {
+	buildSessionSummary,
+	buildSessionsList,
+	parseSessionsListParams,
+	type SessionPlacement,
+} from "./list.ts";
 import { createRedactor, secretFindings } from "./redact.ts";
 import { SessionIndex } from "./sessionIndex.ts";
 
@@ -225,6 +230,34 @@ describe("sessions.list", () => {
 		expect(row.firstPrompt?.startsWith("Read ~/notes.md, word word")).toBe(true);
 		expect(row.firstPrompt?.endsWith("export API_KEY=…")).toBe(true);
 		expect(secretFindings(`${row.title} ${row.firstPrompt}`, "/home/alice")).toEqual([]);
+	});
+
+	test("the header's wall time ends at the last work, not at settings a restored chat appended", async () => {
+		const sessions = join(root, "restored", "sessions");
+		mkdirSync(sessions, { recursive: true });
+		const start = Date.parse("2024-11-27T10:00:00Z");
+		const builder = new TranscriptBuilder({ id: "restored", cwd: "/work/alpha", start });
+		builder.user("Old work");
+		builder.assistant({ text: "Done." });
+		const activeEnd = builder.now();
+		builder.advance(725 * 24 * 3600_000).thinkingLevel("medium");
+		writeSession(sessions, "alpha", builder);
+		const index = new SessionIndex({
+			sessionFiles: () => listSessionFiles(sessions),
+			childTranscriptDirs: async () => [],
+		});
+		const state = await index.ensureFresh(10_000);
+		const result = await buildSessionSummary(
+			{
+				index,
+				projects: PROJECTS,
+				place: (cwd) => PLACEMENTS[cwd] ?? null,
+				status: () => ({ live: false, outcome: null }),
+			},
+			state,
+			"restored",
+		);
+		expect(result.session?.wallMs).toEqual({ value: activeEnd - start - 1000, origin: "counted" });
 	});
 
 	test("the same files give byte-identical results", async () => {

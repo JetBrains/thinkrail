@@ -13,9 +13,11 @@ import {
 	createSideGroup,
 	describeLayoutGroup,
 	findTabLocation,
+	hideAuxiliaryPanels,
 	hideBottom,
 	hideSide,
 	isLayoutUnavailable,
+	keptPanelsToRestore,
 	type LayoutOperationResult,
 	layoutTabName,
 	moveTabToGroup,
@@ -36,8 +38,10 @@ import {
 	setSideGroupFolded,
 	setSideVisibility,
 	showBottom,
+	shownAuxiliaryRegions,
 	showSide,
 	splitCenterGroup,
+	toggleAuxiliaryPanels,
 	toolTab,
 	unplacedTools,
 	unplacedToolsForRegion,
@@ -1177,5 +1181,122 @@ describe("workspace layout model", () => {
 		expect(errors).toContain("Duplicate tab placement: one");
 		expect(errors).toContain("Duplicate canonical resource: terminal");
 		expect(collectAllGroups(document)).toHaveLength(3);
+	});
+});
+
+describe("hiding and restoring every pane", () => {
+	const terminal: LayoutTerminalTab = {
+		kind: "terminal",
+		id: "terminal:one",
+		tabKey: "one",
+		name: "Terminal 1",
+	};
+
+	function leftAndBottom(): WorkspaceLayoutDocument {
+		const document = baseDocument([file("one")]);
+		document.right.visible = false;
+		document.bottom = {
+			...document.bottom,
+			visible: true,
+			groups: [{ id: "bottom-a", weight: 1, folded: false, tabs: [terminal] }],
+		};
+		return document;
+	}
+
+	test("the first toggle hides exactly the shown panes and remembers them; the next restores those", () => {
+		const document = leftAndBottom();
+		const attention = reconcileAttention(document, undefined);
+		const hidden = toggleAuxiliaryPanels(document, attention, [], 6, 3);
+		if (!hidden) throw new Error("expected the panes to hide");
+		expect(shownAuxiliaryRegions(hidden.document)).toEqual([]);
+		expect(hidden.panelsToRestore).toEqual(["left", "bottom"]);
+		expect(hidden.focusGroupId).toBe("center-a");
+		expect(hidden.focusTabId).toBe("one");
+		expect(hidden.focusOnlyIfLost).toBe(true);
+		expect(hidden.document.right).toBe(document.right);
+
+		const restored = toggleAuxiliaryPanels(
+			hidden.document,
+			attention,
+			hidden.panelsToRestore,
+			6,
+			3,
+		);
+		if (!restored) throw new Error("expected the panes to come back");
+		expect(shownAuxiliaryRegions(restored.document)).toEqual(["left", "bottom"]);
+		expect(restored.document.right.visible).toBe(false);
+		expect(restored.panelsToRestore).toEqual([]);
+		expect(restored.focusGroupId).toBeUndefined();
+		expect(restored.select).toEqual([
+			{ location: { area: "left", groupId: "left-a" }, tabId: "tool:projects" },
+			{ location: { area: "bottom", groupId: "bottom-a" }, tabId: "terminal:one" },
+		]);
+	});
+
+	test("a pane whose every group is folded counts as hidden, as for the side and bottom toggles", () => {
+		const document = leftAndBottom();
+		const group = document.bottom.groups[0];
+		if (!group) throw new Error("Missing group fixture");
+		group.folded = true;
+		const hidden = hideAuxiliaryPanels(document, reconcileAttention(document, undefined), []);
+		expect(hidden?.panelsToRestore).toEqual(["left"]);
+		expect(hidden?.document.bottom).toBe(document.bottom);
+	});
+
+	test("with nothing shown and nothing remembered a toggle shows the left and right panes", () => {
+		const document = leftAndBottom();
+		document.left.visible = false;
+		document.bottom.visible = false;
+		const shown = toggleAuxiliaryPanels(
+			document,
+			reconcileAttention(document, undefined),
+			[],
+			6,
+			3,
+		);
+		expect(shown && shownAuxiliaryRegions(shown.document)).toEqual(["left", "right"]);
+		expect(shown?.panelsToRestore).toEqual([]);
+	});
+
+	test("restoring a pane that lost its tool reveals an eligible one and selects it, as Mod+B does", () => {
+		const document = mutation(closeLayoutTab(baseDocument(), "tool:projects")).document;
+		document.left.visible = false;
+		document.right.visible = false;
+		const restored = toggleAuxiliaryPanels(
+			document,
+			reconcileAttention(document, undefined),
+			["left"],
+			6,
+			3,
+		);
+		if (!restored) throw new Error("expected the left pane to come back");
+		expect(findTabLocation(restored.document, "tool:projects")?.area).toBe("left");
+		expect(shownAuxiliaryRegions(restored.document)).toEqual(["left"]);
+		expect(restored.select.map(({ tabId }) => tabId)).toEqual(["tool:projects"]);
+	});
+
+	test("the hide half never restores: with nothing shown it does nothing, and it adds to the memory", () => {
+		const document = leftAndBottom();
+		const attention = reconcileAttention(document, undefined);
+		const hidden = hideAuxiliaryPanels(document, attention, []);
+		if (!hidden) throw new Error("expected the panes to hide");
+		expect(hideAuxiliaryPanels(hidden.document, attention, hidden.panelsToRestore)).toBeNull();
+		expect(hideAuxiliaryPanels(document, attention, ["right"])?.panelsToRestore).toEqual([
+			"left",
+			"right",
+			"bottom",
+		]);
+	});
+
+	test("the memory survives while every pane stays hidden and clears once any pane shows", () => {
+		const document = leftAndBottom();
+		const hidden = hideAuxiliaryPanels(document, reconcileAttention(document, undefined), []);
+		if (!hidden) throw new Error("expected the panes to hide");
+		const remembered = hidden.panelsToRestore;
+		expect(keptPanelsToRestore(remembered, hidden.document)).toBe(remembered);
+		const reopened = setSideVisibility(hidden.document, "right", true);
+		expect(keptPanelsToRestore(remembered, reopened)).toEqual([]);
+		const none: readonly ("left" | "right" | "bottom")[] = [];
+		expect(keptPanelsToRestore(none, document)).toBe(none);
 	});
 });

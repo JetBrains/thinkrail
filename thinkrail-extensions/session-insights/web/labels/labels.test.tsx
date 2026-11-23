@@ -6,7 +6,7 @@ import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { runExport } from "../export/api";
-import { cutOptions, ExportMenu, ExportOptions, ExportOutcome } from "../export/ExportMenu";
+import { cutOptions, ExportOptions, ExportOutcome, ExportTrigger } from "../export/ExportMenu";
 import { listResult, START, sessionRow } from "../fixtures.test";
 import { SessionsView, sessionsLabelled } from "../SessionsPanel";
 import { SessionsTable } from "../SessionsTable";
@@ -36,12 +36,12 @@ function host(
 		openArtifacts: noop,
 		scope: { workspaceId: "w1", projectId: "p1" },
 		hostProtocol: 130,
-		hostApiVersion: 10,
+		hostApiVersion: 11,
 	};
 }
 
 const LABELS: LabelsGetResult = {
-	apiVersion: 10,
+	apiVersion: 11,
 	sessions: [
 		{ sessionId: "s1", labels: ["good", "login"], note: null, noted: true },
 		{ sessionId: "s2", labels: ["Good"], note: null, noted: false },
@@ -72,7 +72,7 @@ describe("labels in the list", () => {
 				now={START}
 				onOpen={noop}
 				onAnalyse={noop}
-				compare={{ from: null, onCompare: noop, onCancel: noop }}
+				selection={{ picked: () => false, onToggle: noop, onCompare: null }}
 				labels={{
 					of: (sessionId) => labelsOf.get(sessionId) ?? [],
 					edit: (row, cell) => (
@@ -113,13 +113,13 @@ describe("labels in the list", () => {
 		expect(second).not.toContain('data-testid="session-insights-label"');
 	});
 
-	test("the label filter sits in the toolbar with the table only, and keeps sessions by label", () => {
+	test("the label filter sits in the toolbar with the Sessions tab only, and keeps sessions by label", () => {
 		const ready = {
 			kind: "ready",
 			result: listResult([sessionRow("s1")]),
 			receivedAt: START,
 		} as const;
-		const shown = (mode: "table" | "day") =>
+		const shown = (tab: "sessions" | "days") =>
 			html(
 				<SessionsView
 					view={ready}
@@ -129,14 +129,14 @@ describe("labels in the list", () => {
 					onRefresh={noop}
 					onOpen={noop}
 					onAnalyse={noop}
-					mode={mode}
-					onMode={noop}
+					tab={tab}
+					onTab={noop}
 					day={<span />}
 					labelFilter={<span data-testid="label-filter-slot" />}
 				/>,
 			);
-		expect(shown("table")).toContain('data-testid="label-filter-slot"');
-		expect(shown("day")).not.toContain('data-testid="label-filter-slot"');
+		expect(shown("sessions")).toContain('data-testid="label-filter-slot"');
+		expect(shown("days")).not.toContain('data-testid="label-filter-slot"');
 		expect([...sessionsLabelled(LABELS, "GOOD")].sort()).toEqual(["s1", "s2"]);
 		expect([...sessionsLabelled(LABELS, "login")]).toEqual(["s1"]);
 		expect(sessionsLabelled(null, "good").size).toBe(0);
@@ -157,7 +157,7 @@ describe("labels in the list", () => {
 				null,
 			),
 		).rejects.toBeInstanceOf(VersionSkew);
-		const saved = { apiVersion: 10, ok: false, code: "LABELS_FULL" } as const;
+		const saved = { apiVersion: 11, ok: false, code: "LABELS_FULL" } as const;
 		expect(
 			await saveLabels(
 				host(() => saved),
@@ -198,17 +198,9 @@ describe("the export menu", () => {
 	});
 
 	test("the trigger is one Export button; the options name the cut, keep labels off and say masking is best effort", () => {
-		expect(
-			html(
-				<ExportMenu
-					host={host(() => null)}
-					sessionId="s1"
-					turns={[]}
-					defaultTurn={null}
-					selectedEvent={null}
-				/>,
-			),
-		).toMatch(/data-testid="session-insights-export"[^>]*>.*Export/);
+		expect(html(<ExportTrigger onPick={noop} />)).toMatch(
+			/data-testid="session-insights-export"[^>]*>.*Export/,
+		);
 		const fixture = html(
 			<ExportOptions
 				kind="fixture"
@@ -252,7 +244,7 @@ describe("the export menu", () => {
 				phase={{
 					kind: "done",
 					result: {
-						apiVersion: 10,
+						apiVersion: 11,
 						ok: true,
 						kind: "trace",
 						path: ".thinkrail/context/session-insights/a.trace.json",
@@ -295,7 +287,7 @@ describe("the export menu", () => {
 				phase={{
 					kind: "failed",
 					result: {
-						apiVersion: 10,
+						apiVersion: 11,
 						ok: false,
 						kind: "html",
 						code: "CHECK_FAILED",
@@ -316,7 +308,7 @@ describe("the export menu", () => {
 	test("runExport writes into the panel's own workspace and refuses another payload version", async () => {
 		const seen: unknown[] = [];
 		const answer = {
-			apiVersion: 10,
+			apiVersion: 11,
 			ok: true,
 			kind: "fixture",
 			path: "p/",

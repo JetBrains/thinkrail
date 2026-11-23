@@ -11,6 +11,7 @@ import {
 	RiDeleteBinLine,
 	RiDragMove2Line,
 	RiEdit2Line,
+	RiExpandDiagonalLine,
 	RiExternalLinkLine,
 	RiFileCopyLine,
 	RiFileEditLine,
@@ -116,6 +117,7 @@ export interface PaletteCatalogActions {
 	readonly toggleLeft: () => void;
 	readonly toggleRight: () => void;
 	readonly toggleBottom: () => void;
+	readonly toggleAllPanels: () => void;
 	readonly showTool: (workspaceId: string, tool: PaletteTool) => void;
 	readonly openExtensionPanel: (workspaceId: string, panel: RegisteredPanel) => void;
 	readonly openExtensionPanelInProject: (projectId: string, panel: RegisteredPanel) => void;
@@ -446,6 +448,15 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 				keywords: ["terminal", "bottom", "hide", "show"],
 				...shortcutOf(deps, "view.toggleBottom"),
 				run: actions.toggleBottom,
+			},
+			{
+				id: "view.toggleAllPanels",
+				title: t("commands.view.toggleAllPanels"),
+				group: "view",
+				icon: RiExpandDiagonalLine,
+				keywords: ["panels", "sidebar", "bottom", "hide", "restore", "focus", "zen"],
+				...shortcutOf(deps, "view.toggleAllPanels"),
+				run: actions.toggleAllPanels,
 			},
 		);
 	}

@@ -117,6 +117,32 @@ describe("global hotkey routing", () => {
 		expect(route(key("KeyF", { shiftKey: true }), withFind, true, "Linux")).toBeNull();
 	});
 
+	test("routes Mod+Shift+F12 to hide all panels, from xterm too, never behind a modal or without a workspace", () => {
+		const withAllPanels = { ...all, onAllPanels: noop };
+		const hideAll = key("F12", { key: "F12", shiftKey: true });
+		expect(route(hideAll, withAllPanels, false, "Linux")).toBe("view.toggleAllPanels");
+		expect(
+			route(
+				key("F12", { key: "F12", ctrlKey: false, metaKey: true, shiftKey: true }),
+				withAllPanels,
+				false,
+				"MacIntel",
+			),
+		).toBe("view.toggleAllPanels");
+		expect(route(hideAll, withAllPanels, false, "Linux", true)).toBe("view.toggleAllPanels");
+		expect(route(hideAll, withAllPanels, true, "Linux")).toBeNull();
+		expect(route(hideAll, all, false, "Linux")).toBeNull();
+		expect(route(key("F12", { key: "F12" }), withAllPanels, false, "Linux")).toBeNull();
+		expect(
+			route(
+				key("F12", { key: "F12", ctrlKey: false, shiftKey: true }),
+				withAllPanels,
+				false,
+				"Linux",
+			),
+		).toBeNull();
+	});
+
 	test("does not claim unavailable workspace commands or any panel chord behind a modal", () => {
 		expect(route(key("KeyJ", { shiftKey: true }), { onProjects: noop }, false, "Linux")).toBeNull();
 		expect(route(key("KeyB"), all, true, "Linux")).toBeNull();

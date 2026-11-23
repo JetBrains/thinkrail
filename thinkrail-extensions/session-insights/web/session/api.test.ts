@@ -32,7 +32,7 @@ function page(
 	const events = EVENTS.slice(cursor, cursor + size);
 	const next = cursor + size < EVENTS.length ? cursor + size : null;
 	return {
-		apiVersion: 10,
+		apiVersion: 11,
 		found: true,
 		pending: false,
 		meta: {
@@ -75,7 +75,7 @@ function host(answer: (method: string, params: unknown) => unknown): {
 			openFile: () => {},
 			scope: { workspaceId: "w1", projectId: "p1" },
 			hostProtocol: 130,
-			hostApiVersion: 10,
+			hostApiVersion: 11,
 		},
 	};
 }
@@ -139,7 +139,7 @@ describe("loadTrace", () => {
 			loadEvent(skewed.host, "s1", "e1", new AbortController().signal),
 		).rejects.toBeInstanceOf(VersionSkew);
 		const search = host(() => ({
-			apiVersion: 10,
+			apiVersion: 11,
 			found: true,
 			revision: "r1",
 			ids: ["a1"],
@@ -152,7 +152,7 @@ describe("loadTrace", () => {
 
 	test("the timeline and the day ask their queries and refuse another payload version", async () => {
 		const timeline = host(() => ({
-			apiVersion: 10,
+			apiVersion: 11,
 			found: false,
 			timeline: null,
 			sources: SOURCES,
@@ -162,7 +162,7 @@ describe("loadTrace", () => {
 		});
 		expect(timeline.calls).toEqual([{ method: "session.timeline", params: { sessionId: "s1" } }]);
 		const day = host(() => ({
-			apiVersion: 10,
+			apiVersion: 11,
 			days: [],
 			sessions: [],
 			hours: [],
@@ -188,7 +188,7 @@ describe("a session the host's index has not reached yet", () => {
 	const READY = { phase: "ready" as const, indexed: 1, total: 1 };
 	const COLD = { phase: "cold" as const, indexed: 0, total: 3 };
 	const summary = (pending: boolean, state = pending ? COLD : READY) => ({
-		apiVersion: 10,
+		apiVersion: 11,
 		state,
 		session: null,
 		pending,

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { activityOf, shellActivity } from "./activity.ts";
 import type { ToolEvent } from "./core.ts";
 import type { CallFacts } from "./facts.ts";
+import { shellWrites } from "./toolFamily.ts";
 
 function tool(name: string, head?: string): ToolEvent {
 	return {
@@ -22,7 +23,7 @@ function tool(name: string, head?: string): ToolEvent {
 	};
 }
 
-const facts = (skill: string | null): CallFacts => ({
+const facts = (skill: string | null, writes = false): CallFacts => ({
 	key: "",
 	path: null,
 	words: [],
@@ -30,6 +31,7 @@ const facts = (skill: string | null): CallFacts => ({
 	skill,
 	todo: null,
 	edit: false,
+	writes,
 	file: null,
 });
 
@@ -56,6 +58,41 @@ describe("activity families", () => {
 	] as const)("the shell head %s is %s", (head, activity) => {
 		expect(shellActivity(head)).toBe(activity);
 		expect(activityOf(tool("bash", head), null)).toBe(activity);
+	});
+
+	test.each([
+		["cat", "edit"],
+		["sed", "edit"],
+		["python3", "edit"],
+		["bun test", "test"],
+		["git diff", "git"],
+	] as const)("the shell head %s writing into a file is %s", (head, activity) => {
+		expect(shellActivity(head, true)).toBe(activity);
+		expect(activityOf(tool("bash", head), facts(null, true))).toBe(activity);
+	});
+
+	test.each([
+		["cat >> tests/test_cli.py <<'EOF'\nimport x > y\nEOF", true],
+		["cat > notes.txt", true],
+		["cat > 'my notes.txt'", true],
+		["echo done >> log.txt && bun test", true],
+		["bun test 2>&1 | tee out.log", true],
+		["sed -i 's/a/b/' src/a.ts", true],
+		["sed -i.bak -e 's/a/b/' src/a.ts", true],
+		["perl -pi -e 's/a/b/' src/a.ts", true],
+		["cmd 2> errors.log", true],
+		["cat README.md", false],
+		['echo "a > b"', false],
+		["grep -rn '=>' src", false],
+		["ls 2>/dev/null", false],
+		["bun test >/dev/null 2>&1", false],
+		["echo oops >&2", false],
+		["sed -n '1,20p' src/a.ts", false],
+		["cat <<EOF\na > b\nEOF", false],
+		["tr a b <<< 'x > y'", false],
+		["diff <(cat a) <(cat b)", false],
+	] as const)("%p writes into a file: %p", (command, writes) => {
+		expect(shellWrites(command)).toBe(writes);
 	});
 
 	test("a command without a head is a run", () => {

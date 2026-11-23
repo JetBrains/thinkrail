@@ -16,16 +16,15 @@ import type {
 	SliceBy,
 	UsageMarkerKind,
 } from "@thinkrail/pi-session-insights/core";
-
-export type StatsSection = "findings" | "usage" | "hotspots" | "sequences" | "compare";
+import type { InsightsSection } from "../listIntent";
 
 export const SECTION_LABEL = {
 	findings: "sessionInsights.stats.section.findings",
 	usage: "sessionInsights.stats.section.usage",
 	hotspots: "sessionInsights.stats.section.hotspots",
 	sequences: "sessionInsights.stats.section.sequences",
-	compare: "sessionInsights.stats.section.compare",
-} as const satisfies Record<StatsSection, MessageKey>;
+	ab: "sessionInsights.stats.section.ab",
+} as const satisfies Record<InsightsSection, MessageKey>;
 
 export const ACTIVITY_LABEL = {
 	search: "sessionInsights.activity.search",

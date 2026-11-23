@@ -311,6 +311,12 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 		surface: "panels",
 		bindings: ["view.toggleBottom"],
 	},
+	{
+		id: "view.toggleAllPanels",
+		title: "shortcuts.toggleAllPanels",
+		surface: "panels",
+		bindings: ["view.toggleAllPanels"],
+	},
 	{ id: "view.files", title: "shortcuts.showFiles", surface: "panels", bindings: ["view.files"] },
 	{
 		id: "view.changes",

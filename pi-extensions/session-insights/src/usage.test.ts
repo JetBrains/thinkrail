@@ -158,7 +158,6 @@ describe("stats.usage", () => {
 		expect(stats.totals.cost.value).toBeCloseTo(1.4);
 		expect(stats.totals.cost.origin).toBe("partiallyRecorded");
 		expect(stats.markers).toEqual([
-			{ day: "2026-11-01", kind: "subagentSpend", model: null },
 			{ day: "2026-11-03", kind: "unpricedModel", model: "claude-bridge/claude-opus" },
 		]);
 	});
@@ -276,6 +275,23 @@ describe("stats.usage", () => {
 		expect(stats.markers).toEqual([
 			{ day: "2026-11-11", kind: "costStopped", model: "anthropic/claude-test" },
 		]);
+	});
+
+	test("a change marker needs a day of spend before it: none on the first day of the history", async () => {
+		const session = (id: string, date: number, subagent: boolean) => {
+			const builder = new TranscriptBuilder({ id, cwd: "/work/a", start: day(date) });
+			builder.user("go");
+			builder.assistant({ text: "ok", usage: cached({ input: 1000 }, 0.3) });
+			if (subagent) builder.usageEntry("subagent", usage(100, 0.1), "kid");
+			return writeSession(root, id, builder);
+		};
+		const single = await statsOver([session("d1", 20, true)]);
+		const alone = await buildStatsUsage(single.input, READY);
+		expect(alone.usage.days).toEqual(["2026-11-20"]);
+		expect(alone.usage.markers).toEqual([]);
+		const later = await statsOver([session("d2", 21, false), session("d3", 22, true)]);
+		const { usage: stats } = await buildStatsUsage(later.input, READY);
+		expect(stats.markers).toEqual([{ day: "2026-11-22", kind: "subagentSpend", model: null }]);
 	});
 
 	test("a digest built in stages equals the one built at once", async () => {

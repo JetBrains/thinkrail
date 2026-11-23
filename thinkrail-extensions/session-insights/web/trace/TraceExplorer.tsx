@@ -15,8 +15,9 @@ import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { cn } from "@thinkrail/ui/utils";
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { VirtuosoHandle } from "react-virtuoso";
+import { DetailsSplit } from "../DetailsSplit";
 import { DetailsPanel } from "../details/DetailsPanel";
 import { formatClock, formatCount, formatDay, formatDuration, formatSpan } from "../format";
 import { keyLabels, PANEL_COMMANDS, PANEL_KEYS, PANEL_SCOPE } from "../keys";
@@ -25,6 +26,7 @@ import { BandMenu } from "./BandMenu";
 import { bandLabel } from "./bandCopy";
 import { type BandPick, bandSteps, pickIntervals, samePick } from "./bands";
 import { childEventId } from "./children";
+import { ROW_HEIGHT, rowInView, type ScrollAlign, scrollTarget } from "./frame";
 import { type Flow, type GanttState, type GanttText, headerBands } from "./gantt";
 import { Legend } from "./Legend";
 import { useCanvasLook } from "./look";
@@ -52,6 +54,8 @@ import { eventTitle, TraceTree, type TreeRows } from "./TraceTree";
 const SEARCH_DEBOUNCE_MS = 250;
 const SEARCH_MIN_CHARS = 2;
 const ZOOM_STEP = 0.6;
+/** Frames a scroll to a row is retried while the list lays out (about a second). */
+const SCROLL_TRIES = 60;
 
 interface TimeWindow {
 	t0: number;
@@ -79,6 +83,20 @@ export interface TraceIntent {
 
 type Selection = { kind: "ids"; focus: TraceFocus } | { kind: "pick"; pick: BandPick };
 
+/** The trace's folds and top row as the session view keeps them across remounts. */
+export interface TraceMemory {
+	/** Read once, when the explorer mounts. */
+	read: () => { open: readonly (readonly [string, boolean])[]; top: string | null };
+	onFolds: (open: ReadonlyMap<string, boolean>) => void;
+	onTop: (eventId: string | null) => void;
+}
+
+/** A scroll the explorer still owes: to an event at the top, or to the selection (`id` null). */
+interface ScrollAim {
+	id: string | null;
+	align: ScrollAlign;
+}
+
 /** Subagent transcripts nested into the trace on demand. */
 export interface ChildTraces {
 	/** Child ids whose transcript the trace can expand. */
@@ -104,6 +122,10 @@ export function TraceExplorer({
 	subtraces,
 	intent,
 	awaiting = false,
+	memory,
+	reveal = true,
+	stacked = false,
+	toolbarStart,
 }: {
 	host: PanelHost;
 	sessionId: string;
@@ -117,13 +139,25 @@ export function TraceExplorer({
 	intent: TraceIntent | null;
 	/** The selected event is on a page still to come: keep the reveal pending until it arrives. */
 	awaiting?: boolean;
+	memory?: TraceMemory | undefined;
+	/** Scroll the selection into view on mount (a jump) rather than back to the remembered top row. */
+	reveal?: boolean;
+	/** The panel is narrow: the call details stack under the tree and its Gantt. */
+	stacked?: boolean;
+	/** Leads the toolbar (the trace's view modes). */
+	toolbarStart?: ReactNode;
 }) {
 	const t = useT();
 	const locale = localeOf(t);
 	const local = useLocalKeys(PANEL_SCOPE, PANEL_COMMANDS);
 	const initialFocus = intent?.focus ?? null;
+	const [saved] = useState(() => memory?.read() ?? null);
 	const [open, setOpen] = useState<ReadonlyMap<string, boolean>>(() =>
-		revealed(model, new Map((intent?.expand ?? []).map((id) => [id, true])), selected),
+		revealed(
+			model,
+			new Map([...(saved?.open ?? []), ...(intent?.expand ?? []).map((id) => [id, true] as const)]),
+			selected,
+		),
 	);
 	const [pending, setPending] = useState<string | null>(null);
 	const [filter, setFilter] = useState<TraceFilter>(initialFocus ? "selection" : "all");
@@ -148,7 +182,9 @@ export function TraceExplorer({
 	const searchInput = useRef<HTMLInputElement>(null);
 	const tree = useRef<HTMLDivElement>(null);
 	const tabsRef = useRef<HTMLDivElement>(null);
-	const scrollPending = useRef(true);
+	const aim = useRef<ScrollAim | null>(
+		!reveal && saved?.top ? { id: saved.top, align: "start" } : { id: null, align: "center" },
+	);
 	const { palette, font } = useCanvasLook(root);
 
 	const start = trace.meta.start ?? 0;
@@ -242,22 +278,80 @@ export function TraceExplorer({
 		if (selectionFolded) {
 			const unfolded = unfoldFor(model, repeats, repeatOpen, selected, match);
 			if (unfolded !== repeatOpen) {
-				scrollPending.current = true;
+				if (!aim.current) aim.current = { id: null, align: "nearest" };
 				setRepeatOpen(unfolded);
 				return;
 			}
 		}
-		if (!scrollPending.current) return;
-		const shown = revealed(model, open, selected);
-		if (shown !== open) {
-			setOpen(shown);
+		const owed = aim.current;
+		if (!owed) return;
+		if (owed.id === null) {
+			const shown = revealed(model, open, selected);
+			if (shown !== open) {
+				setOpen(shown);
+				return;
+			}
+		}
+		const target = owed.id === null ? selected : model.indexOf(owed.id);
+		const row = target < 0 ? -1 : rows.indexOf(target);
+		if (row < 0) {
+			if (owed.id !== null && trace.complete) aim.current = null;
 			return;
 		}
-		const row = rows.indexOf(selected);
-		if (row < 0) return;
-		scrollPending.current = false;
-		virtuoso.current?.scrollIntoView({ index: row, behavior: "auto" });
-	}, [awaiting, match, model, open, repeatOpen, repeats, rows, selected, selectionFolded]);
+		let frame = 0;
+		let tries = 0;
+		let attempted = false;
+		const run = () => {
+			const box = scroller;
+			if (box && box.clientHeight > 0) {
+				if (attempted && rowInView(row, box.scrollTop, box.clientHeight)) {
+					aim.current = null;
+					return;
+				}
+				const align = attempted ? "center" : owed.align;
+				const top = scrollTarget(row, box.scrollTop, box.clientHeight, align);
+				if (top === null && !attempted && owed.align !== "start") {
+					aim.current = null;
+					return;
+				}
+				attempted = true;
+				if (top !== null) virtuoso.current?.scrollTo({ top });
+			}
+			tries += 1;
+			if (tries < SCROLL_TRIES) frame = requestAnimationFrame(run);
+			else aim.current = null;
+		};
+		run();
+		return () => cancelAnimationFrame(frame);
+	}, [
+		awaiting,
+		match,
+		model,
+		open,
+		repeatOpen,
+		repeats,
+		rows,
+		selected,
+		selectionFolded,
+		scroller,
+		trace.complete,
+	]);
+
+	useEffect(() => {
+		memory?.onFolds(open);
+	}, [memory, open]);
+
+	useEffect(() => {
+		if (!scroller || !memory) return;
+		const report = () => {
+			let at = Math.floor(scroller.scrollTop / ROW_HEIGHT);
+			while ((rows[at] ?? 0) < 0) at += 1;
+			const index = rows[at];
+			memory.onTop(index === undefined ? null : (model.at(index)?.id ?? null));
+		};
+		scroller.addEventListener("scroll", report, { passive: true });
+		return () => scroller.removeEventListener("scroll", report);
+	}, [memory, model, rows, scroller]);
 
 	useEffect(() => {
 		const query = search.query.trim();
@@ -304,7 +398,7 @@ export function TraceExplorer({
 		setOpen(nextOpen);
 		if (nextRepeats !== repeatOpen) setRepeatOpen(nextRepeats);
 		onSelect(index);
-		scrollPending.current = true;
+		aim.current = { id: null, align: "nearest" };
 		if (follow) setView(viewContaining(scale, view, event.t0));
 	};
 
@@ -572,6 +666,7 @@ export function TraceExplorer({
 				aria-label={t("sessionInsights.trace.toolbar")}
 				className="flex shrink-0 flex-wrap items-center gap-8 border-border-default border-b px-12 py-4"
 			>
+				{toolbarStart}
 				<span className="flex min-w-160 items-center gap-4">
 					<RiSearchLine aria-hidden className="size-14 shrink-0 text-text-subtle" />
 					<input
@@ -723,6 +818,7 @@ export function TraceExplorer({
 							className="tr-text-caption text-text-subtle tabular-nums"
 						>
 							{t("sessionInsights.trace.paging", {
+								count: trace.meta.total,
 								loaded: formatCount(locale, trace.events.length),
 								total: formatCount(locale, trace.meta.total),
 							})}
@@ -752,11 +848,14 @@ export function TraceExplorer({
 					</Button>
 				</div>
 			</div>
-			<ResizablePanelGroup direction="horizontal" className="min-h-0 flex-1">
-				<ResizablePanel defaultSize={68} minSize={40}>
+			<DetailsSplit
+				stacked={stacked}
+				className="min-h-0 flex-1"
+				testId="trace-details-pane"
+				view={
 					<div className="flex h-full min-h-0 flex-col">
 						<ResizablePanelGroup direction="horizontal" className="min-h-0 flex-1">
-							<ResizablePanel defaultSize={42} minSize={20}>
+							<ResizablePanel defaultSize={stacked ? 72 : 42} minSize={20}>
 								<div ref={tree} className="flex h-full min-h-0 flex-col">
 									<div
 										className={cn(
@@ -823,7 +922,7 @@ export function TraceExplorer({
 								</div>
 							</ResizablePanel>
 							<ResizableHandle />
-							<ResizablePanel defaultSize={58} minSize={25}>
+							<ResizablePanel defaultSize={stacked ? 28 : 58} minSize={stacked ? 15 : 25}>
 								<TraceGantt
 									state={ganttState}
 									palette={palette}
@@ -850,25 +949,22 @@ export function TraceExplorer({
 							</span>
 						</Legend>
 					</div>
-				</ResizablePanel>
-				<ResizableHandle />
-				<ResizablePanel defaultSize={32} minSize={22}>
-					<div className="h-full min-h-0 border-border-default border-l">
-						<DetailsPanel
-							host={host}
-							sessionId={sessionId}
-							model={model}
-							index={rows.length > 0 ? selected : -1}
-							overview={overview}
-							query={searching ? query : ""}
-							onSelect={(index) => select(index)}
-							onZoom={zoomTo}
-							onShowChild={showChild}
-							tabsRef={tabsRef}
-						/>
-					</div>
-				</ResizablePanel>
-			</ResizablePanelGroup>
+				}
+				details={
+					<DetailsPanel
+						host={host}
+						sessionId={sessionId}
+						model={model}
+						index={rows.length > 0 ? selected : -1}
+						overview={overview}
+						query={searching ? query : ""}
+						onSelect={(index) => select(index)}
+						onZoom={zoomTo}
+						onShowChild={showChild}
+						tabsRef={tabsRef}
+					/>
+				}
+			/>
 		</div>
 	);
 }

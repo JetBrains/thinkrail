@@ -24,21 +24,25 @@ const CHIPS = 3;
 const CHIP =
 	"inline-flex max-w-160 min-w-0 shrink-0 items-center gap-2 rounded-full border border-border-default bg-control-bg px-6 tr-text-metadata text-text-default";
 
-/** A session's labels as chips: the first few, then "+N" (all of them with `all`). */
+/** A session's labels as chips: the first `max`, then "+N" (all of them with `all`). */
 export function LabelChips({
 	labels,
 	all = false,
+	max = CHIPS,
 	testId = "session-insights-label",
+	className,
 }: {
 	labels: readonly string[];
 	all?: boolean;
+	max?: number;
 	testId?: string;
+	className?: string;
 }) {
 	const t = useT();
 	if (labels.length === 0) return null;
-	const shown = all ? labels : labels.slice(0, CHIPS);
+	const shown = all ? labels : labels.slice(0, max);
 	return (
-		<span className="flex min-w-0 flex-wrap items-center gap-4">
+		<span className={cn("flex min-w-0 flex-wrap items-center gap-4", className)}>
 			{shown.map((label) => (
 				<span key={label} data-testid={testId} className={CHIP} title={label}>
 					<span className="truncate">{label}</span>
@@ -66,7 +70,8 @@ const PROBLEM_TEXT = {
 	failed: "sessionInsights.labels.failed",
 } as const;
 
-function LabelsForm({
+/** The editor's body: the labels as chips, the field that adds one, suggestions and the note. */
+export function LabelsForm({
 	host,
 	sessionId,
 	initial,

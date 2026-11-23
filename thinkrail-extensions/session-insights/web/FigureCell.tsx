@@ -123,6 +123,7 @@ export function FigureDetails({
 	);
 }
 
+/** A list row's figure; its provenance tooltip never takes the pointer, and keyboard focus opens it. */
 export function FigureCell({
 	figures,
 	sources,
@@ -140,7 +141,11 @@ export function FigureCell({
 }) {
 	return (
 		<td data-testid={testId} className={cn("overflow-hidden p-0 align-top", className)}>
-			<IconTooltip label={<FigureDetails figures={figures} sources={sources} />} align="end">
+			<IconTooltip
+				label={<FigureDetails figures={figures} sources={sources} />}
+				align="end"
+				passThrough
+			>
 				<button
 					type="button"
 					{...gridAttributes(cell)}

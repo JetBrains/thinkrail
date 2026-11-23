@@ -22,7 +22,22 @@ export function settleSessionFocus(sessionId: string, eventId: string): void {
 	if (pending.get(sessionId) === eventId) pending.delete(sessionId);
 }
 
-export function onSessionFocus(listener: Listener): () => void {
+/**
+ * Takes a session's focus requests for the tab showing it: the one pending now is settled (the tab
+ * opened on it), and each later one is settled and handed to `onFocus`.
+ */
+export function followSessionFocus(
+	sessionId: string,
+	onFocus: (eventId: string) => void,
+): () => void {
+	const initial = pendingSessionFocus(sessionId);
+	if (initial) settleSessionFocus(sessionId, initial);
+	const listener: Listener = (target) => {
+		const eventId = target === sessionId ? pendingSessionFocus(sessionId) : null;
+		if (!eventId) return;
+		settleSessionFocus(sessionId, eventId);
+		onFocus(eventId);
+	};
 	listeners.add(listener);
 	return () => {
 		listeners.delete(listener);

@@ -8,6 +8,7 @@ import {
 } from "./core.ts";
 import { resolvePath, slashed, type WorkspacePaths, workspacePaths } from "./paths.ts";
 import { maskSecretFields, type Redactor, safeCut } from "./redact.ts";
+import { shellWrites } from "./toolFamily.ts";
 import { isRecord } from "./totals.ts";
 
 const WORD_LIMIT = 256;
@@ -20,6 +21,7 @@ const SKILL_FILE_ANY_CASE = new RegExp(SKILL_FILE.source, "i");
 const PROMPT_SKILL = /^<skill name="([^"]+)"|^\/skill:([A-Za-z0-9._-]+)/;
 const EDIT_TOOLS: readonly string[] = ["edit", "write"];
 const FILE_TOOLS: readonly string[] = ["read", "edit", "write"];
+const SHELL_TOOLS: readonly string[] = ["bash", "background_command"];
 const PATH_CHARS = 400;
 export interface TodoArgs {
 	id: string | null;
@@ -46,6 +48,8 @@ export interface CallFacts {
 	skill: string | null;
 	todo: TodoArgs | null;
 	edit: boolean;
+	/** A shell command that writes into a file (`shellWrites`). */
+	writes: boolean;
 	file: FileRef | null;
 }
 
@@ -271,6 +275,7 @@ export function callFacts(
 		skill: skillOf(name, record, redactor, paths),
 		todo,
 		edit: EDIT_TOOLS.includes(name),
+		writes: SHELL_TOOLS.includes(name) && shellWrites(text(record.command) ?? ""),
 		file,
 	};
 }

@@ -6,80 +6,42 @@ import {
 	RiUser3Line,
 } from "@remixicon/react";
 import { localeOf, type Translator, useT } from "@thinkrail/locales/react";
-import type {
-	CostDiagnosis,
-	CostMoment,
-	CostSpike,
-	SessionCost,
-} from "@thinkrail/pi-session-insights/core";
+import type { CostMoment, CostSpike, SessionCost } from "@thinkrail/pi-session-insights/core";
 import { Button } from "@thinkrail/ui/button";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { cn } from "@thinkrail/ui/utils";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { type ChartLabel, placeLabels, textMeasure } from "../chartLabels";
 import { causeText } from "../context/causes";
 import { FigureBadge, type Sources } from "../FigureCell";
-import { formatClock, formatCost, formatCount, formatShare, formatTokens } from "../format";
+import { formatClock, formatCount, formatShare, formatTokens } from "../format";
 import { ShareBar } from "../ShareBar";
 import { StatFigure } from "../StatFigure";
+import { useCanvasLook } from "../trace/look";
+import { diagnosisText, valueText } from "./diagnosis";
 
 const W = 1000;
 const H = 80;
 const RANGES = 3;
+const COMPACTION_ROWS = 2;
+const COMPACTION_Y = 36;
+const COMPACTION_ROW = 12;
 
-function valueText(locale: string, cost: SessionCost, value: number): string {
-	return cost.headline === "tokens" ? formatTokens(locale, value) : formatCost(locale, value);
-}
-
-function focusClause(t: Translator, locale: string, d: CostDiagnosis): string {
-	const focus = d.focus;
-	if (!focus) return "";
-	const items = focus.items
-		.map((item) => t("sessionInsights.cost.focusItem", { n: item.n, title: item.title }))
-		.join(t("sessionInsights.cost.focusJoin"));
-	return t(
-		focus.kind === "steps" ? "sessionInsights.cost.focusSteps" : "sessionInsights.cost.focusTurns",
-		{
-			share: formatShare(locale, focus.share, 1) ?? "",
-			items,
-			peak: formatTokens(locale, focus.peakContext),
-		},
-	);
-}
-
-/** The one-line diagnosis: a fixed template per kind, filled with the server's measured figures. */
-export function diagnosisText(t: Translator, locale: string, cost: SessionCost): string {
-	const d = cost.diagnosis;
-	const focus = focusClause(t, locale, d);
-	const total = cost.total.value ?? 0;
-	switch (d.kind) {
-		case "none":
-			return t("sessionInsights.cost.diagnosis.none");
-		case "longContext":
-			return t("sessionInsights.cost.diagnosis.longContext", {
-				calls: formatCount(locale, d.calls),
-				average: formatTokens(locale, d.averageContext),
-				focus,
-			});
-		case "cacheRewrites":
-			return t("sessionInsights.cost.diagnosis.cacheRewrites", {
-				calls: formatCount(locale, d.rewrites?.calls ?? 0),
-				value: valueText(locale, cost, d.rewrites?.value ?? 0),
-				share: formatShare(locale, d.rewrites?.value ?? 0, total) ?? "",
-				focus,
-			});
-		case "manyCalls":
-			return t("sessionInsights.cost.diagnosis.manyCalls", {
-				calls: formatCount(locale, d.calls),
-				median: valueText(locale, cost, d.medianCall),
-				focus,
-			});
-		case "spread":
-			return t("sessionInsights.cost.diagnosis.spread", {
-				calls: formatCount(locale, d.calls),
-				median: valueText(locale, cost, d.medianCall),
-				focus,
-			});
+/** The compaction labels over the cost chart, `width` pixels wide: the word, then its short form. */
+export function compactionLabels(t: Translator, cost: SessionCost, width: number): ChartLabel[] {
+	const n = Math.max(1, cost.calls.length);
+	const indexOf = new Map(cost.calls.map((call, at) => [call.id, at]));
+	const labels: ChartLabel[] = [];
+	for (const item of cost.compactions) {
+		const at = item.after ? indexOf.get(item.after) : undefined;
+		if (at === undefined) continue;
+		labels.push({
+			key: item.id,
+			x: (at / n) * width,
+			variants: [t("sessionInsights.cost.compaction"), t("sessionInsights.cost.compactionShort")],
+		});
 	}
+	return labels.sort((a, b) => a.x - b.x);
 }
 
 function Evidence({ cost }: { cost: SessionCost }) {
@@ -116,11 +78,13 @@ function Evidence({ cost }: { cost: SessionCost }) {
 			text:
 				others.length === 0
 					? t("sessionInsights.cost.chip.high", {
+							count: high.calls,
 							calls: formatCount(locale, high.calls),
 							threshold: formatTokens(locale, only.threshold),
 							value: valueText(locale, cost, high.value),
 						})
 					: t("sessionInsights.cost.chip.highModels", {
+							count: high.calls,
 							calls: formatCount(locale, high.calls),
 							models: high.models
 								.map((item) =>
@@ -138,6 +102,7 @@ function Evidence({ cost }: { cost: SessionCost }) {
 			key: "rewrites",
 			tone: "error",
 			text: t("sessionInsights.cost.chip.rewrites", {
+				count: d.rewrites.calls,
 				calls: formatCount(locale, d.rewrites.calls),
 				value: valueText(locale, cost, d.rewrites.value),
 			}),
@@ -167,6 +132,26 @@ function Evidence({ cost }: { cost: SessionCost }) {
 function CostChart({ cost }: { cost: SessionCost }) {
 	const t = useT();
 	const locale = localeOf(t);
+	const [root, setRoot] = useState<HTMLDivElement | null>(null);
+	const [width, setWidth] = useState(0);
+	const { font } = useCanvasLook(root);
+	const measure = useMemo(() => textMeasure(font), [font]);
+	useEffect(() => {
+		if (!root) return;
+		const read = () => setWidth(root.clientWidth);
+		read();
+		const observer = new ResizeObserver(read);
+		observer.observe(root);
+		return () => observer.disconnect();
+	}, [root]);
+	const compactions =
+		width > 0
+			? placeLabels(compactionLabels(t, cost, width), {
+					width,
+					rows: COMPACTION_ROWS,
+					measure,
+				})
+			: [];
 	const value = (call: SessionCost["calls"][number]) =>
 		cost.headline === "tokens" ? call.tokens : call.cost;
 	const values = cost.calls.map(value);
@@ -204,7 +189,7 @@ function CostChart({ cost }: { cost: SessionCost }) {
 					<span>{valueText(locale, cost, cap)}</span>
 					<span>{valueText(locale, cost, 0)}</span>
 				</div>
-				<div className="relative h-96 border-border-default border-b">
+				<div ref={setRoot} className="relative h-96 border-border-default border-b">
 					<svg
 						aria-hidden="true"
 						viewBox={`0 0 ${W} ${H}`}
@@ -292,20 +277,19 @@ function CostChart({ cost }: { cost: SessionCost }) {
 								{valueText(locale, cost, value(call))}
 							</text>
 						))}
-						{cost.compactions.map((item) => {
-							const at = item.after ? indexOf.get(item.after) : undefined;
-							if (at === undefined) return null;
-							return (
-								<text
-									key={item.id}
-									x={percent(at)}
-									y={36}
-									className="fill-series-7 tr-text-caption"
-								>
-									{t("sessionInsights.cost.compaction")}
-								</text>
-							);
-						})}
+						{compactions.map((label) => (
+							<text
+								key={label.key}
+								data-testid="cost-compaction-label"
+								data-level={label.level}
+								x={label.x}
+								y={COMPACTION_Y + label.row * COMPACTION_ROW}
+								textAnchor={label.anchor}
+								className="fill-series-7 tr-text-caption"
+							>
+								{label.text}
+							</text>
+						))}
 					</svg>
 				</div>
 				<span />
@@ -400,6 +384,7 @@ function MomentRow({
 				</span>
 				<span className="truncate tr-text-metadata text-text-muted tabular-nums">
 					{t("sessionInsights.cost.momentMeta", {
+						count: moment.llmCalls,
 						from: formatClock(locale, moment.t0, false),
 						to: formatClock(locale, moment.t1, false),
 						calls: formatCount(locale, moment.llmCalls),

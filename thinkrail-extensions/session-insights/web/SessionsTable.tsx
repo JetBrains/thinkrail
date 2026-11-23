@@ -1,7 +1,6 @@
 import {
 	RiArrowDownLine,
 	RiArrowDownSLine,
-	RiArrowLeftRightLine,
 	RiArrowRightSLine,
 	RiArrowUpLine,
 	RiFlowChart,
@@ -12,6 +11,7 @@ import type { MessageKey } from "@thinkrail/locales";
 import { localeOf, type Translator, useT } from "@thinkrail/locales/react";
 import type { SessionListRow, SessionsListResult } from "@thinkrail/pi-session-insights/core";
 import { Button, IconButton } from "@thinkrail/ui/button";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import { type FocusEvent, type KeyboardEvent, type ReactNode, useState } from "react";
 import { isBadged, OUTCOME_LABEL, OUTCOME_TONE, sessionName } from "./copy";
@@ -39,8 +39,10 @@ import { LabelChips } from "./labels/LabelsEditor";
 import { chatTarget } from "./load";
 import { DEFAULT_SORT, groupRows, nextSort, type RowGroup, type Sort, type SortKey } from "./rows";
 
-const COLUMNS = 9;
-/** The name, *Open analysis* and compare cells (plus the labels editor when shown) come before the figures. */
+const COLUMNS = 10;
+/** The row's checkbox is its grid's first cell. */
+const CHECK_COL = 0;
+/** The checkbox, the name and *Open analysis* (plus the labels editor when shown) come before the figures. */
 const FIRST_FIGURE = 3;
 const FIGURES = 7;
 const OPEN_GROUPS = 3;
@@ -104,6 +106,36 @@ function lineWidth(line: Line, labelled: boolean): number {
 	return line.kind === "row" ? firstFigure(labelled) + FIGURES : 1;
 }
 
+export type RowKeyAction = "toggle" | "compare" | "open" | "held" | null;
+
+function pressAction(
+	key: string,
+	col: number,
+	labelled: boolean,
+	pairReady: boolean,
+): RowKeyAction {
+	if (key === " ") return col === CHECK_COL ? null : "toggle";
+	if (key !== "Enter") return null;
+	if (col === CHECK_COL) return pairReady ? "compare" : null;
+	return col >= firstFigure(labelled) ? "open" : null;
+}
+
+/**
+ * What an unmodified key does on a row's cell: Space ticks the row (the checkbox ticks itself), Enter on
+ * the checkbox opens the comparison once two are ticked, and Enter on a figure opens the chat. A held
+ * key acts once: its auto-repeats (`repeat`) are swallowed (`held`).
+ */
+export function rowKeyAction(
+	key: string,
+	col: number,
+	labelled: boolean,
+	pairReady: boolean,
+	repeat = false,
+): RowKeyAction {
+	const action = pressAction(key, col, labelled, pairReady);
+	return action && repeat ? "held" : action;
+}
+
 function SortHeader({
 	label,
 	sortKey,
@@ -153,6 +185,9 @@ function TableHead({ sort, onSort }: { sort: Sort; onSort: (key: SortKey) => voi
 	return (
 		<thead className="sticky top-0 z-10 bg-container-header-bg">
 			<tr className="border-border-default border-b">
+				<th scope="col" className="p-0">
+					<span className="sr-only">{t("sessionInsights.selection.column")}</span>
+				</th>
 				<th scope="col" className="px-8 py-4 text-left tr-text-metadata text-text-muted">
 					{t("sessionInsights.column.session")}
 				</th>
@@ -231,11 +266,12 @@ function SecondLine({ children }: { children: ReactNode }) {
 	);
 }
 
-/** The session picked as the first side of a comparison, if any. */
-export interface CompareState {
-	from: string | null;
-	onCompare: (row: SessionListRow) => void;
-	onCancel: () => void;
+/** The rows ticked for a comparison. */
+export interface RowSelection {
+	picked: (sessionId: string) => boolean;
+	onToggle: (row: SessionListRow) => void;
+	/** Opens the comparison; `null` unless exactly two are ticked. */
+	onCompare: (() => void) | null;
 }
 
 /** The user's labels per row (chips under the name) and the row's labels editor at its grid cell. */
@@ -251,7 +287,7 @@ function SessionLine({
 	cellAt,
 	onOpen,
 	onAnalyse,
-	compare,
+	selection,
 	labels,
 }: {
 	row: SessionListRow;
@@ -260,7 +296,7 @@ function SessionLine({
 	cellAt: (col: number) => GridCell;
 	onOpen: (row: SessionListRow) => void;
 	onAnalyse: (row: SessionListRow) => void;
-	compare: CompareState;
+	selection: RowSelection;
 	labels: RowLabels | null;
 }) {
 	const t = useT();
@@ -309,18 +345,36 @@ function SessionLine({
 			detail: t("sessionInsights.cost.tokens", { tokens: formatCount(locale, outside.tokens) }),
 		});
 	const target = chatTarget(row);
+	const picked = selection.picked(row.sessionId);
 	return (
 		<tr
 			data-testid="session-insights-row"
 			data-session-id={row.sessionId}
 			data-workspace-state={row.workspaceState}
-			className="border-border-muted border-t hover:bg-control-bg-hovered"
+			data-picked={picked}
+			className={cn(
+				"group/row border-border-muted border-t hover:bg-control-bg-hovered",
+				picked && "bg-control-bg-selected",
+			)}
 		>
+			<td className="p-0 align-top">
+				<span className="flex justify-center pt-6">
+					<input
+						type="checkbox"
+						{...gridAttributes(cellAt(CHECK_COL))}
+						data-testid="session-insights-pick"
+						aria-label={t("sessionInsights.selection.pick", { name })}
+						checked={picked}
+						onChange={() => selection.onToggle(row)}
+						className="size-14 cursor-pointer accent-primary opacity-0 checked:opacity-100 group-focus-within/row:opacity-100 group-hover/row:opacity-100"
+					/>
+				</span>
+			</td>
 			<td data-testid="session-insights-name" className="overflow-hidden p-0 align-top">
 				<div className="flex min-w-0 items-start">
 					<button
 						type="button"
-						{...gridAttributes(cellAt(0))}
+						{...gridAttributes(cellAt(1))}
 						data-testid={target ? "session-insights-open-chat" : undefined}
 						aria-disabled={target ? undefined : true}
 						onClick={target ? () => onOpen(row) : undefined}
@@ -363,25 +417,8 @@ function SessionLine({
 						size="s"
 						label={t("sessionInsights.openAnalysis")}
 						data-testid="session-insights-open-analysis"
-						{...gridAttributes(cellAt(1))}
-						onClick={() => onAnalyse(row)}
-						className="mt-4 shrink-0"
-					/>
-					<IconButton
-						icon={RiArrowLeftRightLine}
-						size="s"
-						label={
-							compare.from === row.sessionId
-								? t("sessionInsights.compare.cancel")
-								: compare.from
-									? t("sessionInsights.compare.withPicked")
-									: t("sessionInsights.compare.with")
-						}
-						data-testid="session-insights-compare"
-						aria-pressed={compare.from === row.sessionId}
-						selected={compare.from === row.sessionId}
 						{...gridAttributes(cellAt(2))}
-						onClick={() => compare.onCompare(row)}
+						onClick={() => onAnalyse(row)}
 						className={cn("mt-4 shrink-0", !labels && "mr-4")}
 					/>
 					{labels ? (
@@ -541,26 +578,38 @@ function SessionLine({
 	);
 }
 
+/** The table's sort and the groups opened or closed against their default. */
+export interface TableView {
+	sort: Sort;
+	toggled: readonly string[];
+}
+
+const DEFAULT_TABLE_VIEW: TableView = { sort: DEFAULT_SORT, toggled: [] };
+
 export function SessionsTable({
 	result,
 	grouped,
 	now,
 	onOpen,
 	onAnalyse,
-	compare,
+	selection,
 	labels = null,
+	initialView = DEFAULT_TABLE_VIEW,
+	onView,
 }: {
 	result: SessionsListResult;
 	grouped: boolean;
 	now: number;
 	onOpen: (row: SessionListRow) => void;
 	onAnalyse: (row: SessionListRow) => void;
-	compare: CompareState;
+	selection: RowSelection;
 	labels?: RowLabels | null;
+	initialView?: TableView;
+	onView?: (view: TableView) => void;
 }) {
 	const t = useT();
-	const [sort, setSort] = useState<Sort>(DEFAULT_SORT);
-	const [toggled, setToggled] = useState<ReadonlySet<string>>(() => new Set());
+	const [sort, setSort] = useState<Sort>(initialView.sort);
+	const [toggled, setToggled] = useState<ReadonlySet<string>>(() => new Set(initialView.toggled));
 	const [limits, setLimits] = useState<Readonly<Record<string, number>>>({});
 	const [active, setActive] = useState<{ key: string; col: number } | null>(null);
 	const groups = groupRows(result, sort);
@@ -577,27 +626,42 @@ export function SessionsTable({
 		col,
 		tabIndex: row === focus.row && col === focus.col ? 0 : -1,
 	});
-	const toggle = (key: string) =>
-		setToggled((current) => {
-			const next = new Set(current);
-			if (!next.delete(key)) next.add(key);
-			return next;
-		});
+	const toggle = (key: string) => {
+		const next = new Set(toggled);
+		if (!next.delete(key)) next.add(key);
+		setToggled(next);
+		onView?.({ sort, toggled: [...next] });
+	};
+	const sortBy = (key: SortKey) => {
+		const next = nextSort(sort, key);
+		setSort(next);
+		onView?.({ sort: next, toggled: [...toggled] });
+	};
 	const more = (group: RowGroup) =>
 		setLimits((current) => ({ ...current, [group.key]: (current[group.key] ?? PAGE) + PAGE }));
 
 	const onKeyDown = (event: KeyboardEvent<HTMLTableElement>) => {
-		if (!(event.target instanceof HTMLElement)) return;
+		if (isImeComposing(event.nativeEvent) || !(event.target instanceof HTMLElement)) return;
 		const position = gridPosition(event.target);
 		if (!position) return;
 		const line = lines[position.row];
-		if (
-			event.key === "Enter" &&
-			line?.kind === "row" &&
-			position.col >= firstFigure(labels !== null)
-		) {
+		const plain = !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+		const action =
+			line?.kind === "row" && plain
+				? rowKeyAction(
+						event.key,
+						position.col,
+						labels !== null,
+						selection.onCompare !== null,
+						event.repeat,
+					)
+				: null;
+		if (line?.kind === "row" && action) {
 			event.preventDefault();
-			if (chatTarget(line.row)) onOpen(line.row);
+			if (action === "held") return;
+			if (action === "toggle") selection.onToggle(line.row);
+			else if (action === "compare") selection.onCompare?.();
+			else if (chatTarget(line.row)) onOpen(line.row);
 			return;
 		}
 		const next = gridMove(event.key, event.ctrlKey || event.metaKey, position, widths);
@@ -623,6 +687,7 @@ export function SessionsTable({
 			className="w-full min-w-880 table-fixed border-collapse"
 		>
 			<colgroup>
+				<col className="w-28" />
 				<col />
 				<col className="w-136 @max-[1152px]:w-128" />
 				<col className="w-104 @max-[1152px]:w-96" />
@@ -633,7 +698,7 @@ export function SessionsTable({
 				<col className="w-96 @max-[1152px]:w-88" />
 				<col className="w-104" />
 			</colgroup>
-			<TableHead sort={sort} onSort={(key) => setSort((current) => nextSort(current, key))} />
+			<TableHead sort={sort} onSort={sortBy} />
 			<tbody>
 				{lines.map((line, index) => {
 					const cellAt = (col: number) => cellOf(index, col);
@@ -664,7 +729,7 @@ export function SessionsTable({
 							cellAt={cellAt}
 							onOpen={onOpen}
 							onAnalyse={onAnalyse}
-							compare={compare}
+							selection={selection}
 							labels={labels}
 						/>
 					);

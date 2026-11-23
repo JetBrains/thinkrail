@@ -66,11 +66,13 @@ import type {
 import type {
 	ArtifactsView,
 	ChangesTabSection,
+	ChatPane,
 	ClosedChat,
 	ComposerFocusRequest,
 	EditorTab,
 	FilesTreeView,
 	MarkedUnread,
+	PanelViewEntry,
 	PendingMarkUnread,
 	RouteChatTarget,
 	SessionRuntime,
@@ -762,6 +764,42 @@ export function selectLayoutTabPlaced(
 	tabId: string,
 ): boolean {
 	return selectLayoutTabPlacement(state, workspaceId, tabId) !== null;
+}
+
+/** The chat has a tab in the center of the active workspace's view. */
+export function selectChatPlacedInCenter(
+	state: LayoutDocumentState & { activeWorkspaceId: string | null },
+	workspaceId: string,
+	sessionId: string,
+): boolean {
+	if (state.activeWorkspaceId !== workspaceId) return false;
+	const identity = layoutResourceIdentity({ kind: "chat", sessionId });
+	return selectLayoutIdentityPlacement(state, workspaceId, identity)?.area === "center";
+}
+
+export function selectChatPane(
+	state: { chatPanesByWorkspace: Record<string, Record<string, ChatPane>> },
+	workspaceId: string,
+	sessionId: string,
+): ChatPane | null {
+	return state.chatPanesByWorkspace[workspaceId]?.[sessionId] ?? null;
+}
+
+export function selectPanelViewState(
+	state: { panelViewStatesByWorkspace: Record<string, Record<string, PanelViewEntry>> },
+	workspaceId: string,
+	key: string,
+): unknown {
+	return state.panelViewStatesByWorkspace[workspaceId]?.[key]?.state;
+}
+
+/** How many times another placement handed this panel its view; a mounted panel remounts when it moves. */
+export function selectPanelViewEpoch(
+	state: { panelViewStatesByWorkspace: Record<string, Record<string, PanelViewEntry>> },
+	workspaceId: string,
+	key: string,
+): number {
+	return state.panelViewStatesByWorkspace[workspaceId]?.[key]?.epoch ?? 0;
 }
 
 export function selectAttentionCenterTab(

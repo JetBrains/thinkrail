@@ -35,7 +35,7 @@ import { Button } from "@thinkrail/ui/button";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
-import { sessionName } from "../copy";
+import { SEVERITY_PILL, SEVERITY_TONE, sessionName } from "../copy";
 import { FigureDetails, type FigureView, Pill } from "../FigureCell";
 import { formatCost, formatCount, formatShare, formatTokens } from "../format";
 import {
@@ -52,6 +52,15 @@ import {
 } from "./copy";
 
 const GROUPS: readonly FindingGroup[] = ["skills", "commands", "context", "files"];
+
+const WHY_COUNTS_TOTAL: ReadonlySet<FindingRule> = new Set([
+	"cacheMisses",
+	"commandFailing",
+	"costOutlier",
+	"falseError",
+	"poorRecovery",
+	"tokenOutlier",
+]);
 const SEVERITIES: readonly FindingSeverity[] = ["error", "warning", "info"];
 const LINKS_SHOWN = 4;
 
@@ -72,18 +81,6 @@ const RULE_ICON = {
 	repeatedInstruction: RiChatQuoteLine,
 	unverifiedClaim: RiTestTubeLine,
 } as const satisfies Record<FindingRule, RemixiconComponentType>;
-
-const SEVERITY_TONE = {
-	error: "text-feedback-error",
-	warning: "text-feedback-warning",
-	info: "text-feedback-info",
-} as const satisfies Record<FindingSeverity, string>;
-
-const SEVERITY_PILL = {
-	error: "border-feedback-error-muted text-feedback-error",
-	warning: "border-feedback-warning-muted text-feedback-warning",
-	info: "border-feedback-info-muted text-feedback-info",
-} as const satisfies Record<FindingSeverity, string>;
 
 const EXIT_MEANINGS: readonly string[] = [
 	"checksPending",
@@ -384,7 +381,10 @@ function FindingCard({
 					) : null}
 				</div>
 				<p data-testid="finding-why" className="tr-text-ui text-text-muted">
-					{t(RULE_WHY[finding.rule], params)}
+					{t(RULE_WHY[finding.rule], {
+						...params,
+						count: WHY_COUNTS_TOTAL.has(finding.rule) ? (finding.total ?? 0) : finding.count,
+					})}
 					{known.map((exit) => (
 						<span key={exit.exit}>
 							{" "}
@@ -428,7 +428,8 @@ function FindingCard({
 						</code>
 						<span>
 							{t("sessionInsights.findings.quoteCount", {
-								count: formatCount(locale, finding.quote.count),
+								count: finding.count,
+								quoted: formatCount(locale, finding.quote.count),
 								total: formatCount(locale, finding.count),
 							})}
 						</span>

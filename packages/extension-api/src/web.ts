@@ -139,10 +139,25 @@ export interface PanelHostScope {
 	projectId: string;
 }
 
+/** Where a panel shows: its own center tab, or a pane beside its chat inside the chat's tab. */
+export type PanelPlacement = "tab" | "chatPane";
+
 export interface PanelHost {
 	/** `extension.query` for this panel's own extension; rejects with the host's coded errors; an aborted signal rejects locally only. */
 	query(method: string, params?: unknown, signal?: AbortSignal): Promise<unknown>;
 	openChat(target: PanelChatTarget): void;
+	/** Where this panel shows; absent means a center tab. */
+	readonly placement?: PanelPlacement;
+	/** In a chat pane: reveals a place in the chat beside the pane, in place — no tab switch, focus stays in the pane. */
+	showInChat?(at: PanelChatAnchor): void;
+	/** In a chat pane: moves the panel, with its view state, to its own center tab and closes the pane. */
+	openAsTab?(): void;
+	/** In a chat pane: closes the pane, giving the chat its full width back. */
+	closePane?(): void;
+	/** The view state this panel last saved for its tab or pane (`saveViewState`), `undefined` the first time. */
+	readonly viewState?: unknown;
+	/** Keeps a JSON-like view state for this tab or pane in the host, so a remount (the tab brought back) restores it. */
+	saveViewState?(state: unknown): void;
 	/** Opens, or focuses, another panel of this extension in a center tab of `scope`'s workspace; `title` names the tab. */
 	openPanel(panel: string, params?: Readonly<Record<string, string>>, title?: string): void;
 	/** The chat's own renderer for the tool (edit → diff, bash → command and output), without chat chrome. */
@@ -186,6 +201,10 @@ export interface PanelDeclaration {
 	icon: ComponentType<{ className?: string | undefined }>;
 	scopes: readonly PanelScope[];
 	chatAction?: PanelChatAction;
+	/** With a `chatAction`: the panel opens beside an open chat, inside the chat's tab, rather than in a tab of its own. */
+	chatPane?: true;
+	/** A wide view: opening it, as a tab or a chat pane, hides the side and bottom panes once. */
+	wide?: true;
 	rail?: PanelRail;
 	load: () => Promise<{ default: ComponentType<PanelProps> }>;
 }

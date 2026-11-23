@@ -103,6 +103,7 @@ function Status({ state, controls }: { state: SearchState; controls: SearchContr
 			<span data-testid="insights-search-count">
 				{state.phase === "scanning"
 					? t("sessionInsights.search.scanning", {
+							count: scanned?.total ?? 0,
 							summary,
 							read: formatCount(locale, scanned?.sessions ?? 0),
 							total: formatCount(locale, scanned?.total ?? 0),

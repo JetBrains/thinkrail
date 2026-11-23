@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
 	FOCUS_GROUP_BINDINGS,
+	isBrowserReservedChord,
+	isDesktopNativeChord,
+	isPlainChord,
 	KEYBINDINGS,
 	type KeybindingId,
 	keybindingLabel,
@@ -56,6 +59,7 @@ describe.each(Object.entries(PLATFORMS))("keybindings on %s", (family, platform)
 		expect(match(press("KeyB", mod), platform)).toBe("view.toggleLeft");
 		expect(match(press("KeyJ", mod), platform)).toBe("view.toggleRight");
 		expect(match(press("KeyJ", { ...mod, shiftKey: true }), platform)).toBe("view.toggleBottom");
+		expect(match(press("F12", { ...mod, shiftKey: true }), platform)).toBe("view.toggleAllPanels");
 		expect(match(press("KeyK", mod), platform)).toBe("search.open");
 		expect(match(press("KeyF", { ...mod, shiftKey: true }), platform)).toBe("files.findInFiles");
 		expect(match(press("KeyR", { ctrlKey: true }), platform)).toBe("chat.history");
@@ -212,6 +216,41 @@ test("every chord resolves to its own binding and no two bindings share a chord 
 	}
 });
 
+test("Mod+Shift+F12 hides all panels and is free everywhere else on every platform", () => {
+	expect(label("view.toggleAllPanels", { platform: PLATFORMS.apple })).toBe("⇧⌘F12");
+	expect(label("view.toggleAllPanels", { platform: PLATFORMS.windows })).toBe("Ctrl+Shift+F12");
+	expect(label("view.toggleAllPanels", { platform: PLATFORMS.linux, browser: true })).toBe(
+		"Ctrl+Shift+F12",
+	);
+	const [chord] = KEYBINDINGS["view.toggleAllPanels"];
+	expect(isBrowserReservedChord(chord, PLATFORMS.linux)).toBe(false);
+	expect(isBrowserReservedChord(chord, PLATFORMS.apple)).toBe(false);
+	expect(isDesktopNativeChord(chord)).toBe(false);
+	expect(isPlainChord(chord)).toBe(false);
+	for (const [family, platform] of Object.entries(PLATFORMS)) {
+		const mod: Modifiers = family === "apple" ? { metaKey: true } : { ctrlKey: true };
+		const resolved = defaults(platform);
+		expect(resolved.conflicts).toEqual([]);
+		const holders = resolved.commands.filter((command) =>
+			command.chords.some(
+				({ chord: held }) =>
+					held.code === "F12" && held.mod === true && held.shift === true && !held.alt,
+			),
+		);
+		expect(holders.map((command) => command.id)).toEqual(["view.toggleAllPanels"]);
+		for (const [scope, active] of resolved.local) {
+			expect([scope, active.some(({ chord: held }) => held.code === "F12")]).toEqual([
+				scope,
+				false,
+			]);
+		}
+		expect(match(press("F12"), platform)).toBeNull();
+		expect(match(press("F12", { shiftKey: true }), platform)).toBeNull();
+		expect(match(press("F12", mod), platform)).toBeNull();
+		expect(match(press("F12", { ...mod, shiftKey: true, altKey: true }), platform)).toBeNull();
+	}
+});
+
 describe("Mod+? matches the typed question mark on any layout", () => {
 	const linux = PLATFORMS.linux;
 	const typed = (code: string, key: string, modifiers: Modifiers) =>
@@ -255,6 +294,7 @@ describe("keybinding shortcuts", () => {
 		expect(shown("view.toggleLeft")).toEqual({ key: "B", mod: true });
 		expect(shown("view.toggleRight")).toEqual({ key: "J", mod: true });
 		expect(shown("view.toggleBottom")).toEqual({ key: "J", mod: true, shift: true });
+		expect(shown("view.toggleAllPanels")).toEqual({ key: "F12", mod: true, shift: true });
 		expect(shown("search.open")).toEqual({ key: "K", mod: true });
 		expect(shown("files.findInFiles")).toEqual({ key: "F", mod: true, shift: true });
 		expect(shown("chat.history")).toEqual({ key: "R", ctrl: true });

@@ -62,7 +62,7 @@
 		"subagents": {}
 	},
 	"list": {
-		"apiVersion": 10,
+		"apiVersion": 11,
 		"state": {
 			"phase": "ready",
 			"indexed": 1,
@@ -134,6 +134,10 @@
 			"start": ["entry.timestamp", "session.timestamp"],
 			"wallTime": ["entry.timestamp", "session.timestamp"],
 			"activeTime": ["entry.timestamp"],
+			"turns": [
+				"message[user]",
+				"custom_message[background-command-completion|subagent-completion].details.delivery"
+			],
 			"tokens": [
 				"message[assistant].usage",
 				"message[toolResult].usage",

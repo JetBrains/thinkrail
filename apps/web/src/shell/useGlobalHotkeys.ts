@@ -42,6 +42,7 @@ type GlobalHotkeyActions = {
 	onProjects: ChordHandler;
 	onWorkspace?: ChordHandler;
 	onBottom?: ChordHandler;
+	onAllPanels?: ChordHandler;
 	onNewWorkspace?: ChordHandler;
 	onSearch?: ChordHandler;
 	onFindInFiles?: ChordHandler;
@@ -63,6 +64,7 @@ const CHORD_ACTIONS = {
 	"view.toggleLeft": "onProjects",
 	"view.toggleRight": "onWorkspace",
 	"view.toggleBottom": "onBottom",
+	"view.toggleAllPanels": "onAllPanels",
 	"view.files": "onFiles",
 	"view.changes": "onChanges",
 	"workspace.new": "onNewWorkspace",

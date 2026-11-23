@@ -217,7 +217,9 @@ roster's catalog reads ([[submodule-web-panels]]).
   together with every retained workspace-view remap, so an explicit group removal or preset application can
   never leave a hidden workspace referencing a dead group. Components never splice group/tab arrays. Empty
   groups are valid frame state and closing a final resource does not delete them. `layoutProjectionEpoch`
-  advances only when a local transition invalidates an uncontrolled pointer/resize draft.
+  advances only when a local transition invalidates an uncontrolled pointer/resize draft. `panelsToRestore`
+  is *Hide all panels*' runtime-only restore memory (the auxiliary regions it hid), installed by the same
+  `applyLocalLayoutState` payload as the frame and never persisted ([[submodule-web-shell-layout-state]]).
 
   The store owns values and actions, never persistence. `shell/layoutState` validates and hydrates one
   browser-endpoint/surface- or native-profile/window-qualified local document, subscribes to relevant state
@@ -866,12 +868,33 @@ extension's `pasteToEditor` request does, so both paste at the caret the same wa
 panel is diffing (read through **`selectDiffScope`**, which defaults to the shared, referentially stable
 `BRANCH_SCOPE`); keyed **per workspace**, not app-wide like `changesView`, because a scope belongs to that
 branch's review — a commit sha means nothing in another worktree — and dropped with the workspace in
-`applyWorkspaceRemoved`. The transient **`chatLocationRequest`** — the history-search jump and an
-  extension panel's *Open in chat* (`PanelHost.openChat` with an anchor)
+`applyWorkspaceRemoved`. **`chatPanesByWorkspace`** holds each chat's pane beside it (`ChatPane`: the
+extension panel and its params, `open`, and `width` — a percentage of the chat's tab, `null` until it lays
+out), one per chat keyed by workspace and session: **`openChatPane`** opens or replaces it keeping the
+width, **`closeChatPane`** closes it keeping the panel and width, **`setChatPaneWidth`** remembers the
+width; read through **`selectChatPane`**, and **`selectChatPlacedInCenter`** says whether a chat has a tab
+in the active workspace's center (where a pane can open, [[submodule-web-shell]] § Extension panels).
+**`panelViewStatesByWorkspace`** is the extension panels' view state, one JSON-like value per tab
+(its resource identity) or chat pane (`chatPaneViewKey`), each with an `epoch`, written by
+**`savePanelViewState`** (an `undefined` value forgets the value; the epoch stays — an entry handed over
+keeps `{ state: undefined, epoch }`, so its tab does not remount — and an entry at epoch 0 goes) and read
+through `getState()` (`selectPanelViewState`) when a panel mounts — a save re-renders nothing. A save
+whose owner is gone writes nothing: a key with no tab of that identity left in the workspace's view, and
+no pane record of a live chat it belongs to, is refused in that one action, so a panel's unmount flush
+after its tab closed or its chat was deleted cannot write the key back.
+**`transferPanelViewState`** writes a view another placement hands over and bumps the epoch, the one
+value a component subscribes to (`selectPanelViewEpoch`), so a mounted panel remounts on it; it is not
+guarded, since it runs before the destination tab is placed. Both are runtime only: `closeTab` drops a
+cached extension tab's value, **`dropPanelViewState`** drops a closed tab's by its identity, epoch
+included (the shell calls it on every committed extension-tab close, since a tab restored from the layout
+has no cache), deleting a chat (`withoutChat`) drops its pane and the pane's values, and
+`applyWorkspaceRemoved` drops the workspace's entries. The transient **`chatLocationRequest`** — the
+  history-search jump, an extension panel's *Open in chat* (`PanelHost.openChat` with an anchor) and a
+  chat pane's *Show in chat* (`focus: false`: reveal and highlight without moving focus)
   deep link; the requester activates the target project+workspace, the workbench shell integration
   opens/hydrates the target
   chat, `ChatView` consumes + clears — is **`ChatLocationRequest { workspaceId, projectId, sessionId,
-  messageIndex, anchorText, toolCallId?, approximate?, navigation? }`** (`toolCallId` asks for that call's
+  messageIndex, anchorText, toolCallId?, approximate?, focus?, navigation? }`** (`toolCallId` asks for that call's
   row, `approximate` marks an anchor that is the nearest shown ancestor), set by **`requestChatLocation(req)`** (which captures and
   advances an already-hydrated destination group's local clock *before* switching workspaces, and sets `selectedProjectId` +
   `activeWorkspaceId` **atomically**, the same invariant `activateWorkspace` upholds, since the target chat

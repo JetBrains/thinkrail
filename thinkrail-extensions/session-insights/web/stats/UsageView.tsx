@@ -6,6 +6,7 @@ import { useId, useState } from "react";
 import { FigureBadge } from "../FigureCell";
 import { formatCost, formatCostExact, formatCount, formatTokens } from "../format";
 import { Tabs, tabPanel } from "../Tabs";
+import { DEFAULT_STATS_VIEW, type UsageOptions } from "../viewState";
 import { MARKER_NOTE } from "./copy";
 import {
 	dayLabel,
@@ -53,17 +54,29 @@ export function seriesLabel(t: Translator, series: UsageSeries): string {
 export function UsageView({
 	result,
 	onShowSessions,
+	initialOptions = DEFAULT_STATS_VIEW.usage,
+	onOptions,
 }: {
 	result: StatsUsageResult;
 	onShowSessions: ShowSessions;
+	initialOptions?: UsageOptions;
+	onOptions?: (options: UsageOptions) => void;
 }) {
 	const t = useT();
 	const locale = localeOf(t);
 	const { usage, sources } = result;
-	const [metric, setMetric] = useState<UsageMetric>(usage.headline);
-	const [by, setBy] = useState<UsageBy>("model");
-	const [withOutside, setWithOutside] = useState(true);
-	const [tab, setTab] = useState<UsageTab>("models");
+	const [options, setOptions] = useState<UsageOptions>(initialOptions);
+	const metric: UsageMetric = options.metric ?? usage.headline;
+	const { by, withOutside, tab } = options;
+	const choose = (patch: Partial<UsageOptions>) => {
+		const next = { ...options, ...patch };
+		setOptions(next);
+		onOptions?.(next);
+	};
+	const setMetric = (next: UsageMetric) => choose({ metric: next });
+	const setBy = (next: UsageBy) => choose({ by: next });
+	const setWithOutside = (next: boolean) => choose({ withOutside: next });
+	const setTab = (next: UsageTab) => choose({ tab: next });
 	const tabsId = useId();
 	const series = by === "model" ? usage.byModel : usage.byProject;
 	const tokensTotal = usage.totals.tokens.value?.total ?? 0;
@@ -268,6 +281,7 @@ export function UsageView({
 			</div>
 			<p className="tr-text-metadata text-text-subtle">
 				{t(TABLE_NOTE[tab], {
+					count: usage.listingSessions,
 					listing: formatCount(locale, usage.listingSessions),
 					days: usage.sparkDays,
 				})}

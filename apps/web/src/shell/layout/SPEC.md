@@ -104,6 +104,19 @@ holds nothing but terminals, `selectedByGroup` is the whole recall and the forme
 singleton-tool fan-out. Activating the already displayed entry folds only its group; restoring an entry
 reveals/unfolds/selects in one transition. An empty bottom entry reveals a process-free creation surface, not a terminal reservation.
 
+**Hiding every pane** (*Hide all panels*, [[submodule-web-shell]] *Global chords*). One visibility rule
+serves the side and bottom toggles and this command: a region shows while it is visible and not every
+group is folded (`isAuxiliaryRegionShown`, `shownAuxiliaryRegions`). `hideAuxiliaryPanels(document,
+attention, remembered)` hides every shown region in one result with the center recovery focus a side hide
+uses, and returns the restore memory `panelsToRestore` (what it hid plus what was remembered), or `null`
+when nothing shows. `toggleAuxiliaryPanels` is that hide, else it shows the remembered regions — left and
+right when none are — through `showSide` / `showBottom` in left, right, bottom order, with an empty memory
+and, instead of a focus target, the tabs those shows would focus as `select` (attention only).
+`keptPanelsToRestore(memory, frame)` is the clearing rule: a committed frame in which any region shows keeps
+no memory, so every way of opening a pane clears it without knowing the command. The memory is not frame
+state: it is runtime-only store state that `layoutState` installs with the frame
+([[submodule-web-shell-layout-state]]).
+
 `AuxiliaryRail` is a props-driven toolbar, owning only roving DOM focus. An optional `footer` — a list
 of keyed items, each an `AuxiliaryRailActionButton` with the rail-entry skin (the left rail's extension
 icons above its keyboard-shortcuts icon, [[submodule-web-shell]] § Extension panels) — renders pinned to
