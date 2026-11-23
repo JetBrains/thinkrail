@@ -12,14 +12,15 @@ import { sessionName } from "../copy";
 import { formatCost, formatCount, formatStart } from "../format";
 import { useLabels } from "../labels/api";
 import { LabelChips } from "../labels/LabelsEditor";
-import { type ListOutcome, listScope, loadSessions, openComparison, type ScopeKind } from "../load";
+import {
+	type ComparedSession,
+	type ListOutcome,
+	listScope,
+	loadSessions,
+	openComparison,
+	type ScopeKind,
+} from "../load";
 import { type Query, useKeyedQuery } from "../useKeyedQuery";
-
-/** The session the comparison starts from: it is A. */
-export interface CompareFrom {
-	sessionId: string;
-	name: string;
-}
 
 function byStartDesc(a: SessionListRow, b: SessionListRow): number {
 	const x = a.start.value;
@@ -97,15 +98,10 @@ export function pickerStep(key: string, active: number, count: number): number |
 export function compareWith(
 	host: PanelHost,
 	t: Translator,
-	from: CompareFrom,
+	from: ComparedSession,
 	row: SessionListRow,
 ): void {
-	openComparison(
-		host,
-		from.sessionId,
-		row.sessionId,
-		t("sessionInsights.compare.tabTitle", { a: from.name, b: sessionName(t, row) }),
-	);
+	openComparison(host, t, from, { sessionId: row.sessionId, name: sessionName(t, row) });
 }
 
 function Option({
@@ -170,7 +166,7 @@ export function CompareChooser({
 	onPicked,
 }: {
 	host: PanelHost;
-	from: CompareFrom;
+	from: ComparedSession;
 	onPicked: () => void;
 }) {
 	const t = useT();
@@ -290,7 +286,7 @@ export function CompareChooser({
 }
 
 /** The header's *Compare with…*: a picker of the session to compare the current one with. */
-export function CompareButton({ host, from }: { host: PanelHost; from: CompareFrom }) {
+export function CompareButton({ host, from }: { host: PanelHost; from: ComparedSession }) {
 	const t = useT();
 	const [open, setOpen] = useState(false);
 	return (

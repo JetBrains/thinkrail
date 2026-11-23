@@ -1,3 +1,5 @@
+import type { ScopeKind } from "./load";
+
 export type ListTab = "sessions" | "days" | "insights";
 
 export type InsightsSection = "findings" | "usage" | "hotspots" | "sequences" | "ab";
@@ -6,7 +8,7 @@ export interface ListIntent {
 	tab: ListTab;
 	section?: InsightsSection;
 	/** This project or all projects; the list keeps its own scope where absent. */
-	scope?: "project" | "all";
+	scope?: ScopeKind;
 }
 
 type Listener = (intent: ListIntent) => void;

@@ -64,7 +64,7 @@ post-export secret check, redaction, and the provenance of every figure it repor
   `FAILED_RUN_STATUSES`, `SubagentRunRecord`, `TODO_TOOLS`, `TODO_STATUSES`, `TODO_TEXT_GROUP`,
   `TODO_TEXT_ITEM`, `TodoRecord`, `TodoGroupRecord`, `TodoPlanRecord`; *Structural shapes* below), and
   every query's params and result shapes (the list, `SessionOverview` (the header row),
-  `SessionOverviewResult` with `SessionOverviewCards` — `OverviewHappened` / `OverviewPlan` /
+  `SessionOverviewParams`, `SessionOverviewResult` with `SessionOverviewCards` — `OverviewHappened` / `OverviewPlan` /
   `OverviewPlanStep`, `OverviewCost`, `OverviewErrors` / `OverviewChain` / `OverviewAttempt`,
   `OverviewContext`, `OverviewFiles` / `OverviewFile`, `OverviewSubagents`, `OverviewTurns`,
   `OverviewFinding` / `OverviewFindingLink` —,
@@ -106,7 +106,8 @@ post-export secret check, redaction, and the provenance of every figure it repor
   subagent waves (`buildSessionSubagents`, `buildSubagentDetail`, `parseSubagentParams`,
   `childActivity`, `SubagentActivityCache`, `childTranscriptsOf`), context and cache
   (`buildContextView`), the request diff (`buildRequestDiff`, `parseRequestDiffParams`), why expensive
-  (`buildSessionCost`), the Overview (`buildSessionOverview` with `SessionOverviewInput`), the files matrix (`buildSessionFiles`, `buildFileDetail`, `parseFileDetailParams`,
+  (`buildSessionCost`), the Overview (`buildOverviewCards` with `OverviewCardsInput` and `OverviewCards`, `composeOverview`
+  with `OverviewAnswer`, `parseOverviewParams`), the files matrix (`buildSessionFiles`, `buildFileDetail`, `parseFileDetailParams`,
   with an embedder's `ChangeReceipt`s), the statistics (`DigestStore`, `digestOf` / `digestInStages`,
   `buildStatsUsage`, `buildStatsHotspots`, `buildFindingsList`, `parseStatsParams`,
   `parseHotspotsParams`, `parseFindingsHideParams`, `setFindingHidden`, `buildStatsSequences`,
@@ -737,7 +738,7 @@ post-export secret check, redaction, and the provenance of every figure it repor
   runner's default, bounds it. A perf run passes on the development machine (Bun 1.4); the export and
   redaction figures it measured are above.
 - **The Overview is one composition from one trace snapshot** (`session.overview`,
-  `buildSessionOverview`). It reuses the sections' own builders — summary, timeline, analysis, cost,
+  `buildOverviewCards` and `composeOverview`). It reuses the sections' own builders — summary, timeline, analysis, cost,
   context, files and subagents — on one revision, so its cards never disagree, and carries only what the
   cards show (`OVERVIEW_RULES`: twelve plan steps, five files, 120 per-call bars — past that each bar is
   the costliest of its run of calls). Recovered failures count the failed attempts of chains that
@@ -746,7 +747,12 @@ post-export secret check, redaction, and the provenance of every figure it repor
   nor succeeded. Plan steps leave out removed ones and keep the plan's numbering.
   Its findings are `findings.list` over the session's project, keeping those that link this session and
   are not hidden; until the index and the project's digests are ready they are `null` with the
-  `DigestProgress`, so the cards never wait on the statistics.
+  `DigestProgress`, so the cards never wait on the statistics. A revision's cards (`buildOverviewCards`)
+  are apart from what each answer adds (`composeOverview`: the embedder's outcome now and the
+  findings), so an embedder keeps them per file revision and a poll — pinned to its first answer's
+  revision (`revision`, served like a pager's, *Paging pins a revision*) while the findings are counted —
+  reads only the findings again. The build runs the builders as stages that yield as the queries do
+  (`sliceYielder`), and its `signal` stops it at the next stage with the reason.
 - **`/insights` is a text report over the same queries, nothing of its own** (S11). The command builds
   the list, `stats.usage` and `findings.list` for a scope — sessions whose header `cwd` is pi's current
   folder (resolved; case-folded on Windows), or every folder with `--all`, each folder a list "project"

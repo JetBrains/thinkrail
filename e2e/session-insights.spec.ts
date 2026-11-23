@@ -281,7 +281,7 @@ test("the palette opens Session insights, which lists the project's sessions wit
 		await expect(page.getByTestId("left-stack")).toHaveCount(0);
 		await expect(page.getByTestId("right-stack")).toHaveCount(0);
 		await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
-		await page.keyboard.press("Control+Shift+F12");
+		await pressPlatformShortcut(page, "Shift+F12");
 		await expect(page.getByTestId("left-stack")).toBeVisible();
 		await expect(page.getByTestId("right-stack")).toBeVisible();
 		await expect(page.getByTestId("bottom-panel")).toBeVisible();
@@ -416,7 +416,7 @@ test("on Project Home the palette finds Session insights by what it shows, enter
 	await expect(page.getByTestId("search-palette")).toBeHidden();
 	await expect(page.getByTestId("session-insights-panel")).toBeVisible();
 	await expect(page.getByTestId("left-stack")).toHaveCount(0);
-	await page.keyboard.press("Control+Shift+F12");
+	await pressPlatformShortcut(page, "Shift+F12");
 	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
 	await expect(
 		page.locator('[data-testid="editor-tab"][data-kind="extension"]', {
@@ -497,6 +497,10 @@ test("an open chat shows its analysis beside it from its header's toggle and its
 		const beside = pane.getByTestId("session-insights-session");
 		await expect(beside).toHaveAttribute("data-session-id", priced.id);
 		await expect(beside.getByTestId("session-insights-session-title")).toHaveText(priced.title);
+		await expect(beside.getByTestId("session-insights-header")).toHaveAttribute(
+			"data-layout",
+			"wide",
+		);
 		await expect(beside.getByTestId("session-insights-session-open-chat")).toHaveCount(0);
 		await expect(page.locator('[data-testid="editor-tab"][data-kind="extension"]')).toHaveCount(0);
 		await shot(page, ENTRY_SHOTS, "chat-pane");
@@ -550,7 +554,7 @@ test("a chat in the Chats list offers its analysis from its ⋯ menu, and an emp
 	await analyze.click();
 	await expectAnalysisOf(page, sessionId, "book the flights to Lisbon");
 	await expect(page.getByTestId("left-stack")).toHaveCount(0);
-	await page.keyboard.press("Control+Shift+F12");
+	await pressPlatformShortcut(page, "Shift+F12");
 	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
 	await expect(row).toHaveAttribute("data-active", "false");
 
@@ -580,7 +584,7 @@ test("the left rail's Session insights icon and its chord open the list, on Proj
 	await shot(page, ENTRY_SHOTS, "rail-home");
 	await icon.click();
 	await expect(listTab(page)).toHaveAttribute("data-active", "true");
-	await page.keyboard.press("Control+Shift+F12");
+	await pressPlatformShortcut(page, "Shift+F12");
 	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("session-insights-panel")).toBeVisible();
 
@@ -621,7 +625,7 @@ test("the left rail's Session insights icon and its chord open the list, on Proj
 	await closePalette(page);
 	await page.keyboard.press("Control+Alt+KeyI");
 	await expect(listTab(page)).toHaveCount(0);
-	await page.keyboard.press("Control+Shift+KeyU");
+	await pressPlatformShortcut(page, "Shift+KeyU");
 	await expect(listTab(page)).toHaveAttribute("data-active", "true");
 });
 
@@ -783,9 +787,11 @@ test("a session's analysis traces its calls on a shared axis, explains a failing
 		await details.getByTestId("details-open-chat").click();
 		const chatTab = restoredChatTab(page, INSIGHTS_SESSIONS.priced.id);
 		await expect(chatTab).toHaveAttribute("data-active", "true");
-		const flashed = page.locator('[data-chat-row-id="activity:bash-1"] [data-flash]');
-		await expect(flashed).toBeVisible();
-		await expect(flashed).toContainText("bun test retry");
+		await expect(
+			page.locator('[data-chat-row-id="activity:bash-1"] [data-flash]', {
+				hasText: "bun test retry",
+			}),
+		).toBeVisible();
 		await shot(page, "session-insights-s3", "open-in-chat");
 
 		await page
@@ -1137,6 +1143,12 @@ test("context and cache, why a session was expensive and its files explain one s
 	await expect(session.getByTestId("cost-context-cost").getByTestId("cost-view")).toBeAttached();
 	const context = session.getByTestId("cost-context-context").getByTestId("context-view");
 	await expect(context.getByTestId("context-chart")).toBeInViewport();
+	const scroll = session.getByTestId("cost-context");
+	await expect.poll(() => scroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+	await session.getByTestId("session-insights-section-overview").click();
+	await session.getByTestId("session-insights-section-cost").click();
+	await expect(context.getByTestId("context-chart")).toBeAttached();
+	expect(await scroll.evaluate((element) => element.scrollTop)).toBe(0);
 	await page.setViewportSize({ width: 1920, height: 1080 });
 	await expect(context.getByTestId("context-chart")).toHaveAttribute("data-calls", "15");
 	await expect(context.getByTestId("context-chart")).toHaveAttribute("data-misses", "4");
@@ -1806,9 +1818,14 @@ test("ticked sessions compare as A and B, survive a scope switch, and figure too
 	await expect(bar.getByTestId("session-insights-selection-compare")).toBeDisabled();
 	await secondRow.getByTestId("session-insights-pick").click();
 
+	const groups = panel.getByTestId("session-insights-group");
+	const rows = panel.getByTestId("session-insights-row");
 	await panel.getByTestId("session-insights-scope-all").click();
+	await expect(groups.first()).toBeVisible();
 	await expect(bar).toContainText("2 sessions selected");
 	await panel.getByTestId("session-insights-scope-project").click();
+	await expect(groups).toHaveCount(0);
+	await expect(rows).toHaveCount(SEQUENCE_SESSIONS.sonnet.length + SEQUENCE_SESSIONS.gpt.length);
 	await expect(bar).toContainText("2 sessions selected");
 	await shot(panel, "session-insights/list", "selection-bar");
 
@@ -1864,8 +1881,9 @@ test("a session opens on an Overview whose cards lead into its sections; a tab b
 		await expect(session).toHaveAttribute("data-session-id", priced.id);
 
 		const header = session.getByTestId("session-insights-header");
-		const headerBox = await header.boundingBox();
-		expect(headerBox && headerBox.height <= 41).toBe(true);
+		await expect
+			.poll(() => header.evaluate((element) => element.scrollWidth <= element.clientWidth))
+			.toBe(true);
 		await session.getByTestId("session-insights-session-cost").hover();
 		await expect(
 			page.locator('[data-testid="session-insights-figure"][data-metric="cost"]').first(),
@@ -1958,23 +1976,24 @@ test("beside its chat the analysis shows a picked call in the chat in place, and
 		await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
 
 		const session = pane.getByTestId("session-insights-session");
-		await expect(session.getByTestId("session-insights-session-open-chat")).toHaveCount(0);
 		await expect(session.getByTestId("session-insights-open-as-tab")).toBeVisible();
 		await session.getByTestId("session-insights-section-trace").click();
 		const failing = session.locator(
 			'[data-testid="trace-row"][data-kind="tool"][data-error="true"]',
 		);
 		await failing.click();
-		const flashed = page.locator('[data-chat-row-id="activity:bash-1"] [data-flash]');
-		await expect(flashed).toBeVisible();
-		await expect(flashed).toContainText("bun test retry");
+		await expect(
+			page.locator('[data-chat-row-id="activity:bash-1"] [data-flash]', {
+				hasText: "bun test retry",
+			}),
+		).toBeVisible();
 		await expect(chatTab).toHaveAttribute("data-active", "true");
 		const show = session.getByTestId("trace-details").getByTestId("details-open-chat");
 		await expect(show).toContainText("Show in chat");
 		await expect(show).toContainText("shown at left");
 		await shot(page, "session-insights/pane", "show-in-chat");
 
-		await page.keyboard.press("Control+Shift+F12");
+		await pressPlatformShortcut(page, "Shift+F12");
 		await expect(page.getByTestId("left-stack")).toBeVisible();
 		await session.getByTestId("session-insights-close-pane").click();
 		await expect(pane).toHaveCount(0);

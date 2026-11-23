@@ -20,7 +20,7 @@ import { Button, IconButton } from "@thinkrail/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
-import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
+import { Fragment, type ReactNode, useRef, useState } from "react";
 import { isBadged, OUTCOME_LABEL, OUTCOME_TONE, sessionName } from "../copy";
 import { chatTargetOf } from "../details/DetailsPanel";
 import {
@@ -42,7 +42,9 @@ import {
 	formatTokens,
 } from "../format";
 import { LabelChips, LabelsButton, LabelsForm } from "../labels/LabelsEditor";
-import { CompareButton, CompareChooser, type CompareFrom } from "./ComparePicker";
+import type { ComparedSession } from "../load";
+import { guessedWidth, useWidth } from "../width";
+import { CompareButton, CompareChooser } from "./ComparePicker";
 
 /** The user's labels and note for the header, with the labels in use for suggestions. */
 export interface HeaderLabels {
@@ -67,8 +69,6 @@ const TIERS: readonly { below: number; hide: readonly HeaderChip[] }[] = [
 ];
 /** Below this the crumb and the actions move into the overflow too, and one label chip stays. */
 const ROOMY = 760;
-/** The width assumed in a chat pane before the first measure. */
-const PANE_WIDTH = 480;
 const CHIP_ORDER: readonly HeaderChip[] = [
 	"start",
 	"wall",
@@ -196,21 +196,29 @@ export function headerFigures(
 	];
 }
 
-/** In a chat pane: moving the analysis to its own tab, or closing the pane, each after `beforeLeave`. */
+/**
+ * Beside its chat (the host offers `showInChat`, `openAsTab` or `closePane`): moving the analysis to its
+ * own tab and closing the pane, each offered when the host has it and run after `beforeLeave`.
+ */
 export function paneActions(
 	host: PanelHost,
 	beforeLeave: () => void,
-): { openAsTab: () => void; close: () => void } | null {
-	if (host.placement !== "chatPane") return null;
+): { openAsTab: (() => void) | null; close: (() => void) | null } | null {
+	const { showInChat, openAsTab, closePane } = host;
+	if (!showInChat && !openAsTab && !closePane) return null;
 	return {
-		openAsTab: () => {
-			beforeLeave();
-			host.openAsTab?.();
-		},
-		close: () => {
-			beforeLeave();
-			host.closePane?.();
-		},
+		openAsTab: openAsTab
+			? () => {
+					beforeLeave();
+					host.openAsTab?.();
+				}
+			: null,
+		close: closePane
+			? () => {
+					beforeLeave();
+					host.closePane?.();
+				}
+			: null,
 	};
 }
 
@@ -394,7 +402,7 @@ function Overflow({
 	session: SessionOverview;
 	sources: Sources;
 	labels: HeaderLabels | null;
-	from: CompareFrom;
+	from: ComparedSession;
 	figures: readonly HeaderFigure[];
 	layout: HeaderLayout;
 	pane: boolean;
@@ -598,23 +606,13 @@ export function Header({
 }) {
 	const t = useT();
 	const [root, setRoot] = useState<HTMLElement | null>(null);
-	const [width, setWidth] = useState(() =>
-		host.placement === "chatPane" ? PANE_WIDTH : Number.POSITIVE_INFINITY,
-	);
+	const width = useWidth(root, guessedWidth(host.placement));
 	const [request, setRequest] = useState<ExportRequest | null>(null);
-	useEffect(() => {
-		if (!root) return;
-		const read = () => setWidth(root.clientWidth);
-		read();
-		const observer = new ResizeObserver(read);
-		observer.observe(root);
-		return () => observer.disconnect();
-	}, [root]);
 	const layout = headerLayout(width);
 	const name = sessionName(t, session);
 	const figures = headerFigures(t, session, Date.now());
 	const pane = paneActions(host, beforeLeave);
-	const from: CompareFrom = { sessionId: session.sessionId, name };
+	const from: ComparedSession = { sessionId: session.sessionId, name };
 	const onExport = (kind: ExportKind) => setRequest({ kind, attempt: (request?.attempt ?? 0) + 1 });
 	const note = labels?.entry?.note ?? "";
 	const overflows = layout.hidden.size > 0 || !layout.crumb || !layout.actions;
@@ -704,23 +702,23 @@ export function Header({
 						{pane ? null : <OpenChat host={host} session={session} />}
 					</>
 				) : null}
-				{pane ? (
-					<>
-						<IconButton
-							icon={RiExpandDiagonalLine}
-							size="s"
-							label={t("sessionInsights.header.openAsTab")}
-							data-testid="session-insights-open-as-tab"
-							onClick={pane.openAsTab}
-						/>
-						<IconButton
-							icon={RiCloseLine}
-							size="s"
-							label={t("sessionInsights.header.closePane")}
-							data-testid="session-insights-close-pane"
-							onClick={pane.close}
-						/>
-					</>
+				{pane?.openAsTab ? (
+					<IconButton
+						icon={RiExpandDiagonalLine}
+						size="s"
+						label={t("sessionInsights.header.openAsTab")}
+						data-testid="session-insights-open-as-tab"
+						onClick={pane.openAsTab}
+					/>
+				) : null}
+				{pane?.close ? (
+					<IconButton
+						icon={RiCloseLine}
+						size="s"
+						label={t("sessionInsights.header.closePane")}
+						data-testid="session-insights-close-pane"
+						onClick={pane.close}
+					/>
 				) : null}
 			</span>
 			<ExportDialogs

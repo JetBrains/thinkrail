@@ -6,15 +6,22 @@ import type { SessionOverview } from "@thinkrail/pi-session-insights/core";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { DetailsSplit, stacksDetails } from "../DetailsSplit";
 import { DetailsContext, type DetailsHost } from "../details/context";
 import { DetailsPanel } from "../details/DetailsPanel";
 import { figure, listResult, SOURCES, START, sessionRow, tokenTotals } from "../fixtures.test";
-import { requestSessionFocus, settleSessionFocus } from "../focus";
+import {
+	followSessionFocus,
+	pendingSessionFocus,
+	requestSessionFocus,
+	settleSessionFocus,
+} from "../focus";
 import { pendingListView, settleListView } from "../listIntent";
 import type { OverviewLink } from "../overview/OverviewView";
 import { sampleEvents } from "../trace/events.test";
 import { TraceModel } from "../trace/model";
 import { TraceExplorer } from "../trace/TraceExplorer";
+import { guessedWidth } from "../width";
 import { compareWith, pickerRows, pickerStatus, pickerStep, stillIndexing } from "./ComparePicker";
 import { Header, headerFigures, headerLayout, paneActions } from "./Header";
 import { initialNavigation, moved, openFindings, routeOverviewLink } from "./navigation";
@@ -74,10 +81,17 @@ const LABELS = {
 
 const TARGET = { turns: [], defaultTurn: null, selectedEvent: null };
 
-function header(placement?: "tab" | "chatPane") {
+const PANE: Partial<PanelHost> = {
+	placement: "chatPane",
+	showInChat: noop,
+	openAsTab: noop,
+	closePane: noop,
+};
+
+function header(overrides: Partial<PanelHost> = {}) {
 	return html(
 		<Header
-			host={host(placement ? { placement } : {})}
+			host={host(overrides)}
 			session={overview()}
 			sources={SOURCES}
 			labels={LABELS}
@@ -166,7 +180,7 @@ describe("the one-line header", () => {
 	});
 
 	test("in a chat pane: title, one label, note and cost stay; the rest is behind ⋯; ⤢ and × end the row", () => {
-		const markup = header("chatPane");
+		const markup = header(PANE);
 		expect(markup).toContain('data-layout="narrow"');
 		expect(markup.match(/data-testid="session-insights-session-label"/g)).toHaveLength(1);
 		expect(markup).toContain(">+3<");
@@ -189,17 +203,25 @@ describe("the one-line header", () => {
 		const calls: string[] = [];
 		const pane = paneActions(
 			host({
-				placement: "chatPane",
 				openAsTab: () => calls.push("openAsTab"),
 				closePane: () => calls.push("closePane"),
 			}),
 			() => calls.push("save"),
 		);
-		pane?.openAsTab();
-		pane?.close();
+		pane?.openAsTab?.();
+		pane?.close?.();
 		expect(calls).toEqual(["save", "openAsTab", "save", "closePane"]);
+	});
+
+	test("the pane's controls follow the host's members, not its placement", () => {
+		expect(paneActions(host({ closePane: noop }), noop)).toMatchObject({ openAsTab: null });
+		expect(paneActions(host({ showInChat: noop }), noop)).toEqual({ openAsTab: null, close: null });
+		expect(paneActions(host({ placement: "chatPane" }), noop)).toBeNull();
 		expect(paneActions(host(), noop)).toBeNull();
-		expect(paneActions(host({ placement: "tab" }), noop)).toBeNull();
+		const closeOnly = header({ placement: "chatPane", closePane: noop });
+		expect(closeOnly).toContain('data-testid="session-insights-close-pane"');
+		expect(closeOnly).not.toContain('data-testid="session-insights-open-as-tab"');
+		expect(closeOnly).not.toContain('data-testid="session-insights-session-open-chat"');
 	});
 });
 
@@ -312,6 +334,29 @@ describe("the sections", () => {
 		expect(focused).toMatch(
 			/aria-selected="true"[^>]*data-testid="session-insights-section-trace"/,
 		);
+	});
+
+	test("a chat pane leaves a focus request to the tab it opens: it neither opens on it nor takes it", () => {
+		requestSessionFocus("s4", "x1");
+		const pane = html(
+			<SessionPanel
+				host={host({ placement: "chatPane", viewState: { section: "files" } })}
+				params={{ sessionId: "s4" }}
+			/>,
+		);
+		expect(pane).toMatch(/aria-selected="true"[^>]*data-testid="session-insights-section-files"/);
+		expect(pendingSessionFocus("s4")).toBe("x1");
+		const heard: string[] = [];
+		const stop = followSessionFocus("s4", (eventId) => heard.push(eventId));
+		expect(pendingSessionFocus("s4")).toBeNull();
+		requestSessionFocus("s4", "x2");
+		requestSessionFocus("s5", "y1");
+		stop();
+		requestSessionFocus("s4", "x3");
+		expect(heard).toEqual(["x2"]);
+		expect(pendingSessionFocus("s4")).toBe("x3");
+		settleSessionFocus("s4", "x3");
+		settleSessionFocus("s5", "y1");
 	});
 
 	test("the trace's modes: Tree, Turns and Timeline, the current one pressed", () => {
@@ -485,10 +530,11 @@ describe("beside the chat", () => {
 		newer: false,
 	};
 
-	function explorer(placement: "tab" | "chatPane", onSelect: (index: number) => void) {
+	function explorer(stacked: boolean, onSelect: (index: number) => void) {
 		return html(
 			<TraceExplorer
-				host={host({ placement })}
+				host={host(PANE)}
+				stacked={stacked}
 				sessionId="s1"
 				overview={null}
 				trace={trace}
@@ -502,11 +548,28 @@ describe("beside the chat", () => {
 		);
 	}
 
-	test("the call details stack under the tree and its Gantt in a pane, beside them in a tab", () => {
-		expect(explorer("chatPane", noop)).toContain(
-			'data-testid="trace-details-pane" data-stacked="true"',
-		);
-		expect(explorer("tab", noop)).not.toContain('data-stacked="true"');
+	test("the call details stack under a narrow panel's views and sit beside a wide one's", () => {
+		expect(explorer(true, noop)).toContain('data-testid="trace-details-pane" data-stacked="true"');
+		expect(explorer(false, noop)).not.toContain('data-stacked="true"');
+		for (const stacked of [true, false]) {
+			const markup = html(
+				<DetailsSplit stacked={stacked} view={<p>view</p>} details={<p>details</p>} />,
+			);
+			expect(markup).toContain(
+				`data-panel-group-direction="${stacked ? "vertical" : "horizontal"}"`,
+			);
+			expect(markup).toMatch(stacked ? /class="[^"]*\bborder-t\b/ : /class="[^"]*\bborder-l\b/);
+		}
+	});
+
+	test("the details stack below 900 px of panel width wherever it is; a pane guesses narrow until measured", () => {
+		expect(stacksDetails(500)).toBe(true);
+		expect(stacksDetails(899)).toBe(true);
+		expect(stacksDetails(900)).toBe(false);
+		expect(stacksDetails(1800)).toBe(false);
+		expect(stacksDetails(guessedWidth("chatPane"))).toBe(true);
+		expect(stacksDetails(guessedWidth("tab"))).toBe(false);
+		expect(stacksDetails(guessedWidth(undefined))).toBe(false);
 	});
 
 	test("the divider above the stacked details runs across the pane, the tree/Gantt one stays upright", () => {
@@ -516,13 +579,13 @@ describe("beside the chat", () => {
 					/data-panel-resize-handle-id[^>]*?aria-orientation="(\w+)"|aria-orientation="(\w+)"[^>]*?data-panel-resize-handle-id/g,
 				),
 			].map((match) => match[1] ?? match[2]);
-		expect(orientations(explorer("chatPane", noop))).toEqual(["vertical", "horizontal"]);
-		expect(orientations(explorer("tab", noop))).toEqual(["vertical", "vertical"]);
+		expect(orientations(explorer(true, noop))).toEqual(["vertical", "horizontal"]);
+		expect(orientations(explorer(false, noop))).toEqual(["vertical", "vertical"]);
 	});
 
 	test("the trace's fallback selection on mount is not a pick", () => {
 		const picks: number[] = [];
-		explorer("chatPane", (index) => picks.push(index));
+		explorer(true, (index) => picks.push(index));
 		expect(picks).toEqual([]);
 	});
 

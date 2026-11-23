@@ -11,9 +11,16 @@ import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { SOURCES } from "../fixtures.test";
 import { PENDING, VersionSkew } from "../session/api";
-import { loadSessionOverview, overviewPending, SESSION_OVERVIEW } from "./api";
+import SessionPanel from "../session/SessionPanel";
+import {
+	answeredRevision,
+	loadSessionOverview,
+	overviewPending,
+	readsOtherRevision,
+	SESSION_OVERVIEW,
+} from "./api";
 import { CardLink } from "./cards";
-import { OverviewBody, OverviewCards, type OverviewLink, OverviewView } from "./OverviewView";
+import { OverviewBody, OverviewCards, type OverviewLink } from "./OverviewView";
 
 const html = (node: ReactNode) => renderToStaticMarkup(<TooltipProvider>{node}</TooltipProvider>);
 const text = (markup: string) =>
@@ -371,13 +378,12 @@ describe("the overview's states", () => {
 		expect(body({ kind: "ready", value: result() })).toContain("session-insights-overview");
 	});
 
-	test("a host serving another payload version shows the update notice and asks nothing", () => {
-		expect(html(<OverviewView host={host(result(), 10)} sessionId="s1" onOpen={noop} />)).toContain(
-			"session-insights-update-host",
-		);
-		expect(html(<OverviewView host={host(result())} sessionId="s1" onOpen={noop} />)).toContain(
-			"session-insights-overview-loading",
-		);
+	test("a host serving another payload version shows the update notice instead of the overview", () => {
+		const panel = (version: number) =>
+			html(<SessionPanel host={host(result(), version)} params={{ sessionId: "s1" }} />);
+		expect(panel(10)).toContain("session-insights-update-host");
+		expect(panel(10)).not.toContain("session-insights-overview-loading");
+		expect(panel(11)).toContain("session-insights-overview-loading");
 	});
 
 	test("the load maps pending and missing sessions and rejects another payload version", async () => {
@@ -399,6 +405,37 @@ describe("the overview's states", () => {
 		await expect(
 			loadSessionOverview(answering({ ...result(), apiVersion: 10 }), "s1", signal),
 		).rejects.toBeInstanceOf(VersionSkew);
+	});
+
+	test("a poll asks for the revision its last answer's cards read", async () => {
+		expect(answeredRevision(undefined)).toBeUndefined();
+		expect(answeredRevision(PENDING)).toBeUndefined();
+		expect(answeredRevision(null)).toBeUndefined();
+		expect(answeredRevision(result(cards({ findings: null })))).toBe("r1");
+		const asked: unknown[] = [];
+		const polled: PanelHost = {
+			...host(null),
+			query: async (method, params) => {
+				asked.push([method, params]);
+				return result();
+			},
+		};
+		const signal = new AbortController().signal;
+		await loadSessionOverview(polled, "s1", signal, answeredRevision(undefined));
+		await loadSessionOverview(polled, "s1", signal, answeredRevision(result()));
+		expect(asked).toEqual([
+			[SESSION_OVERVIEW, { sessionId: "s1" }],
+			[SESSION_OVERVIEW, { sessionId: "s1", revision: "r1" }],
+		]);
+	});
+
+	test("the cards read another revision than the trace only once both are known and differ", () => {
+		expect(readsOtherRevision({ kind: "ready", value: result() }, "r1")).toBe(false);
+		expect(readsOtherRevision({ kind: "ready", value: result() }, "r2")).toBe(true);
+		expect(readsOtherRevision({ kind: "ready", value: result() }, null)).toBe(false);
+		expect(readsOtherRevision({ kind: "ready", value: PENDING }, "r2")).toBe(false);
+		expect(readsOtherRevision({ kind: "ready", value: null }, "r2")).toBe(false);
+		expect(readsOtherRevision({ kind: "loading" }, "r2")).toBe(false);
 	});
 
 	test("it is asked again while pending or while the findings are still counted", () => {

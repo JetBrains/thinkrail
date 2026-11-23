@@ -15,7 +15,7 @@ import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { listResult, SOURCES, sessionRow } from "../fixtures.test";
 import {
-	onSessionFocus,
+	followSessionFocus,
 	pendingSessionFocus,
 	requestSessionFocus,
 	settleSessionFocus,
@@ -656,15 +656,17 @@ describe("statistics queries", () => {
 
 	test("a jump to a call reaches the session's open analysis once", () => {
 		const heard: string[] = [];
-		const stop = onSessionFocus((sessionId) => heard.push(sessionId));
+		const stop = followSessionFocus("s1", (eventId) => heard.push(eventId));
 		requestSessionFocus("s1", "tool:a:0");
-		expect(heard).toEqual(["s1"]);
-		expect(pendingSessionFocus("s1")).toBe("tool:a:0");
-		settleSessionFocus("s1", "tool:a:0");
+		expect(heard).toEqual(["tool:a:0"]);
 		expect(pendingSessionFocus("s1")).toBeNull();
-		stop();
 		requestSessionFocus("s2", "x");
-		expect(heard).toEqual(["s1"]);
+		expect(heard).toEqual(["tool:a:0"]);
+		stop();
+		requestSessionFocus("s1", "tool:b:0");
+		expect(heard).toEqual(["tool:a:0"]);
+		expect(pendingSessionFocus("s1")).toBe("tool:b:0");
+		settleSessionFocus("s1", "tool:b:0");
 		settleSessionFocus("s2", "x");
 	});
 });

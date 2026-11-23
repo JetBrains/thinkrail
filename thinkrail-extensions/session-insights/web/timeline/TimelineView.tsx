@@ -11,12 +11,12 @@ import type {
 } from "@thinkrail/pi-session-insights/core";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { useLocalKeys } from "@thinkrail/ui/local-keys";
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { isBadged } from "../copy";
+import { DetailsSplit } from "../DetailsSplit";
 import { DetailsPanel } from "../details/DetailsPanel";
 import { FigureBadge, FigureDetails, type Sources } from "../FigureCell";
 import {
@@ -451,6 +451,7 @@ export function TimelineView({
 	sources,
 	selected,
 	onSelect,
+	stacked = false,
 	toolbarStart,
 }: {
 	host: PanelHost;
@@ -463,6 +464,8 @@ export function TimelineView({
 	sources: Sources;
 	selected: number;
 	onSelect: (index: number) => void;
+	/** The panel is narrow: the call details stack under the view. */
+	stacked?: boolean;
 	/** Leads the toolbar (the trace's view modes). */
 	toolbarStart?: ReactNode;
 }) {
@@ -476,7 +479,6 @@ export function TimelineView({
 	});
 	const [root, setRoot] = useState<HTMLDivElement | null>(null);
 	const { palette, font } = useCanvasLook(root);
-	const stacked = host.placement === "chatPane";
 	const [mode, setMode] = useState<AxisMode>("time");
 	const [compress, setCompress] = useState(true);
 	const [showPlan, setShowPlan] = useState(true);
@@ -864,11 +866,9 @@ export function TimelineView({
 
 	return (
 		<div ref={setRoot} data-testid="timeline-view" className="h-full min-h-0">
-			<ResizablePanelGroup
-				direction={stacked ? "vertical" : "horizontal"}
-				className="h-full min-h-0"
-			>
-				<ResizablePanel defaultSize={stacked ? 60 : 68} minSize={stacked ? 25 : 40}>
+			<DetailsSplit
+				stacked={stacked}
+				view={
 					<div className="flex h-full min-h-0 flex-col">
 						<div
 							role="toolbar"
@@ -1021,32 +1021,24 @@ export function TimelineView({
 							))}
 						</Legend>
 					</div>
-				</ResizablePanel>
-				<ResizableHandle direction={stacked ? "vertical" : "horizontal"} />
-				<ResizablePanel defaultSize={stacked ? 40 : 32} minSize={stacked ? 20 : 22}>
-					<div
-						className={cn(
-							"h-full min-h-0 border-border-default",
-							stacked ? "border-t" : "border-l",
-						)}
-					>
-						<DetailsPanel
-							host={host}
-							sessionId={sessionId}
-							model={model}
-							index={selected}
-							overview={overview}
-							query=""
-							onSelect={select}
-							onZoom={(index) => {
-								const event = model.at(index);
-								if (event) setView(viewAround(scale, event.t0, event.t1, 0.6));
-							}}
-							tabsRef={tabsRef}
-						/>
-					</div>
-				</ResizablePanel>
-			</ResizablePanelGroup>
+				}
+				details={
+					<DetailsPanel
+						host={host}
+						sessionId={sessionId}
+						model={model}
+						index={selected}
+						overview={overview}
+						query=""
+						onSelect={select}
+						onZoom={(index) => {
+							const event = model.at(index);
+							if (event) setView(viewAround(scale, event.t0, event.t1, 0.6));
+						}}
+						tabsRef={tabsRef}
+					/>
+				}
+			/>
 		</div>
 	);
 }

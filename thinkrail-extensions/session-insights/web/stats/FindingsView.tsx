@@ -35,7 +35,7 @@ import { Button } from "@thinkrail/ui/button";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
-import { sessionName } from "../copy";
+import { SEVERITY_PILL, SEVERITY_TONE, sessionName } from "../copy";
 import { FigureDetails, type FigureView, Pill } from "../FigureCell";
 import { formatCost, formatCount, formatShare, formatTokens } from "../format";
 import {
@@ -81,18 +81,6 @@ const RULE_ICON = {
 	repeatedInstruction: RiChatQuoteLine,
 	unverifiedClaim: RiTestTubeLine,
 } as const satisfies Record<FindingRule, RemixiconComponentType>;
-
-const SEVERITY_TONE = {
-	error: "text-feedback-error",
-	warning: "text-feedback-warning",
-	info: "text-feedback-info",
-} as const satisfies Record<FindingSeverity, string>;
-
-const SEVERITY_PILL = {
-	error: "border-feedback-error-muted text-feedback-error",
-	warning: "border-feedback-warning-muted text-feedback-warning",
-	info: "border-feedback-info-muted text-feedback-info",
-} as const satisfies Record<FindingSeverity, string>;
 
 const EXIT_MEANINGS: readonly string[] = [
 	"checksPending",

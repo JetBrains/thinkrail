@@ -17,6 +17,7 @@ import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { VirtuosoHandle } from "react-virtuoso";
+import { DetailsSplit } from "../DetailsSplit";
 import { DetailsPanel } from "../details/DetailsPanel";
 import { formatClock, formatCount, formatDay, formatDuration, formatSpan } from "../format";
 import { keyLabels, PANEL_COMMANDS, PANEL_KEYS, PANEL_SCOPE } from "../keys";
@@ -123,6 +124,7 @@ export function TraceExplorer({
 	awaiting = false,
 	memory,
 	reveal = true,
+	stacked = false,
 	toolbarStart,
 }: {
 	host: PanelHost;
@@ -140,6 +142,8 @@ export function TraceExplorer({
 	memory?: TraceMemory | undefined;
 	/** Scroll the selection into view on mount (a jump) rather than back to the remembered top row. */
 	reveal?: boolean;
+	/** The panel is narrow: the call details stack under the tree and its Gantt. */
+	stacked?: boolean;
 	/** Leads the toolbar (the trace's view modes). */
 	toolbarStart?: ReactNode;
 }) {
@@ -181,7 +185,6 @@ export function TraceExplorer({
 	const aim = useRef<ScrollAim | null>(
 		!reveal && saved?.top ? { id: saved.top, align: "start" } : { id: null, align: "center" },
 	);
-	const stacked = host.placement === "chatPane";
 	const { palette, font } = useCanvasLook(root);
 
 	const start = trace.meta.start ?? 0;
@@ -845,11 +848,11 @@ export function TraceExplorer({
 					</Button>
 				</div>
 			</div>
-			<ResizablePanelGroup
-				direction={stacked ? "vertical" : "horizontal"}
+			<DetailsSplit
+				stacked={stacked}
 				className="min-h-0 flex-1"
-			>
-				<ResizablePanel defaultSize={stacked ? 60 : 68} minSize={stacked ? 25 : 40}>
+				testId="trace-details-pane"
+				view={
 					<div className="flex h-full min-h-0 flex-col">
 						<ResizablePanelGroup direction="horizontal" className="min-h-0 flex-1">
 							<ResizablePanel defaultSize={stacked ? 72 : 42} minSize={20}>
@@ -946,32 +949,22 @@ export function TraceExplorer({
 							</span>
 						</Legend>
 					</div>
-				</ResizablePanel>
-				<ResizableHandle direction={stacked ? "vertical" : "horizontal"} />
-				<ResizablePanel defaultSize={stacked ? 40 : 32} minSize={stacked ? 20 : 22}>
-					<div
-						data-testid="trace-details-pane"
-						data-stacked={stacked ? "true" : undefined}
-						className={cn(
-							"h-full min-h-0 border-border-default",
-							stacked ? "border-t" : "border-l",
-						)}
-					>
-						<DetailsPanel
-							host={host}
-							sessionId={sessionId}
-							model={model}
-							index={rows.length > 0 ? selected : -1}
-							overview={overview}
-							query={searching ? query : ""}
-							onSelect={(index) => select(index)}
-							onZoom={zoomTo}
-							onShowChild={showChild}
-							tabsRef={tabsRef}
-						/>
-					</div>
-				</ResizablePanel>
-			</ResizablePanelGroup>
+				}
+				details={
+					<DetailsPanel
+						host={host}
+						sessionId={sessionId}
+						model={model}
+						index={rows.length > 0 ? selected : -1}
+						overview={overview}
+						query={searching ? query : ""}
+						onSelect={(index) => select(index)}
+						onZoom={zoomTo}
+						onShowChild={showChild}
+						tabsRef={tabsRef}
+					/>
+				}
+			/>
 		</div>
 	);
 }

@@ -106,13 +106,9 @@ function lineWidth(line: Line, labelled: boolean): number {
 	return line.kind === "row" ? firstFigure(labelled) + FIGURES : 1;
 }
 
-export type RowKeyAction = "toggle" | "compare" | "open" | null;
+export type RowKeyAction = "toggle" | "compare" | "open" | "held" | null;
 
-/**
- * What an unmodified key does on a row's cell: Space ticks the row (the checkbox ticks itself), Enter on
- * the checkbox opens the comparison once two are ticked, and Enter on a figure opens the chat.
- */
-export function rowKeyAction(
+function pressAction(
 	key: string,
 	col: number,
 	labelled: boolean,
@@ -122,6 +118,22 @@ export function rowKeyAction(
 	if (key !== "Enter") return null;
 	if (col === CHECK_COL) return pairReady ? "compare" : null;
 	return col >= firstFigure(labelled) ? "open" : null;
+}
+
+/**
+ * What an unmodified key does on a row's cell: Space ticks the row (the checkbox ticks itself), Enter on
+ * the checkbox opens the comparison once two are ticked, and Enter on a figure opens the chat. A held
+ * key acts once: its auto-repeats (`repeat`) are swallowed (`held`).
+ */
+export function rowKeyAction(
+	key: string,
+	col: number,
+	labelled: boolean,
+	pairReady: boolean,
+	repeat = false,
+): RowKeyAction {
+	const action = pressAction(key, col, labelled, pairReady);
+	return action && repeat ? "held" : action;
 }
 
 function SortHeader({
@@ -636,10 +648,17 @@ export function SessionsTable({
 		const plain = !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
 		const action =
 			line?.kind === "row" && plain
-				? rowKeyAction(event.key, position.col, labels !== null, selection.onCompare !== null)
+				? rowKeyAction(
+						event.key,
+						position.col,
+						labels !== null,
+						selection.onCompare !== null,
+						event.repeat,
+					)
 				: null;
 		if (line?.kind === "row" && action) {
 			event.preventDefault();
+			if (action === "held") return;
 			if (action === "toggle") selection.onToggle(line.row);
 			else if (action === "compare") selection.onCompare?.();
 			else if (chatTarget(line.row)) onOpen(line.row);

@@ -19,7 +19,6 @@ import {
 import { localeOf, useT } from "@thinkrail/locales/react";
 import type {
 	Figure,
-	FindingSeverity,
 	MetricId,
 	OverviewPlanStep,
 	PlanStatus,
@@ -29,7 +28,7 @@ import { DiffStatBadge } from "@thinkrail/ui/diff-stat-badge";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useId, useState } from "react";
-import { isBadged } from "../copy";
+import { isBadged, SEVERITY_TONE } from "../copy";
 import { diagnosisText, valueText } from "../cost/diagnosis";
 import { FigureBadge, FigureDetails, type FigureView, type Sources } from "../FigureCell";
 import {
@@ -41,6 +40,7 @@ import {
 	formatTokens,
 } from "../format";
 import { drawActivityStrip } from "../subagents/draw";
+import { PLAN_STATUS_LABEL } from "../trace/bandCopy";
 import { useCanvasLook } from "../trace/look";
 import { StripCanvas } from "../trace/StripCanvas";
 import { findingText } from "./findings";
@@ -72,20 +72,6 @@ const STATUS_TONE = {
 	promoted: "text-text-muted",
 	removed: "text-text-subtle",
 } as const satisfies Record<PlanStatus, string>;
-
-const STATUS_LABEL = {
-	done: "sessionInsights.plan.status.done",
-	inProgress: "sessionInsights.plan.status.inProgress",
-	pending: "sessionInsights.plan.status.pending",
-	promoted: "sessionInsights.plan.status.promoted",
-	removed: "sessionInsights.plan.status.removed",
-} as const;
-
-const SEVERITY_TONE = {
-	error: "text-feedback-error",
-	warning: "text-feedback-warning",
-	info: "text-feedback-info",
-} as const satisfies Record<FindingSeverity, string>;
 
 function view(metric: MetricId, figure: Figure, exact: string | null): FigureView {
 	return { metric, origin: figure.origin, exact };
@@ -359,7 +345,7 @@ function PlanRow({
 				{formatCount(locale, step.n)}
 			</span>
 			<Icon aria-hidden className={cn("size-14 shrink-0", STATUS_TONE[step.status])} />
-			<span className="sr-only">{t(STATUS_LABEL[step.status])}</span>
+			<span className="sr-only">{t(PLAN_STATUS_LABEL[step.status])}</span>
 			<span className="min-w-0 truncate text-text-default">{step.title}</span>
 			{failures > 0 ? (
 				<span className="shrink-0 text-feedback-error">

@@ -1,14 +1,9 @@
 import { localeOf, type Translator, useT } from "@thinkrail/locales/react";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
+import { SEVERITY_PILL } from "../copy";
 import { formatCount } from "../format";
 import type { FindingsTally } from "./useFindings";
-
-const TONE = {
-	error: "border-feedback-error-muted text-feedback-error",
-	warning: "border-feedback-warning-muted text-feedback-warning",
-	info: "border-feedback-info-muted text-feedback-info",
-} as const;
 
 /** "7 findings · 2 warnings, 5 info": the findings not hidden and how severe they are. */
 export function findingsSummary(t: Translator, tally: FindingsTally): string {
@@ -43,7 +38,10 @@ export function FindingsBadge({
 		<span
 			data-testid={testId}
 			data-severity={severity}
-			className={cn("rounded-full border px-4 tr-text-caption tabular-nums", TONE[severity])}
+			className={cn(
+				"rounded-full border px-4 tr-text-caption tabular-nums",
+				SEVERITY_PILL[severity],
+			)}
 		>
 			<span aria-hidden="true">{formatCount(localeOf(t), tally.total)}</span>
 			<span className="sr-only">{summary}</span>

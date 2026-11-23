@@ -1,13 +1,15 @@
 import type { PanelHost } from "@thinkrail/extension-api/web";
 import { type DetailTab, TAB_LABEL } from "../details/tabs";
 
-export const SECTIONS = ["overview", "trace", "subagents", "errors", "cost", "files"] as const;
+const SECTIONS = ["overview", "trace", "subagents", "errors", "cost", "files"] as const;
 export type Section = (typeof SECTIONS)[number];
 
-export const TRACE_MODES = ["tree", "turns", "timeline"] as const;
+const TRACE_MODES = ["tree", "turns", "timeline"] as const;
 export type TraceMode = (typeof TRACE_MODES)[number];
 
-export type ContextMode = "chart" | "diff";
+const CONTEXT_MODES = ["chart", "diff"] as const;
+/** *Cost & context*'s context half: the chart or the request diff. */
+export type ContextMode = (typeof CONTEXT_MODES)[number];
 
 /** What a session tab or chat pane shows, kept by the host across remounts (`PanelHost.viewState`). */
 export interface SessionViewState {
@@ -75,7 +77,7 @@ export function parseViewState(value: unknown): SessionViewState {
 		selectedId: text(value.selectedId),
 		open: folds(value.open),
 		top: text(value.top),
-		context: oneOf(["chart", "diff"] as const, value.context, INITIAL_VIEW.context),
+		context: oneOf(CONTEXT_MODES, value.context, INITIAL_VIEW.context),
 		detailTab: DETAIL_TABS.find((tab) => tab === value.detailTab) ?? null,
 		chain: typeof chain === "number" && Number.isInteger(chain) && chain >= 0 ? chain : null,
 		file: text(value.file),

@@ -14,12 +14,15 @@ export interface Navigation {
 	intent: TraceIntent | null;
 	/** Bumped by a jump, so the trace remounts and reveals the event. */
 	jump: number;
-	/** The trace mounts scrolled to the selection (a jump) rather than back to its remembered top row. */
+	/**
+	 * The section opens at a jump's target rather than where it was left: the trace scrolled to the
+	 * selection, *Cost & context* to its context half. Any move clears it, and *Cost & context* once shown.
+	 */
 	reveal: boolean;
 	seen: ReadonlySet<Need>;
 }
 
-export function needOf(section: Section, mode: TraceMode): Need | null {
+function needOf(section: Section, mode: TraceMode): Need | null {
 	if (section === "trace") return mode === "tree" ? null : "timeline";
 	if (section === "subagents" || section === "cost" || section === "files") return section;
 	return null;

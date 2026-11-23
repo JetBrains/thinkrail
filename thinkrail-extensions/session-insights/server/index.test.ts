@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import {
+	appendFileSync,
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
@@ -636,12 +637,15 @@ describe("one session's analysis", () => {
 			},
 		});
 		seed(fake);
-		const queries = sessionInsights.queries?.(fake.host);
-		if (!queries) throw new Error("no queries");
-		const ask = async <T>(name: string, params: unknown) => (await queries[name]?.(params)) as T;
-		await ask("sessions.list", { scope: { kind: "all" } });
+		await ready(fake);
+		const ask = async <T>(name: string, params: unknown) =>
+			(await query(fake.host, name)(params)) as T;
 		let result = await ask<SessionOverviewResult>("session.overview", { sessionId: "priced" });
-		for (let attempt = 0; attempt < 50 && result.overview?.findings === null; attempt++) {
+		for (
+			let attempt = 0;
+			attempt < 50 && (!result.overview || result.overview.findings === null);
+			attempt++
+		) {
 			await Bun.sleep(20);
 			result = await ask<SessionOverviewResult>("session.overview", { sessionId: "priced" });
 		}
@@ -673,9 +677,52 @@ describe("one session's analysis", () => {
 				pending: false,
 				overview: null,
 			});
-		await expect(Promise.resolve(queries["session.overview"]?.({}))).rejects.toThrow(
+		await expect(Promise.resolve(query(fake.host, "session.overview")({}))).rejects.toThrow(
 			"Invalid session.overview params",
 		);
+	});
+
+	test("session.overview polls pinned to a revision answer its cards, built once, with the findings read again", async () => {
+		const fake = fakeHost("overview-pinned");
+		seed(fake);
+		await ready(fake);
+		const overview = query(fake.host, "session.overview");
+		const ask = async (params: unknown) => (await overview(params)) as SessionOverviewResult;
+		let first = await ask({ sessionId: "priced" });
+		for (
+			let attempt = 0;
+			attempt < 50 && (!first.overview || first.overview.findings === null);
+			attempt++
+		) {
+			await Bun.sleep(20);
+			first = await ask({ sessionId: "priced" });
+		}
+		const revision = first.overview?.revision ?? "";
+		expect(revision).not.toBe("");
+		appendFileSync(
+			join(sessionsRootOf(fake), "alpha", "2026-11-01T10-00-00-000Z_priced.jsonl"),
+			`${JSON.stringify({ type: "session_info", name: "Fix the login flow again" })}\n`,
+		);
+		const pinned = await ask({ sessionId: "priced", revision });
+		expect(pinned.overview?.revision).toBe(revision);
+		expect(pinned.overview?.cost).toBe(first.overview?.cost);
+		expect(pinned.overview?.findings).toEqual(first.overview?.findings ?? []);
+		const current = await ask({ sessionId: "priced" });
+		expect(current.overview?.revision).not.toBe(revision);
+		await expect(Promise.resolve(overview({ sessionId: "priced", revision: "" }))).rejects.toThrow(
+			"Invalid session.overview params",
+		);
+	});
+
+	test("session.overview in flight rejects with the switch-off's reason", async () => {
+		const controller = new AbortController();
+		const reason = new Error("switched off");
+		const fake = fakeHost("overview-switched-off", { signal: controller.signal });
+		seed(fake);
+		await ready(fake);
+		const asked = query(fake.host, "session.overview")({ sessionId: "priced" });
+		controller.abort(reason);
+		await expect(Promise.resolve(asked)).rejects.toBe(reason);
 	});
 
 	test("session.trace pages the skeleton; event.get re-reads one body; event.anchor asks the host", async () => {

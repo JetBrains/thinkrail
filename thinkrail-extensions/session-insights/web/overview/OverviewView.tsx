@@ -7,7 +7,7 @@ import { type ReactNode, useState } from "react";
 import { hostServesThisVersion } from "../load";
 import { PENDING, type Pending } from "../session/api";
 import { type Query, useKeyedQuery } from "../useKeyedQuery";
-import { loadSessionOverview, overviewPending } from "./api";
+import { answeredRevision, loadSessionOverview, overviewPending } from "./api";
 import { ContextCard, CostCard, ErrorsCard, FilesCard, HappenedCard, SubagentsCard } from "./cards";
 
 /** Where an Overview card leads: a section of the session tab, or the list's Insights → What to do. */
@@ -18,14 +18,6 @@ export type OverviewLink =
 	| { to: "files"; path?: string }
 	| { to: "subagents" }
 	| { to: "findings" };
-
-export interface OverviewViewProps {
-	host: PanelHost;
-	sessionId: string;
-	/** Bumped by the session's *Reload*: the cards are asked again for the newer revision. */
-	reload?: number;
-	onOpen: (link: OverviewLink) => void;
-}
 
 function Notice({ testId, children }: { testId: string; children: ReactNode }) {
 	return (
@@ -125,23 +117,19 @@ export function OverviewBody({
 }
 
 /**
- * The session tab's landing view: one `session.overview` answer — every card from one trace revision —
- * asked again while the index has not reached the session or the scope's findings are still counted.
+ * The session tab's landing view's data, asked while `active`: one `session.overview` answer — every
+ * card from one trace revision — asked again, pinned to that revision, while the index has not reached
+ * the session or the scope's findings are still counted. The session's *Reload* (`reload`) and *Retry*
+ * ask the current revision.
  */
-export function OverviewView({ host, sessionId, reload = 0, onOpen }: OverviewViewProps) {
-	const t = useT();
+export function useOverview(host: PanelHost, sessionId: string, active: boolean, reload: number) {
 	const [attempt, setAttempt] = useState(0);
-	const serves = hostServesThisVersion(host);
+	const key = active && hostServesThisVersion(host) ? `${sessionId}:${reload}:${attempt}` : null;
 	const query = useKeyedQuery(
-		serves ? `${sessionId}:${reload}:${attempt}` : null,
-		(signal) => loadSessionOverview(host, sessionId, signal),
+		key,
+		(signal, _progress, last) =>
+			loadSessionOverview(host, sessionId, signal, answeredRevision(last)),
 		overviewPending,
 	);
-	if (!serves)
-		return <Notice testId="session-insights-update-host">{t("sessionInsights.updateHost")}</Notice>;
-	return (
-		<div data-session-id={sessionId} className="flex h-full min-h-0 flex-col">
-			<OverviewBody query={query} onRetry={() => setAttempt(attempt + 1)} onOpen={onOpen} />
-		</div>
-	);
+	return { query, retry: () => setAttempt(attempt + 1) };
 }

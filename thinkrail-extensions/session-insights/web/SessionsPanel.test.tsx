@@ -588,6 +588,15 @@ describe("select and compare", () => {
 		expect(rowKeyAction("a", 1, false, true)).toBeNull();
 	});
 
+	test("a held key acts once: its repeats are swallowed, so held Space does not keep flipping the tick", () => {
+		expect(rowKeyAction(" ", 1, false, false, true)).toBe("held");
+		expect(rowKeyAction("Enter", 0, false, true, true)).toBe("held");
+		expect(rowKeyAction("Enter", 3, false, false, true)).toBe("held");
+		expect(rowKeyAction(" ", 0, false, false, true)).toBeNull();
+		expect(rowKeyAction("a", 1, false, true, true)).toBeNull();
+		expect(rowKeyAction(" ", 1, false, false, false)).toBe("toggle");
+	});
+
 	test("ticked rows are checked; nothing ticked shows no bar", () => {
 		const none = selected([]);
 		expect(bar(none)).toBe("");

@@ -7,7 +7,7 @@ import { buildContextView } from "./context.ts";
 import { OVERVIEW_RULES } from "./core.ts";
 import { buildSessionCost } from "./costWhy.ts";
 import { buildFindingsList } from "./findings.ts";
-import { buildSessionOverview } from "./overview.ts";
+import { buildOverviewCards, composeOverview } from "./overview.ts";
 import { createRedactor } from "./redact.ts";
 import { JsonStore } from "./store.ts";
 import { buildSessionTimeline } from "./timeline.ts";
@@ -128,10 +128,8 @@ async function overviewOf(
 		{ ...input, store: new JsonStore(join(root, `store-${sessionId}`)), redactor },
 		state,
 	);
-	const overview = await buildSessionOverview({
-		sessionId,
+	const cards = await buildOverviewCards({
 		trace,
-		outcome: "succeeded",
 		contextWindow: WINDOW,
 		subagents: {
 			trace,
@@ -141,8 +139,8 @@ async function overviewOf(
 			removed: false,
 			activity: new SubagentActivityCache(),
 		},
-		findings,
 	});
+	const overview = composeOverview(cards, { sessionId, outcome: "succeeded", findings });
 	return { overview, trace };
 }
 
@@ -250,6 +248,36 @@ describe("session.overview", () => {
 		const rework = overview.findings?.find((finding) => finding.rule === "rework");
 		expect(rework?.link?.count).toBe(5);
 		expect(rework?.sessions).toBe(1);
+	});
+
+	test("a revision's cards are built in stages that yield, and stop at the next one once aborted", async () => {
+		const { builder } = workSession("ov-yield");
+		const file = writeSession(root, "yield", builder);
+		const trace = await new TraceStore({ redactor, sliceMs: 1000 }).trace(file);
+		if (!trace) throw new Error("no trace");
+		const controller = new AbortController();
+		const reason = new Error("switched off");
+		const input = { trace, contextWindow: WINDOW, subagents: null, sliceMs: 0 };
+		setImmediate(() => controller.abort(reason));
+		await expect(buildOverviewCards({ ...input, signal: controller.signal })).rejects.toBe(reason);
+		const cards = await buildOverviewCards(input);
+		expect(cards.revision).toBe(trace.meta.revision);
+		expect(cards).not.toHaveProperty("findings");
+		const answer = composeOverview(cards, {
+			sessionId: "ov-yield",
+			outcome: "failed",
+			findings: await buildFindingsList(
+				{
+					...(await statsOver([file], { budgetMs: 0 })).input,
+					store: new JsonStore(join(root, "store-ov-yield")),
+					redactor,
+				},
+				{ phase: "cold", indexed: 0, total: 1 },
+			),
+		});
+		expect(answer.happened.outcome).toBe("failed");
+		expect(answer.cost).toBe(cards.cost);
+		expect(answer.findings).toBeNull();
 	});
 
 	test("findings wait for the scope's digests instead of blocking the cards", async () => {

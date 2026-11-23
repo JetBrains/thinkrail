@@ -1,6 +1,11 @@
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
-import type { MetricId, Origin, SessionOutcome } from "@thinkrail/pi-session-insights/core";
+import type {
+	FindingSeverity,
+	MetricId,
+	Origin,
+	SessionOutcome,
+} from "@thinkrail/pi-session-insights/core";
 
 export const BADGED = {
 	recorded: false,
@@ -100,6 +105,20 @@ export const OUTCOME_TONE = {
 	interrupted: "border-feedback-warning-muted text-feedback-warning",
 	cancelled: "border-feedback-warning-muted text-feedback-warning",
 } as const satisfies Record<SessionOutcome, string>;
+
+/** A finding's icon colour by its severity. */
+export const SEVERITY_TONE = {
+	error: "text-feedback-error",
+	warning: "text-feedback-warning",
+	info: "text-feedback-info",
+} as const satisfies Record<FindingSeverity, string>;
+
+/** A finding's pill (border and text) by its severity. */
+export const SEVERITY_PILL = {
+	error: "border-feedback-error-muted text-feedback-error",
+	warning: "border-feedback-warning-muted text-feedback-warning",
+	info: "border-feedback-info-muted text-feedback-info",
+} as const satisfies Record<FindingSeverity, string>;
 
 /** A session's name: its title, else its quoted first prompt, else "Untitled". */
 export function sessionName(

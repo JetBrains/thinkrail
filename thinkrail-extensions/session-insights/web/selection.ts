@@ -53,9 +53,9 @@ export function openPicked(host: PanelHost, t: Translator, picks: readonly Sessi
 	const [a, b] = pair;
 	openComparison(
 		host,
-		a.sessionId,
-		b.sessionId,
-		t("sessionInsights.compare.tabTitle", { a: sessionName(t, a), b: sessionName(t, b) }),
+		t,
+		{ sessionId: a.sessionId, name: sessionName(t, a) },
+		{ sessionId: b.sessionId, name: sessionName(t, b) },
 	);
 	return true;
 }

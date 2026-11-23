@@ -26,19 +26,21 @@ import type {
 import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { cn } from "@thinkrail/ui/utils";
-import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
-import { type ContextMode, ContextView } from "../context/ContextView";
+import { type ReactNode, useEffect, useEffectEvent, useId, useMemo, useRef, useState } from "react";
+import { ContextView } from "../context/ContextView";
 import { CostView } from "../cost/CostView";
+import { stacksDetails } from "../DetailsSplit";
 import { DetailsContext, type DetailsHost, type ShowOutcome } from "../details/context";
 import type { DetailTab } from "../details/tabs";
 import { ErrorsView } from "../errors/ErrorsView";
 import type { ExportTurn } from "../export/ExportMenu";
 import { FilesView } from "../files/FilesView";
-import { onSessionFocus, pendingSessionFocus, settleSessionFocus } from "../focus";
+import { followSessionFocus, pendingSessionFocus } from "../focus";
 import { formatCount } from "../format";
 import { useLabels } from "../labels/api";
 import { hostServesThisVersion } from "../load";
-import { OverviewView } from "../overview/OverviewView";
+import { readsOtherRevision } from "../overview/api";
+import { OverviewBody, useOverview } from "../overview/OverviewView";
 import { SubagentsView } from "../subagents/SubagentsView";
 import { Tabs, tabPanel } from "../Tabs";
 import { TimelineView } from "../timeline/TimelineView";
@@ -51,6 +53,7 @@ import {
 	type TraceMemory,
 } from "../trace/TraceExplorer";
 import { TurnsView } from "../turns/TurnsView";
+import { guessedWidth, useWidth } from "../width";
 import {
 	type LoadedTrace,
 	loadAnalysis,
@@ -70,7 +73,13 @@ import {
 	openFindings,
 	routeOverviewLink,
 } from "./navigation";
-import { foldEntries, type Section, type TraceMode, ViewMemory } from "./viewState";
+import {
+	type ContextMode,
+	foldEntries,
+	type Section,
+	type TraceMode,
+	ViewMemory,
+} from "./viewState";
 
 const SECTIONS: readonly { id: Section; label: MessageKey; icon: RemixiconComponentType }[] = [
 	{ id: "overview", label: "sessionInsights.session.section.overview", icon: RiLayoutGridLine },
@@ -221,29 +230,32 @@ function ModeLoading({ modes, children }: { modes: ReactNode; children: ReactNod
 }
 
 /**
- * Why it was expensive, then context and cache, in one scroll; each new `revealContext` scrolls the
- * context half into view once both halves have settled, so a half still loading cannot move it after.
+ * Why it was expensive, then context and cache, in one scroll; `revealContext` scrolls the context half
+ * into view once both halves have settled, so a half still loading cannot move it after, and reports it
+ * done (`onRevealed`) so the parent asks it no more.
  */
 export function CostContextSection({
 	cost,
 	context,
 	diff,
-	revealContext = 0,
+	revealContext = false,
 	settled = true,
+	onRevealed,
 }: {
 	cost: ReactNode;
 	context: ReactNode;
 	/** The request diff fills a box of its own height inside the scroll. */
 	diff: boolean;
-	revealContext?: number;
+	revealContext?: boolean;
 	settled?: boolean;
+	onRevealed?: () => void;
 }) {
 	const contextHalf = useRef<HTMLElement>(null);
-	const revealed = useRef(0);
+	const revealed = useEffectEvent(() => onRevealed?.());
 	useEffect(() => {
-		if (revealContext === 0 || revealContext === revealed.current || !settled) return;
-		revealed.current = revealContext;
+		if (!revealContext || !settled) return;
 		contextHalf.current?.scrollIntoView({ block: "start" });
+		revealed();
 	}, [revealContext, settled]);
 	return (
 		<div data-testid="cost-context" className="h-full min-h-0 overflow-y-auto">
@@ -262,6 +274,8 @@ export function CostContextSection({
 interface SectionsProps {
 	host: PanelHost;
 	sessionId: string;
+	/** The panel is narrow: the call details stack under the views. */
+	stacked: boolean;
 	overview: SessionOverview | null;
 	trace: LoadedTrace;
 	navigation: Navigation;
@@ -277,14 +291,14 @@ interface SectionsProps {
 	ready: ReadonlyMap<string, readonly TraceEvent[]>;
 	memory: TraceMemory;
 	contextMode: ContextMode;
-	/** Bumped by the Overview's Context link: *Cost & context* scrolls to its context half. */
-	contextReveal: number;
 	chain: number | null;
 	file: string | null;
 	/** A selection the user made in the trace (its tree, turns or timeline). */
 	onPick: (id: string, mode: TraceMode) => void;
 	onSelectId: (id: string) => void;
 	onNavigate: (to: Partial<Omit<Navigation, "seen">>) => void;
+	/** The section showed the jump's target: a later return opens where it was left. */
+	onRevealed: () => void;
 	onContextMode: (mode: ContextMode) => void;
 	onChain: (index: number) => void;
 	onFile: (path: string) => void;
@@ -296,6 +310,7 @@ interface SectionsProps {
 function SessionSections({
 	host,
 	sessionId,
+	stacked,
 	overview,
 	trace,
 	navigation,
@@ -307,12 +322,12 @@ function SessionSections({
 	ready,
 	memory,
 	contextMode,
-	contextReveal,
 	chain,
 	file,
 	onPick,
 	onSelectId,
 	onNavigate,
+	onRevealed,
 	onContextMode,
 	onChain,
 	onFile,
@@ -369,6 +384,7 @@ function SessionSections({
 					awaiting={awaiting}
 					memory={memory}
 					reveal={navigation.reveal}
+					stacked={stacked}
 					toolbarStart={modes}
 				/>
 			);
@@ -403,6 +419,7 @@ function SessionSections({
 				selected={selected}
 				onSelect={pick}
 				onShowInTrace={(index) => toTrace(base.at(index)?.id ?? null, null)}
+				stacked={stacked}
 				toolbarStart={modes}
 			/>
 		) : (
@@ -417,6 +434,7 @@ function SessionSections({
 				sources={value.sources}
 				selected={selected}
 				onSelect={pick}
+				stacked={stacked}
 				toolbarStart={modes}
 			/>
 		);
@@ -427,8 +445,9 @@ function SessionSections({
 		return (
 			<CostContextSection
 				diff={contextMode === "diff" && context.kind === "ready"}
-				revealContext={contextReveal}
+				revealContext={navigation.reveal}
 				settled={cost.kind !== "loading" && context.kind !== "loading"}
+				onRevealed={onRevealed}
 				cost={
 					cost.kind !== "ready" || !cost.value.cost ? (
 						<Unready
@@ -529,6 +548,7 @@ function SessionSections({
 			onShowInTrace={(focus, first) => toTrace(first, { focus, expand: [] })}
 			chain={chain}
 			onChain={onChain}
+			stacked={stacked}
 		/>
 	);
 }
@@ -560,7 +580,7 @@ function useShowInChat(host: PanelHost, sessionId: string) {
 	const running = useRef<AbortController | null>(null);
 	const [shown, setShown] = useState<string | null>(null);
 	useEffect(() => () => running.current?.abort(), []);
-	if (host.placement !== "chatPane" || !host.showInChat) return { show: null, shown };
+	if (!host.showInChat) return { show: null, shown };
 	const show = (eventId: string): Promise<ShowOutcome> => {
 		running.current?.abort();
 		const controller = new AbortController();
@@ -583,6 +603,8 @@ export default function SessionPanel({ host, params }: PanelProps) {
 	const locale = localeOf(t);
 	const sessionId = params.sessionId ?? "";
 	const tabsId = useId();
+	const [root, setRoot] = useState<HTMLDivElement | null>(null);
+	const stacked = stacksDetails(useWidth(root, guessedWidth(host.placement)));
 	const [memory] = useState(() => ViewMemory.of(host));
 	const [traceMemory] = useState<TraceMemory>(() => ({
 		read: () => ({ open: memory.state.open, top: memory.state.top }),
@@ -594,13 +616,13 @@ export default function SessionPanel({ host, params }: PanelProps) {
 	const [timelineAttempt, setTimelineAttempt] = useState(0);
 	const [subagentsAttempt, setSubagentsAttempt] = useState(0);
 	const [insightsAttempt, setInsightsAttempt] = useState(0);
+	const takesFocus = host.placement !== "chatPane";
 	const [navigation, setNavigation] = useState<Navigation>(() =>
-		initialNavigation(memory.state, pendingSessionFocus(sessionId)),
+		initialNavigation(memory.state, takesFocus ? pendingSessionFocus(sessionId) : null),
 	);
 	const [contextMode, setContextMode] = useState<ContextMode>(() => memory.state.context);
 	const [detailTab, setDetailTab] = useState<DetailTab | null>(() => memory.state.detailTab);
 	const [chain, setChain] = useState<number | null>(() => memory.state.chain);
-	const [contextReveal, setContextReveal] = useState(0);
 	const [file, setFile] = useState<string | null>(() => memory.state.file);
 	const { section, mode, selectedId } = navigation;
 	useEffect(() => {
@@ -619,12 +641,8 @@ export default function SessionPanel({ host, params }: PanelProps) {
 		});
 	}, [chain, contextMode, detailTab, file, memory, mode, section, selectedId]);
 	useEffect(() => {
-		const initial = pendingSessionFocus(sessionId);
-		if (initial) settleSessionFocus(sessionId, initial);
-		return onSessionFocus((target) => {
-			const eventId = target === sessionId ? pendingSessionFocus(sessionId) : null;
-			if (!eventId) return;
-			settleSessionFocus(sessionId, eventId);
+		if (!takesFocus) return;
+		return followSessionFocus(sessionId, (eventId) =>
 			setNavigation((current) =>
 				moved(current, {
 					section: "trace",
@@ -634,11 +652,12 @@ export default function SessionPanel({ host, params }: PanelProps) {
 					jump: current.jump + 1,
 					reveal: true,
 				}),
-			);
-		});
-	}, [sessionId]);
+			),
+		);
+	}, [sessionId, takesFocus]);
 	const summary = useSummary(host, sessionId, attempt);
 	const trace = useTrace(host, sessionId, traceAttempt);
+	const cards = useOverview(host, sessionId, section === "overview", traceAttempt);
 	const complete =
 		trace.kind === "ready" && trace.value.complete ? trace.value.meta.revision : null;
 	const seen = navigation.seen;
@@ -731,10 +750,7 @@ export default function SessionPanel({ host, params }: PanelProps) {
 				);
 			},
 			section: (to) => navigate({ section: to }),
-			context: () => {
-				navigate({ section: "cost" });
-				setContextReveal((current) => current + 1);
-			},
+			context: () => navigate({ section: "cost", reveal: true }),
 			chain: setChain,
 			file: setFile,
 			findings: () => openFindings(host, overview?.projectId ?? null),
@@ -742,6 +758,7 @@ export default function SessionPanel({ host, params }: PanelProps) {
 	return (
 		<DetailsContext value={details}>
 			<div
+				ref={setRoot}
 				data-testid="session-insights-session"
 				data-session-id={sessionId}
 				data-placement={host.placement ?? "tab"}
@@ -799,7 +816,10 @@ export default function SessionPanel({ host, params }: PanelProps) {
 					className="flex h-panel-header-row shrink-0 items-center gap-4 overflow-x-auto border-border-default border-b px-12"
 					tabClassName="flex h-full shrink-0 items-center gap-4 px-4"
 				/>
-				{trace.kind === "ready" && trace.value.newer ? (
+				{trace.kind === "ready" &&
+				(trace.value.newer ||
+					(section === "overview" &&
+						readsOtherRevision(cards.query, trace.value.meta.revision))) ? (
 					<div
 						data-testid="session-insights-newer"
 						role="status"
@@ -819,12 +839,9 @@ export default function SessionPanel({ host, params }: PanelProps) {
 				<div {...tabPanel(tabsId, section)} className="min-h-0 flex-1">
 					{section === "overview" ? (
 						<div data-testid="session-insights-overview" className="h-full min-h-0 overflow-y-auto">
-							<OverviewView
-								host={host}
-								sessionId={sessionId}
-								reload={traceAttempt}
-								onOpen={onOverview}
-							/>
+							<div data-session-id={sessionId} className="flex h-full min-h-0 flex-col">
+								<OverviewBody query={cards.query} onRetry={cards.retry} onOpen={onOverview} />
+							</div>
 						</div>
 					) : trace.kind !== "ready" ? (
 						<Unready
@@ -839,6 +856,7 @@ export default function SessionPanel({ host, params }: PanelProps) {
 						<SessionSections
 							host={host}
 							sessionId={sessionId}
+							stacked={stacked}
 							overview={overview}
 							trace={trace.value}
 							navigation={navigation}
@@ -850,12 +868,12 @@ export default function SessionPanel({ host, params }: PanelProps) {
 							ready={ready}
 							memory={traceMemory}
 							contextMode={contextMode}
-							contextReveal={contextReveal}
 							chain={chain}
 							file={file}
 							onPick={onPick}
 							onSelectId={select}
 							onNavigate={navigate}
+							onRevealed={() => setNavigation((current) => ({ ...current, reveal: false }))}
 							onContextMode={setContextMode}
 							onChain={setChain}
 							onFile={setFile}

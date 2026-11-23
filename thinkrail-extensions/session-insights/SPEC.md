@@ -28,7 +28,7 @@ nothing leaves the machine. It is the first consumer of extension queries and pa
   into the asking workspace's artifacts folder, see *Exports*). `session.trace` and
   `event.get` take an optional `childId`, resolved to a transcript in the session's child directories
   (unknown ids answer `found: false`). `sessions.list` takes `fresh: true` (revalidate the index now),
-  and `session.trace` / `sessions.align` a pinned `revision` / `revisions` answered from that snapshot
+  and `session.trace` / `session.overview` / `sessions.align` a pinned `revision` / `revisions` answered from that snapshot
   while the core retains it, with `newerRevision` ([[module-pi-session-insights]] § Paging pins a
   revision); the web half sends `fresh` on the list's mount and *Refresh* and pins every later page.
   While the index is not `ready`, a session it has not reached yet answers `pending` from
@@ -171,13 +171,13 @@ only through host-injected locators.
   columns halve their side padding; the Outcome column keeps its own so it doesn't run into Subagents. A
   figure or header too wide for its column ends in "…" rather than being clipped or overlapping.
 - **Labels in the rows.** The user's labels show as chips under the name (three, then "+N") and a tag
-  button after the compare button opens the labels editor (filled when the session has labels or a note).
+  button after *Open analysis* opens the labels editor (filled when the session has labels or a note).
   The toolbar's label filter (Sessions only) lists the labels in use with
   their sessions; picking one filters the table through the filter bar ("Label: good · N sessions").
 - **Keyboard.** One roving tab stop enters the body (the first row's checkbox); arrows, Home/End (with
   ⌘/Ctrl: the grid's ends) and PageUp/PageDown move between the checkbox, the session name, *Open
   analysis*, the labels button and the figure buttons. Unmodified Space ticks the row from any cell (Enter
-  still acts); Enter on a checkbox opens the comparison when exactly two are ticked. Focusing a figure
+  still acts), once per press — a held key's repeats do nothing; Enter on a checkbox opens the comparison when exactly two are ticked. Focusing a figure
   opens its tooltip. The session name is the row's *Open chat* button (inert, `aria-disabled`, for a
   removed workspace or a session outside every project), and Enter on any figure of an openable row opens
   it too. *Open analysis* (an icon button beside the name) opens the `session` panel for any row, removed
@@ -216,7 +216,9 @@ only through host-injected locators.
 - **Jump to a call.** A finding's session chip opens that session's analysis at its first linked call:
   the list panel records the event in a module the two panels share (`focus.ts`) and opens the session
   tab; a tab already open hears it and remounts its trace on the event, a new one reads it on mount. One
-  tab per session stays one tab per session (a call in the tab params would open a tab per call).
+  tab per session stays one tab per session (a call in the tab params would open a tab per call). A chat
+  pane of the session neither reads nor hears the request: it is meant for the tab being opened, which
+  would otherwise land on its Overview while the pane, mounted earlier, jumped instead.
 - **Findings** (`FindingsView`): cards in four groups (skills; commands and tools; context, cache and cost;
   files and your repeats) in the server's order, with severity counts above. A card: an icon in its
   severity, a title and an explanation filled from fixed templates with the server's numbers, a
@@ -364,8 +366,10 @@ only through host-injected locators.
   (disabled with a reason when the workspace is not open). The row measures itself (a `ResizeObserver`,
   not a container query, because the "⋯" popover renders outside it and must list exactly what the row
   hides): narrower, start and the model go first, then tokens, wall, active and the outcome, then the
-  crumb and the actions; cost and one label chip always stay. In a chat pane *Open chat* is gone and the
-  row ends with ⤢ *Open as tab* and × (`PanelHost.openAsTab` / `closePane`), each saving the view first.
+  crumb and the actions; cost and one label chip always stay. Beside its chat — the host offers
+  `showInChat`, `openAsTab` or `closePane`, which only a pane's host carries — *Open chat* is gone and the
+  row ends with ⤢ *Open as tab* and × (`PanelHost.openAsTab` / `closePane`), each shown when the host has
+  its member and saving the view first.
 - **Sections** (user decision 2026-11-22, option 3A). A tab strip below the header: *Overview*, *Trace*,
   *Subagents*, *Errors*, *Cost & context*, *Files* — the extension's one `Tabs` component (one tab stop,
   ←/→ wrapping, Home/End, the tab panel labelled by the selected tab), as are the call details' tabs, the
@@ -386,7 +390,7 @@ only through host-injected locators.
   loads share one keyed hook (`useKeyedQuery`: a new key aborts the previous load; a `pending` answer is
   asked again with the backoff), its header and data
   hooks live beside it (`Header.tsx`, `hooks.ts`), with the section routing in `navigation.ts`.
-- **Overview** (`OverviewView`, `overview/`): six cards from one `session.overview` answer, two columns
+- **Overview** (`overview/`: `useOverview`, asked while the section shows, and `OverviewBody`): six cards from one `session.overview` answer, two columns
   from 48rem and one below (a container query, so the same view fits a chat pane) — what happened (the
   outcome sentence with turns, calls, failures and recoveries and the wait for the user, the activity
   strip, plan steps with status, failures and spend, skills loaded), why it cost what it did (the cost
@@ -396,19 +400,33 @@ only through host-injected locators.
   turns. Every figure keeps its provenance tooltip; each card has an empty state. A card's link opens its
   section through `OverviewLink` — a plan step or the activity selects its calls in the trace (a removable
   "N calls from the overview" chip), a chain opens that chain's detail, a file that file, Context lands on
-  the context half of *Cost & context* — and *What to do* asks the list for Insights → What to do
+  the context half of *Cost & context* once its two halves have loaded (a later return to the section
+  opens at its top: the reveal is the navigation's, cleared once shown or by any move) — and *What to do* asks the list for Insights → What to do
   (`listIntent.ts`) over the session's own project — this project, or all projects for a session of
   another one, since the card counted the findings there — before `openPanel("sessions")`. It is asked again (1 s, 2 s, then every 5 s) while the
-  session is `pending` or the findings are still being counted, and at once on the session's *Reload*.
+  session is `pending` or the findings are still being counted, each ask pinned to the revision the
+  last answer read, so the cards stay one snapshot while the findings fill in; the server keeps the
+  latest few files' cards by (file, revision), so such a poll reads only the findings again, and stops
+  at a switch-off after each await. Cards of another revision than the trace show the trace's "still
+  being written · Reload" line, and *Reload* asks both again for the current revision.
 - **View state.** Each tab and chat pane keeps the section, trace mode, selection, folds, the trace's top
   row, the context's chart or diff, the details' tab, the picked chain and file through
   `PanelHost.saveViewState` (250 ms after the last change, on unmount and before ⤢ / ×) and restores them
   from `viewState` on mount, so a tab brought back reopens where it was left; a pending focus request
   (`focus.ts`) wins over a restored selection, and a selection made outside the tree clears the saved top
-  row.
-- **Beside the chat** (`host.placement === "chatPane"`, about 500 px wide): the call details stack under
-  the tree and its Gantt (Turns, Timeline and Errors stack too). A pick the user makes in the tree, the
-  turn cards or the timeline asks `event.anchor` and calls `PanelHost.showInChat`, so the chat on the left
+  row. Both panels read a saved state field by field (`parseViewState`, `readListViewState`), each
+  malformed or unknown field falling back alone: the host keeps the value for the page's lifetime, across
+  an update of the extension that may rename a section or option, so a value an older web half saved must
+  not reset the rest.
+- **Narrow panels.** Below 900 px of panel width (beside the views the details would get under 290 px) the
+  call details stack under the tree and its Gantt, as Turns, Timeline and Errors stack theirs — one
+  `DetailsSplit`, remounted when it turns so each direction starts from its own sizes. The panel measures
+  its root (a `ResizeObserver`, as the header does); `placement` is only the guess until the first
+  measure (a chat pane narrow, a tab wide), so a widened pane gets the details beside its views and a
+  narrow centre split gets them under.
+- **Beside the chat** (a pane, about 500 px wide). A pick the user makes in the tree, the
+  turn cards or the timeline asks `event.anchor` and calls `PanelHost.showInChat` (offered only beside the
+  chat), so the chat on the left
   opens the folds around that call, scrolls it into view and highlights it without taking focus; a later
   pick aborts an earlier ask, the fallback selection on mount is no pick, and subagent events have no place
   in the parent chat. The details' *Open in chat* reads *Show in chat* there, then "shown at left".

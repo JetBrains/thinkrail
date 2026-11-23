@@ -3246,6 +3246,15 @@ export interface SessionOverviewCards {
 	digests: DigestProgress;
 }
 
+export interface SessionOverviewParams {
+	sessionId: string;
+	/**
+	 * An earlier answer's `overview.revision`: the cards of that snapshot while the host retains it (else
+	 * of the current one, whose revision then differs), the findings read again.
+	 */
+	revision?: string;
+}
+
 export interface SessionOverviewResult {
 	apiVersion: number;
 	found: boolean;

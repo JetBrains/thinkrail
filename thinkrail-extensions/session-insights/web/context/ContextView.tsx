@@ -17,6 +17,7 @@ import {
 	formatTokens,
 } from "../format";
 import { StatFigure } from "../StatFigure";
+import type { ContextMode } from "../session/viewState";
 import { Swatch } from "../trace/Legend";
 import type { TraceModel } from "../trace/model";
 import { ContextChart } from "./ContextChart";
@@ -24,7 +25,6 @@ import { causeText } from "./causes";
 import { CACHE_SWATCH, CATEGORIES, CATEGORY_LABEL, CATEGORY_SWATCH } from "./look";
 import { RequestDiffView } from "./RequestDiffView";
 
-export type ContextMode = "chart" | "diff";
 const MISSES_SHOWN = 40;
 const GREW_SHOWN = 7;
 

@@ -17,27 +17,53 @@ import {
 	type SessionFiles,
 	type SessionOutcome,
 	type SessionOverviewCards,
+	type SessionOverviewParams,
 	type SessionPlan,
 	type ToolEvent,
 	type TraceEvent,
 } from "./core.ts";
 import { buildSessionCost } from "./costWhy.ts";
 import { buildSessionFiles } from "./files.ts";
+import { sliceYielder } from "./lines.ts";
+import { parseSessionParams } from "./list.ts";
 import { labelOf } from "./redact.ts";
 import { buildSessionTimeline, type ContextWindowLookup } from "./timeline.ts";
+import { isRecord } from "./totals.ts";
 import type { BuiltTrace } from "./trace.ts";
+import { parseRevision } from "./traceQueries.ts";
 import { buildSessionSubagents, childActivity, type SubagentsInput, waveDrafts } from "./waves.ts";
 
-export interface SessionOverviewInput {
-	sessionId: string;
+/** The Overview's cards of one trace revision: what an answer adds per ask (the outcome, the findings) left out. */
+export type OverviewCards = Omit<SessionOverviewCards, "findings" | "digests">;
+
+export interface OverviewCardsInput {
 	trace: BuiltTrace;
-	/** The embedder's outcome of the session. */
-	outcome: SessionOutcome | null;
 	contextWindow?: ContextWindowLookup;
 	/** What the subagent waves are built from; their overview is built only when the session spawned any. */
 	subagents: SubagentsInput | null;
+	/** Once aborted, the build stops at its next stage and rejects with the reason. */
+	signal?: AbortSignal;
+	/** A stage that ran this long yields to the event loop before the next one (8 ms). */
+	sliceMs?: number;
+}
+
+/** What one answer adds to its revision's cards. */
+export interface OverviewAnswer {
+	sessionId: string;
+	/** The embedder's outcome of the session. */
+	outcome: SessionOutcome | null;
 	/** `findings.list` over the session's scope. */
 	findings: FindingsListResult;
+}
+
+const SLICE_MS = 8;
+
+/** `{ sessionId, revision? }`: a poll pins the revision its first answer carried. */
+export function parseOverviewParams(value: unknown): SessionOverviewParams {
+	const method = "session.overview";
+	const { sessionId } = parseSessionParams(value, method);
+	const revision = parseRevision(isRecord(value) ? value.revision : undefined, method);
+	return revision === undefined ? { sessionId } : { sessionId, revision };
 }
 
 const RECOVERED: ReadonlySet<RecoveryChain["outcome"]> = new Set([
@@ -227,31 +253,40 @@ function findings(list: FindingsListResult, sessionId: string): OverviewFinding[
 }
 
 /**
- * The Overview's cards from one trace snapshot: what happened, why it cost what it did, errors, context
- * and cache, files, subagents and turns, composed from the sections' own builders, plus the scope's
- * findings that link the session once its digests are built.
+ * The Overview's cards of one trace snapshot: what happened, why it cost what it did, errors, context
+ * and cache, files, subagents and turns, composed from the sections' own builders in stages that yield
+ * like the queries do, so an embedder can keep them per revision and answer every ask from them.
  */
-export async function buildSessionOverview(
-	input: SessionOverviewInput,
-): Promise<SessionOverviewCards> {
+export async function buildOverviewCards(input: OverviewCardsInput): Promise<OverviewCards> {
 	const { trace } = input;
 	const { events, meta } = trace;
 	const options = input.contextWindow ? { contextWindow: input.contextWindow } : {};
+	const yielder = sliceYielder(input.sliceMs ?? SLICE_MS, undefined, input.signal);
+	const stage = async () => {
+		if (yielder.due()) await yielder.pause();
+	};
 	const analysis = buildSessionAnalysis(trace, []);
+	await stage();
 	const timeline = await buildSessionTimeline(trace, options);
+	await stage();
 	const spend = await buildSessionCost(trace, options);
+	await stage();
 	const window = await buildContextView(trace, options);
+	await stage();
 	const subagents =
 		input.subagents && waveDrafts(trace).length > 0
 			? await buildSessionSubagents(input.subagents)
 			: null;
+	await stage();
+	const sessionFiles = buildSessionFiles(trace);
+	await stage();
 	const tools = events.filter((event): event is ToolEvent => event.kind === "tool");
 	const toolChains = analysis.chains.filter((chain) => chain.kind === "tool");
 	const userWaits = timeline.turns.map((turn) => turn.userWait.value ?? 0);
 	return {
 		revision: meta.revision,
 		happened: {
-			outcome: input.outcome,
+			outcome: null,
 			turns: counted(timeline.turns.length),
 			llmCalls: timeline.llmCalls,
 			toolCalls: counted(tools.length),
@@ -270,7 +305,7 @@ export async function buildSessionOverview(
 		cost: cost(spend),
 		errors: errors(trace, analysis),
 		context: context(window),
-		files: files(buildSessionFiles(trace)),
+		files: files(sessionFiles),
 		subagents: {
 			count: counted(subagents?.runs.length ?? 0),
 			overview: subagents?.overview ?? null,
@@ -279,7 +314,18 @@ export async function buildSessionOverview(
 			prompts: counted(timeline.turns.filter((turn) => turn.trigger === "prompt").length),
 			asks: counted(tools.filter((event) => event.family === "ask").length),
 		},
-		findings: findings(input.findings, input.sessionId),
-		digests: input.findings.digests,
+	};
+}
+
+/** One answer: its revision's cards with the session's outcome now and the scope's findings that link it. */
+export function composeOverview(
+	cards: OverviewCards,
+	answer: OverviewAnswer,
+): SessionOverviewCards {
+	return {
+		...cards,
+		happened: { ...cards.happened, outcome: answer.outcome },
+		findings: findings(answer.findings, answer.sessionId),
+		digests: answer.findings.digests,
 	};
 }
