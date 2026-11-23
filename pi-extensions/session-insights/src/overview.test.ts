@@ -261,6 +261,32 @@ describe("session.overview", () => {
 		expect(overview.happened.turns.value).toBe(1);
 	});
 
+	test("a retry that never ran reads as missing, not as a success", async () => {
+		const builder = new TranscriptBuilder({ id: "retry-stopped", cwd: "/work/a", start: T0 });
+		builder.user("Run the parser tests");
+		builder.assistant({
+			toolCalls: [{ id: "b1", name: "bash", arguments: { command: "bun test parser" } }],
+		});
+		builder.toolResult({
+			toolCallId: "b1",
+			toolName: "bash",
+			isError: true,
+			text: "1 fail\nCommand exited with code 1",
+		});
+		builder.assistant({
+			toolCalls: [{ id: "b2", name: "bash", arguments: { command: "bun test parser --bail" } }],
+			stopReason: "aborted",
+		});
+		const file = writeSession(root, "retry-stopped", builder);
+		const { overview } = await overviewOf(file, "retry-stopped");
+		const chain = overview?.errors?.chain;
+		expect(chain?.outcome).toBe("unfinished");
+		expect(chain?.attempts.map((attempt) => [attempt.failed, attempt.missing ?? false])).toEqual([
+			[true, false],
+			[false, true],
+		]);
+	});
+
 	test("a session without failures, plan or files has no errors card and empty cards", async () => {
 		const builder = new TranscriptBuilder({ id: "ov-quiet", cwd: "/work/a", start: T0 });
 		builder.user("What time is it?");

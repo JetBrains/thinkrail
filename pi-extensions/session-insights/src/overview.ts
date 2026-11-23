@@ -101,6 +101,7 @@ function notableChain(analysis: SessionAnalysis, byId: ReadonlyMap<string, Trace
 					event?.kind === "tool" ? event.tool : event?.kind === "llm" ? event.model : chain.name,
 				label: labelOf(event?.label ?? "", OVERVIEW_RULES.labelChars),
 				failed: event?.error === true,
+				...(event?.kind === "tool" && event.missing === true ? { missing: true as const } : {}),
 			};
 		}),
 		between: chain.between.map((ids) => ids.length),

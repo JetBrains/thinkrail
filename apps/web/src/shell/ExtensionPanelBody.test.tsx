@@ -12,7 +12,7 @@ import { renderToReadableStream, renderToStaticMarkup } from "react-dom/server";
 import { type ChatPaneSlot, ChatPaneSplit } from "../chat/ChatPaneSplit";
 import type { RegisteredPanel } from "../extensions";
 import { layoutResourceIdentity } from "../lib";
-import { chatPaneViewKey, selectPanelViewState, useAppStore } from "../store";
+import { chatPaneViewKey, selectPanelViewEpoch, selectPanelViewState, useAppStore } from "../store";
 import {
 	chatPaneShown,
 	ExtensionPanelFrame,
@@ -388,5 +388,41 @@ describe("the pane beside a chat", () => {
 			section: "files",
 			scroll: 120,
 		});
+	});
+
+	test("a view handed over to a mounted tab wins: the panel remounts on it and the old one saves nothing more", async () => {
+		const tabKey = layoutResourceIdentity({
+			kind: "extension",
+			extension: "insights",
+			panel: "beside",
+			params: { sessionId: "s2" },
+		});
+		const body = (
+			<GatedExtensionPanel
+				workspaceId="w1"
+				gate={gate()}
+				params={{ sessionId: "s2" }}
+				viewKey={tabKey}
+				resetKeys={["w1", "tab"]}
+			/>
+		);
+		await html(body);
+		const mounted = lastHost;
+		mounted?.saveViewState?.({ section: "trace" });
+		expect(selectPanelViewEpoch(useAppStore.getState(), "w1", tabKey)).toBe(0);
+
+		useAppStore.getState().transferPanelViewState("w1", tabKey, { section: "files" });
+		expect(selectPanelViewEpoch(useAppStore.getState(), "w1", tabKey)).toBe(1);
+		mounted?.saveViewState?.({ section: "trace" });
+		expect(selectPanelViewState(useAppStore.getState(), "w1", tabKey)).toEqual({
+			section: "files",
+		});
+
+		expect(await html(body)).toContain(viewAttr({ section: "files" }));
+		lastHost?.saveViewState?.({ section: "errors" });
+		expect(selectPanelViewState(useAppStore.getState(), "w1", tabKey)).toEqual({
+			section: "errors",
+		});
+		expect(selectPanelViewEpoch(useAppStore.getState(), "w1", tabKey)).toBe(1);
 	});
 });

@@ -392,7 +392,7 @@ only through host-injected locators.
   strip, plan steps with status, failures and spend, skills loaded), why it cost what it did (the cost
   section's one-line diagnosis template, shared from `cost/diagnosis.ts`, its evidence chips and a
   per-call bar chart, then this session's findings as one sentence each), errors (the highlighted chain's
-  attempts and error line), context and cache, files (up to five changed or failed), and subagents and
+  attempts — one that never ran reads "no result", as in the errors section — and error line), context and cache, files (up to five changed or failed), and subagents and
   turns. Every figure keeps its provenance tooltip; each card has an empty state. A card's link opens its
   section through `OverviewLink` — a plan step or the activity selects its calls in the trace (a removable
   "N calls from the overview" chip), a chain opens that chain's detail, a file that file, Context lands on

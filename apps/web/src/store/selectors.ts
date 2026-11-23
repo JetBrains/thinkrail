@@ -72,6 +72,7 @@ import type {
 	EditorTab,
 	FilesTreeView,
 	MarkedUnread,
+	PanelViewEntry,
 	PendingMarkUnread,
 	RouteChatTarget,
 	SessionRuntime,
@@ -785,11 +786,20 @@ export function selectChatPane(
 }
 
 export function selectPanelViewState(
-	state: { panelViewStatesByWorkspace: Record<string, Record<string, unknown>> },
+	state: { panelViewStatesByWorkspace: Record<string, Record<string, PanelViewEntry>> },
 	workspaceId: string,
 	key: string,
 ): unknown {
-	return state.panelViewStatesByWorkspace[workspaceId]?.[key];
+	return state.panelViewStatesByWorkspace[workspaceId]?.[key]?.state;
+}
+
+/** How many times another placement handed this panel its view; a mounted panel remounts when it moves. */
+export function selectPanelViewEpoch(
+	state: { panelViewStatesByWorkspace: Record<string, Record<string, PanelViewEntry>> },
+	workspaceId: string,
+	key: string,
+): number {
+	return state.panelViewStatesByWorkspace[workspaceId]?.[key]?.epoch ?? 0;
 }
 
 export function selectAttentionCenterTab(

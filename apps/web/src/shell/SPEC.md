@@ -188,8 +188,8 @@ width, and the stored pane returns with the extension. Its `PanelHost` has `plac
 the pane members: `showInChat(at)` sets `chatLocationRequest` for this chat with `focus: false` — the
 chat is already shown, so nothing navigates and focus stays in the pane; `openAsTab()`
 (`moveChatPaneToTab`) opens the tab the chat action's tab path opens (same params, the chat's title),
-copies the pane's saved view state to that tab's key first, then closes the pane; `closePane()` closes
-it. A tab's host has `placement: "tab"` and no pane members.
+hands the pane's saved view state to that tab's key first (`transferPanelViewState`), then closes the
+pane; `closePane()` closes it. A tab's host has `placement: "tab"` and no pane members.
 
 **Panel view state** lives in the store, runtime only (not persisted across reloads): one JSON-like
 value per extension tab (keyed by the tab's resource identity — extension, panel and params, the tuple
@@ -197,7 +197,10 @@ its doc id is minted from, so a placement alias cannot split it) and per chat pa
 chat, extension, panel), both under the workspace. The host reads it once, in a `useState`
 initializer, when the panel mounts — a tab brought back remounts and restores it — and
 `saveViewState` writes through `savePanelViewState`, which no component subscribes to, so saving
-re-renders nothing. Closing an extension tab drops its value, deleting a chat drops its pane and the
+re-renders nothing. A view handed over by *Open as tab* bumps the key's epoch: the one subscriber, the
+panel frame's `selectPanelViewEpoch`, remounts a destination tab that is already mounted (visible in
+another group) on the handed-over view, and the host it replaced saves nothing more (each host saves
+only while the epoch it mounted with is current), so its unmount cannot write back the old view. Closing an extension tab drops its value, deleting a chat drops its pane and the
 pane's values, and removing a workspace drops all of them; a closed chat keeps its pane, so reopening
 it shows the pane again.
 

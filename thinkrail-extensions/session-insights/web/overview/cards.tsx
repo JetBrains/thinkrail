@@ -782,16 +782,21 @@ export function ErrorsCard({ cards, sources, onOpen }: CardProps) {
 										<span
 											data-testid="overview-attempt"
 											data-failed={attempt.failed}
+											data-missing={attempt.missing ? "true" : undefined}
 											title={attempt.label}
 											className={cn(
 												"inline-flex items-center gap-2 rounded-sm border px-4 tr-code-text-small",
-												attempt.failed
-													? "border-feedback-error-muted text-feedback-error"
-													: "border-feedback-success-muted text-feedback-success",
+												attempt.missing
+													? "border-border-default border-dashed text-text-muted"
+													: attempt.failed
+														? "border-feedback-error-muted text-feedback-error"
+														: "border-feedback-success-muted text-feedback-success",
 											)}
 										>
 											{`#${at + 1} ${attempt.name ?? ""}`}
-											{attempt.failed ? (
+											{attempt.missing ? (
+												<span>{t("sessionInsights.trace.noResult")}</span>
+											) : attempt.failed ? (
 												<RiCloseLine aria-hidden className="size-12" />
 											) : (
 												<RiCheckLine aria-hidden className="size-12" />

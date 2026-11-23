@@ -3133,6 +3133,8 @@ export interface OverviewAttempt {
 	/** One redacted line, cut to `OVERVIEW_RULES.labelChars`. */
 	label: string;
 	failed: boolean;
+	/** No recorded result: the attempt never ran, so it neither failed nor succeeded. */
+	missing?: true;
 }
 
 export interface OverviewChain {

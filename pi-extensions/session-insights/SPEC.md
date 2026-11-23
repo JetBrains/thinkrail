@@ -742,7 +742,8 @@ post-export secret check, redaction, and the provenance of every figure it repor
   cards show (`OVERVIEW_RULES`: twelve plan steps, five files, 120 per-call bars — past that each bar is
   the costliest of its run of calls). Recovered failures count the failed attempts of chains that
   recovered and their time sums those chains; the highlighted chain is a tool chain first, then the one
-  with most attempts, then the earliest. Plan steps leave out removed ones and keep the plan's numbering.
+  with most attempts, then the earliest; an attempt without a recorded result is `missing`, neither failed
+  nor succeeded. Plan steps leave out removed ones and keep the plan's numbering.
   Its findings are `findings.list` over the session's project, keeping those that link this session and
   are not hidden; until the index and the project's digests are ready they are `null` with the
   `DigestProgress`, so the cards never wait on the statistics.

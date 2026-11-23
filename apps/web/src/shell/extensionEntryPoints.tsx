@@ -49,7 +49,7 @@ function openChatPanelTab(
 	const host = state.activeWorkspaceId ?? chat.id;
 	if (!state.activeWorkspaceId) state.activateWorkspace(chat);
 	if (viewState !== undefined) {
-		state.savePanelViewState(
+		state.transferPanelViewState(
 			host,
 			layoutResourceIdentity({
 				kind: "extension",

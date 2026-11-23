@@ -264,6 +264,36 @@ describe("the overview's cards", () => {
 		expect(found.filter((link) => link.to === "trace" && "events" in link)).toHaveLength(1);
 	});
 
+	test("a retry that never ran reads as no result, never as a success", () => {
+		const base = cards();
+		const stopped = base.errors?.chain
+			? cards({
+					errors: {
+						...base.errors,
+						chain: {
+							...base.errors.chain,
+							outcome: "unfinished",
+							attempts: [
+								{ eventId: "tool:a1:0", name: "bash", label: "bun test", failed: true },
+								{
+									eventId: "tool:a3:0",
+									name: "bash",
+									label: "bun test --bail",
+									failed: false,
+									missing: true,
+								},
+							],
+						},
+					},
+				})
+			: base;
+		const markup = html(<OverviewCards result={result(stopped)} onOpen={noop} />);
+		expect(markup).toMatch(
+			/data-testid="overview-attempt"[^>]*data-missing="true"[^>]*>#2 bash<span>no result/,
+		);
+		expect(markup.match(/data-missing="true"/g)).toHaveLength(1);
+	});
+
 	test("a link calls onOpen with its target", () => {
 		const opened: OverviewLink[] = [];
 		const link: OverviewLink = { to: "errors", chain: 3 };

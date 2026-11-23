@@ -30,6 +30,7 @@ import {
 	chatPaneViewKey,
 	SettingsSection,
 	selectChatPane,
+	selectPanelViewEpoch,
 	selectPanelViewState,
 	selectWorkspaceById,
 	useAppStore,
@@ -197,9 +198,13 @@ function LoadedExtensionPanel({
 }: LoadedPanelProps) {
 	const extension = panel.extension;
 	const apiVersion = entry.apiVersion;
-	const [viewState] = useState(() =>
-		selectPanelViewState(useAppStore.getState(), workspaceId, viewKey),
-	);
+	const [{ viewState, epoch }] = useState(() => {
+		const current = useAppStore.getState();
+		return {
+			viewState: selectPanelViewState(current, workspaceId, viewKey),
+			epoch: selectPanelViewEpoch(current, workspaceId, viewKey),
+		};
+	});
 	const host = useMemo(
 		() =>
 			createPanelHost({
@@ -240,10 +245,23 @@ function LoadedExtensionPanel({
 				hostApiVersion: apiVersion,
 				pane,
 				viewState,
-				saveViewState: (state) =>
-					useAppStore.getState().savePanelViewState(workspaceId, viewKey, state),
+				saveViewState: (state) => {
+					const current = useAppStore.getState();
+					if (selectPanelViewEpoch(current, workspaceId, viewKey) !== epoch) return;
+					current.savePanelViewState(workspaceId, viewKey, state);
+				},
 			}),
-		[apiVersion, extension, pane, projectId, protocolVersion, viewKey, viewState, workspaceId],
+		[
+			apiVersion,
+			epoch,
+			extension,
+			pane,
+			projectId,
+			protocolVersion,
+			viewKey,
+			viewState,
+			workspaceId,
+		],
 	);
 	return (
 		<ExtensionPanelFrame
@@ -311,9 +329,11 @@ export function GatedExtensionPanel({
 }) {
 	const t = useT();
 	const { state, projectId } = gate;
+	const epoch = useAppStore((current) => selectPanelViewEpoch(current, workspaceId, viewKey));
 	if (state.kind === "ready" && projectId !== null) {
 		return (
 			<LoadedExtensionPanel
+				key={epoch}
 				workspaceId={workspaceId}
 				projectId={projectId}
 				panel={state.panel}

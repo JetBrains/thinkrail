@@ -561,6 +561,12 @@ export interface ChatPane extends ChatPanePanel {
 	readonly width: number | null;
 }
 
+/** A panel's saved view; `epoch` counts the times another placement handed it over (`transferPanelViewState`). */
+export interface PanelViewEntry {
+	readonly state: unknown;
+	readonly epoch: number;
+}
+
 export function chatPaneViewKey(sessionId: string, extension: string, panel: string): string {
 	return tupleKey("chat-pane", sessionId, extension, panel);
 }
@@ -1484,8 +1490,10 @@ interface AppState {
 	openChatPane: (workspaceId: string, sessionId: string, panel: ChatPanePanel) => void;
 	closeChatPane: (workspaceId: string, sessionId: string) => void;
 	setChatPaneWidth: (workspaceId: string, sessionId: string, width: number) => void;
-	panelViewStatesByWorkspace: Record<string, Record<string, unknown>>;
+	panelViewStatesByWorkspace: Record<string, Record<string, PanelViewEntry>>;
 	savePanelViewState: (workspaceId: string, key: string, state: unknown) => void;
+	/** Saves a view another placement hands over and bumps its epoch, so a mounted panel remounts on it. */
+	transferPanelViewState: (workspaceId: string, key: string, state: unknown) => void;
 	noteFsChanged: (payload: WorkspaceFsChangedPayload) => void;
 	turnsByWorkspace: Record<string, TurnChangeSet[]>;
 	setWorkspaceTurns: (
@@ -3784,10 +3792,24 @@ export const useAppStore = create<AppState>((set, get) => ({
 			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const current = s.panelViewStatesByWorkspace[workspaceId] ?? {};
 			if (state === undefined && !Object.hasOwn(current, key)) return {};
+			const epoch = current[key]?.epoch ?? 0;
 			return {
 				panelViewStatesByWorkspace: {
 					...s.panelViewStatesByWorkspace,
-					[workspaceId]: state === undefined ? omitKey(current, key) : { ...current, [key]: state },
+					[workspaceId]:
+						state === undefined ? omitKey(current, key) : { ...current, [key]: { state, epoch } },
+				},
+			};
+		}),
+	transferPanelViewState: (workspaceId, key, state) =>
+		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
+			const current = s.panelViewStatesByWorkspace[workspaceId] ?? {};
+			const epoch = (current[key]?.epoch ?? 0) + 1;
+			return {
+				panelViewStatesByWorkspace: {
+					...s.panelViewStatesByWorkspace,
+					[workspaceId]: { ...current, [key]: { state, epoch } },
 				},
 			};
 		}),

@@ -875,9 +875,11 @@ width, **`closeChatPane`** closes it keeping the panel and width, **`setChatPane
 width; read through **`selectChatPane`**, and **`selectChatPlacedInCenter`** says whether a chat has a tab
 in the active workspace's center (where a pane can open, [[submodule-web-shell]] § Extension panels).
 **`panelViewStatesByWorkspace`** is the extension panels' view state, one JSON-like value per tab
-(its resource identity) or chat pane (`chatPaneViewKey`), written by **`savePanelViewState`** (an
-`undefined` value forgets the key) and read only through `getState()` (`selectPanelViewState`) when a
-panel mounts — no component subscribes, so a save re-renders nothing. Both are runtime only: `closeTab`
+(its resource identity) or chat pane (`chatPaneViewKey`), each with an `epoch`, written by
+**`savePanelViewState`** (an `undefined` value forgets the key; the epoch stays) and read through
+`getState()` (`selectPanelViewState`) when a panel mounts — a save re-renders nothing.
+**`transferPanelViewState`** writes a view another placement hands over and bumps the epoch, the one
+value a component subscribes to (`selectPanelViewEpoch`), so a mounted panel remounts on it. Both are runtime only: `closeTab`
 drops an extension tab's value, deleting a chat (`withoutChat`) drops its pane and the pane's values, and
 `applyWorkspaceRemoved` drops the workspace's entries. The transient **`chatLocationRequest`** — the
   history-search jump, an extension panel's *Open in chat* (`PanelHost.openChat` with an anchor) and a
