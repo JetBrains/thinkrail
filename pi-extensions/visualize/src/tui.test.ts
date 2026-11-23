@@ -19,7 +19,7 @@ const OVER_SIZE_CAP = `flowchart LR\n${Array.from({ length: 140 }, (_, i) => `  
 
 beforeAll(() => initTheme("dark", false));
 
-function plain(lines: string[]): string[] {
+function plain(lines: readonly string[]): string[] {
 	return lines.map((line) => stripTerminalSequences(line).trimEnd());
 }
 
