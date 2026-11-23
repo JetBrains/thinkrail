@@ -30,7 +30,9 @@ release notes or an upstream issue's status. The upgrade's verification summary 
 removed, retained with evidence, or changed, and the affected tests run. A new workaround adds an entry
 here and rationale in its owning spec; its removal deletes both the workaround and its entry. A
 regression test that guards an adaptation stays when the adaptation goes if it still states the
-product contract (it then guards upstream's behavior instead).
+product contract (it then guards upstream's behavior instead). The step-by-step upgrade procedure
+lives in the repo skill `.agents/skills/upgrading-core-dependencies` (`electrobun.md`); this registry
+stays the list of what it re-checks.
 
 ## Window and shell
 

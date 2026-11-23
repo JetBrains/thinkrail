@@ -77,6 +77,8 @@ entry. A parity failure is evidence of drift, not permission to weaken the test.
 A public SDK replacement must preserve session isolation, cancellation, project trust, durable
 transcripts, and compiled/desktop behavior before the host implementation is removed. Importing a
 private dist path in production is not a replacement; such imports remain confined to parity tests.
+The step-by-step upgrade procedure lives in the repo skill
+`.agents/skills/upgrading-core-dependencies` (`pi.md`); this registry stays the list of what it re-checks.
 
 ## MCP adaptations
 
