@@ -1623,7 +1623,6 @@ export type ExtensionSettingValues = Record<string, Record<string, boolean>>;
 export interface ExtensionSettingDescriptor {
 	key: string;
 	default: boolean;
-	/** An installed extension's own untranslated copy; a built-in's copy is the app's locale keys. */
 	title?: string;
 	description?: string;
 }
@@ -1631,10 +1630,8 @@ export interface ExtensionSettingDescriptor {
 /** Absent from a host below `INSTALLED_EXTENSIONS_PROTOCOL_VERSION`, where every entry is built in. */
 export type ExtensionKind = "builtin" | "installed";
 
-/** `loaded` also for a web-only extension; `failed` and `incompatible` carry the reason in `error`. */
 export type InstalledExtensionState = "loaded" | "failed" | "incompatible";
 
-/** Host-relative URLs of an installed extension's web half: `/extensions/<name>/<token>/<file>`. */
 export interface ExtensionWebHalf {
 	url: string;
 	styles?: string;
@@ -1655,15 +1652,10 @@ export interface ExtensionCatalogEntry {
 	/** The server half's payload version for its `extension.query` methods; absent when undeclared or before `EXTENSION_QUERY_PROTOCOL_VERSION`. */
 	apiVersion?: number;
 	kind?: ExtensionKind;
-	/** Installed only: the declaration in `extensions.json`, the target of `extensions.remove` / `extensions.update`. */
 	source?: string;
-	/** Installed only: the package's `version`. */
 	version?: string;
-	/** Installed only. */
 	state?: InstalledExtensionState;
-	/** Installed only: why it did not load. */
 	error?: string;
-	/** Installed only: present when it is loaded, compatible and has a web half. */
 	web?: ExtensionWebHalf;
 	/** Installed only, from `EXTENSION_BROWSE_PROTOCOL_VERSION`: the manifest's `api`, when it was read. */
 	api?: string;
@@ -1678,10 +1670,8 @@ export interface ExtensionQueryParams {
 	params?: unknown;
 }
 
-/** Which halves a catalog listing declares. */
 export type ExtensionHalf = "server" | "web";
 
-/** One listing of the community catalog (`catalog.json`, `schema: 1`), as the host validated it. */
 export interface ExtensionListing {
 	name: string;
 	version: string;
@@ -1690,14 +1680,12 @@ export interface ExtensionListing {
 	author?: string;
 	api: string;
 	halves: ExtensionHalf[];
-	/** Always `npm:<name>`. */
 	install: string;
 	npm: string;
 	repository?: string;
 	publishedAt: string;
 }
 
-/** `extensions.browse`'s entry: a listing plus whether an installed extension already carries its name. */
 export interface ExtensionBrowseEntry extends ExtensionListing {
 	installed: boolean;
 }
@@ -1707,13 +1695,8 @@ export interface ExtensionBrowseResult {
 	extensions: ExtensionBrowseEntry[];
 }
 
-/**
- * `packages.install`'s result. From `INSTALLED_EXTENSIONS_PROTOCOL_VERSION` `installed` names the kind;
- * an extension is still shaped as a package row (no resources, user scope) so an older client reads it.
- */
 export interface PackageInstallResult extends PiPackageSummary {
 	installed?: "package" | "extension";
-	/** The installed extension's `extension.list` entry when `installed` is `extension`. */
 	extension?: ExtensionCatalogEntry;
 }
 

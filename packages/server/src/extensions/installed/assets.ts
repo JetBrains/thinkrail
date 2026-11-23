@@ -16,7 +16,6 @@ function statKey(path: string): string {
 	return `${info.mtimeMs}:${info.size}`;
 }
 
-/** The version segment: the package version plus a hash of the served files' stats, so an edit is a new URL. */
 export function webToken(record: InstalledExtensionRecord): string | undefined {
 	const { root, manifest } = record;
 	if (!root || !manifest?.web) return undefined;
@@ -64,7 +63,6 @@ function staysInside(root: string, file: string): boolean {
 	}
 }
 
-/** The file a `/extensions/<name>/<token>/<file>` path names: only a loaded extension's `web` or `styles`. */
 export function resolveExtensionAsset(
 	records: readonly InstalledExtensionRecord[],
 	pathname: string,

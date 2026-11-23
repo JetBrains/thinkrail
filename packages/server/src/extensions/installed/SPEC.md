@@ -72,7 +72,8 @@ A folder source is never copied: it loads from where it is, and nothing under it
   the process may still hold a loader built from it — a chat mid-turn keeps the old factories, their lazy
   imports and skill files until its end-of-turn rebuild. **Only a clearly abandoned folder goes:** one
   whose newest mtime — the folder's own and its direct entries' (`npm/`, `git/`, which the installer
-  creates and fills) — is at least a day old (`SWEEP_MIN_AGE_MS`). Several hosts may share one data dir
+  creates and fills) — is at least a day old (`SWEEP_MIN_AGE_MS`; a folder whose mtimes cannot be read
+  counts as changed now, so it is kept). Several hosts may share one data dir
   uncoordinated ([[submodule-server-host]] § Get right), and another host's in-progress install is in neither
   the shared `installs.json` nor this process's pending set; a day is far beyond any install. An old
   superseded folder another live host still loads can still go; that host re-reads `installs.json` at

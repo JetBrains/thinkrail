@@ -10,7 +10,6 @@ function plain(status: number, text: string, headers?: Record<string, string>): 
 	return new Response(text, { status, ...(headers ? { headers } : {}) });
 }
 
-/** `GET /extensions/<name>/<token>/<file>`: only a loaded installed extension's `web` or `styles` file. */
 export function serveExtensionAsset(
 	req: Request,
 	pathname: string,

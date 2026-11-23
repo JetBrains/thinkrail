@@ -63,7 +63,6 @@ export function sourceDisplayName(raw: string): string {
 	return last ?? source;
 }
 
-/** What Browse knows about a listing when it opens the dialog at its confirm step. */
 export interface InstallPreset {
 	source: string;
 	title: string;
@@ -80,7 +79,6 @@ export type InstallStep =
 	| { kind: "scopeUnsupported"; name: string }
 	| { kind: "failed"; name: string; message: string; outcome: InstallFailureOutcome };
 
-/** The extension a result installed, when the host says it installed one. */
 export function installedExtension(
 	result: PackageInstallResult,
 ): ExtensionCatalogEntry | undefined {
@@ -490,7 +488,6 @@ export interface InstallPackageDialogProps {
 	/** `null` when no workspace is active: the repository scope is then unavailable. */
 	workspaceId: string | null;
 	install: (request: { source: string; scope: PiPackageScope }) => Promise<PackageInstallResult>;
-	/** Opens at the confirm step for this source, installing globally; read when the dialog mounts. */
 	preset?: InstallPreset | null | undefined;
 	extensionsSupported: boolean;
 }

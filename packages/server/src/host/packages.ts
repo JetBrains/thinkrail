@@ -47,7 +47,6 @@ export function packagesList(params: {
 	});
 }
 
-/** A confirmed install turns the package or extension on: it leaves its switch list before the row returns. */
 export async function packagesInstall(params: {
 	source: string;
 	scope: PiPackageScope;

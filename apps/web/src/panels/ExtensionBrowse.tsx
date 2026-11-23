@@ -41,7 +41,6 @@ const FAILURE_COPY: Partial<Record<WsErrorCode, MessageKey>> = {
 const INPUT_CLASS =
 	"h-32 w-full rounded-sm border border-control-border-default bg-control-bg pr-8 pl-24 tr-text-ui text-text-default transition-colors placeholder:text-text-muted focus:border-control-border-active focus-visible:focus-ring";
 
-/** Case-insensitive match on what a card shows: title, name, description and author. */
 export function matchesBrowseQuery(entry: ExtensionBrowseEntry, query: string): boolean {
 	const needle = query.trim().toLowerCase();
 	if (!needle) return true;

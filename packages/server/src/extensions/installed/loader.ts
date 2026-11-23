@@ -29,14 +29,12 @@ function sink(): Sink {
 	return map;
 }
 
-/** How long extension code may take to load: an installed server half here, a user's pi extensions in `agent`. */
 export const EXTENSION_LOAD_TIMEOUT_MS = 10_000;
 
 function loadTimeoutError(timeoutMs: number): Error {
 	return new Error(`the server entry did not finish loading within ${timeoutMs / 1000} s`);
 }
 
-/** Settles like `task`, or rejects with the load timeout; a late settle of `task` is observed, never thrown. */
 function settleWithin<T>(task: Promise<T>, timeoutMs: number): Promise<T> {
 	return new Promise<T>((resolve, reject) => {
 		const timer = setTimeout(() => reject(loadTimeoutError(timeoutMs)), timeoutMs);
@@ -55,11 +53,6 @@ function settleWithin<T>(task: Promise<T>, timeoutMs: number): Promise<T> {
 
 let jitiChain: Promise<unknown> = Promise.resolve();
 
-/**
- * Runs `task` with pi's jiti transform forced; the env is process-wide, so callers are serialized. With
- * `timeoutMs`, a task still running then is abandoned: the env is restored, the next caller runs and this
- * one rejects; the abandoned task's own settle changes nothing.
- */
 export function withForcedJitiTransform<T>(task: () => Promise<T>, timeoutMs?: number): Promise<T> {
 	const run = jitiChain.then(async () => {
 		const prior = Object.fromEntries(
@@ -177,12 +170,10 @@ export default function thinkrailDescriptorShim() {
 let loads = 0;
 
 export interface LoadServerDescriptorOptions {
-	/** The pi the extension must resolve; the host's own unless a test says otherwise. */
 	host?: { createAgentSession: unknown; Type: unknown };
 	timeoutMs?: number;
 }
 
-/** Imports an installed server entry through pi's public loader, so its pi imports are the host's instance. */
 export async function loadServerDescriptor(
 	entry: string,
 	hostDir: string,

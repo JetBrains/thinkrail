@@ -61,12 +61,10 @@ export function settingsSearchEntries(
 	];
 }
 
-/** The jump target of an installed extension's row and of one of its settings. */
 export function installedExtensionSettingId(name: string, key?: string): string {
 	return key === undefined ? `installed-extension-${name}` : `extension-setting-${name}-${key}`;
 }
 
-/** Installed extensions and the settings they declare, in their own words, for the dialog to inject. */
 export function installedExtensionSearchEntries(
 	entries: readonly ExtensionCatalogEntry[],
 	settingsSupported: boolean,

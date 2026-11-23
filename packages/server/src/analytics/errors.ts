@@ -13,7 +13,6 @@ export interface FrameRoots {
 	appRoot: string;
 	remapBase?: string;
 	caseInsensitive: boolean;
-	/** Folders of third-party code inside the app root that stay external, read at every report. */
 	foreignRoots?: () => readonly string[];
 }
 

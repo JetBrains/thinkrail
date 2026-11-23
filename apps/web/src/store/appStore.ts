@@ -158,7 +158,6 @@ import {
 	supportsWorkspaceSettling,
 } from "./selectors";
 
-/** The Extensions catalog read: the host's list, or why there is none yet. */
 export type ExtensionCatalogRead = ExtensionCatalogEntry[] | "loading" | "failed";
 
 export interface FileTab {
@@ -1225,7 +1224,6 @@ interface AppState {
 	templatesVersion: number;
 	/** Bumped on `packages.changed`; the Extensions page re-lists installed pi packages when it moves. */
 	packagesVersion: number;
-	/** `extension.list` as the host last answered it; `loading` until it answers a host of this version. */
 	extensionCatalog: ExtensionCatalogRead;
 	modelsRefreshing: boolean;
 	modelsFresh: boolean;

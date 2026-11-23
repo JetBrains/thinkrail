@@ -76,7 +76,6 @@ export default {
 };
 `;
 
-/** An installed ThinkRail extension in a folder: no node_modules, so every pi or typebox import must map to the host's. */
 function writeInstalledExtension(root: string, dataDir: string): string {
 	const folder = join(root, "installed-extension");
 	mkdirSync(join(folder, "server"), { recursive: true });

@@ -8,10 +8,8 @@ import type { ServerExtension } from "@thinkrail/extension-api/server";
 import { type InstalledServerExtension, installedExtensions } from "./installed";
 
 export interface ServerExtensionEntry {
-	/** A built-in's public server specifier; an installed extension's absolute entry file. */
 	readonly specifier: string;
 	readonly extension: ServerExtension;
-	/** Present for an installed extension: the skill roots its loader resolved from the entry. */
 	readonly installed?: { readonly skillRoots: readonly string[] };
 }
 

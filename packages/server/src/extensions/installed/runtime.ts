@@ -40,7 +40,6 @@ const log = logger("extensions");
 
 export interface InstalledServerExtension {
 	readonly extension: ServerExtension;
-	/** The absolute server entry file, the base for its `skillPackages`. */
 	readonly entry: string;
 	readonly skillRoots: readonly string[];
 }
@@ -54,28 +53,23 @@ export interface InstalledExtensionRecord {
 	readonly version?: string;
 	readonly state: InstalledExtensionState;
 	readonly error?: string;
-	/** The package folder on disk, once installed. */
 	readonly root?: string;
 	readonly manifest?: ExtensionManifest;
 	readonly server?: InstalledServerExtension;
 	readonly fingerprint?: string;
-	/** The source that already provides this name. */
 	readonly duplicateOf?: string;
 }
 
 export interface InstalledExtensionsOptions {
 	dataDir: string;
 	reservedNames: () => Iterable<string>;
-	/** The `pi.skills` roots of a descriptor's `skillPackages`, resolved from its entry; throws when one is missing. */
 	skillRoots: (entry: string, extension: ServerExtension) => string[];
 	installer?: ExtensionInstaller;
 	offline?: () => boolean;
 	onChange?: () => void;
-	/** The tool names a loaded server half registers and owns, and the ones the host keeps, for the status file. */
 	toolNames?: (
 		extension: ServerExtension,
 	) => Promise<{ tools: readonly string[]; shadowed: readonly string[] }>;
-	/** How long a server half may take to load; `EXTENSION_LOAD_TIMEOUT_MS` unless a test says otherwise. */
 	loadTimeoutMs?: number;
 }
 
@@ -91,7 +85,6 @@ export interface ExtensionStatusEntry {
 	shadowed?: string[];
 }
 
-/** `<data dir>/extensions/status.json`, rewritten after every reconcile for agents to read. */
 export interface ExtensionsStatus {
 	api: string;
 	updatedAt: string;
@@ -103,7 +96,6 @@ export interface ExtensionsStatus {
 export interface StagedExtension {
 	readonly source: string;
 	readonly name: string;
-	/** For npm/git: the fresh install folder under `installs/`. */
 	readonly install?: InstallRef;
 }
 
@@ -136,10 +128,8 @@ function readPackageJson(root: string): unknown {
 	return JSON.parse(readFileSync(join(root, "package.json"), "utf8").replace(/^\uFEFF/, ""));
 }
 
-/** How long an unrecorded install folder is left alone: another host on this data dir may be filling it. */
 export const SWEEP_MIN_AGE_MS = 24 * 60 * 60 * 1000;
 
-/** The newest mtime of a folder and its direct entries; now when it cannot be read, so it is kept. */
 function lastChanged(dir: string): number {
 	try {
 		return Math.max(
@@ -210,7 +200,6 @@ export class InstalledExtensions {
 		return this.#records;
 	}
 
-	/** Where installed extension code lives: this runtime's folder and every package root it published, as given and resolved. */
 	codeRoots(): readonly string[] {
 		return [this.root, ...this.#codeRoots];
 	}
@@ -220,7 +209,6 @@ export class InstalledExtensions {
 		return this.#servers;
 	}
 
-	/** Why the last read of `extensions.json` was refused; the last good state stays in force. */
 	fileError(): string | undefined {
 		return this.#fileError;
 	}
@@ -231,7 +219,6 @@ export class InstalledExtensions {
 		return run;
 	}
 
-	/** Brings the loaded set in line with `extensions.json`; calls arriving while one runs share the next pass. */
 	reconcile(): Promise<void> {
 		if (this.#reconcileQueued) return this.#reconcileQueued;
 		const queued = this.#enqueue(async () => {
@@ -487,7 +474,6 @@ export class InstalledExtensions {
 		}
 	}
 
-	/** Gives each name to its first declaration with an installed manifest; a later one becomes a duplicate. */
 	async #ownNames(
 		records: readonly (InstalledExtensionRecord | undefined)[],
 	): Promise<(InstalledExtensionRecord | undefined)[]> {
@@ -544,7 +530,6 @@ export class InstalledExtensions {
 		}
 	}
 
-	/** Declared sources without a record yet are still installing; a refused file keeps the last good rows. */
 	async #writeStatus(sources: readonly string[]): Promise<void> {
 		const bySource = new Map(this.#records.map((record) => [record.source, record]));
 		const extensions: ExtensionStatusEntry[] = [];
@@ -673,15 +658,10 @@ export class InstalledExtensions {
 		return read;
 	}
 
-	/** The kind rule on an installed package: whether `root/package.json` carries a `thinkrail` manifest. */
 	isExtensionAt(root: string): boolean {
 		return extensionPackageAt(root) !== undefined;
 	}
 
-	/**
-	 * The kind rule at install time: fetches the source (an npm/git source into a fresh folder of this
-	 * root) and reads its package.json. `undefined` — and nothing left behind — for a plain package.
-	 */
 	async stage(source: string): Promise<StagedExtension | undefined> {
 		const kind = extensionSourceKind(source);
 		if (kind === undefined) return undefined;
@@ -720,7 +700,6 @@ export class InstalledExtensions {
 		this.#removeInstallDir(staged.install.dir);
 	}
 
-	/** Declares a staged extension (replacing an earlier install of the same source) and loads it. */
 	adopt(staged: StagedExtension): Promise<InstalledExtensionRecord> {
 		return this.#enqueue(async () => {
 			let read: Extract<DeclarationsRead, { ok: true }>;
@@ -763,7 +742,6 @@ export class InstalledExtensions {
 		});
 	}
 
-	/** A fresh install in a new folder (npm/git) or a re-load in place (folder); the old one stays on failure. */
 	update(source: string): Promise<void> {
 		return this.#enqueue(async () => {
 			const read = this.#declared();

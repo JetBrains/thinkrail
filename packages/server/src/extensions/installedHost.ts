@@ -17,16 +17,12 @@ const log = logger("extensions");
 export interface InstalledExtensionsHostOptions {
 	dataDir: string;
 	onChange: () => void;
-	/** The user's pi `npmCommand`, read at each install. */
 	npmCommand?: NpmCommand;
 	installer?: ExtensionInstaller;
-	/** The names of the host's own named inline extensions (pi's built-in slots it supplies), also reserved. */
 	hostExtensionNames?: readonly string[];
-	/** The host's own static inline factories; an installed extension's same-named tools are listed as shadowed. */
 	hostToolFactories?: readonly ExtensionFactory[];
 }
 
-/** Starts the host's installed-extension runtime: watches `extensions.json` and reconciles in the background. */
 export function startInstalledExtensions(options: InstalledExtensionsHostOptions): () => void {
 	setHostToolFactories(options.hostToolFactories ?? []);
 	const runtime = new InstalledExtensions({

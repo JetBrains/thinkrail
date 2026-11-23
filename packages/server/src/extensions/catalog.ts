@@ -98,7 +98,6 @@ function describeOnce(extension: ServerExtension): Promise<ExtensionDescription>
 let hostFactories: readonly ExtensionFactory[] = [];
 let hostFactoryTools: Promise<string[]> | undefined;
 
-/** The host's own inline factories, whose tool names an installed extension never owns. */
 export function setHostToolFactories(factories: readonly ExtensionFactory[]): void {
 	hostFactories = factories;
 	hostFactoryTools = undefined;
@@ -112,7 +111,6 @@ async function hostToolNames(builtins: readonly ServerExtensionEntry[]): Promise
 	return new Set([...described.flatMap(({ tools }) => tools), ...(await hostFactoryTools)]);
 }
 
-/** An installed server half's tool names split into the ones it owns and the ones the host keeps. */
 export async function extensionToolNames(
 	extension: ServerExtension,
 	builtins: readonly ServerExtensionEntry[] = builtinServerExtensions,
@@ -157,7 +155,6 @@ async function installedEntry(
 	};
 }
 
-/** The Settings catalog: built-ins in registry order, then every installed declaration with its state. */
 export async function listExtensionCatalog(
 	disabled: ReadonlySet<string>,
 	entries: readonly ServerExtensionEntry[] = builtinServerExtensions,

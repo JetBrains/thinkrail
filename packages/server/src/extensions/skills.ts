@@ -8,7 +8,6 @@ interface SkillPackageManifest {
 	pi?: { skills?: string[] };
 }
 
-/** The `pi.skills` roots of each `skillPackages` entry, resolved from the extension's own entry file. */
 export function skillPackageRoots(extensionEntry: string, extension: ServerExtension): string[] {
 	const skillPackages = extension.skillPackages ?? [];
 	if (skillPackages.length === 0) return [];

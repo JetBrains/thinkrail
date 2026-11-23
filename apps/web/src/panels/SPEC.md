@@ -1663,7 +1663,9 @@ a project picker, the prompt hero, and the reused
   (`useInstalledExtensions.ts`) owns every `extensions.*` and switch/setting request of these rows, keyed
   `extension\0<source>` for busy and inline errors (never a toast), runs the update check on mount and with the
   **Updates** row's Check for updates (its count and Update all include flagged extensions), joins **Update
-  all** (sequential `extensions.update`), and re-lists the store catalog after each mutation; the
+  all** (sequential `extensions.update`), and re-lists the store catalog after each mutation; its requests
+  outwait the transport's default (ten minutes for a mutation, two for the update check), since an npm or
+  git reinstall outlasts it, and the host still finishes a run the page stopped waiting for; the
   `extensions.changed` push does the same for changes made elsewhere (the agent skill editing
   `extensions.json`). The page's one statement that changes reach open chats when their current turn ends
   covers extensions too.
@@ -1684,7 +1686,8 @@ a project picker, the prompt hero, and the reused
   host fetches the catalog (`extensions.browse`, [[submodule-server-extension-catalog]]); the browser never
   contacts thinkrail.ai. The hook reads on mount and again, from the host's cache, whenever the store catalog
   changes (so the **Installed** marks follow installs and removals); **Retry** forces a refetch; the latest read
-  wins. The group's description states plainly that listings are automatic and unreviewed and that an extension
+  wins. Its own 30 s request bound only catches a host that stopped answering: the host's fetch has a shorter
+  timeout of its own. The group's description states plainly that listings are automatic and unreviewed and that an extension
   runs code on this machine and in the app. A search field row (Enter enters the field, ↓ leaves it for the
   listings, Esc clears a query and then returns to the row) narrows by title, name,
   description and author ("No extensions match …") over one `SettingsList` (`extension-browse`) of listing

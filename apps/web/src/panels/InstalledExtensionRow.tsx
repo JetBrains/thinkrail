@@ -31,21 +31,18 @@ export type InstalledExtensionAction =
 
 export type ExtensionSourceKind = "npm" | "git" | "local";
 
-/** A light reading of a declaration for its tag; the host decides what the source really is. */
 export function extensionSourceKind(source: string): ExtensionSourceKind {
 	if (source.startsWith("npm:")) return "npm";
 	if (/^(git:|github:|https?:|ssh:|git@)/.test(source)) return "git";
 	return "local";
 }
 
-/** The key an installed row's busy and error state hang on. */
 export function installedExtensionKey(
 	entry: Pick<ExtensionCatalogEntry, "source" | "name">,
 ): string {
 	return `extension\0${entry.source ?? entry.name}`;
 }
 
-/** The Installed list's row id of an extension; a pi package row's id starts with its scope instead. */
 export function installedExtensionRowId(
 	entry: Pick<ExtensionCatalogEntry, "source" | "name">,
 ): string {

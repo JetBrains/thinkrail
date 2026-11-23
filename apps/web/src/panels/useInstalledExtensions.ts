@@ -5,12 +5,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { errorText, getTransport, refreshExtensionCatalog } from "@/transport";
 import { type InstalledExtensionAction, installedExtensionKey } from "./InstalledExtensionRow";
 
-/** An npm or git reinstall outlasts the transport's default; the host still finishes a run that outlasts this. */
 const EXTENSION_MUTATION_TIMEOUT_MS = 10 * 60_000;
 const UPDATE_CHECK_TIMEOUT_MS = 2 * 60_000;
 
 export interface InstalledExtensionsController {
-	/** `installedExtensionKey`s the last update check flagged. */
 	updates: ReadonlySet<string>;
 	checkingUpdates: boolean;
 	checkError: string | undefined;
@@ -24,7 +22,6 @@ export interface InstalledExtensionsController {
 	removeNow: () => void;
 }
 
-/** Off adds the name; on removes it. Names the page does not know are carried through. */
 export function nextDisabledExtensions(
 	current: readonly string[],
 	name: string,
@@ -34,7 +31,6 @@ export function nextDisabledExtensions(
 	return enabled ? without : [...without, name];
 }
 
-/** Every request an installed extension row makes; errors land on the row, never in a toast. */
 export function useInstalledExtensions({
 	enabled,
 	disabledExtensions,

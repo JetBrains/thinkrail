@@ -3,13 +3,8 @@ import type { ExtensionCatalogRead } from "@/store";
 import { getTransport, wsErrorCode } from "@/transport";
 import type { ExtensionBrowseRead } from "./ExtensionBrowse";
 
-/** The host fetches with a short timeout of its own; this only bounds a host that stopped answering. */
 const BROWSE_TIMEOUT_MS = 30_000;
 
-/**
- * Reads `extensions.browse` for the page: once on mount, again (from the host's cache) whenever the
- * installed catalog changes so the Installed marks follow, and with `force` on Retry. The latest read wins.
- */
 export function useExtensionBrowse({
 	enabled,
 	installedCatalog,

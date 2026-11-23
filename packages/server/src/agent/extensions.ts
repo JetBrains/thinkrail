@@ -455,11 +455,6 @@ interface LoaderInputs {
 	session: HostSessionServices | undefined;
 }
 
-/**
- * pi copies a loader's inline factories at construction, so a change of the registry (an installed
- * extension loaded or removed) is applied by building a fresh loader at the next reload, behind one
- * stable `ResourceLoader` the session keeps.
- */
 export async function buildResourceLoader(
 	cwd: string,
 	settingsManager: SettingsManager,
@@ -518,7 +513,6 @@ function registrationKey(method: string, args: readonly unknown[]): string | und
 	return typeof name === "string" ? `${REGISTRARS[method]}:${name}` : undefined;
 }
 
-/** `pi` with every tool, command and flag registration passed through `admit` first. */
 function registrationView(pi: ExtensionAPI, admit: (key: string) => boolean): ExtensionAPI {
 	return new Proxy(pi, {
 		get: (target, key) => {
@@ -534,7 +528,6 @@ function registrationView(pi: ExtensionAPI, admit: (key: string) => boolean): Ex
 	});
 }
 
-/** Names the host's `builtin:` slots register in a load, refused to installed extensions. */
 function builtinSlotClaims(): {
 	record: (inline: InlineExtension) => InlineExtension;
 	refuse: (inline: InlineExtension) => InlineExtension;
@@ -558,7 +551,6 @@ function builtinSlotClaims(): {
 	};
 }
 
-/** The host's own static inline factories, composed into every parent session after the built-ins. */
 export const HOST_INLINE_FACTORIES: readonly ExtensionFactory[] = [
 	headlessSearchPolicy,
 	reviewToolExtension,

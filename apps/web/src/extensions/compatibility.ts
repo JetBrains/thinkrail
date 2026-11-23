@@ -3,7 +3,6 @@ import {
 	isExtensionApiCompatible,
 } from "@thinkrail/extension-api/installed";
 
-/** How an extension's manifest `api` relates to this app: loadable, or which side is out of date. */
 export type ExtensionApiFit = "compatible" | "needsNewerApp" | "builtForOlderApp" | "unknown";
 
 const API_VERSION = /^(\d+)\.(\d+)$/;

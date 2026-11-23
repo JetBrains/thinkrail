@@ -285,10 +285,6 @@ function descriptorKey(descriptor: InstalledWebExtension): string {
 	return [descriptor.url, descriptor.styles ?? "", ...(descriptor.shadowed ?? [])].join("\0");
 }
 
-/**
- * Converges on the host's current set: unloads names it no longer lists, loads new ones and those whose
- * URLs changed (an update), and leaves the rest alone — a failed load is retried only when its URL changes.
- */
 export function syncWebExtensions(
 	descriptors: readonly InstalledWebExtension[],
 ): Promise<WebExtensionLoadResult[]> {

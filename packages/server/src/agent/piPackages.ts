@@ -69,13 +69,11 @@ export function publishPiPackagesChanged(): void {
 	publish?.();
 }
 
-/** The npm command the user configured for pi, so ThinkRail's own installs fetch the same way pi's do. */
 export function piNpmCommand(): string[] | undefined {
 	return createPiSettings(getAgentDir(), getAgentDir(), { packages: "none" }).getGlobalSettings()
 		.npmCommand;
 }
 
-/** The loaded installed ThinkRail extensions changed: every chat rebuilds its loader when its turn ends. */
 export function refreshInstalledExtensions(): void {
 	bumpPackagesRevision();
 	refreshExtensionTools();
@@ -149,12 +147,6 @@ function scopeRefused(name: string): CodedError {
 	);
 }
 
-/**
- * The kind rule: the fetched package.json decides. A `thinkrail` manifest installs a ThinkRail extension
- * (declared in ThinkRail's file, user scope only, never in pi's settings); anything else is a pi package.
- * A folder is read in place; an npm/git source is installed by pi first, so a pi package is fetched once,
- * and only an extension is fetched again into ThinkRail's own root.
- */
 export async function piPackagesInstall(
 	target: PiPackagesTarget,
 	request: { source: string; scope: PiPackageScope },

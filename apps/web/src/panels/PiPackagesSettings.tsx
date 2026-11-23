@@ -602,13 +602,10 @@ export interface PiPackagesGroupProps {
 	onUpdateAll: () => void;
 	onCheckUpdates: () => void;
 	onRetry?: (() => void) | undefined;
-	/** Installed ThinkRail extension rows, listed first; they keep showing while the packages list fails. */
 	extensionRows?: readonly LeadingListRow[];
-	/** Flagged updates outside `updates` (installed extensions), counted for Update all. */
 	extraUpdates?: number;
 }
 
-/** A row another owner lists in the Installed list: its list row id, its markup and its Delete. */
 export interface LeadingListRow {
 	id: string;
 	render: (menu: RowMenuControl) => ReactNode;

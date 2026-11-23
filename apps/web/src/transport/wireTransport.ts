@@ -269,7 +269,6 @@ function refreshUserFonts(connectionGeneration: number): void {
 
 let extensionCatalogRequest = 0;
 
-/** The one `extension.list` path: welcome, `extensions.changed` and the Extensions page; the latest request wins. */
 export function refreshExtensionCatalog(
 	connectionGeneration: number = useAppStore.getState().connectionGeneration,
 ): Promise<void> {

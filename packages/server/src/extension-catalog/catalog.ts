@@ -77,7 +77,6 @@ function listingOf(entry: unknown): ExtensionListing | null {
 	};
 }
 
-/** The whole file or nothing: it is our own build's output, so any bad shape is a broken publish. */
 export function parseExtensionCatalog(value: unknown): ExtensionCatalog | null {
 	if (!isRecord(value) || value.schema !== 1 || !isoDate(value.generatedAt)) return null;
 	if (!Array.isArray(value.extensions)) return null;
@@ -165,7 +164,6 @@ export function catalogUrl(override: string | undefined = process.env[EXTENSION_
 	return override?.trim() || EXTENSION_CATALOG_URL;
 }
 
-/** One fetched copy, kept for `CATALOG_CACHE_MS`; concurrent reads share one request; a failed read drops the copy. */
 export class ExtensionCatalogSource {
 	readonly #options: CatalogSourceOptions;
 	#cached: { catalog: ExtensionCatalog; at: number } | null = null;
@@ -249,7 +247,6 @@ export function resetExtensionCatalogSourceForTests(next: ExtensionCatalogSource
 	shared = next;
 }
 
-/** `extensions.browse`: the catalog with each listing marked when an installed extension has its name. */
 export async function browseExtensions(
 	installedNames: ReadonlySet<string>,
 	options: { force?: boolean; source?: ExtensionCatalogSource } = {},

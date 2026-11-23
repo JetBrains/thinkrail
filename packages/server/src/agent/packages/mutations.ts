@@ -148,11 +148,6 @@ function declaredAsInput(ctx: PiPackageHostContext, target: PiPackageTarget): st
 	return resolveLocalSource(source, settingsBaseDir(ctx.cwd, ctx.agentDir, target.scope));
 }
 
-/**
- * The Install field read the way `pi install` reads it from the workspace: pasted input parsed, a bare
- * name that is also a folder or file next to the workspace taken as that path, a relative path resolved
- * and required to exist. Refuses an unwritable scope before anything is fetched.
- */
 export function resolvePiInstallSource(ctx: PiPackageHostContext, target: PiPackageTarget): string {
 	assertScope(target.scope);
 	const base = ctx.cwd ?? ctx.agentDir;
@@ -171,11 +166,6 @@ export function resolvePiInstallSource(ctx: PiPackageHostContext, target: PiPack
 	return source;
 }
 
-/**
- * Installs, then persists the declaration; a relative local source reads like `pi install ./x` from the
- * workspace. When `isForeign` claims what pi just fetched (an npm/git source), nothing is declared, the
- * install is undone unless pi's root already held that package, and the result is `undefined`.
- */
 export function installPiPackage(
 	ctx: PiPackageHostContext,
 	target: PiPackageTarget,
