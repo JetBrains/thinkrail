@@ -54,6 +54,18 @@
 	--color-feedback-warning-muted: var(--feedback-warning-muted);
 	--color-bubble-user-bg: var(--bubble-user-bg);
 	--color-bubble-user-border: var(--bubble-user-border);
+	--color-series-1: var(--series-1);
+	--color-series-2: var(--series-2);
+	--color-series-3: var(--series-3);
+	--color-series-4: var(--series-4);
+	--color-series-5: var(--series-5);
+	--color-series-6: var(--series-6);
+	--color-series-7: var(--series-7);
+	--color-series-8: var(--series-8);
+	--color-ramp-1: var(--ramp-1);
+	--color-ramp-2: var(--ramp-2);
+	--color-ramp-3: var(--ramp-3);
+	--color-ramp-4: var(--ramp-4);
 	--color-sunken: var(--sunken);
 	--color-overlay: var(--overlay);
 }
