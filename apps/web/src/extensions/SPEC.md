@@ -87,7 +87,9 @@ such command is the extension's own and unscoped.
   (`summary`, `chrome`, `prominence`, `width`, `defaultExpanded`, `interactive`, `dock`,
   `composerSuggestions`), each checked against its type or its allowed values, and drops every other
   key: an extension's own `renderer` or `extension` field inside `options` can therefore never replace
-  the checked renderer or the owner the registry stamps. Only then are the renderers registered, under the descriptor's `name`
+  the checked renderer or the owner the registry stamps. Only then are the renderers registered — minus
+  any name the descriptor lists as `shadowed` (a tool the host keeps over the extension's server half, so
+  the host's result never wears the extension's card) — under the descriptor's `name`
   (the npm identity, not the author's `defineWebExtension` name), in the precedence slot reserved when its
   load started — the descriptor order of the host's list — so a contested tool name goes to the
   extension the server runs, not to the bundle that loaded first. Any failure removes the stylesheet,
@@ -131,8 +133,8 @@ such command is the extension's own and unscoped.
 
 - **One set, converged.** `syncWebExtensions(descriptors)` is the only writer bootstrap uses: it unloads
   every name it loaded that the host no longer lists (removal — past calls fall back to the default row),
-  loads names it has not loaded and names whose `url`/`styles` changed (an update reinstalled under a new
-  token), and leaves the rest untouched. A failed load is retried only when its URL changes or the page
+  loads names it has not loaded and names whose `url`/`styles`/`shadowed` changed (an update reinstalled
+  under a new token, or a server half that now registers a host tool), and leaves the rest untouched. A failed load is retried only when its URL changes or the page
   reloads; Settings shows the failure meanwhile. New names get precedence slots after the ones already
   held, so a newly installed extension listed before an older one wins a contested name only after a reload
   — the same accepted window as above.

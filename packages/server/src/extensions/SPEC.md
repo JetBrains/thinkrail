@@ -133,7 +133,8 @@ lookup, skill roots — defaults to it, so an installed extension is composed ex
   catalog `hostToolFactories` — `agent`'s `HOST_INLINE_FACTORIES`, the one list the parent composition
   uses too). **`extensionToolNames(extension)`** splits an installed half's recorded names (the same
   memoised description Settings lists) into `tools` it owns and `shadowed` ones the host owns, so neither
-  Settings nor the status file presents a name whose registration has no effect. The host names it knows
+  Settings nor the status file presents a name whose registration has no effect, and the catalog hands
+  `shadowed` to the client on the entry's `web`, so its web half never draws over the host tool's result. The host names it knows
   without a session are every built-in's (parent and inert-session factories, whether switched on or
   off — a switch can take the name back at any reload) and those the host's static inline factories
   register against the same stub. **Not known, so left listed:** names that only a session's loader

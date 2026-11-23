@@ -29,6 +29,7 @@ const PALETTE: ExtensionCatalogEntry = {
 	web: {
 		url: "/extensions/x/0.0.0-abc/dist/web.js",
 		styles: "/extensions/x/0.0.0-abc/dist/web.css",
+		shadowed: ["set_title"],
 	},
 };
 const FAILED: ExtensionCatalogEntry = {
@@ -66,7 +67,12 @@ describe("extension catalog selectors", () => {
 			extensionCatalog: [BUILTIN, PALETTE, FAILED, UI_ONLY],
 		};
 		expect(selectInstalledWebHalves(state)).toEqual([
-			{ name: PALETTE.name, url: PALETTE.web?.url ?? "", styles: PALETTE.web?.styles ?? "" },
+			{
+				name: PALETTE.name,
+				url: PALETTE.web?.url ?? "",
+				styles: PALETTE.web?.styles ?? "",
+				shadowed: ["set_title"],
+			},
 			{ name: "cards", url: "/extensions/cards/1.0.0-def/web.js" },
 		]);
 		expect(selectInstalledWebHalves({ ...state, extensionCatalog: "loading" })).toBeNull();

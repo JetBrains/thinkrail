@@ -15,6 +15,7 @@ export interface InstalledWebExtension {
 	name: string;
 	url: string;
 	styles?: string | undefined;
+	shadowed?: readonly string[] | undefined;
 }
 
 export type WebExtensionLoadFailure = "import" | "export" | "styles";
@@ -229,8 +230,13 @@ async function runLoad(
 		state.stylesheets.get(name)?.remove();
 		if (stylesheet) state.stylesheets.set(name, stylesheet);
 		else state.stylesheets.delete(name);
-		setInstalledToolRenderers(name, extension.toolRenderers);
-		result = { name, status: "loaded", tools: Object.keys(extension.toolRenderers) };
+		const toolRenderers = Object.fromEntries(
+			Object.entries(extension.toolRenderers).filter(
+				([tool]) => !descriptor.shadowed?.includes(tool),
+			),
+		);
+		setInstalledToolRenderers(name, toolRenderers);
+		result = { name, status: "loaded", tools: Object.keys(toolRenderers) };
 	} catch (error) {
 		if (!current()) return superseded(name);
 		const failure = error instanceof LoadError ? error : new LoadError("import", error);
@@ -276,7 +282,7 @@ export function unloadWebExtension(name: string): boolean {
 }
 
 function descriptorKey(descriptor: InstalledWebExtension): string {
-	return `${descriptor.url}\0${descriptor.styles ?? ""}`;
+	return [descriptor.url, descriptor.styles ?? "", ...(descriptor.shadowed ?? [])].join("\0");
 }
 
 /**

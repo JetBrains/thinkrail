@@ -1519,8 +1519,9 @@ what they always did.
   the target of the methods below), `version`, `state` (`InstalledExtensionState`: `loaded` — also a
   web-only extension; `failed` — install or load error, a duplicate name; `incompatible` — the manifest's
   `api` is not this host's major or is a newer minor), `error` (the reason, the host's or pi's text) and
-  `web` (`ExtensionWebHalf`, `{ url, styles? }`: host-relative URLs, only when the extension is loaded,
-  compatible and has a web half, whether switched on or off). `name` is the npm package name — the key of
+  `web` (`ExtensionWebHalf`, `{ url, styles?, shadowed? }`: host-relative URLs, only when the extension is
+  loaded, compatible and has a web half, whether switched on or off; `shadowed` names the tools its server
+  half registers that the host keeps, which the client never draws with this web half's renderers). `name` is the npm package name — the key of
   `disabledExtensions` and `extensionSettings` as for a built-in; `title` is the manifest's, else the
   name; `description` the package's. An installed entry's `settings` carry the extension's own `title` /
   `description` (`ExtensionSettingDescriptor`), which a client shows instead of locale keys.

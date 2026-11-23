@@ -228,6 +228,7 @@ export interface InstalledWebHalf {
 	name: string;
 	url: string;
 	styles?: string;
+	shadowed?: string[];
 }
 
 /**
@@ -248,6 +249,7 @@ export function selectInstalledWebHalves(
 						name: entry.name,
 						url: entry.web.url,
 						...(entry.web.styles ? { styles: entry.web.styles } : {}),
+						...(entry.web.shadowed?.length ? { shadowed: entry.web.shadowed } : {}),
 					},
 				]
 			: [],

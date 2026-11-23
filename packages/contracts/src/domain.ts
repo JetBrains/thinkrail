@@ -1638,6 +1638,7 @@ export type InstalledExtensionState = "loaded" | "failed" | "incompatible";
 export interface ExtensionWebHalf {
 	url: string;
 	styles?: string;
+	shadowed?: string[];
 }
 
 export interface ExtensionCatalogEntry {

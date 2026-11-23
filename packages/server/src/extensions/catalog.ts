@@ -135,7 +135,8 @@ async function installedEntry(
 		: undefined;
 	const title = record.manifest?.title ?? server?.title ?? record.title;
 	const description = record.description ?? server?.description;
-	const web = webHalfOf(record);
+	const half = webHalfOf(record);
+	const web = half && owned?.shadowed.length ? { ...half, shadowed: owned.shadowed } : half;
 	return {
 		tools: [],
 		hasParentExtensions: false,

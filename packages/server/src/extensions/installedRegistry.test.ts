@@ -234,6 +234,7 @@ describe("the runtime registry", () => {
 		mkdirSync(dataDir);
 		const folder = writeExtension(join(root, "shadow-ext"), {
 			name: "shadow-ext",
+			web: "dist/web.js",
 			files: { "server/index.ts": SHADOWING_DESCRIPTOR },
 		});
 		writeFileSync(join(dataDir, "extensions.json"), JSON.stringify({ extensions: [folder] }));
@@ -251,6 +252,7 @@ describe("the runtime registry", () => {
 		]);
 		const row = (await listExtensionCatalog(new Set())).at(-1);
 		expect(row).toMatchObject({ name: "shadow-ext", tools: ["own_tool"] });
+		expect(row?.web?.shadowed).toEqual(["visualize", "host_tool"]);
 		stop?.();
 		stop = undefined;
 	});

@@ -610,10 +610,13 @@ name — a built-in registration first, else, among installed extensions whose r
 registered, the one listed first by the host (the accepted loading window is in
 [[submodule-web-extensions]]) — else the longest app-local prefix registration
 (`registerToolRendererPrefix` — today only `mcp__`, because pi names MCP tools per server), else the
-default. Exact names always win, an empty prefix never matches, and
-extension descriptors stay exact-name only. The order mirrors which tool the server actually runs (built-in
-tool-name precedence, then pi's first registration wins), so a card does not draw over another tool's
-result outside that window.
+default. A built-in exact name always wins, an empty prefix never matches, and
+extension descriptors stay exact-name only. An installed exact name never takes a name under an app
+prefix — the host's MCP tools beat an installed one on the server — and the loader never registers an
+installed renderer for a name the host keeps over that extension's server half (its `web.shadowed`).
+The order mirrors which tool the server actually runs (built-in
+tool-name precedence, host-owned tools before installed ones, then pi's first registration wins), so a
+card does not draw over another tool's result outside that window.
 
 **The registry is subscribable.** Installed web halves register after first render
 ([[submodule-web-extensions]]): `reserveInstalledOwner(owner)` fixes an owner's precedence slot when its

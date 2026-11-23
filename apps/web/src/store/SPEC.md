@@ -685,7 +685,7 @@ selector to hide its Projects rail and pane, so onboarding has the whole window.
   to the same host keeps the rows on screen until the new list lands. Its selectors:
   `selectBuiltinExtensions` (the Built into ThinkRail group — every row of an older host, `kind: "builtin"`
   from v131), `selectInstalledExtensions` (installed rows in host order), `selectInstalledWebHalves` (the
-  `{ name, url, styles? }` set the page must have loaded — switched-off ones included — `null` while unknown,
+  `{ name, url, styles?, shadowed? }` set the page must have loaded — switched-off ones included — `null` while unknown,
   empty for a host older than v131), and the gates `selectSupportsInstalledExtensions` (v131) and
   `selectSupportsExtensionBrowse` (v132).
   **`disabledPackages: string[]`** mirrors `disabledExtensions` from the settings broadcast; the

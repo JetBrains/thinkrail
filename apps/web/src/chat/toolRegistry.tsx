@@ -47,8 +47,12 @@ if (import.meta.hot) import.meta.hot.data.toolRegistry = state;
 
 function publish(): void {
 	const exact = new Map<string, ToolRegistration>();
+	const prefixed = (name: string) =>
+		[...state.prefixes.keys()].some((prefix) => prefix !== "" && name.startsWith(prefix));
 	for (const owned of state.installed.values()) {
-		for (const [name, registration] of owned) if (!exact.has(name)) exact.set(name, registration);
+		for (const [name, registration] of owned) {
+			if (!exact.has(name) && !prefixed(name)) exact.set(name, registration);
+		}
 	}
 	for (const [name, registration] of state.builtIn) exact.set(name, registration);
 	state.current = Object.freeze({

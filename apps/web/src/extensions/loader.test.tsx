@@ -237,6 +237,16 @@ describe("web extension loader", () => {
 		expect(unloadWebExtension("weather")).toBe(false);
 	});
 
+	test("never registers a renderer for a tool the host keeps over the extension's server half", async () => {
+		fakeEnvironment();
+		const [result] = await loadWebExtensions([
+			{ name: "thinkrail-ext-weather", url: "weather-v1.js", shadowed: ["forecast"] },
+		]);
+		expect(result).toEqual({ name: "thinkrail-ext-weather", status: "loaded", tools: ["weather"] });
+		expect(getToolRenderer("weather")).not.toBe(DefaultToolRenderer);
+		expect(getToolRenderer("forecast")).toBe(DefaultToolRenderer);
+	});
+
 	test("a contested tool name goes to the extension listed first, whichever bundle loads first", async () => {
 		const gate = deferred<void>();
 		fakeEnvironment({
