@@ -31,6 +31,28 @@ export function endingSuggestionsCall(
 	return { name: call.name, args: call.arguments ?? {}, raw: result.raw };
 }
 
+function finishedReply(message: AssistantMessage): boolean {
+	return (
+		message.stopReason === "stop" && !message.content.some((block) => block.type === "toolCall")
+	);
+}
+
+function roundEndingSuggestionsCall(
+	turns: readonly ChatTurn[],
+	toolResults: Readonly<Record<string, ToolResultState>>,
+	registry: ToolRegistry,
+): ReturnType<typeof endingSuggestionsCall> {
+	for (let i = turns.length - 1; i >= 0; i--) {
+		const turn = turns[i];
+		if (!turn || turn.kind === "system") continue;
+		if (turn.kind !== "assistant" || turn.streaming) return null;
+		const ending = endingSuggestionsCall(turn.message, toolResults, registry);
+		if (ending) return ending;
+		if (!finishedReply(turn.message)) return null;
+	}
+	return null;
+}
+
 export function deriveComposerSuggestions(
 	source: ComposerSuggestionsSource | undefined,
 	disabledExtensions: readonly string[] = [],
@@ -38,16 +60,7 @@ export function deriveComposerSuggestions(
 ): readonly string[] {
 	if (!source || source.isStreaming) return NONE;
 	if (source.queue.steering.length > 0 || source.queue.followUp.length > 0) return NONE;
-	let last: ChatTurn | undefined;
-	for (let i = source.turns.length - 1; i >= 0; i--) {
-		const turn = source.turns[i];
-		if (turn && turn.kind !== "system") {
-			last = turn;
-			break;
-		}
-	}
-	if (last?.kind !== "assistant" || last.streaming) return NONE;
-	const ending = endingSuggestionsCall(last.message, source.toolResults, registry);
+	const ending = roundEndingSuggestionsCall(source.turns, source.toolResults, registry);
 	if (!ending) return NONE;
 	return (
 		readComposerSuggestions(ending.name, ending.args, ending.raw, disabledExtensions, registry) ??
