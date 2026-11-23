@@ -85,6 +85,8 @@ for (const testCase of spec.cases) {
 	const tool = tools.get(testCase.tool)?.definition;
 	if (!tool) continue;
 	const label = `${testCase.tool} ${testCase.name}`;
+	const ctx = scriptedContext(testCase.ui);
+	if (testCase.branch) ctx.sessionManager = { getBranch: () => testCase.branch };
 	let result;
 	try {
 		result = await tool.execute(
@@ -92,7 +94,7 @@ for (const testCase of spec.cases) {
 			testCase.args,
 			undefined,
 			undefined,
-			scriptedContext(testCase.ui),
+			ctx,
 		);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);

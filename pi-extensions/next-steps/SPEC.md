@@ -68,8 +68,11 @@ draws its own chips.
   `claude-bridge/claude-opus-5-5` showed 2059 chars before the call and 2193 after. So `execute` reads
   `ctx.sessionManager.getBranch()` and finds the assistant message carrying this call by `toolCallId`.
   It looks it up by id, not as the leaf, because sibling results may already follow it; pi persists the
-  message on `message_end`, before tools run. If that message has a non-empty `text` block, the call ends
-  the turn as before. Only a message with no text continues the turn: its answer is missing or narrated.
+  message on `message_end`, before tools run. If that message's text is at least `MIN_ANSWER_CHARS`
+  (200) long, the call ends the turn as before. Otherwise the turn continues: the answer is missing,
+  narrated, or only a lead-in ("Here's the summary:"). The threshold weighs a lost answer against a
+  repeated short one. In local sessions, every one of 42 answers written as text before the call was at
+  least 423 chars; interim notes before other tool calls in the live runs were 47–130.
   Text in earlier messages doesn't count, since interim narration ("Let me check…") would excuse a lost
   answer. Without a session manager, or when the message isn't on the branch, the call asks for the
   final message.
@@ -98,8 +101,8 @@ draws its own chips.
 Package tests cover:
 - normalization (including the nine-item cap), `terminate: false` and the request for the final
   message, blank suggestions included;
-- text in the calling message ending the turn, thinking-only or blank text asking for the final
-  message, the calling message found by id rather than as the leaf, and an earlier message's text not
+- an answer-length text in the calling message ending the turn, a short lead-in, thinking-only or
+  blank text asking for the final message, the calling message found by id rather than as the leaf, and an earlier message's text not
   counting;
 - the legacy refused result's render;
 - an embedder's `guidance` replacing only what it names;
@@ -109,7 +112,8 @@ Package tests cover:
   run clear it, resume restores it, and RPC mode never shows it;
 - wrapping.
 
-`check:pi-packages` loads the packed tarball under Node and runs the execute/terminate/render cases.
+`check:pi-packages` loads the packed tarball under Node and runs the execute/terminate/render cases,
+including one whose session branch holds an answer before the call.
 
 Live check for the answer order (vanilla pi at the catalog version, the package plus ThinkRail's
 guideline loaded with `-e`, `claude-bridge/claude-opus-5-5` at `high`, a scratch repo with four failing

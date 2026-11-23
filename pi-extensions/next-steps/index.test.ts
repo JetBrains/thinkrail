@@ -10,7 +10,7 @@ import defaultFactory, {
 	normalizeSuggestions,
 	suggestionsOnBranch,
 } from "./index.ts";
-import { WRITE_ANSWER_TEXT } from "./src/extension.ts";
+import { MIN_ANSWER_CHARS, WRITE_ANSWER_TEXT } from "./src/extension.ts";
 import { renderNextStepsResult, SuggestionRow, shortcutLabel } from "./src/tui.ts";
 
 type ExecResult = {
@@ -174,15 +174,24 @@ function calling(id: string, blocks: Array<Record<string, unknown>>, extraCalls:
 
 const onBranch = (entries: SessionEntry[]) => ({ sessionManager: { getBranch: () => entries } });
 const PARAMS = { suggestions: ["Open a PR"] };
-const ANSWER = { type: "text", text: "Fixed: the parser now skips blanks." };
+const ANSWER = { type: "text", text: "Fixed: the parser now skips blanks. ".repeat(8) };
 
 describe("whether the turn waits for the final message", () => {
 	test("an answer already written as text in the calling message ends the turn, so it is not repeated", async () => {
 		const { tool } = load();
+		expect(ANSWER.text.trim().length).toBeGreaterThanOrEqual(MIN_ANSWER_CHARS);
 		const ctx = onBranch([calling("c1", [{ type: "thinking", thinking: "" }, ANSWER])]);
 		const result = await tool.execute("c1", PARAMS, undefined, undefined, ctx);
 		expect([result.terminate, result.details]).toEqual([true, { suggestions: ["Open a PR"] }]);
 		expect(result.content[0]?.text).toContain("Your turn is over.");
+	});
+
+	test("a short lead-in before the call is not taken for the answer", async () => {
+		const { tool } = load();
+		const leadIn = [{ type: "text", text: "Here's the summary:" }];
+		const ctx = onBranch([calling("c1", leadIn)]);
+		const result = await tool.execute("c1", PARAMS, undefined, undefined, ctx);
+		expect(result.terminate).toBe(false);
 	});
 
 	test("a calling message with only thinking or blank text asks for the final message", async () => {

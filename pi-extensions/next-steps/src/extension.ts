@@ -57,7 +57,9 @@ export const WRITE_ANSWER_TEXT =
 
 const WIDGET_KEY = "next-steps";
 
-function callingMessageHasText(
+export const MIN_ANSWER_CHARS = 200;
+
+function callingMessageHoldsAnswer(
 	branch: readonly SessionEntry[] | undefined,
 	toolCallId: string,
 ): boolean {
@@ -70,7 +72,11 @@ function callingMessageHasText(
 	return (
 		calling?.type === "message" &&
 		calling.message.role === "assistant" &&
-		calling.message.content.some((block) => block.type === "text" && block.text.trim() !== "")
+		calling.message.content
+			.filter((block) => block.type === "text")
+			.map((block) => block.text)
+			.join("")
+			.trim().length >= MIN_ANSWER_CHARS
 	);
 }
 
@@ -100,7 +106,7 @@ export function createSuggestNextStepsTool(
 		async execute(toolCallId, params: NextStepsParams, _signal, _onUpdate, ctx) {
 			const suggestions = normalizeSuggestions(params.suggestions);
 			const saved = suggestions.length > 0;
-			if (callingMessageHasText(ctx?.sessionManager?.getBranch(), toolCallId)) {
+			if (callingMessageHoldsAnswer(ctx?.sessionManager?.getBranch(), toolCallId)) {
 				const text = saved
 					? "Shown to the user as one-click next messages. Your turn is over."
 					: "No usable suggestions were given. Your turn is over.";
