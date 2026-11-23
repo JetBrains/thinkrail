@@ -2,11 +2,13 @@ import type {
 	ExtensionAPI,
 	ExtensionContext,
 	ExtensionFactory,
+	SessionEntry,
 	ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import type { KeyId } from "@earendil-works/pi-tui";
 import { type Static, Type } from "typebox";
 import {
+	isNextStepsDetails,
 	NEXT_STEPS_TOOL_NAME,
 	type NextStepsDetails,
 	normalizeSuggestions,
@@ -51,7 +53,37 @@ export interface NextStepsExtensionOptions {
 	guidance?: NextStepsGuidance;
 }
 
+export const MISSING_ANSWER_TEXT =
+	"Your answer was not shown to the user: write it as a normal text reply (not in thinking), then call suggest_next_steps again.";
+
 const WIDGET_KEY = "next-steps";
+
+function refusesMissingAnswer(branch: readonly SessionEntry[], toolCallId: string): boolean {
+	const index = branch.findLastIndex(
+		(entry) =>
+			entry.type === "message" &&
+			entry.message.role === "assistant" &&
+			entry.message.content.some((block) => block.type === "toolCall" && block.id === toolCallId),
+	);
+	const calling = branch[index];
+	if (calling?.type !== "message" || calling.message.role !== "assistant") return false;
+	if (calling.message.content.some((block) => block.type === "text" && block.text.trim() !== ""))
+		return false;
+	for (let earlier = index - 1; earlier >= 0; earlier--) {
+		const entry = branch[earlier];
+		if (entry?.type !== "message") continue;
+		const { message } = entry;
+		if (message.role === "user") return true;
+		if (
+			message.role === "toolResult" &&
+			message.toolName === NEXT_STEPS_TOOL_NAME &&
+			isNextStepsDetails(message.details) &&
+			message.details.refused
+		)
+			return false;
+	}
+	return true;
+}
 
 const SHORTCUTS = [
 	"alt+1",
@@ -76,7 +108,15 @@ export function createSuggestNextStepsTool(
 		promptSnippet: guidance.promptSnippet ?? DEFAULT_PROMPT_SNIPPET,
 		promptGuidelines: [...(guidance.promptGuidelines ?? DEFAULT_PROMPT_GUIDELINES)],
 		parameters: NextStepsSchema,
-		async execute(_toolCallId, params: NextStepsParams) {
+		async execute(toolCallId, params: NextStepsParams, _signal, _onUpdate, ctx) {
+			const branch = ctx?.sessionManager?.getBranch();
+			if (branch && refusesMissingAnswer(branch, toolCallId)) {
+				return {
+					content: [{ type: "text", text: MISSING_ANSWER_TEXT }],
+					details: { suggestions: [], refused: true },
+					terminate: false,
+				};
+			}
 			const suggestions = normalizeSuggestions(params.suggestions);
 			const text =
 				suggestions.length > 0

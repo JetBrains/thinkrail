@@ -10,6 +10,7 @@ export interface NextStepsArgs {
 
 export interface NextStepsDetails {
 	suggestions: string[];
+	refused?: true;
 }
 
 export function normalizeSuggestions(raw: readonly unknown[]): string[] {

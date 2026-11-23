@@ -853,6 +853,8 @@
 	"mcp.transport.http": "HTTP",
 	"mcp.transport.stdio": "stdio",
 	"nextSteps.list.empty": "没有可用的建议。",
+	"nextSteps.refused.body": "回复中没有可见的回答，因此在建议后续步骤前已要求代理先写出回答。",
+	"nextSteps.refused.summary": "已要求先以文本给出回答",
 	"nextSteps.summary_one": "建议了 {{count}} 个后续步骤",
 	"nextSteps.summary_other": "建议了 {{count}} 个后续步骤",
 	"notifications.aggregate.body_one": "{{count}} 个工作树需要您处理",

@@ -767,6 +767,8 @@
 	"mcp.transport.http": "HTTP",
 	"mcp.transport.stdio": "stdio",
 	"nextSteps.list.empty": "使える候補はありません。",
+	"nextSteps.refused.body": "返信に表示される回答がなかったため、次のステップを提案する前に回答を書くようエージェントに依頼しました。",
+	"nextSteps.refused.summary": "先に回答をテキストで書くよう依頼",
 	"nextSteps.summary_other": "次のステップを {{count}} 件提案",
 	"notifications.aggregate.body_other": "{{count}} 件のワークツリーが対応を必要としています",
 	"notifications.permission.deniedHint": "このサイトの通知はブロックされています。ブラウザーのサイト設定で再度許可してから、通知をオンにしてください。",
