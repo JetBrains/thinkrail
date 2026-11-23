@@ -98,6 +98,12 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isFunctionList = (value: unknown): boolean =>
 	Array.isArray(value) && value.every((entry) => typeof entry === "function");
 
+const BUILT_IN_ONLY_FIELDS = [
+	"queries",
+	"apiVersion",
+	"supersedesPackages",
+] as const satisfies readonly (keyof ServerExtension)[];
+
 function shapeError(value: unknown): string | undefined {
 	const notADescriptor = "its default export is not a defineServerExtension descriptor";
 	if (!isRecord(value)) return notADescriptor;
@@ -113,6 +119,11 @@ function shapeError(value: unknown): string | undefined {
 	}
 	for (const key of ["title", "description"] as const) {
 		if (value[key] !== undefined && typeof value[key] !== "string") return `"${key}" must be text`;
+	}
+	for (const key of BUILT_IN_ONLY_FIELDS) {
+		if (value[key] !== undefined) {
+			return `"${key}" is not part of extension API 1.0: only a built-in extension declares it`;
+		}
 	}
 	if (
 		value.skillPackages !== undefined &&

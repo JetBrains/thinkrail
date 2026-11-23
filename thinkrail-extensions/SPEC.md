@@ -218,9 +218,11 @@ follow the `.js`, `tsc` stops at the declaration.
 The contract for an extension authored outside this repository. It adds no capability: an installed
 extension contributes what a built-in one can through the tool path (agent tools, skills, boolean
 settings, interactive tools, artifact tools, tool cards with their registration options such as composer
-suggestions). The web shell's contributions — a `globalOverlay`, `commands`, `shortcuts` and a web-only
-Settings row — stay built-in only: an installed web half contributes its tool renderers and nothing else
-([[submodule-web-extensions]]). The **ThinkRail extension is the unit**; a pi package is an optional dependency its
+suggestions). The web shell's contributions — a `globalOverlay`, `commands`, `shortcuts`, `panels` and a
+web-only Settings row — stay built-in only: an installed web half contributes its tool renderers and nothing
+else ([[submodule-web-extensions]]). So do the server's host-only hooks, `queries` (with its `apiVersion`) and
+`supersedesPackages`: they are not in API 1.0, and an installed server half that declares one does not
+load — its row says which field ([[submodule-server-extensions-installed]]). The **ThinkRail extension is the unit**; a pi package is an optional dependency its
 server half composes, because a UI-only extension has none and the agent backend may change.
 
 **Where it is built**

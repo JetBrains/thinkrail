@@ -1110,9 +1110,12 @@ re-opened transcripts provider-valid.
     `isLoaderPolicyStale` is one more predicate of the reconciliation `applyExtensionTools` runs at
     registration, after every reload and on `refreshExtensionTools`, so a session prepared under an older
     policy or older setting values reloads when it registers (or once its turn ends) and a change
-    mid-reload re-reloads — the fan-out alone would miss both. It also compares the **superseded
-    packages** a loader's last load left out (`omitSupersededPackages`, recorded with what that load found
-    of the packages any registry extension supersedes, `supersedablePackagesIn`) with what the current
+    mid-reload re-reloads — the fan-out alone would miss both. The loader's `extensionsOverride` composes
+    `preferRegistryTools(omitSupersededPackages(omitDisabledRegistryExtensions(result, …, registry), …,
+    builtins), registry)`: only a built-in supersedes a package (the installed loader refuses the field).
+    It also compares the **superseded
+    packages** a loader's last load left out (`omitSupersededPackages`, recorded on the stable outer loader
+    with what that load found of the packages a built-in supersedes, `supersedablePackagesIn`) with what the current
     switches would leave out of the same packages: switching a superseding extension reloads exactly the
     chats that load such a package (a user's vanilla `@thinkrail/pi-session-insights`, whose `/insights`
     then appears or goes), under the same end-of-turn rule, and no other chat. Keying the disabled set

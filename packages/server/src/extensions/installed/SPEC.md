@@ -86,7 +86,8 @@ A folder source is never copied: it loads from where it is, and nothing under it
 - **States.** `loaded`; `incompatible` — `extensionApiMismatch` says why, and it is decided **before any
   extension code runs**; `failed` — the reason text: install error, not an extension source, no or
   invalid manifest (including a built-in's name, from the injected `reservedNames`), a declared file
-  missing or resolving outside the package (realpath), a load error, a wrong descriptor shape, a
+  missing or resolving outside the package (realpath), a load error, a wrong descriptor shape or a
+  host-only hook, a
   descriptor `name` other than the package name (the package name is the identity, and a silent rename
   would surprise the author), an unresolvable `skillPackages` entry, or a name an earlier declaration
   already owns (`duplicateOf`). A row's `error` is the user's
@@ -129,7 +130,11 @@ A folder source is never copied: it loads from where it is, and nothing under it
   process's ordinary env. Tests inject a shorter `loadTimeoutMs`. **Identity guard:** the shim's `createAgentSession` and `Type` must be the
   host's own (`===`; a jiti namespace is a Proxy, so members are compared, never namespaces), else the load
   fails — the loader proves on every load that the extension resolution yields the host's single pi. The
-  descriptor's shape is then validated field by field.
+  descriptor's shape is then validated field by field. **Host-only hooks are refused:** a descriptor that
+  declares `queries`, `apiVersion` or `supersedesPackages` is a `failed` row saying the field is not part of
+  extension API 1.0. A query table receives `ExtensionHostServices` and answers `extension.query` with no
+  timeout, and superseding a package would silently drop a user's pi package from every session — both
+  stay with the built-ins until an API version takes them on.
 - **Kind detection at install** ([[submodule-server-agent-packages]] § Kind detection runs it): pi installs
   an npm/git source first and `isExtensionAt(root)` reads the package pi installed — a `thinkrail` key makes
   it an extension — so a plain pi package is fetched once, by pi, as before extensions existed. Only an

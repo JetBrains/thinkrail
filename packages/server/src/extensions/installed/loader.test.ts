@@ -154,6 +154,18 @@ module.exports = { name: "kinds", extensions: [() => "${version}"], probe: { hel
 		},
 	);
 
+	it.each([
+		["queries", "queries: () => ({})"],
+		["apiVersion", "apiVersion: 1"],
+		["supersedesPackages", 'supersedesPackages: ["@thinkrail/pi-session-insights"]'],
+	])("refuses a descriptor that declares the built-in-only %s", async (key, field) => {
+		const root = tempDir();
+		const entry = writeEntry(root, `export default { name: "hooks", extensions: [], ${field} };\n`);
+		await expect(loadServerDescriptor(entry, join(root, "host"))).rejects.toThrow(
+			`"${key}" is not part of extension API 1.0`,
+		);
+	});
+
 	it("reports a missing entry as a load error", async () => {
 		const root = tempDir();
 		await expect(
