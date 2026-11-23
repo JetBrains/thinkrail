@@ -44,23 +44,19 @@ upgrade.
 
 ## The SSE framing patch
 
-Bun silently skips a patch whose version key does not match the installed version, and it applies hunks
-at their recorded line numbers, so a renamed patch can silently produce a broken module. Never just
-rename it.
+The registry entry *Anthropic SSE framing patch* decides whether the patch is dropped, ported, or
+first needs a product decision; this section is only the mechanics. Never just rename the patch.
 
-1. **Decide with the unpatched release.** Temporarily remove the `patchedDependencies` entry,
-   reinstall, and run
+1. **Run the deciding test on the unpatched release.** Temporarily remove the `patchedDependencies`
+   entry, reinstall, and run
    `bun run --cwd packages/server test src/agent/anthropicStreamFraming.test.ts`. Server tests must
-   run from `packages/server`, whose `bunfig.toml` preloads an isolated home.
-   - "Defects the patch fixes" **passes**: upstream fixed it. Delete the patch file, the
-     `patchedDependencies` entry, and the registry entry, and keep the test as the contract.
-   - It **fails**: the patch is still needed. Port it.
-   - Only "behavior the patch keeps" fails: pi changed that behavior. Decide whether to follow it
-     before porting anything (ask the user if it is product-visible).
-2. **Port by regenerating from a clean dist.** `bun patch @earendil-works/pi-ai@<new>`, apply the
-   old patch's change by hand to `dist/api/anthropic-messages.js`, then
-   `bun patch --commit node_modules/@earendil-works/pi-ai`. Delete the old patch file, and check the
-   `patchedDependencies` key and file name.
+   run from `packages/server`, whose `bunfig.toml` preloads an isolated home. Act on the result as the
+   registry entry says; ask the user before following a product-visible change.
+2. **Port by regenerating from a clean dist.** Run `bun patch @earendil-works/pi-ai@<new>`. With the
+   repo's isolated install, the folder it prints is under `node_modules/.bun/`, not the root
+   `node_modules`. Apply the old patch's change by hand to `dist/api/anthropic-messages.js` in that
+   folder, then run the `bun patch --commit '<that folder>'` command it prints. Delete the old patch
+   file, and check the `patchedDependencies` key and file name.
 3. Re-run the framing test patched; every case must pass. Record both runs (unpatched fails N defect
    cases, patched N/N) in *Testing* and in *Last re-check*.
 4. Update the patch path wherever specs name it (`grep -rn "pi-ai@<old>" --include=*.md .`).
