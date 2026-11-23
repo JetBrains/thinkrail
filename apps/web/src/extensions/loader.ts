@@ -16,6 +16,7 @@ export interface InstalledWebExtension {
 	url: string;
 	styles?: string | undefined;
 	shadowed?: readonly string[] | undefined;
+	serverTools?: readonly string[] | undefined;
 }
 
 export type WebExtensionLoadFailure = "import" | "export" | "styles";
@@ -235,7 +236,7 @@ async function runLoad(
 				([tool]) => !descriptor.shadowed?.includes(tool),
 			),
 		);
-		setInstalledToolRenderers(name, toolRenderers);
+		setInstalledToolRenderers(name, toolRenderers, descriptor.serverTools);
 		result = { name, status: "loaded", tools: Object.keys(toolRenderers) };
 	} catch (error) {
 		if (!current()) return superseded(name);
@@ -282,7 +283,12 @@ export function unloadWebExtension(name: string): boolean {
 }
 
 function descriptorKey(descriptor: InstalledWebExtension): string {
-	return [descriptor.url, descriptor.styles ?? "", ...(descriptor.shadowed ?? [])].join("\0");
+	return JSON.stringify([
+		descriptor.url,
+		descriptor.styles ?? "",
+		descriptor.shadowed ?? [],
+		descriptor.serverTools ?? [],
+	]);
 }
 
 export function syncWebExtensions(

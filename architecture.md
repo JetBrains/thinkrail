@@ -439,7 +439,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
     of its surface, and all-or-nothing loading; a security story — installing is
     the consent, global scope only, no isolation, an unreviewed npm-keyword catalog, each an accepted
     risk. Queries, panels and `supersedesPackages` stay with the built-ins: they are not in extension
-    API 1.0, and an installed server half that declares queries or `supersedesPackages` does not load.
+    API 1.0, and an installed server half that declares queries (with their `apiVersion`) or `supersedesPackages` does not load.
     The server half is imported through pi's public loader so its pi imports stay the host's single
     instance in every launcher. Rejected: a logical extension inside
     the apps (three physical homes, no boundary), generated factory lists derived from descriptors

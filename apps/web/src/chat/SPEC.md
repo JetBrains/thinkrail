@@ -611,9 +611,13 @@ registered, the one listed first by the host (the accepted loading window is in
 [[submodule-web-extensions]]) — else the longest app-local prefix registration
 (`registerToolRendererPrefix` — today only `mcp__`, because pi names MCP tools per server), else the
 default. A built-in exact name always wins, an empty prefix never matches, and
-extension descriptors stay exact-name only. An installed exact name never takes a name under an app
-prefix — the host's MCP tools beat an installed one on the server — and the loader never registers an
-installed renderer for a name the host keeps over that extension's server half (its `web.shadowed`).
+extension descriptors stay exact-name only. An installed exact name that the extension's own server half
+registers never takes a name under an app prefix — the host's MCP tools beat an installed one on the
+server — and the loader never registers an installed renderer for a name the host keeps over that
+extension's server half (its `web.shadowed`). A card for a tool the extension's server half does not
+register is the extension's documented purpose and is accepted: a web half may draw a host MCP tool
+(`mcp__<server>__<tool>`) or a host tool that has no card of its own (`set_title`, `grep`), while the host
+still runs the tool; only a built-in card is never replaced.
 The order mirrors which tool the server actually runs (built-in
 tool-name precedence, host-owned tools before installed ones, then pi's first registration wins), so a
 card does not draw over another tool's result outside that window.

@@ -47,6 +47,7 @@ const UI_ONLY: ExtensionCatalogEntry = {
 	...PALETTE,
 	name: "cards",
 	enabled: true,
+	tools: [],
 	web: { url: "/extensions/cards/1.0.0-def/web.js" },
 };
 
@@ -72,6 +73,7 @@ describe("extension catalog selectors", () => {
 				url: PALETTE.web?.url ?? "",
 				styles: PALETTE.web?.styles ?? "",
 				shadowed: ["set_title"],
+				serverTools: ["color_palette"],
 			},
 			{ name: "cards", url: "/extensions/cards/1.0.0-def/web.js" },
 		]);

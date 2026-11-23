@@ -28,6 +28,7 @@ interface RegistryState {
 	builtIn: Map<string, ToolRegistration>;
 	prefixes: Map<string, ToolRegistration>;
 	installed: Map<string, Map<string, ToolRegistration>>;
+	served: Map<string, ReadonlySet<string>>;
 	listeners: Set<() => void>;
 	current: ToolRegistry;
 }
@@ -37,6 +38,7 @@ function createState(): RegistryState {
 		builtIn: new Map(),
 		prefixes: new Map(),
 		installed: new Map(),
+		served: new Map(),
 		listeners: new Set(),
 		current: { revision: 0, exact: new Map(), prefixes: new Map() },
 	};
@@ -49,9 +51,11 @@ function publish(): void {
 	const exact = new Map<string, ToolRegistration>();
 	const prefixed = (name: string) =>
 		[...state.prefixes.keys()].some((prefix) => prefix !== "" && name.startsWith(prefix));
-	for (const owned of state.installed.values()) {
+	for (const [owner, owned] of state.installed) {
+		const served = state.served.get(owner);
 		for (const [name, registration] of owned) {
-			if (!exact.has(name) && !prefixed(name)) exact.set(name, registration);
+			if (exact.has(name) || (served?.has(name) && prefixed(name))) continue;
+			exact.set(name, registration);
 		}
 	}
 	for (const [name, registration] of state.builtIn) exact.set(name, registration);
@@ -85,12 +89,14 @@ export function registerToolRendererPrefix(
 export function setInstalledToolRenderers(
 	owner: string,
 	toolRenderers: NonNullable<WebExtension["toolRenderers"]>,
+	serverTools: readonly string[] = [],
 ): void {
 	const owned = new Map<string, ToolRegistration>();
 	for (const [name, { renderer, options }] of Object.entries(toolRenderers)) {
 		owned.set(name, { renderer, ...options, extension: owner });
 	}
 	state.installed.set(owner, owned);
+	state.served.set(owner, new Set(serverTools));
 	publish();
 }
 
@@ -100,6 +106,7 @@ export function reserveInstalledOwner(owner: string): void {
 
 export function removeInstalledToolRenderers(owner: string): boolean {
 	if (!state.installed.delete(owner)) return false;
+	state.served.delete(owner);
 	publish();
 	return true;
 }

@@ -27,7 +27,7 @@ private and unchanged. It imports no pi value at runtime.
   `@earendil-works/pi-coding-agent`. It is the installed subset of the built-ins' `extension-api/server`:
   the host-only hooks — `queries` with its `apiVersion`, `supersedesPackages`, `WorkspaceFiles.checkArtifacts`
   and `ArtifactTool.published` — are not in API 1.0 (the host refuses an installed descriptor that
-  declares `queries` or `supersedesPackages`, [[submodule-server-extensions-installed]]).
+  declares `queries` (with its `apiVersion`) or `supersedesPackages`, [[submodule-server-extensions-installed]]).
 - `./web`, `./resources`, `./ui/button`, `./ui/theme`, `./ui/utils` — **type declarations** of the
   shared set. At runtime these specifiers are the app's own modules on
   `globalThis.__thinkrailExtensionHost = { api, modules }`, keyed by exactly these specifiers plus

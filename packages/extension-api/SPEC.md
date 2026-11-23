@@ -207,7 +207,7 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   extensions the host leaves out of its sessions while this extension is on — a user's vanilla install of
   the same capability), plus optional `apiVersion` and `queries`. `queries` (with its `apiVersion`) and
   `supersedesPackages` are built-in only: they are not in extension API 1.0, and the installed loader
-  refuses a server half that declares `queries` or `supersedesPackages`. Its identity
+  refuses a server half that declares `queries` (with its `apiVersion`) or `supersedesPackages`. Its identity
   helper preserves factories, order and optional-field absence; loading and skill resolution remain host
   responsibilities.
 - `queries(host: ExtensionHostServices)` returns `ExtensionQuery` methods by name — queries (reads, and
