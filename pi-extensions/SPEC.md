@@ -108,11 +108,12 @@ publish within 48 hours of its creation — the manual bootstrap does not count 
 before the package's next version PR merges, not at bootstrap. Operational detail: `pi-extensions/README.md`.
 
 Order: visualize → ask-user-question → next-steps → session-insights → delegation + subagents →
-background-commands → spec-graph → todos. **session-insights is publish-ready, not published:** it ships
-the vanilla-pi `/insights` command, so it left `private` (which also puts it under the parity gate) and
-carries its first changeset at `0.0.0`. Nothing publishes until a human cuts the version PR and an
-npm-org owner bootstraps the first version (`release:pack session-insights`); its gallery `video` is still
-to be recorded before that. Not published: `pi-thinkrail-workflow` (workspace-internal), `pi-dag` (until
+background-commands → spec-graph → todos. **session-insights shipped `0.1.0` without its gallery
+`video`, by decision:** it ships the vanilla-pi `/insights` command, so it left `private` (which also puts
+it under the parity gate), and its first version was bootstrapped by hand before the clip was recorded,
+rather than holding the release for it. A published version's manifest cannot be amended, so pi.dev shows
+no preview for `0.1.0`; the clip and `pi.video` ship with its next version. Until then it is the one
+installable extension without a `video`. Not published: `pi-thinkrail-workflow` (workspace-internal), `pi-dag` (until
 it has a consumer).
 
 ## Boundary
