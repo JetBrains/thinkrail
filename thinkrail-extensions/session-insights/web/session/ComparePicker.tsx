@@ -12,8 +12,8 @@ import { sessionName } from "../copy";
 import { formatCost, formatCount, formatStart } from "../format";
 import { useLabels } from "../labels/api";
 import { LabelChips } from "../labels/LabelsEditor";
-import { listScope, loadSessions, openComparison, type ScopeKind } from "../load";
-import { useKeyedQuery } from "../useKeyedQuery";
+import { type ListOutcome, listScope, loadSessions, openComparison, type ScopeKind } from "../load";
+import { type Query, useKeyedQuery } from "../useKeyedQuery";
 
 /** The session the comparison starts from: it is A. */
 export interface CompareFrom {
@@ -52,6 +52,29 @@ export function pickerRows(
 		)
 		.sort(byStartDesc);
 }
+
+/** A list answered while the host's index is still being built: more sessions are on their way. */
+export function stillIndexing(outcome: ListOutcome): boolean {
+	return outcome.kind === "ok" && outcome.result.state.phase !== "ready";
+}
+
+export type PickerStatus = "loading" | "failed" | "noMatches" | "empty" | null;
+
+/** What the picker says under its options: nothing while it shows some, else why there are none. */
+export function pickerStatus(list: Query<ListOutcome>, shown: number, query: string): PickerStatus {
+	if (list.kind === "loading") return "loading";
+	if (list.kind !== "ready" || list.value.kind !== "ok") return "failed";
+	if (shown > 0) return null;
+	if (query.trim()) return "noMatches";
+	return stillIndexing(list.value) ? "loading" : "empty";
+}
+
+const STATUS_COPY = {
+	loading: "sessionInsights.comparePicker.loading",
+	failed: "sessionInsights.comparePicker.failed",
+	noMatches: "sessionInsights.comparePicker.noMatches",
+	empty: "sessionInsights.comparePicker.empty",
+} as const;
 
 /** The option ↑/↓ moves to (clamped at the ends), Home/End reach; `null` for any other key. */
 export function pickerStep(key: string, active: number, count: number): number | null {
@@ -155,7 +178,11 @@ export function CompareChooser({
 	const [scope, setScope] = useState<ScopeKind>("project");
 	const [query, setQuery] = useState("");
 	const [active, setActive] = useState(0);
-	const list = useKeyedQuery(scope, (signal) => loadSessions(host, listScope(host, scope), signal));
+	const list = useKeyedQuery(
+		scope,
+		(signal) => loadSessions(host, listScope(host, scope), signal),
+		stillIndexing,
+	);
 	const labels = useLabels(host, null, true);
 	const labelsOf = new Map(
 		(labels?.sessions ?? []).map((entry) => [entry.sessionId, entry.labels]),
@@ -184,16 +211,8 @@ export function CompareChooser({
 		setActive(next);
 		document.getElementById(optionId(next))?.scrollIntoView({ block: "nearest" });
 	};
-	const state =
-		list.kind === "loading"
-			? t("sessionInsights.comparePicker.loading")
-			: list.kind !== "ready" || list.value.kind !== "ok"
-				? t("sessionInsights.comparePicker.failed")
-				: rows.length > 0
-					? null
-					: query.trim()
-						? t("sessionInsights.comparePicker.noMatches")
-						: t("sessionInsights.comparePicker.empty");
+	const status = pickerStatus(list, rows.length, query);
+	const state = status ? t(STATUS_COPY[status]) : null;
 	return (
 		<div data-testid="compare-picker" className="flex w-400 max-w-full flex-col gap-8 p-8">
 			<span className="truncate tr-text-metadata text-text-subtle" title={from.name}>

@@ -947,7 +947,7 @@ export function TraceExplorer({
 						</Legend>
 					</div>
 				</ResizablePanel>
-				<ResizableHandle />
+				<ResizableHandle direction={stacked ? "vertical" : "horizontal"} />
 				<ResizablePanel defaultSize={stacked ? 40 : 32} minSize={stacked ? 20 : 22}>
 					<div
 						data-testid="trace-details-pane"

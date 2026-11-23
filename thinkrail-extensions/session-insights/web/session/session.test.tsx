@@ -8,14 +8,14 @@ import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { DetailsContext, type DetailsHost } from "../details/context";
 import { DetailsPanel } from "../details/DetailsPanel";
-import { figure, SOURCES, START, sessionRow, tokenTotals } from "../fixtures.test";
+import { figure, listResult, SOURCES, START, sessionRow, tokenTotals } from "../fixtures.test";
 import { requestSessionFocus, settleSessionFocus } from "../focus";
 import { pendingListView, settleListView } from "../listIntent";
 import type { OverviewLink } from "../overview/OverviewView";
 import { sampleEvents } from "../trace/events.test";
 import { TraceModel } from "../trace/model";
 import { TraceExplorer } from "../trace/TraceExplorer";
-import { compareWith, pickerRows, pickerStep } from "./ComparePicker";
+import { compareWith, pickerRows, pickerStatus, pickerStep, stillIndexing } from "./ComparePicker";
 import { Header, headerFigures, headerLayout, paneActions } from "./Header";
 import { initialNavigation, moved, openFindings, routeOverviewLink } from "./navigation";
 import SessionPanel, { CostContextSection, ModeSwitch, showEventInChat } from "./SessionPanel";
@@ -235,6 +235,26 @@ describe("compare with…", () => {
 		expect(ids("current")).toEqual([]);
 	});
 
+	test("a list answered while the index is building is asked again and reads as loading, not empty", () => {
+		const cold = listResult(rows.slice(0, 1), {
+			state: { phase: "cold", indexed: 1, total: 5 },
+		});
+		const ready = listResult(rows.slice(0, 1));
+		expect(stillIndexing({ kind: "ok", result: cold })).toBe(true);
+		expect(stillIndexing({ kind: "ok", result: ready })).toBe(false);
+		expect(stillIndexing({ kind: "version" })).toBe(false);
+		const answered = (result: typeof cold) => ({
+			kind: "ready" as const,
+			value: { kind: "ok" as const, result },
+		});
+		expect(pickerStatus(answered(cold), 0, "")).toBe("loading");
+		expect(pickerStatus(answered(ready), 0, "")).toBe("empty");
+		expect(pickerStatus(answered(cold), 0, "fix")).toBe("noMatches");
+		expect(pickerStatus(answered(cold), 2, "")).toBeNull();
+		expect(pickerStatus({ kind: "loading" }, 0, "")).toBe("loading");
+		expect(pickerStatus({ kind: "failed" }, 0, "")).toBe("failed");
+	});
+
 	test("↑/↓ move between the options, clamped, Home and End reach the ends", () => {
 		expect(pickerStep("ArrowDown", 0, 3)).toBe(1);
 		expect(pickerStep("ArrowDown", 2, 3)).toBe(2);
@@ -322,6 +342,7 @@ describe("the sections", () => {
 		const route = {
 			trace: (mode: string, events: readonly string[]) => calls.push(["trace", mode, events]),
 			section: (section: string) => calls.push(["section", section]),
+			context: () => calls.push(["context"]),
 			chain: (index: number) => calls.push(["chain", index]),
 			file: (path: string) => calls.push(["file", path]),
 			findings: () => calls.push(["findings"]),
@@ -331,6 +352,7 @@ describe("the sections", () => {
 			{ to: "trace", mode: "timeline", events: ["a", "b"] },
 			{ to: "errors", chain: 2 },
 			{ to: "cost" },
+			{ to: "cost", view: "context" },
 			{ to: "files", path: "src/a.ts" },
 			{ to: "subagents" },
 			{ to: "findings" },
@@ -342,6 +364,7 @@ describe("the sections", () => {
 			["section", "errors"],
 			["chain", 2],
 			["section", "cost"],
+			["context"],
 			["section", "files"],
 			["file", "src/a.ts"],
 			["section", "subagents"],
@@ -484,6 +507,17 @@ describe("beside the chat", () => {
 			'data-testid="trace-details-pane" data-stacked="true"',
 		);
 		expect(explorer("tab", noop)).not.toContain('data-stacked="true"');
+	});
+
+	test("the divider above the stacked details runs across the pane, the tree/Gantt one stays upright", () => {
+		const orientations = (markup: string) =>
+			[
+				...markup.matchAll(
+					/data-panel-resize-handle-id[^>]*?aria-orientation="(\w+)"|aria-orientation="(\w+)"[^>]*?data-panel-resize-handle-id/g,
+				),
+			].map((match) => match[1] ?? match[2]);
+		expect(orientations(explorer("chatPane", noop))).toEqual(["vertical", "horizontal"]);
+		expect(orientations(explorer("tab", noop))).toEqual(["vertical", "vertical"]);
 	});
 
 	test("the trace's fallback selection on mount is not a pick", () => {

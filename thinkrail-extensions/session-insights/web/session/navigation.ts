@@ -57,6 +57,8 @@ export function initialNavigation(saved: SessionViewState, focus: string | null)
 export interface OverviewRoute {
 	trace: (mode: TraceMode, events: readonly string[]) => void;
 	section: (section: Exclude<Section, "trace" | "overview">) => void;
+	/** *Cost & context* scrolled to its context half. */
+	context: () => void;
 	chain: (index: number) => void;
 	file: (path: string) => void;
 	findings: () => void;
@@ -72,7 +74,8 @@ export function routeOverviewLink(link: OverviewLink, route: OverviewRoute): voi
 			if (link.chain !== undefined) route.chain(link.chain);
 			return;
 		case "cost":
-			route.section("cost");
+			if (link.view === "context") route.context();
+			else route.section("cost");
 			return;
 		case "files":
 			route.section("files");

@@ -1128,9 +1128,16 @@ test("context and cache, why a session was expensive and its files explain one s
 	const session = page.getByTestId("session-insights-session");
 	await expect(session).toHaveAttribute("data-session-id", CONTEXT_SESSIONS.refactor.id);
 
-	await session.getByTestId("session-insights-section-cost").click();
-	await expect(session.getByTestId("cost-context-cost").getByTestId("cost-view")).toBeVisible();
+	await page.setViewportSize({ width: 1440, height: 800 });
+	await session.getByTestId("overview-link-context").click();
+	await expect(session.getByTestId("session-insights-section-cost")).toHaveAttribute(
+		"aria-selected",
+		"true",
+	);
+	await expect(session.getByTestId("cost-context-cost").getByTestId("cost-view")).toBeAttached();
 	const context = session.getByTestId("cost-context-context").getByTestId("context-view");
+	await expect(context.getByTestId("context-chart")).toBeInViewport();
+	await page.setViewportSize({ width: 1920, height: 1080 });
 	await expect(context.getByTestId("context-chart")).toHaveAttribute("data-calls", "15");
 	await expect(context.getByTestId("context-chart")).toHaveAttribute("data-misses", "4");
 	await expect(context.getByTestId("context-cliff")).toHaveText(

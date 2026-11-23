@@ -328,7 +328,9 @@ only through host-injected locators.
   { a, b }, "A ↔ B")` — one tab per ordered pair. The row's compare button and the two-click picking bar
   were removed: picking took two clicks on a small button and shared its name with the slice comparison.
 - ***Compare with…*** in a session tab's header (`ComparePicker`): a searchable popover over `sessions.list`
-  for this project or all projects, newest first, the current session excluded and named as A; typing
+  for this project or all projects, newest first, the current session excluded and named as A (asked
+  again with the backoff while the host's index is still being built, and reading as loading rather than
+  empty until it is); typing
   filters the rows by title, first prompt or label (presentation), ↑/↓, Enter and Esc work, and the pick
   opens the same comparison tab with this session as A.
 - **The tab** (`ComparePanel`): both sessions' header cards (`session.summary`; start, turns, calls,
@@ -397,7 +399,7 @@ only through host-injected locators.
   the context half of *Cost & context* — and *What to do* asks the list for Insights → What to do
   (`listIntent.ts`) over the session's own project — this project, or all projects for a session of
   another one, since the card counted the findings there — before `openPanel("sessions")`. It is asked again (1 s, 2 s, then every 5 s) while the
-  session is `pending` or the findings are still being counted.
+  session is `pending` or the findings are still being counted, and at once on the session's *Reload*.
 - **View state.** Each tab and chat pane keeps the section, trace mode, selection, folds, the trace's top
   row, the context's chart or diff, the details' tab, the picked chain and file through
   `PanelHost.saveViewState` (250 ms after the last change, on unmount and before ⤢ / ×) and restores them

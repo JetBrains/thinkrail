@@ -596,7 +596,7 @@ export function TurnsView({
 						<Legend model={model} testId="turns-legend" />
 					</div>
 				</ResizablePanel>
-				<ResizableHandle />
+				<ResizableHandle direction={stacked ? "vertical" : "horizontal"} />
 				<ResizablePanel defaultSize={stacked ? 40 : 32} minSize={stacked ? 20 : 22}>
 					<div
 						className={cn(

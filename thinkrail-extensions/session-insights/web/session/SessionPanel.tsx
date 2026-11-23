@@ -220,21 +220,36 @@ function ModeLoading({ modes, children }: { modes: ReactNode; children: ReactNod
 	);
 }
 
-/** Why it was expensive, then context and cache, in one scroll. */
+/**
+ * Why it was expensive, then context and cache, in one scroll; each new `revealContext` scrolls the
+ * context half into view once both halves have settled, so a half still loading cannot move it after.
+ */
 export function CostContextSection({
 	cost,
 	context,
 	diff,
+	revealContext = 0,
+	settled = true,
 }: {
 	cost: ReactNode;
 	context: ReactNode;
 	/** The request diff fills a box of its own height inside the scroll. */
 	diff: boolean;
+	revealContext?: number;
+	settled?: boolean;
 }) {
+	const contextHalf = useRef<HTMLElement>(null);
+	const revealed = useRef(0);
+	useEffect(() => {
+		if (revealContext === 0 || revealContext === revealed.current || !settled) return;
+		revealed.current = revealContext;
+		contextHalf.current?.scrollIntoView({ block: "start" });
+	}, [revealContext, settled]);
 	return (
 		<div data-testid="cost-context" className="h-full min-h-0 overflow-y-auto">
 			<section data-testid="cost-context-cost">{cost}</section>
 			<section
+				ref={contextHalf}
 				data-testid="cost-context-context"
 				className={cn("border-border-default border-t", diff && "h-640")}
 			>
@@ -262,6 +277,8 @@ interface SectionsProps {
 	ready: ReadonlyMap<string, readonly TraceEvent[]>;
 	memory: TraceMemory;
 	contextMode: ContextMode;
+	/** Bumped by the Overview's Context link: *Cost & context* scrolls to its context half. */
+	contextReveal: number;
 	chain: number | null;
 	file: string | null;
 	/** A selection the user made in the trace (its tree, turns or timeline). */
@@ -290,6 +307,7 @@ function SessionSections({
 	ready,
 	memory,
 	contextMode,
+	contextReveal,
 	chain,
 	file,
 	onPick,
@@ -409,6 +427,8 @@ function SessionSections({
 		return (
 			<CostContextSection
 				diff={contextMode === "diff" && context.kind === "ready"}
+				revealContext={contextReveal}
+				settled={cost.kind !== "loading" && context.kind !== "loading"}
 				cost={
 					cost.kind !== "ready" || !cost.value.cost ? (
 						<Unready
@@ -580,6 +600,7 @@ export default function SessionPanel({ host, params }: PanelProps) {
 	const [contextMode, setContextMode] = useState<ContextMode>(() => memory.state.context);
 	const [detailTab, setDetailTab] = useState<DetailTab | null>(() => memory.state.detailTab);
 	const [chain, setChain] = useState<number | null>(() => memory.state.chain);
+	const [contextReveal, setContextReveal] = useState(0);
 	const [file, setFile] = useState<string | null>(() => memory.state.file);
 	const { section, mode, selectedId } = navigation;
 	useEffect(() => {
@@ -710,6 +731,10 @@ export default function SessionPanel({ host, params }: PanelProps) {
 				);
 			},
 			section: (to) => navigate({ section: to }),
+			context: () => {
+				navigate({ section: "cost" });
+				setContextReveal((current) => current + 1);
+			},
 			chain: setChain,
 			file: setFile,
 			findings: () => openFindings(host, overview?.projectId ?? null),
@@ -794,7 +819,12 @@ export default function SessionPanel({ host, params }: PanelProps) {
 				<div {...tabPanel(tabsId, section)} className="min-h-0 flex-1">
 					{section === "overview" ? (
 						<div data-testid="session-insights-overview" className="h-full min-h-0 overflow-y-auto">
-							<OverviewView host={host} sessionId={sessionId} onOpen={onOverview} />
+							<OverviewView
+								host={host}
+								sessionId={sessionId}
+								reload={traceAttempt}
+								onOpen={onOverview}
+							/>
 						</div>
 					) : trace.kind !== "ready" ? (
 						<Unready
@@ -820,6 +850,7 @@ export default function SessionPanel({ host, params }: PanelProps) {
 							ready={ready}
 							memory={traceMemory}
 							contextMode={contextMode}
+							contextReveal={contextReveal}
 							chain={chain}
 							file={file}
 							onPick={onPick}

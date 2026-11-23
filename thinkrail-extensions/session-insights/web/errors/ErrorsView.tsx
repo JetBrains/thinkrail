@@ -778,7 +778,7 @@ export function ErrorsView({
 					</div>
 				</div>
 			</ResizablePanel>
-			<ResizableHandle />
+			<ResizableHandle direction={stacked ? "vertical" : "horizontal"} />
 			<ResizablePanel defaultSize={42} minSize={25}>
 				<div
 					className={cn("h-full min-h-0 border-border-default", stacked ? "border-t" : "border-l")}

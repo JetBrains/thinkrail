@@ -22,6 +22,8 @@ export type OverviewLink =
 export interface OverviewViewProps {
 	host: PanelHost;
 	sessionId: string;
+	/** Bumped by the session's *Reload*: the cards are asked again for the newer revision. */
+	reload?: number;
 	onOpen: (link: OverviewLink) => void;
 }
 
@@ -126,12 +128,12 @@ export function OverviewBody({
  * The session tab's landing view: one `session.overview` answer — every card from one trace revision —
  * asked again while the index has not reached the session or the scope's findings are still counted.
  */
-export function OverviewView({ host, sessionId, onOpen }: OverviewViewProps) {
+export function OverviewView({ host, sessionId, reload = 0, onOpen }: OverviewViewProps) {
 	const t = useT();
 	const [attempt, setAttempt] = useState(0);
 	const serves = hostServesThisVersion(host);
 	const query = useKeyedQuery(
-		serves ? `${sessionId}:${attempt}` : null,
+		serves ? `${sessionId}:${reload}:${attempt}` : null,
 		(signal) => loadSessionOverview(host, sessionId, signal),
 		overviewPending,
 	);
