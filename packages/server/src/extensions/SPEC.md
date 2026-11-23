@@ -64,7 +64,7 @@ lookup, skill roots — defaults to it, so an installed extension is composed ex
   extension lets the package load again. The catalog still lists the package with what a load recorded,
   since recording runs first; `agent` marks its row `supersededBy` through `supersedingExtension(name,
   isDisabled)` — the enabled extension naming that package — and keys an open chat's reload on what
-  `supersedablePackagesIn(result)` — the loaded packages any extension supersedes, on or off — found, so a
+  `supersedablePackagesIn(result, builtins)` — the loaded packages any built-in supersedes, on or off — found, so a
   switch flip reloads only chats that actually load such a package),
   `preferRegistryTools(result)` (also composed into that override, after the disabled filter). It moves a
   **built-in** directly ahead of the first other extension that registers one of its tool names, so a
