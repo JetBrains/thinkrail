@@ -20,6 +20,35 @@ const DEFAULT_TIMEOUT_MS = 60_000;
 const RECONNECT_INITIAL_MS = 500;
 const RECONNECT_MAX_MS = 10_000;
 const RECONNECT_STABLE_MS = 5_000;
+const REQUEST_WINDOWS = { ordinary: 256, control: 32 } as const;
+type RequestLane = keyof typeof REQUEST_WINDOWS;
+const CONTROL_METHODS: ReadonlySet<WsMethodName> = new Set([
+	"session.abort",
+	"session.extUiReply",
+	"session.respondToTool",
+	"session.answerQuestion",
+	"subagent.stop",
+	"subagent.stopAll",
+	"backgroundCommand.stop",
+	"terminal.write",
+	"terminal.resize",
+	"terminal.close",
+	"provider.loginReply",
+	"provider.loginCancel",
+	"project.cancelClone",
+	"speech.cancelInstall",
+]);
+
+// Unknown methods remain ordering barriers so cancellation cannot precede initiation.
+const OVERTAKABLE_READS: ReadonlySet<WsMethodName> = new Set([
+	"project.list",
+	"session.list",
+	"session.stateList",
+	"git.status",
+	"git.diffFile",
+	"git.listCommits",
+	"workspace.turns",
+]);
 
 export function reconnectDelay(
 	previousDelayMs: number,
@@ -81,11 +110,15 @@ export class WsTransport {
 		string,
 		{
 			frame: string;
+			lane: RequestLane;
+			canBeOvertaken: boolean;
+			sent: boolean;
 			resolve: (v: unknown) => void;
 			reject: (e: Error) => void;
 			timer: ReturnType<typeof setTimeout>;
 		}
 	>();
+	private readonly active = { ordinary: 0, control: 0 };
 	private readonly subscribers = new Map<string, Set<PushHandler>>();
 	private readonly latest = new Map<string, unknown>();
 	private ackQueue: string[] = [];
@@ -115,10 +148,13 @@ export class WsTransport {
 				return;
 			}
 			openedAt = Date.now();
-			this.onStatus?.("connected");
 			this.ackQueue = [];
 			this.sendFrame(JSON.stringify({ resume: [...this.pending.keys()] }));
-			for (const entry of this.pending.values()) this.sendFrame(entry.frame);
+			for (const entry of this.pending.values()) {
+				if (entry.sent) this.sendFrame(entry.frame);
+			}
+			this.drainRequests();
+			if (this.ws === ws && ws.readyState === WebSocket.OPEN) this.onStatus?.("connected");
 		};
 		ws.onmessage = (ev) => this.handleMessage(ev.data);
 		ws.onclose = () => {
@@ -150,19 +186,49 @@ export class WsTransport {
 			);
 		}
 		return new Promise<WsResult<M>>((resolve, reject) => {
+			const lane = CONTROL_METHODS.has(method) ? "control" : "ordinary";
 			const timer = setTimeout(() => {
-				this.pending.delete(id);
-				if (this.ws?.readyState === WebSocket.OPEN) this.queueAck(id);
+				const entry = this.takePending(id);
+				if (entry?.sent && this.ws?.readyState === WebSocket.OPEN) this.queueAck(id);
 				reject(new RequestTimeoutError(t("app.transport.timedOut", { method })));
+				if (entry) this.drainRequests();
 			}, timeoutMs);
 			this.pending.set(id, {
 				frame,
+				lane,
+				canBeOvertaken: OVERTAKABLE_READS.has(method),
+				sent: false,
 				resolve: resolve as (v: unknown) => void,
 				reject,
 				timer,
 			});
-			this.sendFrame(frame);
+			if (this.active[lane] < REQUEST_WINDOWS[lane]) this.drainRequests();
 		});
+	}
+
+	private takePending(id: string) {
+		const entry = this.pending.get(id);
+		if (!entry) return undefined;
+		clearTimeout(entry.timer);
+		this.pending.delete(id);
+		if (entry.sent) this.active[entry.lane]--;
+		return entry;
+	}
+
+	private drainRequests(): void {
+		if (this.ws?.readyState !== WebSocket.OPEN) return;
+		for (const entry of this.pending.values()) {
+			if (entry.sent) continue;
+			if (this.active[entry.lane] >= REQUEST_WINDOWS[entry.lane]) {
+				if (!entry.canBeOvertaken) return;
+				continue;
+			}
+			this.flushAcks();
+			if (this.ws?.readyState !== WebSocket.OPEN) return;
+			entry.sent = true;
+			this.active[entry.lane]++;
+			this.sendFrame(entry.frame);
+		}
 	}
 
 	subscribe(channel: string, handler: PushHandler): () => void {
@@ -185,6 +251,7 @@ export class WsTransport {
 		queueMicrotask(() => {
 			this.ackScheduled = false;
 			this.flushAcks();
+			this.drainRequests();
 		});
 	}
 
@@ -220,10 +287,8 @@ export class WsTransport {
 			return;
 		}
 		this.queueAck(msg.id);
-		const entry = this.pending.get(msg.id);
+		const entry = this.takePending(msg.id);
 		if (!entry) return;
-		clearTimeout(entry.timer);
-		this.pending.delete(msg.id);
 		if (msg.ok) {
 			entry.resolve(msg.result);
 			return;
