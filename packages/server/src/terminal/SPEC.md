@@ -25,7 +25,8 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   `persistTerminalSessions`, `reviveTerminalSessions`, `closeAllTerminals`, `clearTerminalClient`,
   `resetTerminalState` (test seam), `setTerminalPublisher`,
   `setTerminalTabsPublisher`; an accepted `writeTerminal` returns its owning workspace id (a displaced
-  caller returns `null`), so the host counts only input that actually reached a PTY as workspace activity;
+  caller returns `null`), so the host can attribute accepted input to a workspace; focus-report-only and
+  empty chunks still reach the PTY, while the host excludes them from workspace activity;
   the `TerminalDeliveryResult` type shared with the host publisher adapter.
 - **Allowed deps:** `persistence`, `contracts` (`WS_CHANNELS`, `TerminalWindowsShell`), `bun-pty`,
   `Bun.which`, `Bun.spawnSync` (`id -un`), `process.env`.
