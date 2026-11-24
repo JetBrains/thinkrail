@@ -102,7 +102,8 @@ does on retrieval benchmarks.
   pays a root's first build in one turn (a corpus of tens of megabytes would hold it for seconds).
 - **Benchmark.** `core/bench/` holds a frozen copy of 15 real specs (`*.md.txt`, so no indexer sees a
   duplicate id) and 20 questions written without the engine in view; the test gates on ≥ 16 with the
-  expected section in the top 3. Five paraphrase misses are recorded but not gated. `bun
+  expected section in the top 3. Five paraphrase misses are recorded but not gated. It gates ranking, not
+  speed: about 0.7 s on a developer machine, up to 5.5 s on a loaded CI runner, so its bound is 30 s. `bun
   core/bench/live.ts [root]` prints the same report over a live tree and never fails.
 
 ## Finished task-specs
