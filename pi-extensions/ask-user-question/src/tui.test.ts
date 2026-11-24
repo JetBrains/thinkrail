@@ -530,7 +530,7 @@ describe("askInTerminal", () => {
 });
 
 describe("transcript renderers", () => {
-	const plain = (component: { render(width: number): string[] }) =>
+	const plain = (component: { render(width: number): readonly string[] }) =>
 		component
 			.render(100)
 			.map((line) => stripTerminalSequences(line).trimEnd())
