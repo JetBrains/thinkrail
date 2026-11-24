@@ -77,7 +77,9 @@ it on stop, so `log` stays free of any analytics edge.
 
 - **Owns:** the process-level Pino adapter, level/env resolution, scoped façade, JSONL schema and privacy
   policy, pino-roll configuration and startup cleanup invocation, pretty stderr, and the shared
-  `describeError` used by the independent crash report.
+  `describeError` used by the independent crash report. Its optional JSON replacer lets the crash
+  formatter mask structured credential fields while retaining the same Error-stack and unrenderable-value
+  handling. Ordinary log callers omit it; their existing serialization and Pino redaction are unchanged.
 - **Public surface (barrel):** `logger`, `Logger`, `LogLevel`, `initLogging`, `InitLoggingOptions`,
   `setLogLevel`, `logsDir`, `describeError`, `observeLoggedErrors`.
 - **Allowed deps:** `persistence` (`dataDir`); `pino`, `pino-pretty`, `pino-roll`; Node path/streams.

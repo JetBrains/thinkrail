@@ -283,13 +283,25 @@ nudges `fsChanged`. Nothing cleans the folder: sent messages keep naming its fil
   bounded settle includes hidden delegation children even when their parent is
   idle, plus child cascades already started by a concurrent removal, so graceful quit does not let a
   background child lose its terminal abort/tool result; `crashLog.ts` (`installCrashLog` — the `uncaughtException`/`unhandledRejection` report
-  appended to `<dataDir>/logs/crash.log` and echoed to stderr, then — for the first fault only — an awaited,
-  ≤ 1 s analytics `reportFatalError` (tagged with the crash kind) before `exit(1)`; later faults in that window are still appended but
+  appended to `<dataDir>/logs/crash.log` and echoed to stderr. Both destinations receive the same
+  credential-redacted record, capped at **64 KiB in UTF-8**, including its header and an explicit
+  truncation marker, without splitting a UTF-8 character. Structured credential fields are replaced at
+  any depth; recognizable credential assignments, authorization/cookie headers, URL userinfo and private
+  key blocks in error text are masked too. This is defense in depth, not a guarantee that arbitrary
+  project text or unlabeled secrets are safe to share. The crash directory and file are created and
+  tightened to `0700`/`0600` on reuse (POSIX permissions; no Windows ACL guarantee). Linked directories
+  and linked or non-regular files are refused before chmod/write; a FIFO cannot block the fatal path.
+  Then — for the first fault only — an awaited, ≤ 1 s analytics `reportFatalError` (tagged with the crash
+  kind) precedes an awaited stderr flush, capped at another 1 s for a broken/stalled sink, and `exit(1)`.
+  Later faults in that window are still appended and their stderr writes join the flush, but
   neither re-report nor re-exit: in-process pi means such a
   fault is the whole host's, and a launcher started without a terminal otherwise loses its only trace.
   Never a recovery, and never installed under `NODE_ENV=test` — a unit-test process reports its own
-  faults. It renders the throw via the `log` module's `describeError`, so crash reports and log lines
-  agree, but keeps its own sync append — the death path must not depend on the logger's state);
+  faults. It renders the throw via the `log` module's `describeError` with a credential-field replacer,
+  then redacts and bounds that result before either destination. The synchronous file append and bounded
+  stderr write callbacks do not depend on the logger's state; a formatting/file/stream failure cannot
+  recurse through the crash handler or prevent termination. Analytics keeps its existing classifier-only
+  payload, independent of this local diagnostic record);
   `boot.ts` (`bootHost` → await `initLogging` — debug level when the launcher passed `verbose` — then
   install the crash report, await the login-shell environment when the launcher passed
   `resolveShellEnv: true` (started before `initLogging`), apply the stored host environment
