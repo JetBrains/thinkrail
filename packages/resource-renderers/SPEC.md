@@ -740,7 +740,11 @@ until the main thread moves the content in the same frame it renders the window 
 never blanks. Pierre corrects the scroll position inside its rAF pass and `useScrollViewState`
 restores it from a ResizeObserver, both after that frame's scroll event, so the scroller's own
 `scrollTo` and `scrollTop` re-sync the transform synchronously; otherwise Pierre would measure rows
-against a stale offset. Natural-height stacked sections run the same structure without scrolling:
+against a stale offset. The scroller hands Pierre's virtualizer the content element to watch for size
+changes. Left to itself the virtualizer watches the scroller's first child, which is the cursor proxy
+once a diff takes review, so it kept the scroll height of a first render that came before the
+highlighter loaded and clamped every later scroll to the top: a large diff scrolled at once stayed
+blank below its first window. Natural-height stacked sections run the same structure without scrolling:
 the viewport's height is read back from the scroller after the sizer is set, so it never feeds the
 content's own height.
 
