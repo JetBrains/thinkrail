@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { EXTENSION_API_VERSION, SDK_PACKAGE } from "../shared";
 import { ExtensionBuildError } from "./errors";
+import { toPosix } from "./paths";
 
 export const EXTENSION_KEYWORD = "thinkrail-extension";
 
@@ -168,5 +169,5 @@ export function readExtensionPackage(root: string): ExtensionPackage {
 }
 
 export function displayPath(root: string, path: string): string {
-	return relative(root, path) || ".";
+	return toPosix(relative(root, path)) || ".";
 }

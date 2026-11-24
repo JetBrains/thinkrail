@@ -157,6 +157,8 @@ private and unchanged. It imports no pi value at runtime.
   prefixed utilities, pointing at the app's runtime variables. The app's `tr-*` typography classes are
   used unprefixed and come from the app's sheet.
 
+Every path the build reports (`files[].path`, the CLI summary and build-error messages) is relative to the extension folder and uses `/` on every platform, matching the manifest.
+
 ## Frozen API snapshots
 
 `api/<major>.<minor>.api.md` is the committed surface of one extension API version: the allow-list as
