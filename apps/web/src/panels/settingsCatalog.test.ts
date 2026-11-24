@@ -3,6 +3,7 @@ import {
 	FONTS_PROTOCOL_VERSION,
 	MCP_USER_SERVERS_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
+	TERMINAL_COPY_ON_SELECT_PROTOCOL_VERSION,
 	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
 import { EN } from "@thinkrail/locales";
@@ -86,6 +87,14 @@ describe("the settings catalog", () => {
 });
 
 describe("availableSettings", () => {
+	test("copy on select appears in search only on capable hosts, on every platform", () => {
+		for (const hostPlatform of ["darwin", "linux", "win32"] as const) {
+			expect(ids({ ...LATEST, hostPlatform })).toContain("terminal-copy-on-select");
+		}
+		for (const protocolVersion of [null, TERMINAL_COPY_ON_SELECT_PROTOCOL_VERSION - 1]) {
+			expect(ids({ ...LATEST, protocolVersion })).not.toContain("terminal-copy-on-select");
+		}
+	});
 	test("a current host in a workspace offers every entry except other platforms' ones", () => {
 		const available = ids(LATEST);
 		expect(available).toContain("chat-model");

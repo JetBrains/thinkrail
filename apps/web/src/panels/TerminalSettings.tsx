@@ -1,7 +1,11 @@
 import type { HostPlatform, TerminalWindowsShell } from "@thinkrail/contracts";
-import { WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import {
+	TERMINAL_COPY_ON_SELECT_PROTOCOL_VERSION,
+	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
+} from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
+import { Switch } from "@thinkrail/ui/switch";
 import {
 	SETTINGS_ROWS,
 	SettingsChoice,
@@ -108,14 +112,50 @@ export function WindowsShellSettings({
 	);
 }
 
+export function CopyOnSelectSettings({
+	protocolVersion,
+	value,
+	reset,
+	onSelect,
+}: {
+	protocolVersion: number | null;
+	value: boolean;
+	reset?: SettingsReset | undefined;
+	onSelect: (enabled: boolean) => void;
+}) {
+	const t = useT();
+	if (protocolVersion === null || protocolVersion < TERMINAL_COPY_ON_SELECT_PROTOCOL_VERSION) {
+		return null;
+	}
+	return (
+		<SettingsGroup title={t("settings.terminal.selection.title")} scope="device">
+			<SettingsRow
+				{...settingProps(t, SETTING.terminalCopyOnSelect)}
+				reset={reset}
+				control={
+					<Switch
+						checked={value}
+						label={t(SETTING.terminalCopyOnSelect.label)}
+						tabIndex={0}
+						onCheckedChange={onSelect}
+						testId="terminal-copy-on-select"
+					/>
+				}
+			/>
+		</SettingsGroup>
+	);
+}
+
 export function TerminalSettings() {
 	const t = useT();
 	const replayKb = useAppStore((s) => s.terminalReplayKb);
 	const windowsShell = useAppStore((s) => s.terminalWindowsShell);
+	const copyOnSelect = useAppStore((s) => s.terminalCopyOnSelect);
 	const hostPlatform = useAppStore((s) => s.hostPlatform);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const replayReset = useConfigReset("terminalReplayKb", "settings.terminal.replayFailed");
 	const shellReset = useConfigReset("terminalWindowsShell", "settings.terminal.shellFailed");
+	const copyReset = useConfigReset("terminalCopyOnSelect", "settings.terminal.copyOnSelect.failed");
 
 	const select = (kb: number) => {
 		if (kb === replayKb) return;
@@ -125,6 +165,13 @@ export function TerminalSettings() {
 	const selectWindowsShell = (shell: TerminalWindowsShell) => {
 		if (shell === windowsShell) return;
 		void saveSettings({ terminalWindowsShell: shell }, t("settings.terminal.shellFailed"));
+	};
+	const selectCopyOnSelect = (enabled: boolean) => {
+		if (enabled === copyOnSelect) return;
+		void saveSettings(
+			{ terminalCopyOnSelect: enabled },
+			t("settings.terminal.copyOnSelect.failed"),
+		);
 	};
 
 	const scrollbackValue =
@@ -152,6 +199,12 @@ export function TerminalSettings() {
 					reset={replayReset}
 				/>
 			</div>
+			<CopyOnSelectSettings
+				protocolVersion={protocolVersion}
+				value={copyOnSelect}
+				reset={copyReset}
+				onSelect={selectCopyOnSelect}
+			/>
 			<WindowsShellSettings
 				platform={hostPlatform}
 				protocolVersion={protocolVersion}

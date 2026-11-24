@@ -4430,6 +4430,25 @@ test("applyConfig projects and validates the Windows terminal shell", () => {
 	);
 });
 
+test("applyConfig defaults copy on select off for older or malformed hosts, including after it was on", () => {
+	for (const terminalCopyOnSelect of [true, false]) {
+		useAppStore.getState().applyConfig({ ...DEFAULT_CONFIG, terminalCopyOnSelect });
+		expect(useAppStore.getState().terminalCopyOnSelect).toBe(terminalCopyOnSelect);
+	}
+	const { terminalCopyOnSelect: _missing, ...olderHost } = DEFAULT_CONFIG;
+	for (const config of [
+		olderHost,
+		...["true", 1, null, [], {}].map((terminalCopyOnSelect) => ({
+			...DEFAULT_CONFIG,
+			terminalCopyOnSelect,
+		})),
+	]) {
+		useAppStore.getState().applyConfig({ ...DEFAULT_CONFIG, terminalCopyOnSelect: true });
+		useAppStore.getState().applyConfig(config as AppConfig);
+		expect(useAppStore.getState().terminalCopyOnSelect).toBe(false);
+	}
+});
+
 test("applyConfig projects the composer growth limit", () => {
 	useAppStore.getState().applyConfig({
 		...DEFAULT_CONFIG,

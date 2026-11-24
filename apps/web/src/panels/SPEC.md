@@ -1330,10 +1330,14 @@ a project picker, the prompt hero, and the reused
   (This computer) whose **Shell for new terminal tabs** is an **expensive** list (Auto / PowerShell 7
   (pwsh) / Windows PowerShell / Command Prompt, `settings.update { terminalWindowsShell }` — see
   `submodule-server-terminal`'s shell-selection decision for what each choice spawns): arrows move a
-  pending pick, Enter applies, a click applies at once; open tabs keep their shell. Both reset to their
-  defaults. The protocol gate keeps a newer independently shipped client from presenting
-  a setting an older host preserves but does not act on. The Windows-shell
-  half is split into a **props-driven** `WindowsShellSettings` component rather than reading the store
+  pending pick, Enter applies, a click applies at once; open tabs keep their shell. **Copy on select** is
+  a cheap switch in a **Selection** group (This computer), default off, shown only at
+  `protocolVersion >= TERMINAL_COPY_ON_SELECT_PROTOCOL_VERSION`. It sends
+  `settings.update { terminalCopyOnSelect }` and applies to already-open terminals. All three reset to
+  their defaults. The protocol gates also apply to the settings search catalog and keep a newer
+  independently shipped client from presenting a setting an older host preserves but does not act on.
+  The Windows-shell and selection groups are **props-driven** `WindowsShellSettings` and
+  `CopyOnSelectSettings` components rather than reading the store
   inline like the replay picker: zustand's React binding feeds `renderToStaticMarkup` its frozen
   `getInitialState()` snapshot (`useSyncExternalStore`'s `getServerSnapshot` argument), never a test's
   `setState`, so any settings section that must stay assertable under that render path takes its store
@@ -3204,6 +3208,14 @@ menu has closed, because a closing menu returns focus to its row; disabled
   otherwise open inspect-element), so it never writes `^C`; xterm itself encodes Ctrl+letter only without
   Shift. Plain Ctrl+C stays xterm's SIGINT, and macOS keeps xterm's defaults. Ctrl+Shift+V needs no handler:
   xterm leaves it unencoded, so Chromium's paste-as-plain-text reaches xterm's own paste listener.
+- **Terminal copy on select.** The opt-in, host-device `terminalCopyOnSelect` preference copies a
+  non-empty xterm selection through `copyText`; absent, malformed, off, or pre-feature host settings
+  never copy automatically. `onSelectionChange` coalesces changes for 150 ms, and a left-button drag
+  cannot copy until mouseup (including outside the terminal), even if the user pauses during the drag.
+  The write reads the latest selection and preference, so clearing selection, switching off, losing
+  window focus or disposing the terminal cancels pending work. A settings change never recreates the
+  terminal or copies an old selection by itself. All listeners and pending work belong to the mounted
+  terminal. Selection only writes the clipboard; the existing copy chords and paste handling stay as above.
 - **Korean IME replacement bridge (WebKit).** WebKit — Safari and the desktop app's WKWebView — drives
   the macOS Korean input method without `composition*` events: a syllable's first jamo lands as an
   `insertText` input, every re-composition of it (`ㄱ`→`가`→`간`) as `insertReplacementText`, the next

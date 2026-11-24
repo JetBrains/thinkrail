@@ -97,7 +97,8 @@ Config validation normalizes `disabledSubagents` like `disabledExtensions`: abse
 
 Config validation normalizes the closed theme mode plus complete opaque system pair, the closed
 composer-growth preference, the closed Windows terminal-shell preference (invalid/absent →
-`DEFAULT_CONFIG.terminalWindowsShell`), the question panel height (whole `40–100` percent), chat/file line
+`DEFAULT_CONFIG.terminalWindowsShell`), the copy-on-select boolean (invalid/absent → `false`),
+the question panel height (whole `40–100` percent), chat/file line
 widths plus their pane-bound switches, and the
 JetBrains quota boolean + whole `1–3600` second cadence over their defaults, and the `keybindings` map
 (chords failing `isKeybindingChord` dropped, an entry left with none dropped, unknown ids and stored `[]`

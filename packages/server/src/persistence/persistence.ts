@@ -700,6 +700,10 @@ export function loadConfig(): AppConfig {
 			typeof value.terminalReplayKb === "number" && Number.isFinite(value.terminalReplayKb)
 				? value.terminalReplayKb
 				: DEFAULT_CONFIG.terminalReplayKb,
+		terminalCopyOnSelect:
+			typeof value.terminalCopyOnSelect === "boolean"
+				? value.terminalCopyOnSelect
+				: DEFAULT_CONFIG.terminalCopyOnSelect,
 		composerGrowthLimit: isComposerGrowthLimit(value.composerGrowthLimit)
 			? value.composerGrowthLimit
 			: DEFAULT_CONFIG.composerGrowthLimit,
