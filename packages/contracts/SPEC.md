@@ -70,6 +70,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   code, so it needs no protocol bump. One code is named by the client and never sent by the host:
   **`FRAME_TOO_LARGE`**, a request refused before sending because its frame exceeds `WS_MAX_FRAME_BYTES`
   (below) — the composer hands that prompt back to its draft instead of losing it.
+  **`EXTENSION_UI_UNSUPPORTED`** is also used locally: the host's in-process extension UI rejects
+  `custom()` with this code so an extension can choose a supported dialog instead of treating absent
+  terminal UI as user cancellation. It adds no WS method, payload or capability; an uncaught extension
+  error still follows pi's existing notification path.
   Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`

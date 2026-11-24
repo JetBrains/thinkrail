@@ -15,6 +15,39 @@ import {
 
 const ESC = "\u001b";
 
+test("custom UI rejects detectably without invoking terminal code or cancelling a supported dialog", async () => {
+	const frames: ExtUiRequest[] = [];
+	setExtUiPublisher((frame) => frames.push(frame));
+	const ui = createWebUiContext("custom-unsupported");
+	let factoryCalls = 0;
+	try {
+		const input = ui.input("Supported prompt");
+		const pending = pendingExtUiDialog("custom-unsupported");
+		const custom = ui.custom<string>(
+			() => {
+				factoryCalls++;
+				throw new Error("A web host cannot instantiate a terminal component");
+			},
+			{ overlay: true },
+		);
+		expect(custom).toBeInstanceOf(Promise);
+		await expect(custom).rejects.toMatchObject({
+			name: "CodedError",
+			code: "EXTENSION_UI_UNSUPPORTED",
+			message: expect.stringContaining("ui.input()"),
+		});
+		expect(factoryCalls).toBe(0);
+		expect(frames).toHaveLength(1);
+		expect(pendingExtUiDialog("custom-unsupported")).toBe(pending);
+		cancelExtUiForSession("custom-unsupported");
+		expect(await input).toBeUndefined();
+		expect(pendingExtUiDialog("custom-unsupported")).toBeNull();
+	} finally {
+		cancelExtUiForSession("custom-unsupported");
+		setExtUiPublisher(() => {});
+	}
+});
+
 test("extension editor calls address their own chat's composer and keep paste apart from replace", () => {
 	const frames: ExtUiRequest[] = [];
 	setExtUiPublisher((frame) => frames.push(frame));

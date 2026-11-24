@@ -660,9 +660,14 @@ re-opened transcripts provider-valid.
     pi's own `emitError` sites omit it (`runner.js` message_end, `agent-session.js` command/`<runtime>`),
     and synthesising one there would record the *host's* stack — pointing the reader at
     `prepareSessionEntry` instead of the extension, which is the opposite of why the line exists.
-    **Members distinguish browser calls from terminal-only calls.** *Untranslatable* ones are inert no-ops and rightly so — they take a
-    TUI `Component` factory a web host cannot render (`setFooter`, `setHeader`, `setEditorComponent`,
-    `custom`, `setWidget`'s factory overload; the string-array overload **is** rendered).
+    **Members distinguish browser calls from terminal-only calls.** *Untranslatable* setters are inert
+    no-ops: they take a TUI `Component` factory a web host cannot render (`setFooter`, `setHeader`,
+    `setEditorComponent`, `setWidget`'s factory overload; the string-array overload **is** rendered).
+    `custom()` instead rejects with `CodedError("EXTENSION_UI_UNSUPPORTED")`, without invoking its factory
+    or registering a dialog. An extension can catch `error.code === "EXTENSION_UI_UNSUPPORTED"` and fall
+    back to `select`, `confirm`, `input` or `editor`; a supported dialog's user cancellation still resolves
+    its ordinary cancelled value. An uncaught rejection follows pi's existing extension error reporting,
+    not a fabricated cancellation. `ctx.mode` stays `"rpc"` and `ctx.hasUI` stays true.
     *Translatable* ones must behave: **`theme` is a real `Theme`** (`plainTextTheme`) whose every
     decorator returns its input unchanged. `setEditorText` and `pasteToEditor` publish fire-and-forget
     frames of their own kinds for that session's browser composer: a replacement (an empty string clears
