@@ -50,7 +50,8 @@ export function PhoneAccessPanel({ headingId, access, onOpenSettings }: PhoneAcc
 				</h2>
 				<Switch
 					checked={enabled}
-					disabled={pending || status === null}
+					disabled={status === null}
+					aria-busy={pending || undefined}
 					label={t("settings.phone.enable")}
 					testId="phone-quick-toggle"
 					onCheckedChange={access.toggle}

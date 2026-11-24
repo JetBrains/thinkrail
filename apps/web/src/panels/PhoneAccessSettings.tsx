@@ -41,7 +41,8 @@ export function PhoneAccessView({ access }: PhoneAccessViewProps) {
 					control={
 						<Switch
 							checked={enabled}
-							disabled={pending || status === null}
+							disabled={status === null}
+							aria-busy={pending || undefined}
 							label={t("settings.phone.enable")}
 							testId="phone-access-toggle"
 							tabIndex={0}

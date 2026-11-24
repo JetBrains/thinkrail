@@ -159,6 +159,13 @@ test("loading: the switch waits and the devices list says loading, not empty", (
 	);
 });
 
+test("a toggle in flight stays focusable and reports busy, so the keyboard keeps its place", () => {
+	const markup = render({ pending: true });
+	const toggle = markup.match(/<button[^>]*data-testid="phone-access-toggle"[^>]*>/)?.[0] ?? "";
+	expect(toggle).toContain('aria-busy="true"');
+	expect(toggle).not.toContain('disabled=""');
+});
+
 test("a failed first read says so with a retry instead of loading forever", () => {
 	const markup = render({ status: null, loadFailed: true });
 	expect(markup).toContain("phone-access-load-failed");

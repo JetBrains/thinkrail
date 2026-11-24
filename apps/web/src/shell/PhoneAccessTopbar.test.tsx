@@ -133,3 +133,11 @@ test("an expired code dims its QR and says so instead of the time it works until
 	expect(markup).toContain("This code has expired.");
 	expect(markup).not.toContain("works once, until");
 });
+
+test("a toggle in flight stays focusable and reports busy", () => {
+	const toggle =
+		render({ pending: true }).match(/<button[^>]*data-testid="phone-quick-toggle"[^>]*>/)?.[0] ??
+		"";
+	expect(toggle).toContain('aria-busy="true"');
+	expect(toggle).not.toContain('disabled=""');
+});
