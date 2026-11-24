@@ -88,7 +88,7 @@ export function focusProjects(toggleProjectsHome: () => void): void {
 	const state = useAppStore.getState();
 	const workspaceId = state.activeWorkspaceId;
 	if (workspaceId) {
-		state.requestToolView(workspaceId, "projects");
+		state.enqueueLayoutIntent({ kind: "reveal-tool", workspaceId, tool: "projects", focus: false });
 		focusToolBody("projects");
 		return;
 	}
@@ -105,7 +105,7 @@ export function showFiles(mode: "all" | "changed", { activeRow = false } = {}): 
 	const workspaceId = state.activeWorkspaceId;
 	if (!workspaceId) return;
 	state.setFilesMode(mode);
-	state.requestToolView(workspaceId, "files");
+	state.enqueueLayoutIntent({ kind: "reveal-tool", workspaceId, tool: "files", focus: false });
 	const activePath = activeRow && mode === "all" ? selectActiveFilePath(state, workspaceId) : null;
 	if (activePath !== null) state.revealInFiles(workspaceId, activePath);
 	focusToolBody(
