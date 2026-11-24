@@ -886,7 +886,9 @@ preview on the plan page and its live slot taking Esc and a click answer. `ask-k
 card's keyboard pass: F6 and Mod+1 landing on the current option while Mod+L keeps the composer, Shift+Tab
 from the composer, Esc back with the question docked, a click answer parking on the receipt without a ring
 and a keyboard one in the composer, a question arriving (its seeded session reported idle, then waiting,
-through a routed wire) that takes focus from a walked transcript item, a Tab-focused button, an empty
+through a routed wire, idle from before the workspace is entered: its auto-open would otherwise show the
+question waiting and spend that chat mount's one claim) that takes focus from a walked transcript item,
+a Tab-focused button, an empty
 composer (also after Mod+L, and after a Mod+L that won over an earlier waiting call the wire names) or a
 button the mouse focused (Chromium only: WebKit never focuses a clicked button, and every WebKit
 `openRound` covers its History-button case), and that announces "F6 to answer" over a typed draft, whose
