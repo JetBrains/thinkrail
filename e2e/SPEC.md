@@ -114,6 +114,11 @@ compaction to keep the request small and deterministic, restoring the settings b
 It neither changes the provider/effort selection nor proves removal of a fixed output cap; the focused
 SDK reserve-independence canary owns that assertion.
 
+The focused `outputs.live` probe also requests a report in an explicit project directory outside
+`.thinkrail/context/`, checking the actual file, its final handoff, and the absence of an artifact copy
+or publication attempt. This complements the default Outputs case and `artifacts.live`'s temporary-file
+protection; only the tagged live probes spend provider tokens.
+
 ## Repository cloning
 
 `clone-project.spec.ts` clones disposable local `file:` repositories through the Welcome and rail menus,
