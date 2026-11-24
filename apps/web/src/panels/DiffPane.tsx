@@ -12,7 +12,7 @@ import {
 } from "@thinkrail/resource-renderers";
 import { withIconClass } from "@thinkrail/ui/button";
 import { useMemo, useState } from "react";
-import { copyText, isPhoneViewport } from "@/lib";
+import { copyText, isPhoneViewport, usePhoneViewport } from "@/lib";
 import type { DiffTab, FileComparisonTab, GitDiffTab } from "../store";
 import { isFileComparison, selectDiffTabTargetRef, useAppStore } from "../store";
 import { getTransport } from "../transport";
@@ -22,6 +22,7 @@ import { HeaderIconButton } from "./HeaderIconButton";
 import { useResetViewStateOnImplementationChange } from "./resourcePane";
 import { SendReviewButton } from "./SendReviewButton";
 import { useLiveTabContent } from "./useLiveTabContent";
+import { useResponsiveDiffView } from "./useResponsiveDiffView";
 
 const CopiedCheck = withIconClass(Check, "text-feedback-success");
 
@@ -31,18 +32,25 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 
 function FileComparisonPane({ tab }: { tab: FileComparisonTab }) {
 	const { before } = tab;
+	const mobile = usePhoneViewport();
+	const [viewRef, view] = useResponsiveDiffView(tab.view, mobile);
 	const setTabRenderer = useAppStore((state) => state.setTabRenderer);
 	const setDiffTabView = useAppStore((state) => state.setDiffTabView);
 	const setTabViewState = useAppStore((state) => state.setTabViewState);
 	return (
-		<div data-testid="diff-pane" data-compare className="flex h-full min-h-0 flex-col">
+		<div
+			ref={viewRef}
+			data-testid="diff-pane"
+			data-compare
+			className="flex h-full min-h-0 flex-col"
+		>
 			<ResourcePreview
 				workspaceId={tab.workspaceId}
 				path={tab.path}
 				before={before}
 				rendererId={tab.rendererId}
 				onRendererId={(rendererId) => setTabRenderer(tab.workspaceId, tab.id, rendererId)}
-				layout={tab.view === "inline" ? "unified" : "split"}
+				layout={view === "inline" ? "unified" : "split"}
 				onLayout={(layout) => setDiffTabView(tab.id, layout === "unified" ? "inline" : "split")}
 				viewState={tab.viewState}
 				onViewState={(viewState) => setTabViewState(tab.workspaceId, tab.id, viewState)}
@@ -129,7 +137,7 @@ function GitDiffPane({ tab }: { tab: GitDiffTab }) {
 	const { renderer, candidates, implementationKey, mobile, hunkActions } = surface;
 	useResetViewStateOnImplementationChange(tab.workspaceId, tab.id, implementationKey);
 
-	const view = mobile ? "inline" : (tab.view ?? "split");
+	const [viewRef, view] = useResponsiveDiffView(tab.view, mobile);
 	const ignoreWhitespace = tab.ignoreWhitespace ?? false;
 	const { dir, base } = splitPath(tab.path);
 	const copy = async () => {
@@ -151,7 +159,7 @@ function GitDiffPane({ tab }: { tab: GitDiffTab }) {
 	};
 
 	return (
-		<div data-testid="diff-pane" className="flex h-full min-h-0 flex-col">
+		<div ref={viewRef} data-testid="diff-pane" className="flex h-full min-h-0 flex-col">
 			<div
 				data-testid="diff-view-toggle"
 				role="toolbar"

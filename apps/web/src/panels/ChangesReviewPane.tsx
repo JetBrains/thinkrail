@@ -38,6 +38,7 @@ import { focusWhenRevealed } from "./revealFocus";
 import { ownsReviewShortcut } from "./reviewShortcuts";
 import { SendAllReviewsButton } from "./SendReviewButton";
 import { createSectionContentCache } from "./sectionContentCache";
+import { useResponsiveDiffView } from "./useResponsiveDiffView";
 import { useReviewReveal } from "./useReviewReveal";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 import { useWorkspaceTurns } from "./useWorkspaceTurns";
@@ -162,7 +163,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 		[files],
 	);
 	const viewedCount = files.filter((change) => viewedSet.has(change.path)).length;
-	const view = mobile ? "inline" : (tab.view ?? "split");
+	const [viewRef, view] = useResponsiveDiffView(tab.view, mobile);
 	const rendererIds = useAppStore(
 		useShallow((state) => selectChangesTabRendererIds(state, workspaceId, tab.id)),
 	);
@@ -503,13 +504,17 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 									<ReviewKey label={keys.label("review.markViewed")} />
 								</Button>
 							</div>
-							<div data-focus-list={`changes-review:${tab.id}`} className="min-h-0 flex-1">
+							<div
+								ref={layout === "single" ? viewRef : undefined}
+								data-focus-list={`changes-review:${tab.id}`}
+								className="min-h-0 flex-1"
+							>
 								<ChangesFileSection
 									key={current.path}
 									workspaceId={workspaceId}
 									tabId={tab.id}
 									scope={scope}
-									tabView={tab.view}
+									view={view}
 									ignoreWhitespace={ignoreWhitespace}
 									section={tab.sections[current.path]}
 									keptList={tab.kept[current.path]}
@@ -541,6 +546,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 								/>
 							) : null}
 							<div
+								ref={viewRef}
 								data-focus-list={`changes-review:${tab.id}`}
 								className="relative min-h-0 flex-1 bg-container-content-bg"
 							>
@@ -582,7 +588,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 											workspaceId={workspaceId}
 											tabId={tab.id}
 											scope={scope}
-											tabView={tab.view}
+											view={view}
 											ignoreWhitespace={ignoreWhitespace}
 											section={tab.sections[change.path]}
 											keptList={tab.kept[change.path]}

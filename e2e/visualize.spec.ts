@@ -606,6 +606,42 @@ test("a before/after preview opens as a diff tab over the two files that survive
 	}
 });
 
+test("a source comparison tab adapts to its pane and keeps an explicit layout across remount", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1800, height: 1000 });
+	const cleanup = writeMockups({
+		"before.ts": "export const result = 1;\n",
+		"after.ts": "export const result = 2;\n",
+	});
+	try {
+		const card = await openVisualization(page, "responsive source comparison", {
+			type: "file",
+			path: `${MOCKUP_DIR}/after.ts`,
+			before: `${MOCKUP_DIR}/before.ts`,
+		});
+		await clickTranscriptControl(card.getByTestId("tool-visualize-open-tab"));
+		const tab = page.locator('[data-testid="editor-tab"][data-kind="diff"]');
+		const pane = page.locator('[data-testid="diff-pane"][data-compare]');
+		await expect(pane.getByTestId("diff-toggle-split")).toHaveAttribute("data-active", "true");
+		await page.setViewportSize({ width: 1000, height: 1000 });
+		await expect(pane.getByTestId("diff-toggle-inline")).toHaveAttribute("data-active", "true");
+		await expect(pane.getByTestId("diff-view").locator("[data-unified]")).toHaveCount(1);
+		await page.screenshot({ path: test.info().outputPath("narrow-automatic-inline.png") });
+		await pane.getByTestId("diff-toggle-split").click();
+		await page.setViewportSize({ width: 1800, height: 1000 });
+		await page.setViewportSize({ width: 1000, height: 1000 });
+		await expect(pane.getByTestId("diff-toggle-split")).toHaveAttribute("data-active", "true");
+		await page.locator('[data-testid="editor-tab"][data-kind="chat"]').first().click();
+		await expect(pane).toHaveCount(0);
+		await tab.click();
+		await expect(pane.getByTestId("diff-toggle-split")).toHaveAttribute("data-active", "true");
+		await expect(pane.getByTestId("diff-view").locator("[data-unified]")).toHaveCount(0);
+	} finally {
+		cleanup();
+	}
+});
+
 test("an HTML preview width is shared by the card and its full screen and survives a comparison tab switch", async ({
 	page,
 }) => {

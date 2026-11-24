@@ -2892,8 +2892,15 @@ menu has closed, because a closing menu returns focus to its row; disabled
   corresponding capability. It renders one `view-toggle-<renderer suffix>` segment per candidate when the
   registry returns more than one. Renderer choice replaces the old markdown-only `rendered` state; layout
   and whitespace remain independent diff state. The review tab's toolbar carries the same whitespace and
-  `Split | Inline` controls for every section at once — but, because that toggle is pane-level across every
-  section rather than per-renderer, they follow `DiffPane`'s capability gates collectively: each control
+  layout. Until a user explicitly chooses Split or Inline, `useResponsiveDiffView` chooses from the
+  actual diff viewport width: about 40 code columns per side plus six columns per side for gutters,
+  measured in the current `tr-code-editor` font. It follows pane resizing and loaded font changes;
+  a review's guide does not count toward the diff viewport. The shared result feeds both the toolbar and
+  every review section, including One-file mode, and also drives individual git and file-comparison tabs.
+  Only a manual choice writes the tab's existing `view`; automatic layout stays local and releases its
+  observers after that choice. Phone mode still uses Inline and preserves the desktop choice for return.
+  The review tab's `Split | Inline` control sets every section at once. Because that toggle is pane-level
+  across every section rather than per-renderer, the controls follow `DiffPane`'s capability gates collectively: each control
   shows only when at least one file in the scope resolves (by path, through `diffRendererCapabilities`) to a
   renderer advertising it, so an all-Markdown/image/PDF/rich scope hides them instead of offering inert
   controls. The gate reads only the per-path renderer selections (`selectChangesTabRendererIds`), so draft
