@@ -1036,8 +1036,8 @@ re-opened transcripts provider-valid.
     never replaces the host's (registered in [[pi-compatibility]] § Registry tool precedence). The child
     set keeps the same rule: `childExtensionFactories` ends with the built-in registry child factories, and
     the installed ones go to `pi-delegation` apart, as `childInstalledExtensionFactories()`, which it loads
-    after its own (`dropCancelledPrompt`, a DAG resource's worker factories), so an installed child factory
-    never shadows a host or DAG worker tool. A child loads no `builtin:` slot, so pi's first-registration
+    after a DAG resource's worker factories (and before its tool-less `dropCancelledPrompt`, which stays last),
+    so an installed child factory never shadows a host or DAG worker tool. A child loads no `builtin:` slot, so pi's first-registration
     rule is the whole guard there. `piPackagesInstall` applies the kind rule ([[submodule-server-agent-packages]]
     § Kind detection) and returns `{ installed: "package" | "extension", … }`. The pi runtime build forces
     jiti's transform through the shared `withForcedJitiTransform`, serialized with installed-extension
