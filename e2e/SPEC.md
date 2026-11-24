@@ -212,6 +212,10 @@ second wire. A new title on the tab means the page handled that answer, so a cha
 local runtime is already placed. A chat it must read first opens only after that read, which the rename
 does not wait for, so the probe also asserts that no new `session.getMessages` for that chat went out on
 the new socket (a replayed read keeps its id): the pass sends the read while it handles the answer.
+First-entry close coverage holds the initial catalog answer after restored tabs appear, closes an inactive
+chat, and then releases the answer or reconnects. A never-placed chat with unfinished work must appear
+in the background before the probe asserts the closed chat stayed in history and the current tab kept
+focus; this positive barrier waits for the delayed passive pass without sleeps.
 Showing a side or the bottom focuses its selected tab (its edge-rail control when no tab renders) one
 animation frame after the region renders; a probe that then focuses inside the shown region first waits
 for that endpoint, or a late frame moves focus away from the probe's target.
