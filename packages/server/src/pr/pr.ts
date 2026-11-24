@@ -22,6 +22,7 @@ import {
 	gitStatus,
 	isSafeRef,
 	listRemotes,
+	nonInteractiveGitEnv,
 	originUrls,
 	remoteNameOf,
 	remoteRefOid,
@@ -229,6 +230,7 @@ const PUSH_AUTH_PATTERNS = [
 	/could not read (username|password)/i,
 	/authentication failed/i,
 	/terminal prompts disabled/i,
+	/user interactivity has been disabled/i,
 	/host key verification failed/i,
 ];
 
@@ -242,8 +244,7 @@ export function pushGitEnv(
 ): Record<string, string | undefined> {
 	const keepSsh = hasSshCommandConfig || base.GIT_SSH_COMMAND || base.GIT_SSH;
 	const env: Record<string, string | undefined> = {
-		...base,
-		GIT_TERMINAL_PROMPT: "0",
+		...nonInteractiveGitEnv(base),
 		LC_MESSAGES: "C",
 		...(base.LC_ALL && !base.LC_CTYPE ? { LC_CTYPE: base.LC_ALL } : {}),
 		...(keepSsh ? {} : { GIT_SSH_COMMAND: "ssh -oBatchMode=yes" }),

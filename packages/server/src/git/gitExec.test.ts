@@ -17,7 +17,7 @@ import {
 
 const posix = test.skipIf(process.platform === "win32");
 
-const SSH_VARS = ["GIT_SSH_COMMAND", "GIT_SSH", "GIT_SSH_VARIANT"] as const;
+const GIT_ENV_VARS = ["GIT_SSH_COMMAND", "GIT_SSH", "GIT_SSH_VARIANT", "GCM_INTERACTIVE"] as const;
 
 let dir: string;
 let repo: string;
@@ -40,7 +40,7 @@ function sshRemoteVia(body: string): string {
 }
 
 beforeEach(() => {
-	for (const name of SSH_VARS) {
+	for (const name of GIT_ENV_VARS) {
 		savedEnv[name] = process.env[name];
 		delete process.env[name];
 	}
@@ -51,7 +51,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-	for (const name of SSH_VARS) {
+	for (const name of GIT_ENV_VARS) {
 		if (savedEnv[name] === undefined) delete process.env[name];
 		else process.env[name] = savedEnv[name];
 	}
@@ -60,13 +60,63 @@ afterEach(() => {
 
 test("nonInteractiveGitEnv layers over process.env and leaves the user's ssh client alone", () => {
 	process.env.GIT_SSH_COMMAND = "ssh -i /keys/sentinel";
+	process.env.GCM_INTERACTIVE = "always";
 
 	const env = nonInteractiveGitEnv();
 
 	expect(env.GIT_TERMINAL_PROMPT).toBe("0");
+	expect(env.GCM_INTERACTIVE).toBe("never");
 	expect(env.PATH).toBe(process.env.PATH);
 	expect(env.GIT_SSH_COMMAND).toBe("ssh -i /keys/sentinel");
+	expect(process.env.GCM_INTERACTIVE).toBe("always");
 });
+
+test("an explicit base environment is preserved without allowing inherited credential prompts", () => {
+	const base = {
+		PATH: "/fixture/bin",
+		GIT_TERMINAL_PROMPT: "1",
+		GCM_INTERACTIVE: "always",
+		GIT_SSH: "/fixture/custom-ssh",
+	};
+	const env = nonInteractiveGitEnv(base);
+	expect(env.GIT_TERMINAL_PROMPT).toBe("0");
+	expect(env.GCM_INTERACTIVE).toBe("never");
+	expect(env.PATH).toBe(base.PATH);
+	expect(env.GIT_SSH).toBe(base.GIT_SSH);
+	expect(Object.keys(env).sort()).toEqual(Object.keys(base).sort());
+	expect(base.GIT_TERMINAL_PROMPT).toBe("1");
+	expect(base.GCM_INTERACTIVE).toBe("always");
+});
+
+posix("the sync git runner passes the no-interaction setting to its child", () => {
+	process.env.GCM_INTERACTIVE = "always";
+	const result = git(repo, [
+		"-c",
+		'alias.credential-mode=!printf "%s" "$GCM_INTERACTIVE"',
+		"credential-mode",
+	]);
+	expect(result.ok).toBe(true);
+	expect(result.out).toBe("never");
+	expect(process.env.GCM_INTERACTIVE).toBe("always");
+});
+
+posix(
+	"the async git runner keeps credential helper lookup enabled with noninteractive inheritance",
+	async () => {
+		process.env.GCM_INTERACTIVE = "always";
+		const helper =
+			'!f() { cat >/dev/null; printf "username=%s\\npassword=fixture-only\\n" "$GCM_INTERACTIVE"; }; f';
+		const result = await gitAsync(
+			repo,
+			["-c", "credential.helper=", "-c", `credential.helper=${helper}`, "credential", "fill"],
+			{ stdin: new Blob(["protocol=thinkrail-test\nhost=local-fixture\n\n"]) },
+		);
+		expect(result.ok).toBe(true);
+		expect(result.out).toContain("username=never");
+		expect(result.out).toContain("password=fixture-only");
+		expect(process.env.GCM_INTERACTIVE).toBe("always");
+	},
+);
 
 posix("the user's core.sshCommand runs unmodified — we add no options of our own", async () => {
 	sshRemoteVia('echo "ARGV: $*" >&2\nexit 42');
