@@ -162,7 +162,8 @@ shutdown release barriers; and finalized outcomes after a shrinking compaction.
   and caches it until `disposeChildrenOf(parent)` — a service may resolve parents backed by different
   registries, so one mutable fallback must never synchronize provider state across them),
   `maxConcurrentPerParent`, `childBaseExtensionFactories` (the hook-only set EVERY child loads) and
-  `childExtensionFactories` (the curated set a child MAY load) — both decision #25, both pi
+  `childExtensionFactories` (the curated set a child MAY load) — both decision #25 — and
+  `childInstalledExtensionFactories` (third-party factories an opted-in child loads last), all pi
   `InlineExtension`s, so an embedder passes bare factories or `{ name, factory }` and keeps the name
   in pi diagnostics — and `buildChildSettings` (decision #31).
 - Storage helpers: `defaultDelegationRoot` / `delegationSessionDir` / `deriveChildSessionFile`
@@ -475,7 +476,9 @@ run-scoped signal. Non-user paths retain their behavior.
     `DelegationBindings.childExtensionFactories` (pi's loader loads injected factories even under
     `noExtensions` — verified); the `tools` allowlist gates which of the set's tools are callable;
     a child loading any factory is bound `mode: "print"` (headless — `ctx.hasUI` false, dialogs
-    skipped). The one unconditional set is `DelegationBindings.childBaseExtensionFactories`: every
+    skipped). It also loads `DelegationBindings.childInstalledExtensionFactories` last, after the
+    curated set, a resource's factories and the core's own hook, so a third-party factory never
+    takes a tool name from them (pi gives a name to its first registration). The one unconditional set is `DelegationBindings.childBaseExtensionFactories`: every
     child — ordinary or resource, opted in or not — loads it ahead of the curated set. It carries
     tool-less infrastructure hooks an embedder needs on every child request (ThinkRail: the
     oversized-image guard and the post-compaction skill carry-over; the guard was made necessary by decision #31's raw-image settings — PR #657 review:

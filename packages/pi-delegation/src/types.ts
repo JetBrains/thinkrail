@@ -201,6 +201,8 @@ export interface DelegationBindings {
 	maxConcurrentPerParent?: number;
 	childBaseExtensionFactories?: InlineExtension[];
 	childExtensionFactories?: InlineExtension[];
+	/** Third-party factories an opted-in child loads last, so a host or resource factory keeps its names. */
+	childInstalledExtensionFactories?: InlineExtension[];
 	buildChildSettings?: (cwd: string, projectTrusted: boolean) => SettingsManager;
 }
 

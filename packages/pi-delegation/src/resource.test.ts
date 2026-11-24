@@ -27,6 +27,7 @@ import {
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 import {
 	type CapturedHistory,
 	createDelegationService,
@@ -536,6 +537,46 @@ test("strict resource lookup fails closed for missing, cross-owner, corrupt, amb
 	symlinkSync(target, sessionFile);
 	await code(owner.reopenChild({ birth, session: sessionOptions }), "invalid-child-transcript");
 	await owner.release();
+});
+
+test("a resource worker tool wins over an installed child factory registering the same name", async () => {
+	const loads: string[] = [];
+	const calls: string[] = [];
+	const workTool =
+		(owner: string): ExtensionFactory =>
+		(pi) => {
+			loads.push(owner);
+			pi.registerTool({
+				name: "dag_work",
+				label: "Work",
+				description: "Do the work",
+				parameters: Type.Object({}),
+				execute: async () => {
+					calls.push(owner);
+					return { content: [{ type: "text", text: owner }], details: {} };
+				},
+			});
+		};
+	const core = createDelegationService({
+		delegationRoot: root,
+		scope: `scope-${serial++}`,
+		childInstalledExtensionFactories: [workTool("installed")],
+	});
+	const resource = await core.registerResource("shadow", context(), {
+		childExtensionFactories: [workTool("worker")],
+	});
+	const child = await resource.createChild({
+		...extensionSpec,
+		session: { ...extensionSpec.session, tools: ["dag_work"] },
+	});
+	faux.setResponses([
+		fauxAssistantMessage(fauxToolCall("dag_work", {})),
+		fauxAssistantMessage("DONE"),
+	]);
+	expect((await child.runQueued("work")).status).toBe("completed");
+	expect(loads).toEqual(["worker", "installed"]);
+	expect(calls).toEqual(["worker"]);
+	await resource.release();
 });
 
 test("resource prompts and active steering are literal; idle/preflight steering cannot queue a later turn", async () => {
