@@ -4,6 +4,8 @@ import {
 	type AgentSettlement,
 	CHAT_HANDOFF_CUSTOM_TYPE,
 	type ExtUiRequest,
+	isToolResponsePending,
+	readToolResponseMessage,
 	type SessionCompletion,
 	type SessionState,
 } from "@thinkrail/contracts";
@@ -52,6 +54,85 @@ export function sessionStateMessages(entries: readonly SessionEntry[]): AgentMes
 	return entries.flatMap((entry) => {
 		if (entry.type === "message") return [entry.message];
 		if (entry.type === "custom_message") return [customMessage(entry)];
+		return [];
+	});
+}
+
+function compactResponseDetails(message: unknown) {
+	const response = readToolResponseMessage(message);
+	return response ? { toolCallId: response.toolCallId, response: null, result: null } : undefined;
+}
+
+function compactStateMessage(message: AgentMessage): AgentMessage {
+	switch (message.role) {
+		case "user":
+		case "system":
+			return { role: message.role, content: "", timestamp: message.timestamp };
+		case "assistant":
+			return {
+				role: message.role,
+				content: Array.isArray(message.content)
+					? message.content
+							.filter((block) => block?.type === "toolCall")
+							.map(({ type, id, name }) => ({ type, id, name, arguments: {} }))
+					: [],
+				api: message.api,
+				provider: message.provider,
+				model: message.model,
+				usage: message.usage,
+				stopReason: message.stopReason,
+				timestamp: message.timestamp,
+			};
+		case "toolResult":
+			return {
+				role: message.role,
+				toolCallId: message.toolCallId,
+				toolName: message.toolName,
+				content: [],
+				details: isToolResponsePending(message.details) ? { kind: "ack" } : null,
+				isError: message.isError,
+				timestamp: message.timestamp,
+			};
+		case "custom":
+			return {
+				role: message.role,
+				customType: message.customType,
+				content: "",
+				display: message.display,
+				details: compactResponseDetails(message),
+				timestamp: message.timestamp,
+			};
+		case "bashExecution":
+			return { ...message, command: "", output: "" };
+		case "branchSummary":
+		case "compactionSummary":
+			return { ...message, summary: "" };
+		default:
+			return message;
+	}
+}
+
+export function diskStateEntries(entries: readonly SessionEntry[]): SessionEntry[] {
+	const lastUser = entries.findLastIndex(
+		(entry) => entry.type === "message" && entry.message.role === "user",
+	);
+	return entries.slice(Math.max(0, lastUser)).flatMap((entry): SessionEntry[] => {
+		const base = { id: entry.id, parentId: entry.parentId, timestamp: entry.timestamp };
+		if (entry.type === "message") {
+			return [{ ...base, type: "message", message: compactStateMessage(entry.message) }];
+		}
+		if (entry.type === "custom_message") {
+			return [
+				{
+					...base,
+					type: "custom_message",
+					customType: entry.customType,
+					content: "",
+					display: entry.display,
+					details: compactResponseDetails(customMessage(entry)),
+				},
+			];
+		}
 		return [];
 	});
 }

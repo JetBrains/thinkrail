@@ -399,6 +399,14 @@ restart and toggle-reload regressions on upgrades.
   `SessionManager.list`/`listAll` parse every file they list.
   Prefer public discovery/parsing APIs when they meet those needs; retain parity coverage in history,
   template and composer tests until then.
+- **Disk session state cache** — [[submodule-server-agent]], `diskSessionCache.ts` and
+  `sessionState.ts`. Pi 1.6.0's public `SessionManager.open` still reads and parses the whole transcript;
+  repeated state reads retain only a bounded, file-stamped projection of the branch facts ThinkRail's
+  state derivation uses. Pi's own listing and the host's strict preflight remain authoritative. Remove
+  this cache when pi offers a cached/indexed read API that supplies the branch facts without reopening
+  unchanged files. On upgrades run `diskSessionCache.test.ts`, both full-branch and projected cases in
+  `sessionState.test.ts`, and the manager's disk-cache/strict-listing regressions; no model context or
+  session file is rewritten from the cached projection.
 - **Context edits on summarized display turns** — [[submodule-server-history]], `displayTranscript.ts`
   (`projectContextEntry`). The display projection puts the turns the latest compaction summarized back
   in front of its marker, and they must carry the branch's latest `context_edit` the way pi projects kept
