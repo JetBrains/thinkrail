@@ -191,7 +191,9 @@ is always measured, and a disconnected anchor fails as a remount instead of repo
 rect.
 Pierre surfaces paint plain text first and replace their rows when the worker's highlight lands, which
 is late on slower hosts such as the compiled-binary and packaged-desktop artifacts; pointer probes wait
-for highlighted tokens (`pierreHighlightedTokens`) before measuring or dragging rows.
+for highlighted tokens (`pierreHighlightedTokens`) before measuring or dragging rows. The plain pass
+already colours every token with `--code-foreground`, so a highlighted token is one coloured by any
+other `--code-` role: matching the plain pass let a probe measure a row the highlight then replaced.
 A following probe that lets actionability scroll an off-screen transcript control into view first
 waits for the chat to settle (`waitForScrollStability`: `data-scroll-moving="false"` and unchanged scroll
 geometry across frames; `clickTranscriptControl` settles, then clicks). That scroll is not reader input,
