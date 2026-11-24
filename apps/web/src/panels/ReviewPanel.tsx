@@ -8,6 +8,7 @@ import {
 	RiSendPlaneLine as Send,
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
+import { useToolRegistry } from "@thinkrail/chat-ui/toolRegistry";
 import type { ReviewComment } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { outdatedReason } from "@thinkrail/resource-renderers";
@@ -21,7 +22,6 @@ import { QuietScrollArea } from "@/components/QuietScrollArea";
 import { PlanStatusIcon, SectionLabel } from "../chat/planKit";
 import { sessionGlance } from "../chat/planView";
 import { glanceIcon } from "../chat/TodoList";
-import { useToolRegistry } from "../chat/toolRegistry";
 import { type ReviewFocusSurface, selectDiffScope, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { ConfirmPopover } from "./ConfirmPopover";

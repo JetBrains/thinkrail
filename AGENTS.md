@@ -42,9 +42,10 @@ Clear, fractal module boundaries are a top-priority requirement:
 
 ## Repo-wide invariants
 
-- `apps/web` depends on `contracts`, `locales`, `ui`, `extension-api/web` (plus `extension-api/installed`
-  from `src/extensions` only), `resource-renderers`, and `thinkrail-extensions/*/web` only, never `server`
-  or `shared`.
+- `apps/web` depends on `contracts`, `locales`, `ui`, `design-tokens`, `chat-ui`, `remote-client`,
+  `extension-api/web` (plus `extension-api/installed`
+  from `src/extensions` only), `resource-renderers`, and `thinkrail-extensions/*/web` only, never `server` or
+  `shared`.
 - User-facing UI text is a key in `packages/locales/en.json` rendered through `@thinkrail/locales/react`;
   the lint gate rejects hardcoded JSX text and text attributes.
 - Never value-import `pi` into browser-bundled code. Import types only from the `pi-ai` /

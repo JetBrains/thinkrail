@@ -1,9 +1,9 @@
 import { RiArrowRightUpLine } from "@remixicon/react";
+import { SessionStatsBar } from "@thinkrail/chat-ui/SessionStatsBar";
 import type { SessionStats } from "@thinkrail/contracts";
 import { Button } from "@thinkrail/ui/button";
 import type { ComponentType, ReactNode } from "react";
 import type { ChatAction, ChatActionTarget } from "@/lib";
-import { SessionStatsBar } from "./SessionStatsBar";
 import { SkillsButton } from "./SkillsButton";
 
 export interface ChatHeaderLink {

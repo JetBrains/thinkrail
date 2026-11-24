@@ -31,3 +31,23 @@ export function createSingleFlight(): SingleFlight {
 		isStopped: () => stopped,
 	};
 }
+
+/**
+ * At most one task per key: a call while that key's task is in flight is dropped, so a second click cannot
+ * send it twice. `onBusy` hears the keys in flight after every start and settle.
+ */
+export function createKeyedFlight<K>(
+	onBusy: (busy: ReadonlySet<K>) => void = () => {},
+): (key: K, task: () => Promise<unknown>) => void {
+	const busy = new Set<K>();
+	return (key, task) => {
+		if (busy.has(key)) return;
+		busy.add(key);
+		onBusy(new Set(busy));
+		const settle = () => {
+			busy.delete(key);
+			onBusy(new Set(busy));
+		};
+		void task().then(settle, settle);
+	};
+}

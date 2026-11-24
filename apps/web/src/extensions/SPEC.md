@@ -16,8 +16,8 @@ ones loaded at runtime ([[module-thinkrail-extensions]] § Installed extensions)
 
 - **Built-in:** `registry.ts` owns their ordered list; `registerWebExtensions()` feeds each descriptor's
   tool entries into chat's registry in order, preserving its last-registration-wins behavior and fallback
-  renderer. Re-registering the same list replaces entries rather than accumulating them. The app-local
-  registrations (`chat/tools/register`) arrive later with `ChatView`'s lazy chunk and name other tools.
+  renderer. Re-registering the same list replaces entries rather than accumulating them. The built-in card
+  registrations (`@thinkrail/chat-ui/tools/register`) arrive later with `ChatView`'s lazy chunk and name other tools.
 - **Host object:** `host.ts` exposes the app's own modules to installed web halves on one frozen
   `globalThis.__thinkrailExtensionHost = { api, modules }`, keyed by the specifier an author imports.
   The object's name, `api` and keys are `EXTENSION_HOST_OBJECT`, `EXTENSION_API_VERSION` and

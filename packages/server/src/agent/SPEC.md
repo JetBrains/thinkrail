@@ -337,7 +337,7 @@ re-opened transcripts provider-valid.
     real settings with `getImageAutoResize()` answering `false` on that instance — never persisted — so the
     `read` tool sends image files **raw**, bypassing pi's photon/WASM resizer that the single-file binary
     can't bundle; the web UI downsizes user-attached images itself at attach time — `apps/web`'s
-    `chat/imageAttachment` caps the long edge at 1568px — and the `imageGuard` extension below is the
+    `@thinkrail/chat-ui/imageAttachment` caps the long edge at 1568px — and the `imageGuard` extension below is the
     in-context second line of defense). The override sits on the getter, not in the merged settings: pi
     rebuilds `settings` from disk on every `reload()` (the resource loader reloads inside
     `createAgentSession`), on a trust change and on every persisting setter's `save()` — an in-memory

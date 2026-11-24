@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
-import { DefaultToolRenderer, getToolRenderer } from "../chat/toolRegistry";
+import { DefaultToolRenderer, getToolRenderer } from "@thinkrail/chat-ui/toolRegistry";
 import {
 	EXTENSION_API_VERSION,
 	extensionApiFit,

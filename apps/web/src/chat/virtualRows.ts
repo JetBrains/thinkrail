@@ -1,4 +1,4 @@
-import type { ChatMessageOrder } from "./chatPreferences";
+import type { ChatMessageOrder } from "@thinkrail/chat-ui/chatMessageOrder";
 
 export const CHAT_VIRTUAL_INDEX_ORIGIN = 1_000_000;
 

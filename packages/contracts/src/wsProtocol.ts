@@ -56,6 +56,9 @@ import type {
 	ProviderStatusReport,
 	ProviderWarning,
 	PrPreview,
+	RemoteAccessStatus,
+	RemoteDeviceAccess,
+	RemotePairingLink,
 	ResourceHistoryCursor,
 	ResourceHistoryPage,
 	ResourceKind,
@@ -147,7 +150,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 132;
+export const PROTOCOL_VERSION = 133;
+export const REMOTE_ACCESS_PROTOCOL_VERSION = 133;
 export const EXTENSION_BROWSE_PROTOCOL_VERSION = 132;
 export const INSTALLED_EXTENSIONS_PROTOCOL_VERSION = 131;
 export const EXTENSION_QUERY_PROTOCOL_VERSION = 130;
@@ -462,6 +466,12 @@ export const WS_METHODS = {
 	gitPrefetch: "git.prefetch",
 	githubAuthStatus: "github.authStatus",
 	githubRefresh: "github.refresh",
+	remoteStatus: "remote.status",
+	remoteSetEnabled: "remote.setEnabled",
+	remoteIssueLink: "remote.issueLink",
+	remoteRevokeDevice: "remote.revokeDevice",
+	remoteRenameDevice: "remote.renameDevice",
+	remoteSetDeviceAccess: "remote.setDeviceAccess",
 	prPreview: "pr.preview",
 	prOpen: "pr.open",
 	prGenerate: "pr.generate",
@@ -666,6 +676,12 @@ export const WS_CHANNELS = {
 	extensionsChanged: "extensions.changed",
 	fontsChanged: "fonts.changed",
 	speechChanged: "speech.changed",
+	/** To one paired device only: its access, after the welcome and whenever this computer changes it. */
+	remoteDeviceAccess: "remote.deviceAccess",
+	/** To one paired device only: the host's current `RemoteHostRoutes`, after the welcome. */
+	remoteHostRoutes: "remote.hostRoutes",
+	/** To this computer's own clients only: the whole `RemoteAccessStatus`, whenever it changes. */
+	remoteStatusChanged: "remote.statusChanged",
 } as const;
 
 type SameUnion<A extends B, B extends C, C = A> = A;
@@ -1118,6 +1134,15 @@ export interface WsMethodMap {
 	"git.prefetch": { params: { projectId: string; ref: string }; result: { ok: boolean } };
 	"github.authStatus": { params: Record<string, never>; result: GithubAuthStatus };
 	"github.refresh": { params: Record<string, never>; result: GithubAuthStatus };
+	"remote.status": { params: Record<string, never>; result: RemoteAccessStatus };
+	"remote.setEnabled": { params: { enabled: boolean }; result: RemoteAccessStatus };
+	"remote.issueLink": { params: Record<string, never>; result: RemotePairingLink };
+	"remote.revokeDevice": { params: { id: string }; result: RemoteAccessStatus };
+	"remote.renameDevice": { params: { id: string; label: string }; result: RemoteAccessStatus };
+	"remote.setDeviceAccess": {
+		params: { id: string; access: RemoteDeviceAccess };
+		result: RemoteAccessStatus;
+	};
 	"pr.preview": {
 		params: {
 			workspaceId: string;
@@ -1661,6 +1686,8 @@ export type WsClientMessage = WsRequest | WsAck | WsResume;
 
 export const WS_MAX_FRAME_BYTES = 16 * 1024 * 1024;
 
+export const WS_OUTBOUND_BUFFER_LIMIT_BYTES = 256 * 1024 * 1024;
+
 export type WsErrorCode =
 	| "UNKNOWN_COMMIT"
 	| "PUSH_AUTH_FAILED"
@@ -1685,6 +1712,12 @@ export type WsErrorCode =
 	| "SURVEY_CHANGED"
 	| "SURVEY_INVALID"
 	| "SURVEY_NOT_SENT"
+	| "REMOTE_ACCESS_LOCAL_ONLY"
+	| "REMOTE_ACCESS_OFF"
+	| "REMOTE_DEVICE_READ_ONLY"
+	| "REMOTE_DEVICE_REVOKED"
+	| "REMOTE_DEVICE_LABEL_EMPTY"
+	| "REMOTE_DEVICE_ACCESS_INVALID"
 	| "PACKAGE_SOURCE_INVALID"
 	| "PACKAGE_OFFLINE"
 	| "PACKAGE_UNTRUSTED"

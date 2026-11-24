@@ -9,7 +9,12 @@ import type {
 	ServerWelcome,
 	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
-import { PROTOCOL_VERSION, WS_CHANNELS, WS_MAX_FRAME_BYTES } from "@thinkrail/contracts";
+import {
+	PROTOCOL_VERSION,
+	SPEECH_PROTOCOL_VERSION,
+	WS_CHANNELS,
+	WS_MAX_FRAME_BYTES,
+} from "@thinkrail/contracts";
 import { isPortFree } from "@thinkrail/shared/freePort";
 import {
 	configurePiRuntime,
@@ -25,6 +30,9 @@ import {
 } from "../analytics";
 import { resetJbcentralStateForTests } from "../auth";
 import { logger } from "../log";
+import { addDevice, type PairedDevice } from "../remote";
+import type { RemoteChannel } from "../remote-transport/channel";
+import type { RemoteAccess, RemoteAccessOptions } from "../remote-transport/remoteAccess";
 import { resetConfigCache, updateConfig } from "../settings";
 import { type BootedHost, bootHost } from "./boot";
 import { handleRequest } from "./handlers";
@@ -504,6 +512,80 @@ test("serves the SPA from staticDir with index.html fallback", async () => {
 	const deep = await fetch(`http://localhost:${b.port}/some/client/route`);
 	expect(deep.status).toBe(200);
 	expect(await deep.text()).toContain("<title>spa</title>");
+});
+
+test("boot keeps the remote access handle so the launcher can mint a pairing link", async () => {
+	const relayUrl = `ws://127.0.0.1:${grabFreePort()}`;
+	const b = await boot({
+		port: grabFreePort(),
+		host: "localhost",
+		portMode: "exact",
+		remote: { relayUrl },
+	});
+
+	expect(b.server.remote.issueLink("default").link).toStartWith("thinkrail://pair?");
+});
+
+test("a paired device's channel hears the host's broadcasts beside the local sockets", async () => {
+	let pair: RemoteAccessOptions["onPaired"] | undefined;
+	const startAccess = (options: RemoteAccessOptions): RemoteAccess => {
+		pair = options.onPaired;
+		return {
+			identity: {
+				publicKey: "K",
+				fingerprint: "f",
+				sign: () => new Uint8Array(),
+				nostrSecret: new Uint8Array(32),
+			},
+			addresses: [],
+			nostr: null,
+			routes: () => ({ signalingUrls: [options.relayUrl] }),
+			issueLink: () => ({ link: "thinkrail://pair?v=1", expiresAt: 5 }),
+			stop: () => {},
+		};
+	};
+	const b = await boot({
+		port: grabFreePort(),
+		host: "localhost",
+		portMode: "exact",
+		remote: { relayUrl: "ws://127.0.0.1:1", startAccess },
+	});
+	const decoder = new TextDecoder();
+	const deviceChannel = (into: { channel?: string; data?: unknown }[]): RemoteChannel => ({
+		open: true,
+		send: (data) => into.push(JSON.parse(decoder.decode(data))),
+		onMessage: () => {},
+		onClose: () => {},
+		close: () => {},
+	});
+	const pushed: { channel?: string; data?: unknown }[] = [];
+	const device: PairedDevice = { id: "phone", label: "Phone", publicKey: "P", pairedAt: 1 };
+	addDevice(device);
+	pair?.(device, deviceChannel(pushed), PROTOCOL_VERSION);
+	const welcome = pushed.find((frame) => frame.channel === WS_CHANNELS.serverWelcome);
+	expect(welcome?.data).toHaveProperty("speech");
+
+	const older: { channel?: string; data?: unknown }[] = [];
+	const olderDevice: PairedDevice = { id: "old", label: "Old", publicKey: "O", pairedAt: 1 };
+	addDevice(olderDevice);
+	pair?.(olderDevice, deviceChannel(older), SPEECH_PROTOCOL_VERSION - 1);
+	const olderWelcome = older.find((frame) => frame.channel === WS_CHANNELS.serverWelcome);
+	expect(olderWelcome?.data).toMatchObject({ protocolVersion: PROTOCOL_VERSION });
+	expect(olderWelcome?.data).not.toHaveProperty("speech");
+
+	const local = await collectSocket(b.port, "broadcast-local");
+	local.socket.send(
+		JSON.stringify({
+			id: "update",
+			method: "settings.update",
+			params: { config: { extensionSettings: { "remote-broadcast": { on: true } } } },
+		}),
+	);
+	await local.waitForFrame((frame) => frame.channel === WS_CHANNELS.settingsChanged);
+	expect(pushed.map((frame) => frame.channel)).toContain(WS_CHANNELS.settingsChanged);
+	await local.waitForFrame((frame) => frame.channel === WS_CHANNELS.remoteStatusChanged);
+	expect(pushed.map((frame) => frame.channel)).not.toContain(WS_CHANNELS.remoteStatusChanged);
+	local.socket.close();
 });
 
 test("stop() releases the port", async () => {

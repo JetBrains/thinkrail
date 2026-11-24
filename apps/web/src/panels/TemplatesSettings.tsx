@@ -4,13 +4,13 @@ import {
 	RiAddLine as Plus,
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
+import { assembleTemplate } from "@thinkrail/chat-ui/prompt";
 import type { TemplateInfo, TemplateScope } from "@thinkrail/contracts";
 import { t as translate, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { SkeletonRows } from "@thinkrail/ui/skeleton";
 import { useEffect, useState } from "react";
 import { TemplateEditorDialog } from "@/chat/TemplateEditorDialog";
-import { assembleTemplate } from "@/prompt";
 import {
 	SETTINGS_LIST_PRIMARY,
 	SETTINGS_LIST_ROW,

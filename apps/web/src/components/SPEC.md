@@ -28,11 +28,8 @@ vocabulary of the two search surfaces, and the shared loading-skeleton primitive
     reporter installed via `setErrorBoundaryReporter` (wired by
     `main.tsx` to the transport's error reports; reporter failures are swallowed). The seam keeps this
     module store/transport-free. `reportBoundaryError(error, reportId)` is the same seam for a boundary
-    with its own fallback (chat's per-tool-renderer boundary).
-- **`CustomIcon.tsx`** — renders an SVG from `public/custom-icons/` as a themeable `currentColor` glyph
-  via a CSS `mask-image` span (`.custom-icon*` classes in `index.css`), so a custom glyph sizes with
-  `size-*` and colours with `text-*` exactly like a Remix icon. Names are a typed union
-  (`CustomIconName`); today: `file-diff-line`/`file-diff-fill` (the Changes review tab glyph).
+    with its own fallback; `main.tsx` installs it as chat-ui's per-tool-renderer boundary reporter
+    (`setToolPresentationErrorReporter`).
 - **`QuietScrollArea.tsx`** — the store-free overflow observer and two presentation surfaces:
   `QuietScrollArea` owns an ordinary native scroll viewport (an optional `viewportRef` callback hands that
   element to a caller that saves/restores its scroll, e.g. `panels/RememberedScrollArea`), while `QuietScrollFrame` observes a
@@ -51,29 +48,15 @@ vocabulary of the two search surfaces, and the shared loading-skeleton primitive
   directions. `QuietScrollFrame` also re-skins xterm's non-native slider to the same thumb (transparent
   underlying slider, a 6px optical thumb, opacity gated on intent and measured vertical overflow).
   Surface colour is an explicit semantic prop (`sidebar` or `terminal`), never inferred from arrangement.
-- **`AttentionDot.tsx`** — the store-free, static green/accent dot whose sole accessible label is “Needs
-  attention.” It carries no reason, count, tooltip, motion, or clearing behavior; callers decide only whether
-  it is present. It is the one marker for both needs-input and unread-result attention.
 - **`KeyHint.tsx`** — `KeyHint` (`@thinkrail/ui/keycaps`' caps plus a short label, the label also its
   tooltip), the footer vocabulary the search palette and Find in Files share. The caps are the ui
   primitive so a tooltip can render a chord too; callers derive the labels with `commands`'
   `shortcutKeys`, so a platform rule lives in one place.
 - **`MatchHighlight.tsx`** — `highlightRanges(text, ranges)`: the text with its ascending, disjoint
   `[start, end)` match ranges wrapped in `<mark>`, the one rendering of a matcher's or `git grep`'s ranges.
-- **`RunningIcon.tsx`** — the store-free **“ThinkRail is working” badge**: the brand monogram inside a
-  rounded-square frame, drawn in `currentColor` so it sizes with `size-*` and colours with `text-*` like a
-  Remix icon, with the accessible label “Agent working”. While motion is allowed, the frame (two halves
-  leaving a gap on the left and meeting on the right) and the six letter strokes of the monogram draw and
-  erase on one 3.263s cycle (`loader-*` keyframes in `index.css`); a beat with only the frame showing is
-  part of the design. Each letter stroke is a wide line clipped to its region of `BRAND_MARK_SEGMENTS`, the
-  same segments `BRAND_MARK_PATH` is joined from, so the fully drawn badge is the shell's mark rather than a
-  second copy that could drift. Only the stroke centre-lines, the frame, and the small gap between the R's
-  stem and top bar (the stem stroke stops short) are local animation geometry. Reduced motion leaves every
-  stroke at its fully drawn dash: the static, complete badge. This loader replaced a ring with a lapping
-  train and a pulsing monogram; before that the row's own identity glyph breathed, dropped because a
-  dimming folder reads as “disabled” at 14px. Callers pass only size/colour classes and decide from
-  normalized host state whether a top-level session is running; the icon renders no dot, spinner, count,
-  tooltip, or idle state.
+- **Also governs (implementation in `@thinkrail/ui/attention-dot` and `@thinkrail/ui/running-icon`,
+  [[module-ui]], so the IDE and the phone shell show the same status marks):** `AttentionDot` and
+  `RunningIcon`; their design and invariants live in the ui spec's *Status marks*.
 - **Also governs (implementation in `@thinkrail/ui/skeleton`, [[module-ui]], so the app and
   [[module-resource-renderers]] share it):** `SkeletonRows`, the one pulsing-rows placeholder every loading surface
   uses, and `LoadingRegion`, the sized-wrapper shape around it that most call sites actually want (a
@@ -88,17 +71,14 @@ vocabulary of the two search surfaces, and the shared loading-skeleton primitive
   next `preload()` does. Known limit: on a slow link, or when the revealing data is already in the store
   at mount, the first mount still takes the `lazy` path.
 - **Public surface:** `ErrorBoundary`, `isChunkLoadError`, `setErrorBoundaryReporter`, `reportBoundaryError` — imported directly via
-  `@/components/ErrorBoundary` (no barrel; the placeholders come from `@thinkrail/ui/skeleton`); `AttentionDot` via
-  `@/components/AttentionDot`; `RunningIcon` via `@/components/RunningIcon`; `CustomIcon`,
-  `CustomIconName` via `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the
+  `@/components/ErrorBoundary` (no barrel; the placeholders come from `@thinkrail/ui/skeleton`); `QuietScrollArea`, `QuietScrollFrame`, and the
   `QuietScrollEdges` type via `@/components/QuietScrollArea`; `preloadedLazy` via
   `@/components/preloadedLazy`; `useNow()` via `@/components/useNow` (the
   wall clock as a `useSyncExternalStore` value on a shared 30 s ticker, so a render never calls `Date.now`
   itself).
 - **Allowed deps:** React, `@remixicon/react`, `@thinkrail/ui/utils` (`cn`), `@thinkrail/ui/button` (the
   error fallback's Reload / Try again are shared buttons), `@thinkrail/locales` (UI strings), `lib` (`shallowEqualArrays` — the reset-keys comparison, shared
-  rather than re-stated), `constants` (`BRAND_MARK_SEGMENTS` — the monogram regions `RunningIcon` clips to,
-  shared with the shell logo rather than copied). Kept dependency-light on purpose, and both are leaves, so *any* region
+  rather than re-stated). Kept dependency-light on purpose, and both are leaves, so *any* region
   (shell, panels, `main.tsx`) can still wrap in it without creating a cycle.
 - **Forbidden:** `store`/`transport`/`panels`/`shell`/`chat`/`contracts`; `server`/`shared`/`pi`; inline
   `style` objects or raw hex (fallback is themed with token utilities only).
@@ -124,11 +104,11 @@ third thing, never bare text, never nothing:
 2. **`Loader2` spinner (usually beside a short label) — for an *in-flight action or transient state* pinned
    to its control**: a single button, one menu item, one icon — never a whole region. Reference sites:
    the "New chat"/"Creating…" button states, `shell/WorkspaceChatHistory.tsx`'s history icon,
-   `chat/ActivityGroup.tsx`/`chat/ToolCard.tsx` step icons, `panels/ProjectTree.tsx`'s "Creating worktree…"
+   `chat-ui/src/ActivityGroup.tsx`/`chat-ui/src/ToolCard.tsx` step icons, `panels/ProjectTree.tsx`'s "Creating worktree…"
    pending row. On a shared button this tier is `loading` (icon-sized spinner in the icon's place). A
    narrower named sub-idiom of this tier: **`RefreshCw` spinning in place** (icon unchanged, just rotating;
    a shared button spells it `loading spinIcon`) for a manual "Refresh" action on a control whose surrounding content stays visible and
-   valid while the refresh runs (`chat/ModelEffortPicker.tsx`, `panels/GithubSettings.tsx`,
+   valid while the refresh runs (`chat-ui/src/ModelEffortPicker.tsx`, `panels/GithubSettings.tsx`,
    `panels/ProvidersSettings.tsx`, `panels/BranchPicker.tsx`) — swapping to a generic spinner there would
    discard the "this still works, just refreshing" signal the in-place spin gives for free. Under reduced
    motion a rotation cannot carry the signal, so `spinIcon` shows the static spinner glyph instead.
@@ -182,7 +162,7 @@ Beyond picking the right tier:
   skeleton-then-pop for this reason). `chat/ChatView.tsx`
   skips it for a sharper reason: a non-`none` `transform` on an ancestor — including mid-animation, before
   the keyframe settles at `none` — establishes a new containing block, which broke the sticky positioning
-  of `chat/activityBreadcrumbs.tsx`'s breadcrumb bar nested inside it (`e2e/activity-breadcrumbs.spec.ts`
+  of `chat-ui/src/activityBreadcrumbs.tsx`'s breadcrumb bar nested inside it (`e2e/activity-breadcrumbs.spec.ts`
   caught this in review). Anything with a `position: sticky`/`fixed` descendant is disqualified from this
   transform-based reveal outright, no exception list needed — check for one before adding it.
 

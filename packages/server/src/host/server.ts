@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { hostname } from "node:os";
 import { join, normalize } from "node:path";
 import type {
 	HostPlatform,
@@ -25,6 +26,7 @@ import {
 	MCP_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
+	REMOTE_ACCESS_PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
 	SPEECH_SOCKET_ROUTE,
 	TEXT_SEARCH_PROTOCOL_VERSION,
@@ -34,8 +36,9 @@ import {
 	WORKSPACE_VIEW_ROUTE,
 	WS_CHANNELS,
 	WS_MAX_FRAME_BYTES,
+	WS_OUTBOUND_BUFFER_LIMIT_BYTES,
 } from "@thinkrail/contracts";
-import { errorCodeOf } from "@thinkrail/shared/codedError";
+import { CodedError, errorCodeOf } from "@thinkrail/shared/codedError";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import {
 	admissionContextFor,
@@ -154,6 +157,13 @@ import {
 	setProjectPathGuard,
 	setProjectPublisher,
 } from "../projects";
+import {
+	bridgeRemoteWire,
+	createRemoteAccessControl,
+	type RemoteAccessControl,
+	type RemoteAccessControlOptions,
+	type RemoteWireBridge,
+} from "../remote-transport";
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
 import { getConfig, setSettingsPublisher } from "../settings";
 import {
@@ -224,6 +234,7 @@ import { applyGitCeiling } from "./gitCeiling";
 import {
 	handleRequest,
 	releaseDisabledExtensionQueries,
+	remoteAccessStatus,
 	requestErrorReport,
 	requestMethodDiagnostic,
 	workspaceCreationHandoff,
@@ -275,6 +286,16 @@ import { workspaceToolsHost } from "./workspaceTools";
 export interface CreateServerOptions {
 	port?: number;
 	host?: string;
+	/**
+	 * Turns phone access on for this run (`--remote`), whatever Settings says: paired devices drive the host
+	 * over a signaling relay — `relayUrl` when given, else one the host runs itself, reachable at this
+	 * machine's Wi‑Fi/LAN and Tailscale addresses. Without it, access follows the Settings switch.
+	 */
+	remote?: {
+		relayUrl?: string | undefined;
+		/** Starts the pairing side in place of the real one; injected in tests. */
+		startAccess?: RemoteAccessControlOptions["startAccess"];
+	};
 	staticDir?: string;
 	projectPath?: string;
 	appVersion?: string;
@@ -308,6 +329,8 @@ export interface CreateServerOptions {
 export interface RunningServer {
 	readonly port: number;
 	startAttributionClaim: () => void;
+	/** Phone access: on/off, pairing links, paired devices. Off unless Settings or `remote` turned it on. */
+	remote: RemoteAccessControl;
 	stop: () => void;
 	shutdown: () => Promise<void>;
 }
@@ -323,7 +346,6 @@ interface SocketData {
 }
 
 const CLIENT_REPLAY_RETENTION_MS = 60_000;
-const WS_OUTBOUND_BUFFER_LIMIT_BYTES = 256 * 1024 * 1024;
 const RECENT_FOLDER_CHECK_BUDGET_MS = 250;
 
 const log = logger("host");
@@ -361,6 +383,9 @@ function countMethods(methods: readonly string[]): string {
 	return [...counts].map(([method, count]) => `${method} ×${count}`).join(", ");
 }
 
+/** This machine's name as a paired phone shows it (`Studio-Mac.local` → `Studio-Mac`). */
+const computerName = (): string => hostname().replace(/\.local$/, "");
+
 function clientProtocolVersion(value: string | null): number {
 	const parsed = Number(value);
 	return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
@@ -392,6 +417,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const {
 		port = 24242,
 		host = "localhost",
+		remote,
 		staticDir,
 		projectPath,
 		appVersion,
@@ -452,7 +478,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			clientKey,
 			setTimeout(() => {
 				reapTimers.delete(clientKey);
-				if (sockets.has(clientKey)) return;
+				if (sockets.has(clientKey) || remoteClients.has(clientKey)) return;
 				if (!requestReplays.clearClient(clientKey)) {
 					armClientReap(clientKey);
 					return;
@@ -581,22 +607,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					ws.subscribe(WS_CHANNELS.fontsChanged);
 				const speech = ws.data.protocolVersion >= SPEECH_PROTOCOL_VERSION;
 				if (speech) ws.subscribe(WS_CHANNELS.speechChanged);
-				const hostPlatform: HostPlatform =
-					process.platform === "darwin" || process.platform === "win32"
-						? process.platform
-						: "linux";
+				if (ws.data.protocolVersion >= REMOTE_ACCESS_PROTOCOL_VERSION)
+					ws.subscribe(WS_CHANNELS.remoteStatusChanged);
 				const setupCapture = additionalCapture();
-				const chats = seesChats(ws.data.protocolVersion);
-				const welcome: ServerWelcome = {
-					protocolVersion: PROTOCOL_VERSION,
-					hostPlatform,
-					projects: listProjects().filter((project) => chats || !isChatsContainer(project)),
-					recentProjects: listRecentProjects().filter((project) => !isChatsContainer(project)),
-					config: getConfig(),
-					...(speech ? { speech: speechStatus() } : {}),
-					...(appVersion ? { appVersion } : {}),
-					...(hostUpdateNotice ? { hostUpdate: hostUpdateNotice } : {}),
-				};
+				const welcome: ServerWelcome = buildWelcome(ws.data.protocolVersion);
 				setupObservation.observe(setupCapture, {
 					project_present: welcome.projects.some((project) => !isChatsContainer(project))
 						? "yes"
@@ -667,6 +681,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 									clientKey: ws.data.clientKey,
 									protocolVersion: ws.data.protocolVersion,
 									...(hostUpdate ? { runHostUpdate: requestHostUpdate } : {}),
+									remoteAccess,
 								});
 								return JSON.stringify({ id: requestId, ok: true, result });
 							} catch (err) {
@@ -728,6 +743,106 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		},
 	});
 
+	const buildWelcome = (protocolVersion: number): ServerWelcome => {
+		const speech = protocolVersion >= SPEECH_PROTOCOL_VERSION;
+		const chats = seesChats(protocolVersion);
+		const hostPlatform: HostPlatform =
+			process.platform === "darwin" || process.platform === "win32" ? process.platform : "linux";
+		return {
+			protocolVersion: PROTOCOL_VERSION,
+			hostPlatform,
+			projects: listProjects().filter((project) => chats || !isChatsContainer(project)),
+			recentProjects: listRecentProjects().filter((project) => !isChatsContainer(project)),
+			config: getConfig(),
+			...(speech ? { speech: speechStatus() } : {}),
+			...(appVersion ? { appVersion } : {}),
+			...(hostUpdateNotice ? { hostUpdate: hostUpdateNotice } : {}),
+		};
+	};
+
+	const remoteBridges = new Map<RemoteWireBridge, number>();
+
+	const deviceBridges = new Map<string, Set<RemoteWireBridge>>();
+	const remoteClients = new Set<string>();
+	const remoteAccess: RemoteAccessControl = createRemoteAccessControl({
+		...(remote?.relayUrl ? { relayUrl: remote.relayUrl } : {}),
+		...(remote?.startAccess ? { startAccess: remote.startAccess } : {}),
+		hostName: computerName(),
+		onPaired: (device, channel, protocolVersion) => {
+			const clientKey = `remote:${device.id}`;
+			remoteClients.add(clientKey);
+			const pendingReap = reapTimers.get(clientKey);
+			if (pendingReap !== undefined) {
+				clearTimeout(pendingReap);
+				reapTimers.delete(clientKey);
+			}
+			const bridge = bridgeRemoteWire(channel, {
+				clientKey,
+				replay: {
+					run: (id, method, params, execute) =>
+						requestReplays.run(
+							clientKey,
+							id,
+							createHash("sha256")
+								.update(JSON.stringify([method, params, null]))
+								.digest("hex"),
+							execute,
+							requestMethodDiagnostic(method),
+						),
+					acknowledge: (ids) => reportAbandoned(requestReplays.acknowledge(clientKey, ids)),
+					retain: (ids) => reportAbandoned(requestReplays.retain(clientKey, ids)),
+				},
+				onError: (error, method) => reportError(error, requestErrorReport(method)),
+				dispatch: (method, params) => {
+					const verdict = remoteAccess.mayRequest(device.id, method);
+					if (verdict === "revoked")
+						throw new CodedError("REMOTE_DEVICE_REVOKED", "This device is no longer paired.");
+					if (verdict === "readOnly")
+						throw new CodedError(
+							"REMOTE_DEVICE_READ_ONLY",
+							"This device can only read. Allow changes for it on the computer.",
+						);
+					return handleRequest(method, params, { clientKey, protocolVersion });
+				},
+				errorCodeOf,
+			});
+			const own = deviceBridges.get(device.id) ?? new Set<RemoteWireBridge>();
+			own.add(bridge);
+			deviceBridges.set(device.id, own);
+			remoteBridges.set(bridge, protocolVersion);
+			channel.onClose(() => {
+				remoteBridges.delete(bridge);
+				own.delete(bridge);
+				if (own.size === 0 && deviceBridges.get(device.id) === own) {
+					deviceBridges.delete(device.id);
+					remoteClients.delete(clientKey);
+					if (!stopping && !reapTimers.has(clientKey)) armClientReap(clientKey);
+				}
+			});
+			// The device has no WS "open" event, so hand it the same welcome snapshot over the bridge.
+			bridge.push(WS_CHANNELS.serverWelcome, buildWelcome(protocolVersion));
+			bridge.push(WS_CHANNELS.remoteDeviceAccess, { access: device.access });
+			const routes = remoteAccess.routes();
+			if (routes) bridge.push(WS_CHANNELS.remoteHostRoutes, routes);
+		},
+		onAccessChanged: (deviceId, access) => {
+			for (const bridge of deviceBridges.get(deviceId) ?? []) {
+				bridge.push(WS_CHANNELS.remoteDeviceAccess, { access });
+			}
+		},
+		onStatus: (state) =>
+			publishScoped(WS_CHANNELS.remoteStatusChanged, remoteAccessStatus(state), {
+				belowProtocol: REMOTE_ACCESS_PROTOCOL_VERSION,
+				localOnly: true,
+			}),
+	});
+	try {
+		if (remote) remoteAccess.setEnabled(true, { persist: false });
+		else remoteAccess.restore();
+	} catch (err) {
+		log.warn("phone access could not start", err as Error);
+	}
+
 	const backpressureReconciler = setInterval(() => {
 		for (const socket of sockets.values()) {
 			if (settleSlowConsumer(socket) === "healthy") socket.data.held?.drain();
@@ -748,11 +863,17 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	type PushSocket = Bun.ServerWebSocket<SocketData>;
 	const fanOut = (
 		channel: string,
-		admits: (socket: PushSocket) => boolean,
+		admits: (protocolVersion: number) => boolean,
+		frame: string,
 		deliver: (socket: PushSocket) => void,
+		toDevices = true,
 	): void => {
 		for (const socket of sockets.values()) {
-			if (socket.isSubscribed(channel) && admits(socket)) deliver(socket);
+			if (socket.isSubscribed(channel) && admits(socket.data.protocolVersion)) deliver(socket);
+		}
+		if (!toDevices) return;
+		for (const [bridge, protocolVersion] of remoteBridges) {
+			if (admits(protocolVersion)) bridge.pushFramed(frame);
 		}
 	};
 
@@ -767,25 +888,34 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		workspaceId?: string;
 		projectId?: string;
 		belowProtocol?: number;
-	}): ((socket: PushSocket) => boolean) => {
+	}): ((protocolVersion: number) => boolean) => {
 		const aboutChats =
 			(scope.workspaceId !== undefined && isChatWorkspaceId(scope.workspaceId)) ||
 			(scope.projectId !== undefined && isChatsContainerId(scope.projectId));
 		const floor = scope.belowProtocol ?? 0;
-		return ({ data: { protocolVersion } }) =>
+		return (protocolVersion) =>
 			protocolVersion >= floor && (!aboutChats || seesChats(protocolVersion));
 	};
 
 	const publishScoped = (
 		channel: string,
 		data: unknown,
-		scope: { workspaceId?: string; projectId?: string; belowProtocol?: number } = {},
+		scope: {
+			workspaceId?: string;
+			projectId?: string;
+			belowProtocol?: number;
+			/** This computer's sockets only, never a paired device (phone access is managed here). */
+			localOnly?: boolean;
+		} = {},
 		afterSession?: string,
 	) => {
+		const frame = JSON.stringify({ channel, data });
 		fanOut(
 			channel,
 			admitsScope(scope),
-			pushTo(channel, JSON.stringify({ channel, data }), afterSession),
+			frame,
+			pushTo(channel, frame, afterSession),
+			scope.localOnly !== true,
 		);
 	};
 
@@ -1215,7 +1345,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			taskObservation.toolStarted(workspaceId, payload.sessionId, payload.event);
 		}
 		const frame = JSON.stringify({ channel: WS_CHANNELS.piEvent, data: payload });
-		fanOut(WS_CHANNELS.piEvent, admitsScope({ workspaceId }), (socket) => {
+		fanOut(WS_CHANNELS.piEvent, admitsScope({ workspaceId }), frame, (socket) => {
 			if (socket.data.held) socket.data.held.deliver(payload, frame);
 			else pushTo(WS_CHANNELS.piEvent, frame)(socket);
 		});
@@ -1233,16 +1363,14 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setExtUiPublisher((request, audience) => {
 		const workspaceId = getSessionAttribution(request.sessionId);
 		const aboutChat = workspaceId !== undefined && isChatWorkspaceId(workspaceId);
+		const frame = JSON.stringify({ channel: WS_CHANNELS.piExtensionUi, data: request });
 		fanOut(
 			WS_CHANNELS.piExtensionUi,
-			({ data: { protocolVersion } }) =>
+			(protocolVersion) =>
 				(!audience || protocolVersion < audience.belowProtocol) &&
 				(!aboutChat || seesChats(protocolVersion)),
-			pushTo(
-				WS_CHANNELS.piExtensionUi,
-				JSON.stringify({ channel: WS_CHANNELS.piExtensionUi, data: request }),
-				request.sessionId,
-			),
+			frame,
+			pushTo(WS_CHANNELS.piExtensionUi, frame, request.sessionId),
 		);
 	});
 
@@ -1321,6 +1449,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		persistTerminalSessions();
 		closeAllTerminals();
 		restoreSeamDefaults();
+		remoteAccess.stop();
 		server.stop(true);
 	};
 	const shutdown = (): Promise<void> => {
@@ -1353,6 +1482,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			return server.port ?? port;
 		},
 		startAttributionClaim: startAttributionClaimWhenReady,
+		remote: remoteAccess,
 		stop,
 		shutdown,
 	};

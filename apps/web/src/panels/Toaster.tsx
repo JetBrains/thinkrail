@@ -27,7 +27,8 @@ const variantIcon: Record<ToastType["variant"], { Icon: typeof RiAlertLine; clas
 
 const AUTO_DISMISS_MS = 5000;
 
-export function Toaster() {
+/** `viewportClassName` places the stack for a host, e.g. clear of a phone's home indicator. */
+export function Toaster({ viewportClassName }: { viewportClassName?: string }) {
 	const toasts = useAppStore((s) => s.toasts);
 	const dismissToast = useAppStore((s) => s.dismissToast);
 	return (
@@ -74,7 +75,7 @@ export function Toaster() {
 					</Toast>
 				);
 			})}
-			<ToastViewport />
+			<ToastViewport className={viewportClassName} />
 		</ToastProvider>
 	);
 }

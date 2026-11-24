@@ -10,6 +10,7 @@ import { SHARED_SOURCES, WHOLE_PUBLIC_API_EXCEPT } from "./sources";
 
 const ASSETS = new URL("../assets/", import.meta.url);
 const APP_SRC = new URL("../../../apps/web/src/", import.meta.url);
+const TOKENS = new URL("../../design-tokens/styles/", import.meta.url);
 
 export const MANIFEST_FILE = new URL("shared-modules.json", ASSETS);
 export const THEME_FILE = new URL("thinkrail-theme.css", ASSETS);
@@ -72,20 +73,23 @@ function blocks(css: string, opener: RegExp): string[] {
 	return found;
 }
 
-function appCss(path: string): string {
-	return stripComments(readFileSync(new URL(path, APP_SRC), "utf8"));
+function css(path: string, root: URL): string {
+	return stripComments(readFileSync(new URL(path, root), "utf8"));
 }
 
 export function themeCss(): string {
-	const index = appCss("index.css");
+	const index = css("index.css", APP_SRC);
 	const parts = [
-		"/* Generated from apps/web/src by @thinkrail/extension-sdk — do not edit. Reference-only: import it with theme(reference). */",
-		...blocks(appCss("styles/generated/colors.css"), /@theme inline \{/g),
-		...blocks(appCss("styles/generated/spacing.css"), /@theme inline \{/g),
-		...blocks(appCss("styles/tokens.css"), /@theme static \{/g).map((block) =>
+		"/* Generated from apps/web/src and packages/design-tokens by @thinkrail/extension-sdk — do not edit. Reference-only: import it with theme(reference). */",
+		...blocks(css("generated/colors.css", TOKENS), /@theme inline \{/g),
+		...blocks(css("generated/spacing.css", TOKENS), /@theme inline \{/g),
+		...blocks(css("shape.css", TOKENS), /@theme static \{/g).map((block) =>
 			block.replace("@theme static", "@theme inline"),
 		),
 		...blocks(index, /@theme inline \{/g),
+		...blocks(css("motion.css", TOKENS), /@theme \{/g).map((block) =>
+			block.replace("@theme", "@theme inline"),
+		),
 		...[...index.matchAll(/@custom-variant [^;]+;/g)].map((match) => match[0]),
 	];
 	return `${parts.map((part) => part.replace(/\n\s*\n/g, "\n")).join("\n\n")}\n`;

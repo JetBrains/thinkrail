@@ -1,3 +1,11 @@
+import { ACTIVITY_BREADCRUMB_HEIGHT } from "@thinkrail/chat-ui/activityBreadcrumbs";
+import { foldOverride } from "@thinkrail/chat-ui/foldState";
+import { type ChatRow, rowIdForToolCall } from "@thinkrail/chat-ui/rows";
+import type {
+	TranscriptMenu,
+	TranscriptMenuAction,
+	TranscriptNavigation,
+} from "@thinkrail/chat-ui/TranscriptItem";
 import { focusAndReveal, TABBABLE_SELECTOR } from "@thinkrail/ui/focus";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { type LocalKeys, useLocalKeys } from "@thinkrail/ui/local-keys";
@@ -11,10 +19,6 @@ import {
 import { useEffect, useInsertionEffect, useState } from "react";
 import { LOCAL_KEY_DEFAULTS } from "@/keybindings";
 import { copyText, resolveTreeMove } from "@/lib";
-import { ACTIVITY_BREADCRUMB_HEIGHT } from "./activityBreadcrumbs";
-import { foldOverride } from "./foldState";
-import { type ChatRow, rowIdForToolCall } from "./rows";
-import type { TranscriptMenu, TranscriptMenuAction, TranscriptNavigation } from "./TranscriptItem";
 import {
 	keyboardLeavesFollow,
 	type TranscriptKeyAction,

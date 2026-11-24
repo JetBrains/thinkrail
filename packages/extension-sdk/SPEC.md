@@ -188,8 +188,9 @@ reprint-only toolchain diff; `--print` shows the current surface. The snapshot i
   stubs or the host. `tools/generate.test.ts` reruns it and fails on drift, and checks the
   manifest equals the allow-list and the package's `exports` are exactly the SDK specifiers plus
   `./server`, `./shared-modules.json`, `./theme.css` and `./package.json`.
-- `assets/thinkrail-theme.css` — the app's `@theme` blocks from `apps/web/src/styles` and `index.css`
-  (comments stripped, radius rewritten from `static` to `inline`) plus its `@custom-variant`s; the same
+- `assets/thinkrail-theme.css` — the `@theme` blocks of `packages/design-tokens/styles` (colours,
+  spacing, shape, motion) and `apps/web/src/index.css` (comments stripped, radius and motion rewritten to
+  `inline`) plus the app's `@custom-variant`s; the same
   test rebuilds it from the app's sources at test time.
 - Declarations (`tools/build.ts`, also `prepack`, output `dist/`, never committed): tsgo emits from the
   in-repo sources (`tsconfig.dts.json`) and rolldown-plugin-dts bundles them, inlining third-party and

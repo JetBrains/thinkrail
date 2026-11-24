@@ -1,13 +1,4 @@
 import { expect, test } from "bun:test";
-import askUserQuestion from "@thinkrail/ext-ask-user-question/web";
-import hintMode from "@thinkrail/ext-hint-mode/web";
-import nextSteps from "@thinkrail/ext-next-steps/web";
-import outputs from "@thinkrail/ext-outputs/web";
-import sessionInsights from "@thinkrail/ext-session-insights/web";
-import visualize, { MermaidView } from "@thinkrail/ext-visualize/web";
-import type { PanelDeclaration, ToolRenderProps, WebExtension } from "@thinkrail/extension-api/web";
-import { EN } from "@thinkrail/locales";
-import { currentTranslator } from "@thinkrail/locales/react";
 import {
 	DefaultToolRenderer,
 	getToolChrome,
@@ -17,7 +8,16 @@ import {
 	isInteractiveTool,
 	readComposerSuggestions,
 	resolveProminence,
-} from "../chat/toolRegistry";
+} from "@thinkrail/chat-ui/toolRegistry";
+import askUserQuestion from "@thinkrail/ext-ask-user-question/web";
+import hintMode from "@thinkrail/ext-hint-mode/web";
+import nextSteps from "@thinkrail/ext-next-steps/web";
+import outputs from "@thinkrail/ext-outputs/web";
+import sessionInsights from "@thinkrail/ext-session-insights/web";
+import visualize, { MermaidView } from "@thinkrail/ext-visualize/web";
+import type { PanelDeclaration, ToolRenderProps, WebExtension } from "@thinkrail/extension-api/web";
+import { EN } from "@thinkrail/locales";
+import { currentTranslator } from "@thinkrail/locales/react";
 import { matchKeybinding, matchLocal, resolveKeybindings, SHORTCUT_CATALOG } from "../keybindings";
 import { isMessageKey } from "../lib";
 import {

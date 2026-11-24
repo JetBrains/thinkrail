@@ -90,9 +90,18 @@ roster's catalog reads ([[submodule-web-panels]]).
   `server.welcome` snapshot lands. Every connection-status transition clears `protocolVersion`, so UI
   capabilities remain unavailable between sockets and until the current socket's welcome is installed;
   **`welcomeProtocolVersion`** keeps the last installed welcome's protocol across a reconnect (in memory
-  only), for the one capability that must outlive a blip: **`selectHostSearchAvailable`** (the search
+  only, and host-scoped: a host switch resets it), for the one capability that must outlive a blip: **`selectHostSearchAvailable`** (the search
   palette keeps its host scopes and rows) beside **`selectHostReachable`** (connected and this
-  connection's welcome — when a host search request may go out).
+  connection's welcome — when a host search request may go out). **`remoteHostKey`** (host-scoped) names the
+  remote host the app is mounted on, null on this computer's own; **`enterRemoteHost(hostKey, open)`** sets
+  it with the matching status transition in one write, and **`selectSupportsRemoteAccess`** (protocol gate +
+  local host only) is the one gate for phone access, which a remote host refuses to a device.
+  **`resetHostState()`** returns every host-scoped slice (`initialHostState()`: domain state, the
+  workspace-keyed views and requests, host config to defaults) to its initial value when the transport moves
+  to another host; monotonic counters (`connectionGeneration`, `welcomeGeneration`, provider and revision
+  versions), the workbench frame and client preferences survive, so a reply from the previous host still
+  fails its generation guard. `hostScope.test.ts` classifies every data key as host-scoped (reset) or
+  client-scoped (an explicit list), so a new field cannot skip the decision.
   **`installWelcomeSnapshot(protocolVersion, projects, recentProjects,
   config?, hostPlatform?, hostUpdate?, hostAppVersion?, speech?)`** installs protocol + both sorted project views + optional config,
   host platform, optional host-update lifecycle snapshot, the voice-input **`speech`** status (`null` from a
@@ -131,7 +140,9 @@ roster's catalog reads ([[submodule-web-panels]]).
   **Settled shelf.** `selectors.ts` owns **`selectWorkspacePartition(state, projectId, now)`** — the one
   derivation of a project's rows into `live` and `settled` (each settled row carrying its reason:
   `override`, `review merged|closed`, or `idle since`), consumed by the rail, the topbar's *Switch to*
-  menu, and the shelf alike so the three can never disagree; **`selectAutoSettledCounts(state, now)`**
+  menu, and the shelf alike so the three can never disagree — it feeds the store's state (support flag,
+  `settleIdleDays`, running/attention, the live latch) into contracts' `partitionWorkspaces`, the rule the phone
+  shares; **`selectAutoSettledCounts(state, now)`**
   reuses its per-row rule to count, per loaded project, only the rows the shelf took on its own (never an
   `override`), which is what the rail's one-time first-move notice announces. Below
   `WORKSPACE_SETTLE_PROTOCOL_VERSION` it returns the host's raw list as `live`, unsorted, and ignores even
@@ -309,8 +320,9 @@ roster's catalog reads ([[submodule-web-panels]]).
   already copied to, pending decodes and native clipboard reads, errors, the in-flight upload's `AbortController` and a fresh generation
   token; the pure model `PromptImagesState` + `newPromptImagesState` and its transitions
   `withoutPromptChips` / `withCopiedPromptFile` / `withPendingWork` (pending work counts only on the
-  generation it started on) are the store's own `promptImageState.ts`, so runtime
-  creation runs no `chat` code). `updateChatPromptImages(sessionId, update)` changes
+  generation it started on) are [[module-chat-ui]]'s `promptImageState` — a dependency-free module beside the
+  composer that reads it, so runtime creation runs no renderer code; the store barrel re-exports only the
+  `PromptFile` type `transport`'s uploader takes). `updateChatPromptImages(sessionId, update)` changes
   that draft atomically through the same existing-runtime-only boundary as text drafts. Remounts and
   transcript reconciliation retain it; closing the runtime or clearing its workspace releases it.
   A new runtime gets a different generation even when its session id is reused, so old decodes cannot
@@ -362,7 +374,7 @@ roster's catalog reads ([[submodule-web-panels]]).
   as a new message) while *keeping it in the session file*, so the reducer drops the superseded failed
   assistant turn (`removeSupersededAssistant`, the same rule as the overflow-compaction path) —
   otherwise the client renders the reply twice (frozen failed partial + retried copy). Hydration applies
-  the same presentation rule to the persisted copy (`chat/hydrate.ts` hides retried attempts — an
+  the same presentation rule to the persisted copy ([[module-chat-ui]]'s `hydrate.ts` hides retried attempts — an
   errored assistant followed by another assistant message), so live and reloaded clients agree.
   - **Normalized session state** (`sessionStateByWorkspace`) is the full host-authored state record per
     workspace/session. Snapshot hydration replaces the map only on a complete current-generation read;
@@ -866,7 +878,8 @@ host's `artifacts.list` snapshot), **`artifactsTickByWorkspace`** (`noteArtifact
 app-wide **`artifactsShowIgnored`** toggle and **`artifactsView`** (`setArtifactsView`, `"outputs" |
 "smart" | "list" | "tree"`, `null` until the user picks one); the seen watermarks, the open folders (Smart's
 group and chip ids included), the toggle and the view hydrate from per-client preferences
-(`hydrateArtifactsPreferences`). **`selectArtifactsView`** resolves the view the panel shows (an explicit
+(`hydrateArtifactsPreferences`) and so survive a host switch: they are this device's preferences, and a
+reset would write the empty value back over them. **`selectArtifactsView`** resolves the view the panel shows (an explicit
 choice while it is offered, else Outputs when **`selectArtifactOutputsOffered`** — host v128 and the
 `outputs` extension, `OUTPUTS_EXTENSION`, not in `disabledExtensions` — else Smart when
 **`supportsArtifactRoles`** holds, else List), and **`selectArtifactsRoundFilter`** maps it to what the

@@ -15,12 +15,13 @@ re-declaration. This centralizes authored rhythm values; it does not remove lite
 generated CSS, or compiled bundle.
 
 ```
-styles/spacing.json            the authored SOURCE — the only authored canonical rhythm lengths
-styles/spacing.schema.json     the editor-facing contract for it
-scripts/spacing.ts             load / validate / render — the only place a spacing derivation is written
-scripts/generate-spacing.ts    writes the output; `--check` fails when it is stale
-styles/generated/spacing.css   GENERATED: the `--space-<n>` tokens + the `--spacing: 1px` base
-styles/spacingUsage.test.ts    the adoption guard
+packages/design-tokens/
+  styles/spacing.json            the authored SOURCE — the only authored canonical rhythm lengths
+  styles/spacing.schema.json     the editor-facing contract for it
+  scripts/spacing.ts             load / validate / render — the only place a spacing derivation is written
+  scripts/generate-spacing.ts    writes the output; `--check` fails when it is stale
+  styles/generated/spacing.css   GENERATED: the `--space-<n>` tokens + the `--spacing: 1px` base
+apps/web/src/styles/spacingUsage.test.ts    the adoption guard
 ```
 
 ## The scale

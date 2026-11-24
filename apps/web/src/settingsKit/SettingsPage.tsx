@@ -1,7 +1,8 @@
 import { Children, isValidElement, type ReactNode } from "react";
 
 export interface SettingsPageProps {
-	title: string;
+	/** Omitted where the host's own header already names the page, as on the phone. */
+	title?: string;
 	description?: ReactNode;
 	testId?: string;
 	children: ReactNode;
@@ -10,10 +11,12 @@ export interface SettingsPageProps {
 export function SettingsPage({ title, description, testId, children }: SettingsPageProps) {
 	return (
 		<div data-testid={testId} className="flex flex-col gap-24">
-			<header className="flex flex-col gap-4 pr-[2rem]">
-				<h2 className="tr-heading-sm text-text-default">{title}</h2>
-				{description ? <p className="tr-text-metadata text-text-muted">{description}</p> : null}
-			</header>
+			{title ? (
+				<header className="flex flex-col gap-4 pr-[2rem]">
+					<h2 className="tr-heading-sm text-text-default">{title}</h2>
+					{description ? <p className="tr-text-metadata text-text-muted">{description}</p> : null}
+				</header>
+			) : null}
 			<div className="flex flex-col">
 				{Children.toArray(children).map((child, index) => (
 					<div

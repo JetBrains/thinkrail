@@ -1,8 +1,12 @@
 import { expect, test } from "bun:test";
+import {
+	assembleHighlight,
+	HIGHLIGHT_PRE_END,
+	planHighlightPatch,
+} from "@thinkrail/chat-ui/highlightHtml";
 import { type ChatHighlight, createChatStreams } from "./chatHighlighter";
 import { CODE_LANGUAGES } from "./codeLanguages";
 import { chatLanguageId } from "./highlightCode";
-import { assembleHighlight, HIGHLIGHT_PRE_END, planHighlightPatch } from "./highlightHtml";
 
 const SAMPLE = 'function main() { return "x" + 1; } // note';
 const wholeRender = (code: string, lang: string) => {

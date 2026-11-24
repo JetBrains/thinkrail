@@ -1,11 +1,11 @@
 import { RiRefreshLine } from "@remixicon/react";
+import { LEVEL_LABEL } from "@thinkrail/chat-ui/modelPicker";
 import type { SubagentCatalogEntry } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
-import { LEVEL_LABEL } from "@/chat/modelPicker";
 import { SETTINGS_ROWS, SettingsGroup, SettingsNotice, SettingsRow } from "@/settingsKit";
 import {
 	selectActiveRepoWorkspaceId,

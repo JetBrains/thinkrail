@@ -1,8 +1,8 @@
+import { type ChatRow, rowIndexForToolCall, rowIndexForTurn } from "@thinkrail/chat-ui/rows";
+import type { ChatTurn } from "@thinkrail/chat-ui/types";
 import type { ChatLocationRequest } from "@/store";
 import { turnAnchorText } from "./recentPrompts";
-import { type ChatRow, rowIndexForToolCall, rowIndexForTurn } from "./rows";
 import { transcriptItems } from "./transcriptNavigation";
-import type { ChatTurn } from "./types";
 
 export interface LocatedRow {
 	index: number;

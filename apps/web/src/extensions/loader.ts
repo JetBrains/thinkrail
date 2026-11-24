@@ -1,14 +1,14 @@
+import {
+	removeInstalledToolRenderers,
+	reserveInstalledOwner,
+	setInstalledToolRenderers,
+} from "@thinkrail/chat-ui/toolRegistry";
 import type {
 	ToolRegistrationOptions,
 	ToolRenderer,
 	WebExtension,
 } from "@thinkrail/extension-api/web";
 import { useSyncExternalStore } from "react";
-import {
-	removeInstalledToolRenderers,
-	reserveInstalledOwner,
-	setInstalledToolRenderers,
-} from "../chat/toolRegistry";
 import { clientErrorReport, getTransport, reportClientError } from "../transport";
 
 export interface InstalledWebExtension {

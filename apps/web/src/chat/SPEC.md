@@ -15,9 +15,14 @@ message / content-block model**, a **tool-renderer registry** (the extension poi
 (the app-integration layer). Hand-rolled — pi ships no web UI, and the official
 `@earendil-works/pi-web-ui` (MIT, **Lit**, runs the agent in-browser / "Direct Mode") is the canonical
 event→render *reference* we learn from but do **not** adopt (architecture + framework mismatch with our
-host-runs-pi / typed-WS / React+shadcn model). Built so others can reuse/contribute (extraction-ready as
-a future `packages/chat-ui`). Built-in tool renderers live in the child
-[tools/SPEC.md](tools/SPEC.md); extracted extension renderers live in [[module-thinkrail-extensions]].
+host-runs-pi / typed-WS / React+shadcn model). **Split:** the presentational renderers, the registry, the built-in tool cards, the
+composer and the Resources dock live in [[module-chat-ui]] (`packages/chat-ui`, so the phone shell
+`apps/web/src/phone` renders the same chat); this
+directory keeps the app-integration layer — `ChatView`, `ChatTranscript`, the store/transport hooks and
+dialogs, preference persistence, virtualization and scroll control. This spec remains the design record for
+both halves. Built-in tool renderers live in the child
+[tools/SPEC.md](../../../../packages/chat-ui/src/tools/SPEC.md); extracted extension renderers live in
+[[module-thinkrail-extensions]].
 
 ## Rendering model — rows and progressive disclosure
 
@@ -205,7 +210,7 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   (duplicated the CSS, drifted at its breakpoint), a full-pane-width row with an inner text measure
   (touches every row type and the virtualized list's measurement), per-tool-name width lists.
 - **Message copy** — plain user bubbles and the **round's concluding assistant answer** carry a
-  hover-revealed (`group`/`opacity-0 group-hover:opacity-100`) **`CopyButton`** (`chat/CopyButton.tsx`,
+  hover-revealed (`group`/`opacity-0 group-hover:opacity-100`) **`CopyButton`** (`chat-ui/src/CopyButton.tsx`,
   `data-testid="chat-copy"`) that copies the full message **source** — `userText(message.content)` for a
   user bubble, the markdown `text` for an assistant row — never the collapsed preview or any UI chrome.
   Only the **final** `markdown` row of a round is copyable, not the intermediate narration the agent emits
@@ -1248,7 +1253,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   beside the text draft: ready images, pending decodes, errors and the decode generation survive
   file/chat tab and workspace remounts. `usePromptImages` accepts that owner from `ChatView` through
   `Composer`; other prompt dialogs keep a local owner. The draft model (`PromptImagesState` /
-  `newPromptImagesState`) belongs to `store`. Decode completion updates the owner's current
+  `newPromptImagesState`) is [[module-chat-ui]]'s `promptImageState`; the store holds each session's draft. Decode completion updates the owner's current
   state atomically, so concurrent or remounted decodes share one request budget. Every new owner and
   reset gets a fresh opaque generation; a late completion cannot populate a reset or closed/reopened
   session. Session/workspace retirement releases the draft with its runtime. This state is never
@@ -1325,7 +1330,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   last. The sort is display-only and per group — provider order, Pinned, Recent and the Default row
   keep their own order, the catalog itself is never reordered, and a search still ranks rows by score
   (ties fall back to this order). Headers, counts and rows are matched by the pickers' own cmdk `filter`
-  (`chat/pickerGroups.ts`, a port of cmdk's default scorer), so a header matches when any of its models
+  (`chat-ui/src/pickerGroups.ts`, a port of cmdk's default scorer, over each row's `modelKeywords` — the phone's model
+  sheet searches with the same pair), so a header matches when any of its models
   does and its count equals the rows it reveals. With no query and no models the list reads "No models to
   show. Connect a provider, or show hidden models in Settings → Models → Visible models."; "No models
   found." appears only for a query. Hidden models never reach either picker: callers pass `store`'s
@@ -1397,7 +1403,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   the line says each request lists at most `SKILL_LISTING_MAX_TOKENS` of it and the agent searches for the
   rest, since the model's window sets the budget in between. Past that ceiling it turns warning colour with
   a hint to switch unused groups off. All props-driven; behavior detail lives in the components' jsdoc.
-- **Attachments (`promptImages.tsx`, `attachments.ts`)** — any file, picked, pasted or dropped, joins one
+- **Attachments (chat-ui's `promptImages.tsx` and `attachments.ts`)** — any file, picked, pasted or dropped, joins one
   draft beside the images (`PromptImagesState.files`: picked bytes or a local path; browser-local, never
   persisted). **Classification:** contracts' `attachmentImageType` — a raster image by type or extension,
   HEIC, TIFF and AVIF included, so one the webview cannot decode keeps its error chip on every path — takes
@@ -1504,7 +1510,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `styles/COLOR.md`). **Compact mode**: below the chat column's `@md` container width (phones, narrow
   splits) labels and keycap hide and the send pill collapses to an icon, so the model pill keeps its room.
   Labels use `ui.action`.
-- **Anthropic extra-usage notice** (`ExtraUsageNotice.tsx`, props-driven). It warns that Claude Pro/Max
+- **Anthropic extra-usage notice** (`@thinkrail/chat-ui/ExtraUsageNotice`, props-driven). It warns that Claude Pro/Max
   auth bills ThinkRail's usage per token as extra usage. Both variants link only claude.ai's usage page.
   There is no "Details" link: no pi doc explains the billing (pi's providers.md has no Claude Pro/Max
   section), and Anthropic's help pages cover usage limits, not the third-party rule. The notice's own
@@ -2188,9 +2194,11 @@ Unknown custom messages retain their existing behavior.
   per-session and store-derived, so it survives the tab-switch remount; a successful reload calls
   `markSkillsSynced` to clear only this chat).
   **No `index.ts` barrel** — chat pulls the **highlight client**, so per the code-splitting exception imports stay
-  **per-file**; the registry is importable from `chat/toolRegistry` **without** pulling it.
-- **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); the lifecycle-neutral
-  `prompt` module; `keybindings` (the transcript, composer and history key constants its handlers compare); `store` + `transport`
+  **per-file** (`@thinkrail/chat-ui/<file>` for the shared half); the registry is importable from
+  `@thinkrail/chat-ui/toolRegistry` **without** pulling it. Every file named in this spec that is not an
+  app-integration file below lives in [[module-chat-ui]].
+- **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); [[module-chat-ui]] (the
+  renderers, the composer and its lifecycle-neutral `/prompt` behaviour); `keybindings` (the transcript, composer and history key constants its handlers compare); `store` + `transport`
   (**app-integration files only** — a renderer that takes props must never reach for either. Today that
   is `ChatView.tsx`, **`ChatTranscript.tsx`** (the churn-isolated transcript child — the Virtuoso list, scroll
   control, transcript sync, completion-ack, the extension-dialog reply, and the
@@ -2204,15 +2212,18 @@ Unknown custom messages retain their existing behavior.
   **`mcpServerCalls.ts`** (an MCP server's detail body and the chat's calls to it),
   **`useSessionStats.ts`** (generation/revision-fenced authoritative telemetry reads),
   **`useTranscriptSync.ts`** (successful-compaction + connection-generation canonical transcript
-  reconciliation), `SkillsDialog.tsx`, **`useProjectTrustSummary.ts`** (the trust-summary read the Skills
+  reconciliation), **`chatDraft.ts`** (putting queued or unsent messages back in a chat's stored draft ahead
+  of what was typed since, and the `/compact` and `/name` submissions — the one copy `ChatView` and the
+  phone's chat share), `SkillsDialog.tsx`, **`useProjectTrustSummary.ts`** (the trust-summary read the Skills
   dialog shares with `panels/ProjectTrustNotice` and New Workspace; its pure derivation and copy live in the
   store-free `projectTrust.ts`), `TemplateEditorDialog.tsx`,
   `SubagentTranscriptDialog.tsx`, **`useModelPreferences.ts`** (pinned / recents / default pair:
   the store read plus the `settings.update` writes every picker mount shares), and **`modelVisibility.ts`**
   (the hidden-models persistence seam `main.tsx` starts once: hydrates `store.hiddenModels` and writes it
   back through the stable client-preference adapter or host-qualified localStorage — the store itself
-  touches no storage). `promptImages.tsx` is not an integration file: its one `store` import is the pure
-  prompt-image draft model, and uploads reach it only through `Composer.onSubmit`. `useModelCatalog` is the shared
+  touches no storage). `promptImages.tsx` is not an integration file: the pure prompt-image draft model it reads
+  (`promptImageState`) sits beside it in [[module-chat-ui]]; uploads reach it only through `Composer.onSubmit`.
+  `useModelCatalog` is the shared
   models-catalog seam `panels/NewWorkspaceDialog` also imports per-file, so the two pickers cannot
   drift; on activation it **drops catalog authority synchronously** (a flag an earlier consumer set says
   nothing about the list this one inherited) and reads `model.list` only when the shared list is **empty** —
@@ -2223,12 +2234,13 @@ Unknown custom messages retain their existing behavior.
   pass still answers — with a list to render, not a verdict), and dropped by the next `model.list` install
   from *any* consumer. `model.list` answers from *before* the
   detached refresh it triggers, so it is never a basis for concluding a model is gone);
-  `react-markdown` / `remark-gfm` / code highlighting (via `lib/highlightCode`; a streaming fence
-  shows its last highlight plus the newer text as plain until the worker catches up); `marked` (block lexer
-  for `markdownBlocks` splitting only, never for rendering); `@thinkrail/ext-visualize/web`
-  (`Markdown` consumes `MermaidView`; `mermaid` stays lazy inside the extension);
+  code highlighting (the app's `lib/highlightCode` worker client, injected into the shared renderers through
+  `@thinkrail/chat-ui/highlight`; a streaming fence shows its last highlight plus the newer text as plain
+  until the worker catches up); `@thinkrail/resource-renderers` (`ChatTranscript`'s `ResourceScope`);
   `@thinkrail/extension-api/web`; `react-virtuoso`; `@remixicon/react`; `@thinkrail/ui/*`;
-  `components/useNow`; `lib`.
+  `components/useNow`; `speech` (`DICTATION_EVENT`); `lib`. `react-markdown`, `remark-gfm`, `marked` (the
+  `markdownBlocks` lexer) and `@thinkrail/ext-visualize/web` (`MermaidView`) are [[module-chat-ui]]'s
+  `Markdown` deps, not this directory's.
 - **Forbidden:** value-importing any `pi` package; a **presentational** renderer importing
   `store`/`transport` (only the app-integration files enumerated above may — keep the renderers reusable).
 - **`ChatView`** is the primary app-integration file: wires the transport calls and this session's

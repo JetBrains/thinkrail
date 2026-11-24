@@ -1,3 +1,15 @@
+import { assistantFailure } from "@thinkrail/chat-ui/assistantFailure";
+import type { ChatMessageOrder } from "@thinkrail/chat-ui/chatMessageOrder";
+import type { HydratedRuntime } from "@thinkrail/chat-ui/hydrate";
+import { newPromptImagesState, type PromptImagesState } from "@thinkrail/chat-ui/promptImageState";
+import { insertRoundCloser } from "@thinkrail/chat-ui/roundCloser";
+import type {
+	ChatAttachment,
+	ChatTurn,
+	CompactionState,
+	ExtUiDialogRequest,
+	ToolResultState,
+} from "@thinkrail/chat-ui/types";
 import type {
 	AppConfig,
 	AppSurvey,
@@ -79,17 +91,6 @@ import {
 import { t } from "@thinkrail/locales/react";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
-import { assistantFailure } from "../chat/assistantFailure";
-import type { ChatMessageOrder } from "../chat/chatPreferences";
-import type { HydratedRuntime } from "../chat/hydrate";
-import { insertRoundCloser } from "../chat/roundCloser";
-import type {
-	ChatAttachment,
-	ChatTurn,
-	CompactionState,
-	ExtUiDialogRequest,
-	ToolResultState,
-} from "../chat/types";
 import {
 	ancestorPaths,
 	defaultTerminalIndex,
@@ -131,7 +132,6 @@ import {
 	type McpWorkspaceProjection,
 	withoutMcpSession,
 } from "./mcp";
-import { newPromptImagesState, type PromptImagesState } from "./promptImageState";
 import {
 	artifactsWatermark,
 	type HistoryTarget,
@@ -479,6 +479,7 @@ export const SettingsSection = {
 	Artifacts: "artifacts",
 	Subagents: "subagents",
 	Text: "text",
+	Phone: "phone",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
 
@@ -1156,6 +1157,8 @@ interface AppState {
 	installMcpList: (read: McpRead, result: McpListResult) => void;
 	applyMcpStatus: (snapshot: McpStatusSnapshot) => void;
 	status: ConnectionStatus;
+	/** The remote host this app is mounted on (`mountRemoteSession`); null on the local host. */
+	remoteHostKey: string | null;
 	connectionGeneration: number;
 	welcomeGeneration: number;
 	protocolVersion: number | null;
@@ -1329,6 +1332,9 @@ interface AppState {
 	customLayoutPresets: LayoutPreset[];
 	toasts: Toast[];
 	setStatus: (status: ConnectionStatus) => void;
+	/** Marks the store as mounted on a remote host, with its channel open (`connected`) or on its way. */
+	enterRemoteHost: (hostKey: string, open: boolean) => void;
+	resetHostState: () => void;
 	setOnboardingWizard: (gate: OnboardingWizardGate) => void;
 	installWelcomeSnapshot: (
 		protocolVersion: number,
@@ -2656,108 +2662,231 @@ function nextTerminalTitle(list: TerminalTab[]): string {
 	return defaultTerminalTitle(Math.max(0, ...used) + 1);
 }
 
+type HostState = Pick<
+	AppState,
+	| "status"
+	| "remoteHostKey"
+	| "protocolVersion"
+	| "welcomeProtocolVersion"
+	| "hostPlatform"
+	| "hostAppVersion"
+	| "hostUpdate"
+	| "projects"
+	| "recentProjects"
+	| "workspaces"
+	| "removedWorkspaceIds"
+	| "chatContinuations"
+	| "initiatedContinuations"
+	| "expandedProjectIds"
+	| "workspaceSettlingSupported"
+	| "settledShelfExpanded"
+	| "settledShelfShown"
+	| "selectedProjectId"
+	| "activeWorkspaceId"
+	| "activeWorkspaceLiveLatch"
+	| "workspaceSelectionHistory"
+	| "routeChatTarget"
+	| "composerFocusRequest"
+	| "workspaceViewsByWorkspace"
+	| "layoutDocumentsByWorkspace"
+	| "layoutAttentionByWorkspace"
+	| "panelsToRestore"
+	| "layoutIntents"
+	| "tabsByWorkspace"
+	| "activeTabByWorkspace"
+	| "previewTabByWorkspace"
+	| "navTickByWorkspace"
+	| "closedChatsByWorkspace"
+	| "chatStartsByWorkspace"
+	| "workspaceCreations"
+	| "activeCreationId"
+	| "creationChatToOpen"
+	| "sentCreationPrompts"
+	| "workspaceRetryDraft"
+	| "deletedSessionsByWorkspace"
+	| "terminalsByWorkspace"
+	| "activeTerminalByWorkspace"
+	| "sessions"
+	| "sessionStateByWorkspace"
+	| "sessionStateSnapshotInstalled"
+	| "renderedCompletionBySession"
+	| "markingUnreadWorkspaces"
+	| "markedUnreadBySession"
+	| "obscuredChatSessions"
+	| "extUiOrphans"
+	| "models"
+	| "providerStatus"
+	| "extensionCatalog"
+	| "modelsRefreshing"
+	| "modelsFresh"
+	| "changesRequest"
+	| "specRequest"
+	| "specsByWorkspace"
+	| "artifactsByWorkspace"
+	| "artifactsTickByWorkspace"
+	| "reviewsByWorkspace"
+	| "reviewFocusRequest"
+	| "fileClipboard"
+	| "filesTreeByWorkspace"
+	| "diffScopeByWorkspace"
+	| "chatPanesByWorkspace"
+	| "panelViewStatesByWorkspace"
+	| "chatLocationRequest"
+	| "historyOpenRequest"
+	| "fsChangesByWorkspace"
+	| "turnsByWorkspace"
+	| "skillChangeTickByWorkspace"
+	| "skillsSyncedTickBySession"
+	| "activeLogin"
+	| "loginStarting"
+	| "unheldLoginFrame"
+	| "surveyInvitationOpen"
+	| "inAppSurvey"
+	| "localLocales"
+	| "userThemes"
+	| "userFonts"
+	| "speech"
+	| "resourceSnapshots"
+	| "mcpByWorkspace"
+>;
+
+/** A connection transition: a fresh `connected` opens a new generation and awaits its welcome. */
+function statusPatch(
+	state: AppState,
+	status: ConnectionStatus,
+): Pick<
+	AppState,
+	| "status"
+	| "protocolVersion"
+	| "resourceSnapshots"
+	| "connectionGeneration"
+	| "sessionStateSnapshotInstalled"
+> {
+	return {
+		status,
+		protocolVersion: null,
+		resourceSnapshots: staleChatResources(state.resourceSnapshots),
+		connectionGeneration:
+			status === "connected" ? state.connectionGeneration + 1 : state.connectionGeneration,
+		sessionStateSnapshotInstalled: false,
+	};
+}
+
+function initialHostState(): HostState {
+	return {
+		status: "connecting",
+		remoteHostKey: null,
+		protocolVersion: null,
+		welcomeProtocolVersion: null,
+		hostPlatform: null,
+		hostAppVersion: null,
+		hostUpdate: null,
+		projects: [],
+		recentProjects: [],
+		workspaces: {},
+		removedWorkspaceIds: nullProto<Record<string, true>>(),
+		chatContinuations: {},
+		initiatedContinuations: {},
+		expandedProjectIds: nullProto<Record<string, true>>(),
+		workspaceSettlingSupported: false,
+		settledShelfExpanded: nullProto<Record<string, true>>(),
+		settledShelfShown: nullProto<Record<string, number>>(),
+		selectedProjectId: null,
+		activeWorkspaceId: null,
+		activeWorkspaceLiveLatch: false,
+		workspaceSelectionHistory: [],
+		routeChatTarget: null,
+		composerFocusRequest: null,
+		workspaceViewsByWorkspace: {},
+		layoutDocumentsByWorkspace: {},
+		layoutAttentionByWorkspace: {},
+		panelsToRestore: [],
+		layoutIntents: [],
+		tabsByWorkspace: {},
+		activeTabByWorkspace: {},
+		previewTabByWorkspace: {},
+		navTickByWorkspace: {},
+		closedChatsByWorkspace: {},
+		chatStartsByWorkspace: {},
+		workspaceCreations: {},
+		activeCreationId: null,
+		creationChatToOpen: null,
+		sentCreationPrompts: {},
+		workspaceRetryDraft: null,
+		deletedSessionsByWorkspace: nullProto<Record<string, Record<string, true>>>(),
+		terminalsByWorkspace: {},
+		activeTerminalByWorkspace: {},
+		sessions: {},
+		sessionStateByWorkspace: {},
+		sessionStateSnapshotInstalled: false,
+		renderedCompletionBySession: {},
+		markingUnreadWorkspaces: {},
+		markedUnreadBySession: {},
+		obscuredChatSessions: {},
+		extUiOrphans: [],
+		models: [],
+		providerStatus: { version: -1, report: null, failed: false },
+		extensionCatalog: "loading",
+		modelsRefreshing: false,
+		modelsFresh: false,
+		changesRequest: null,
+		specRequest: null,
+		specsByWorkspace: {},
+		artifactsByWorkspace: {},
+		artifactsTickByWorkspace: {},
+		reviewsByWorkspace: {},
+		reviewFocusRequest: null,
+		fileClipboard: null,
+		filesTreeByWorkspace: {},
+		diffScopeByWorkspace: {},
+		chatPanesByWorkspace: {},
+		panelViewStatesByWorkspace: {},
+		chatLocationRequest: null,
+		historyOpenRequest: null,
+		fsChangesByWorkspace: {},
+		turnsByWorkspace: {},
+		skillChangeTickByWorkspace: {},
+		skillsSyncedTickBySession: {},
+		activeLogin: null,
+		loginStarting: false,
+		unheldLoginFrame: null,
+		surveyInvitationOpen: false,
+		inAppSurvey: null,
+		localLocales: null,
+		userThemes: null,
+		userFonts: null,
+		speech: null,
+		resourceSnapshots: {},
+		mcpByWorkspace: {},
+	};
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
-	status: "connecting",
+	...initialHostState(),
 	connectionGeneration: 0,
 	welcomeGeneration: 0,
-	protocolVersion: null,
-	welcomeProtocolVersion: null,
-	hostPlatform: null,
-	hostAppVersion: null,
-	hostUpdate: null,
-	projects: [],
-	recentProjects: [],
-	workspaces: {},
-	removedWorkspaceIds: nullProto<Record<string, true>>(),
-	chatContinuations: {},
-	initiatedContinuations: {},
-	expandedProjectIds: nullProto<Record<string, true>>(),
-	workspaceSettlingSupported: false,
-	settledShelfExpanded: nullProto<Record<string, true>>(),
-	settledShelfShown: nullProto<Record<string, number>>(),
-	selectedProjectId: null,
-	activeWorkspaceId: null,
-	activeWorkspaceLiveLatch: false,
-	workspaceSelectionHistory: [],
-	routeChatTarget: null,
 	routeChatTargetGeneration: 0,
-	composerFocusRequest: null,
 	workbenchFrame: null,
-	workspaceViewsByWorkspace: {},
 	layoutStateReady: false,
 	localLayoutPreferences: { ...DEFAULT_LOCAL_LAYOUT_PREFERENCES },
-	layoutDocumentsByWorkspace: {},
-	layoutAttentionByWorkspace: {},
 	layoutProjectionEpoch: 0,
-	panelsToRestore: [],
-	layoutIntents: [],
-	tabsByWorkspace: {},
-	activeTabByWorkspace: {},
-	previewTabByWorkspace: {},
-	navTickByWorkspace: {},
-	closedChatsByWorkspace: {},
-	chatStartsByWorkspace: {},
-	workspaceCreations: {},
-	activeCreationId: null,
-	creationChatToOpen: null,
-	sentCreationPrompts: {},
-	workspaceRetryDraft: null,
-	deletedSessionsByWorkspace: nullProto<Record<string, Record<string, true>>>(),
-	terminalsByWorkspace: {},
-	activeTerminalByWorkspace: {},
-	sessions: {},
-	sessionStateByWorkspace: {},
 	sessionStateClock: 0,
-	sessionStateSnapshotInstalled: false,
-	renderedCompletionBySession: {},
-	markingUnreadWorkspaces: {},
-	markedUnreadBySession: {},
-	obscuredChatSessions: {},
-	extUiOrphans: [],
-	models: [],
 	hiddenModels: [],
 	providerVersion: 0,
 	providerStatusVersion: 0,
-	providerStatus: { version: -1, report: null, failed: false },
 	templatesVersion: 0,
 	packagesVersion: 0,
-	extensionCatalog: "loading",
-	modelsRefreshing: false,
-	modelsFresh: false,
-	changesRequest: null,
-	specRequest: null,
-	specsByWorkspace: {},
-	artifactsByWorkspace: {},
-	artifactsTickByWorkspace: {},
-	artifactsSeenByWorkspace: {},
 	artifactsShowIgnored: true,
 	artifactsView: null,
+	artifactsSeenByWorkspace: {},
 	artifactsTreeExpandedByWorkspace: {},
-	reviewsByWorkspace: {},
-	reviewFocusRequest: null,
 	changesView: "tree",
 	filesMode: "all",
-	fileClipboard: null,
-	filesTreeByWorkspace: {},
 	changesLayout: "stacked",
-	diffScopeByWorkspace: {},
-	chatPanesByWorkspace: {},
-	panelViewStatesByWorkspace: {},
-	chatLocationRequest: null,
-	historyOpenRequest: null,
-	fsChangesByWorkspace: {},
-	turnsByWorkspace: {},
-	skillChangeTickByWorkspace: {},
-	skillsSyncedTickBySession: {},
-	activeLogin: null,
-	loginStarting: false,
-	unheldLoginFrame: null,
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
 	settingsTarget: null,
-	surveyInvitationOpen: false,
 	surveyWindowOpen: false,
-	inAppSurvey: null,
 	notificationPromptOpen: false,
 	searchOpen: false,
 	searchSession: 0,
@@ -2802,25 +2931,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 	otherAgentSkills: DEFAULT_CONFIG.otherAgentSkills,
 	disabledPackages: DEFAULT_CONFIG.disabledPackages,
 	locale: DEFAULT_CONFIG.locale,
-	localLocales: null,
 	installLocalLocales: (snapshot) => set({ localLocales: snapshot }),
-	userThemes: null,
 	installUserThemes: (snapshot) => set({ userThemes: snapshot }),
 	interfaceFont: DEFAULT_CONFIG.interfaceFont,
 	codeFont: DEFAULT_CONFIG.codeFont,
 	codeFontSize: DEFAULT_CONFIG.codeFontSize,
 	codeLigatures: DEFAULT_CONFIG.codeLigatures,
 	fontWeightOffset: DEFAULT_CONFIG.fontWeightOffset,
-	userFonts: null,
 	installUserFonts: (snapshot) => set({ userFonts: snapshot }),
-	speech: null,
 	installSpeechStatus: (speech) => set({ speech }),
 	onboardingDismissed: DEFAULT_CONFIG.onboardingDismissed,
 	onboardingWizard: "pending",
 	toasts: [],
-	resourceSnapshots: {},
 	resourceRevision: 0,
-	mcpByWorkspace: {},
 	mcpRevision: 0,
 	installMcpList: (read, result) =>
 		set((state) => {
@@ -2977,14 +3100,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 			},
 		})),
 	setOnboardingWizard: (onboardingWizard) => set({ onboardingWizard }),
-	setStatus: (status) =>
+	resetHostState: () => set({ ...initialHostState(), ...configPatch(DEFAULT_CONFIG) }),
+	setStatus: (status) => set((state) => statusPatch(state, status)),
+	enterRemoteHost: (hostKey, open) =>
 		set((state) => ({
-			status,
-			protocolVersion: null,
-			resourceSnapshots: staleChatResources(state.resourceSnapshots),
-			connectionGeneration:
-				status === "connected" ? state.connectionGeneration + 1 : state.connectionGeneration,
-			sessionStateSnapshotInstalled: false,
+			remoteHostKey: hostKey,
+			...statusPatch(state, open ? "connected" : "connecting"),
 		})),
 	installWelcomeSnapshot: (
 		protocolVersion,

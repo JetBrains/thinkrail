@@ -16,9 +16,9 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
+import { RunningIcon } from "@thinkrail/ui/running-icon";
 import { useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { RunningIcon } from "../../components/RunningIcon";
 import { chatDisplayName, chatLabel, copyText } from "../../lib";
 import { ChatDeleteDialog } from "../../panels/ChatDeleteDialog";
 import { ContinueChatDialog } from "../../panels/ContinueChatDialog";

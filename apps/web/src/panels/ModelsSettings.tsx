@@ -1,3 +1,4 @@
+import { type DefaultPairOption, ModelEffortPicker } from "@thinkrail/chat-ui/ModelEffortPicker";
 import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	type AppConfigUpdate,
@@ -9,7 +10,6 @@ import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { Switch } from "@thinkrail/ui/switch";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type DefaultPairOption, ModelEffortPicker } from "@/chat/ModelEffortPicker";
 import { useModelCatalog } from "@/chat/useModelCatalog";
 import { useModelPreferences } from "@/chat/useModelPreferences";
 import {

@@ -1,0 +1,63 @@
+import type {
+	ToolInteraction,
+	ToolInteractionState,
+	ToolPlacement,
+} from "@thinkrail/extension-api/web";
+import { useMemo } from "react";
+import { useChatActions } from "./ChatActions";
+import { useFoldGeometry } from "./foldState";
+import {
+	useInteractionAccepting,
+	useInteractionDocked,
+	useInteractionFocusScope,
+	useInteractionState,
+} from "./interactionState";
+import { isInteractiveTool, useToolRegistry } from "./toolRegistry";
+
+export function useToolInteraction(
+	toolCallId: string,
+	toolName: string,
+	dockPlacement?: ToolPlacement,
+): ToolInteraction | undefined {
+	const actions = useChatActions();
+	const interaction = useInteractionState(toolCallId);
+	const focusScope = useInteractionFocusScope();
+	const prepareLayoutChange = useFoldGeometry();
+	const response = interaction?.response;
+	const superseded = interaction?.superseded ?? false;
+	const ended = interaction?.terminal ?? false;
+	const accepting = useInteractionAccepting(toolCallId);
+	const docked = useInteractionDocked(toolCallId);
+	const placement = dockPlacement ?? (docked ? "stub" : undefined);
+	const hostProtocol = actions?.hostProtocol;
+	const registry = useToolRegistry();
+	const state = useMemo<ToolInteractionState>(
+		() => ({ response, superseded, ended, accepting }),
+		[response, superseded, ended, accepting],
+	);
+	return useMemo(() => {
+		if (!isInteractiveTool(toolName, registry) || !actions || !focusScope) return undefined;
+		return {
+			state,
+			respond: (value) => actions.respondToTool(toolCallId, value),
+			focusScope,
+			prepareLayoutChange,
+			focusComposer: actions.focusComposer,
+			focusTranscript: () => actions.focusToolCall(toolCallId),
+			mayClaimFocus: () => actions.mayClaimFocus(toolCallId),
+			landingChord: actions.landingChord,
+			hostProtocol,
+			placement,
+		};
+	}, [
+		actions,
+		focusScope,
+		hostProtocol,
+		placement,
+		prepareLayoutChange,
+		registry,
+		state,
+		toolCallId,
+		toolName,
+	]);
+}

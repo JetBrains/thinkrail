@@ -1,8 +1,8 @@
+import type { WorkspaceChatTarget } from "@thinkrail/chat-ui/ChatActions";
 import type { Workspace } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { isNavigationChange, selectWorkspaceById, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
-import type { WorkspaceChatTarget } from "./ChatActions";
 
 let latestOpen = 0;
 

@@ -4,6 +4,7 @@ import {
 	RiSearchLine as Search,
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
+import { formatContext } from "@thinkrail/chat-ui/modelPicker";
 import {
 	CUSTOM_ENDPOINTS_PROTOCOL_VERSION,
 	CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION,
@@ -26,7 +27,6 @@ import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { Switch } from "@thinkrail/ui/switch";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
-import { formatContext } from "@/chat/modelPicker";
 import {
 	SETTINGS_LIST_PRIMARY,
 	SETTINGS_LIST_ROW,

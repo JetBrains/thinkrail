@@ -1,11 +1,11 @@
-import { parseToolResultContent } from "@thinkrail/extension-api/web";
-import { type ChatRow, LARGE_USER_MESSAGE } from "./rows";
+import { type ChatRow, LARGE_USER_MESSAGE } from "@thinkrail/chat-ui/rows";
 import {
 	currentToolRegistry,
 	isInteractiveTool,
 	resolveProminence,
 	type ToolRegistry,
-} from "./toolRegistry";
+} from "@thinkrail/chat-ui/toolRegistry";
+import { parseToolResultContent } from "@thinkrail/extension-api/web";
 
 const MAX_ESTIMATED_HEIGHT = 20_000;
 const MIN_ESTIMATED_HEIGHT = 20;

@@ -228,7 +228,7 @@ keeps it.
 
 ## Decisions
 
-- **Markdown is injected, not imported.** The host's markdown (the app's `chat/Markdown`) draws Mermaid
+- **Markdown is injected, not imported.** The host's markdown (the app passes `@thinkrail/chat-ui/Markdown`) draws Mermaid
   through `@thinkrail/ext-visualize/web`; importing it would create a package → extension → package cycle
   once extensions render files. The package therefore owns only the props contract; its tests render through
   a test-only react-markdown + GFM helper.
