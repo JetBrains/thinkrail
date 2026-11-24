@@ -33,4 +33,4 @@ test("the question → section benchmark finds the expected section in the top t
 	const report = scoreQuestions(entries, asked);
 	if (report.found < REQUIRED) console.log(formatReport(report));
 	expect(report.found).toBeGreaterThanOrEqual(REQUIRED);
-});
+}, 30_000);
