@@ -42,7 +42,8 @@ ref off the workspace-create critical path.
   **`opts.onTimeout: "return"`** opts out and returns `ok: false`, `failure: "timeout"` — only for a caller
   that must act on the timeout itself or for which any failure is a soft skip: `gitCommitPaths`' staging
   and commit (they must restore the index or inspect HEAD first), `readBlobAt` (optional review context),
-  `workspaces`' `recordWorkspaceHead` (a background activity sample) and `reclaimWorktree`'s
+  `workspaces`' `recordWorkspaceHead` (a background activity sample), `renameWorkspace`'s publication
+  inspection (keeps the branch and reports an unverified state while setting the label), and `reclaimWorktree`'s
   `worktree remove` / `prune` (cleanup that falls back to `rm` + prune). The async runners still return the
   timeout; their fact readers pass it through **`throwOnTimeout(result, action, consequence?)`**. `setSyncGitTimeoutForTests(ms)` shortens the 10s default so hang tests finish
   fast; `undefined` restores it. `gitAsync(cwd, args, opts?)` and

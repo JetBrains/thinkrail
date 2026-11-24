@@ -23,6 +23,7 @@ import {
 	gitAsync,
 	headBranchAt,
 	headShaAt,
+	remoteTrackingRef,
 	resolveDefaultBranch,
 	resolveDiffRange,
 	SLOW_GIT_TIMEOUT_MS,
@@ -476,6 +477,25 @@ export function branchMoveOwed(
 function keptBranchReason(workspace: Workspace, live: string | null) {
 	if (live === null) return "detached" as const;
 	if (!onOwnBranch(workspace)) return "not-own" as const;
+	const localRef = `refs/heads/${workspace.branch}`;
+	const refs = git(
+		workspace.worktreePath,
+		["for-each-ref", "--format=%(refname)%09%(upstream)%09%(symref)", localRef, "refs/remotes"],
+		{ onTimeout: "return" },
+	);
+	if (!refs.ok) return "unverified" as const;
+	const rows = refs.out.split("\n").map((line) => line.split("\t"));
+	const local = rows.find(([ref]) => ref === localRef);
+	if (!local) return "unverified" as const;
+	if (local[1]) return "published" as const;
+	const remotes = git(workspace.worktreePath, ["remote"], { onTimeout: "return" });
+	if (!remotes.ok) return "unverified" as const;
+	const remoteNames = remotes.out.split("\n").filter(Boolean);
+	const publishedRefs = new Set(
+		remoteNames.map((remote) => remoteTrackingRef(`${remote}/${workspace.branch}`, remoteNames)),
+	);
+	if (rows.some(([ref, _upstream, symref]) => ref && !symref && publishedRefs.has(ref)))
+		return "published" as const;
 	return undefined;
 }
 
@@ -528,7 +548,7 @@ export function renameWorkspace(
 	if (branchChanged) delete target.review;
 	target.branch = branch;
 	target.renamed = true;
-	if (branchKept && opts.by) target.branchNamePending = opts.by;
+	if (branchKept && branchKept !== "published" && opts.by) target.branchNamePending = opts.by;
 	else delete target.branchNamePending;
 	saveWorkspaces(all);
 	emit({ kind: "updated", workspace: target });

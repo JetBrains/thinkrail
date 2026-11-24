@@ -196,8 +196,16 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   the move is owed to that chat only, and
   the call returns `branchKept`: `"detached"` when `HEAD` is detached or unreadable (mid-rebase `-m` would
   corrupt the rebase's head-name), `"not-own"` when the worktree has a branch checked out outside ThinkRail.
+  An own branch with a configured upstream or an exact same-name remote-tracking ref on any configured
+  remote is kept as `"published"`; this uses local Git metadata only, never a fetch or remote probe. An
+  upstream whose ref has been pruned still protects the branch. Remote names containing `/` are supported;
+  a remote branch with a different path but the same basename does not count. A failed metadata read
+  keeps the branch as `"unverified"` while still setting the display name. Publication is final for naming:
+  it clears `branchNamePending` instead of leaving an automatic move owed after a later unpublish/prune.
+  An unverified read remains retryable by the same chat, like a detached or adopted branch.
   `renamed` locks only the display name: once `HEAD` is back on the own branch, a later call from the same
-  chat with `opts.branch` moves it. Every call that does not keep a branch clears `branchNamePending`, so a
+  chat with `opts.branch` moves it if its publication state is readable and it is still unpublished.
+  Every call that does not temporarily keep a branch clears `branchNamePending`, so a
   manual rename cancels the owed move; a later chat never inherits it (its task would give a different slug,
   and the branch may already back a PR). `branchNamePending` is the one persisted naming field besides
   `renamed`. Returns `{ workspace, branchKept? }`. The branch-moving path
