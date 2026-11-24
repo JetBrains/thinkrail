@@ -68,6 +68,7 @@
 		"@types/react-dom": "catalog:",
 		"@vitejs/plugin-react": "6.1.2",
 		"babel-plugin-react-compiler": "1.0.0",
+		"linkedom": "catalog:",
 		"resedit": "catalog:",
 		"tailwindcss": "catalog:",
 		"typescript": "catalog:",

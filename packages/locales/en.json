@@ -276,6 +276,7 @@
 	"chat.modelPicker.authKind.env": "environment key",
 	"chat.modelPicker.authKind.oauth": "subscription",
 	"chat.modelPicker.authKind.other": "configured",
+	"chat.modelPicker.copyModelId": "Copy model ID: {{id}}",
 	"chat.modelPicker.costPerMillion": "{{cost}} per M",
 	"chat.modelPicker.costlyWarning": "uses your limits faster",
 	"chat.modelPicker.defaultFailed": "Couldn't save the default model",

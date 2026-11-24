@@ -626,6 +626,9 @@ the lane shares one host. A test that changes one restores it before it ends; ot
 the same test under `--repeat-each`, inherit it. Host-owned `recentModels` are the exception: every explicit
 model pick appends to them and no wire call restores them, so a model-picker scenario never assumes an empty
 shortlist — it reveals the provider groups (`revealModelGroups`) and asserts only the head of the recents.
+`settings-models.spec.ts` also opens both Settings pairs and the composer on a selected model in a
+40-model catalog with provider-qualified IDs, checks that the selected row is visible at phone width,
+and copies another row's full ID by keyboard and mouse without changing the pair or closing the picker.
 The chat-history search index ([[submodule-server-history]]) is host memory too and revalidates lazily, so
 a scenario's `history.search` can answer with an earlier scenario's or repeat's deleted chats until it has
 read the scenario's own. A scenario that acts on a hit therefore searches for a prompt with a per-run tag,
