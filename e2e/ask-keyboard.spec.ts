@@ -292,9 +292,9 @@ async function openHeldRound(
 	const states = await routeSessionStates(page);
 	await openFixtureProject(page);
 	const session = seedQuestionnaire(name, toolCallId, { questions: [ROLLOUT] }, BASE_TS);
+	const held = await states.hold(session.id, toolCallId);
 	await enterDefaultWorkspace(page);
 	await hideAuxiliaryWorkbench(page);
-	const held = await states.hold(session.id, toolCallId);
 	await openPersistedChat(page, name);
 	await expect(
 		page.getByTestId("chat-scroll").locator('[data-testid="ask-user-question"]').first(),
