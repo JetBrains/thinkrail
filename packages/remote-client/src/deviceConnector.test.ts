@@ -18,7 +18,7 @@ import {
 	connectRemoteProject,
 	connectSavedHost,
 } from "./deviceConnector";
-import { type DeviceKey, setDeviceKeyStore } from "./deviceKey";
+import { type DeviceKey, setDeviceKeyStore, textDeviceKeyStore } from "./deviceKey";
 import { BROKER_READY_TIMEOUT_MS } from "./signalingRoute";
 
 type Listener = (event: unknown) => void;
@@ -245,6 +245,29 @@ test("a saved host returns at once and its loop makes the first attempt", async 
 	await settle(() => opens.length > 0);
 	expect(opens).toEqual([true]);
 	connection.close();
+});
+
+test("a text key store keeps the device key as text in the store it wraps, and hands the same key back", async () => {
+	const kept = new Map<string, string>();
+	const store = {
+		read: (key: string) => kept.get(key) ?? null,
+		write: (key: string, value: string) => void kept.set(key, value),
+	};
+	setDeviceKeyStore(textDeviceKeyStore(store));
+	const connection = connectSavedHost({ relayUrl: "ws://host:1", hostKey, label: "laptop" }, {});
+	await settle(() => peers[0]?.answered === true);
+	expect(sockets[0]?.validProofs).toBe(1);
+	const saved = kept.get("thinkrail.remote.deviceKey");
+	expect(saved).toContain("publicKeyRaw");
+	expect(localStorage.getItem("thinkrail.remote.deviceKey")).toBeNull();
+	connection.close();
+
+	setDeviceKeyStore(textDeviceKeyStore(store));
+	const again = connectSavedHost({ relayUrl: "ws://host:1", hostKey, label: "laptop" }, {});
+	await settle(() => peers[1]?.answered === true);
+	expect(sockets[1]?.validProofs).toBe(1);
+	expect(kept.get("thinkrail.remote.deviceKey")).toBe(saved);
+	again.close();
 });
 
 test("a relay that opens but never gets ready fails the attempt as relay_lost, socket closed, and is retried", async () => {

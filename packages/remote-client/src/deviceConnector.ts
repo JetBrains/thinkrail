@@ -21,6 +21,7 @@ import { hostRejection, isTerminalConnectError, RemoteConnectError } from "./con
 import { toDeviceChannel } from "./deviceChannel";
 import { deviceKey } from "./deviceKey";
 import { createDeviceWireClient, type DeviceWireClient } from "./deviceWireClient";
+import type { KeyValueStore } from "./hostRegistry";
 import { createReconnectLoop } from "./reconnectLoop";
 import { RelayUnreachableError } from "./relayPicker";
 import { openSignaling, type SignalingPipe } from "./signalingRoute";
@@ -142,6 +143,12 @@ async function hostSigned(
 		return false;
 	}
 }
+
+/** The browser's own storage, where a device keeps what it remembers unless its shell gives a steadier one. */
+export const browserStore: KeyValueStore = {
+	read: (key) => localStorage.getItem(key),
+	write: (key, value) => localStorage.setItem(key, value),
+};
 
 interface OpenParams {
 	relayUrls: readonly string[];

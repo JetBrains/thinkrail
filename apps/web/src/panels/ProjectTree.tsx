@@ -64,6 +64,7 @@ import { type MouseEvent, type ReactNode, useCallback, useEffect, useRef, useSta
 import { useShallow } from "zustand/react/shallow";
 import { type ChatAction, copyText } from "@/lib";
 import { useNow } from "../components/useNow";
+import { serversSupported } from "../remote";
 import {
 	isChatWorkspace,
 	isDefaultWorkspace,
@@ -92,11 +93,13 @@ import {
 } from "../store";
 import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
+import { AddServerDialog } from "./AddServerDialog";
 import { ChatsSection } from "./ChatsSection";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { RemoveWorkspaceDialog } from "./RemoveWorkspaceDialog";
+import { ServerList } from "./ServerList";
 import {
 	announceSettledShelf,
 	SETTLED_NOTICE_QUIET_MS,
@@ -197,6 +200,8 @@ export function ProjectTree({
 	const expandedProjectIds = useAppStore((s) => s.expandedProjectIds);
 	const [dialogProjectId, setDialogProjectId] = useState<string | null>(null);
 	const [existingDialogProjectId, setExistingDialogProjectId] = useState<string | null>(null);
+	const [addingServer, setAddingServer] = useState(false);
+	const withServers = serversSupported();
 	const addProjectButtonRef = useRef<HTMLButtonElement>(null);
 	const projectNameButtonsRef = useRef(new Map<string, HTMLButtonElement>());
 	const workspaceDialogReturnFocusIdRef = useRef<string | null>(null);
@@ -361,6 +366,7 @@ export function ProjectTree({
 					onClone={cloneRepository}
 					onOpenRecent={(p) => void openProject(p)}
 					{...(supportsCreate ? { onStartNew: startNewProject } : {})}
+					{...(withServers ? { onAddServer: () => setAddingServer(true) } : {})}
 				>
 					<IconButton
 						ref={addProjectButtonRef}
@@ -521,6 +527,8 @@ export function ProjectTree({
 					) : null}
 				</DragOverlay>
 			</DndContext>
+			{withServers ? <ServerList onAddServer={() => setAddingServer(true)} /> : null}
+			{addingServer ? <AddServerDialog onClose={() => setAddingServer(false)} /> : null}
 
 			{dialogProjectId !== null ? (
 				<NewWorkspaceDialog
