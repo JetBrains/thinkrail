@@ -318,6 +318,15 @@ restart and toggle-reload regressions on upgrades.
   and the image-resize override bridge resources a single-file artifact cannot discover or load.
   Replace each only when pi supplies an equivalent artifact seam; run `check:seams` and the relevant
   binary/desktop artifact probes, including extension value imports and images.
+- **Outgoing image count** — [[submodule-server-agent]], `imageGuard.ts`. Pi 1.6 exposes
+  `inputLimits.images.maxPerRequest` in the public model and accepts it in `models.json`, but the
+  request path does not enforce it. The context hook retains the newest images within that declared
+  count, with a conservative 100-image fallback only for Anthropic-family models without valid count
+  metadata. It changes outgoing context, never stored messages. **Removal gate:** pi applies equivalent
+  request-wide count limits before every call (including retry/continuation), preserves newer images
+  and all text, and leaves durable history intact. Run `imageGuard.test.ts` and the real-session
+  `imageGuardSession.test.ts` probe against the installed SDK; remove the host count pass only when
+  those properties hold without it. Provider-specific byte and dimension rules are a separate gate.
 - **Runtime extension descriptor shim** — [[submodule-server-extensions-installed]], `installed/loader.ts`.
   An installed ThinkRail extension's server entry must import the host's single pi and typebox in every
   launcher, but pi exports no "load a module with extension resolution" API. The host writes a shim that

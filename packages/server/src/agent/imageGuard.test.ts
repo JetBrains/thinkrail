@@ -390,7 +390,16 @@ describe("isAnthropicFamilyModel", () => {
 
 type ContextHandler = (
 	event: { type: "context"; messages: AgentMessage[] },
-	ctx: { model: { api?: string; provider?: string; id?: string } | undefined },
+	ctx: {
+		model:
+			| {
+					api?: string;
+					provider?: string;
+					id?: string;
+					inputLimits?: { images?: { maxPerRequest?: number } };
+			  }
+			| undefined;
+	},
 ) => unknown;
 
 function registeredHandler(): ContextHandler {
@@ -430,4 +439,118 @@ test("the guard is a no-op for a non-Anthropic model — the caps are Anthropic'
 		}),
 	).toBeUndefined();
 	expect(await handler(oversized, { model: undefined })).toBeUndefined();
+});
+
+describe("outgoing image count", () => {
+	test("keeps the latest 100 images without count metadata, preserving text and stored history on retries", async () => {
+		const handler = registeredHandler();
+		const messages = Array.from({ length: 182 }, (_, index) =>
+			user([{ type: "text", text: `caption ${index}` }, image(pngBytes(index + 1, 1))]),
+		);
+		const original = structuredClone(messages);
+		const event = { type: "context" as const, messages };
+		const result = (await handler(event, anthropicCtx)) as { messages: AgentMessage[] };
+		expect(result?.messages).toHaveLength(182);
+		for (let index = 0; index < messages.length; index++) {
+			const content = guardedContent(result.messages, index);
+			expect(content[0]).toEqual({ type: "text", text: `caption ${index}` });
+			if (index < 82) expect(content[1]?.text).toContain("most recent 100 images");
+			else expect(result.messages[index]).toBe(messages[index]);
+		}
+		expect(messages).toEqual(original);
+		expect(await handler(event, anthropicCtx)).toEqual(result);
+		expect(await handler({ ...event, messages: result.messages }, anthropicCtx)).toBeUndefined();
+	});
+
+	test("counts occurrences across user and tool messages, even when the same image object is reused", async () => {
+		const shared = image(pngBytes(1, 1));
+		const messages = [
+			user([shared, { type: "text", text: "first caption" }, shared]),
+			toolResult([shared, { type: "text", text: "tool caption" }, shared]),
+			user("continue"),
+		];
+		const result = (await registeredHandler()(
+			{ type: "context", messages },
+			{ model: { ...anthropicCtx.model, inputLimits: { images: { maxPerRequest: 1 } } } },
+		)) as { messages: AgentMessage[] };
+		const first = guardedContent(result?.messages, 0);
+		const second = guardedContent(result?.messages, 1);
+		expect(first.map((block) => block.type)).toEqual(["text", "text", "text"]);
+		expect(first[1]).toEqual({ type: "text", text: "first caption" });
+		expect(second[0]?.text).toContain("most recent 1 image");
+		expect(second[1]).toEqual({ type: "text", text: "tool caption" });
+		expect(second[2]).toBe(shared);
+		expect(result.messages[1]).toMatchObject({
+			toolCallId: "tc1",
+			toolName: "read",
+			isError: false,
+		});
+		expect(result.messages[2]).toBe(messages[2]);
+		expect(guardedContent(messages, 0)[0]).toBe(shared);
+		expect(guardedContent(messages, 1)[0]).toBe(shared);
+	});
+
+	test("honors an explicit 600-image capacity and leaves an exact-count request alone", async () => {
+		const handler = registeredHandler();
+		const messages = [user(Array.from({ length: 182 }, () => image(pngBytes(1, 1))))];
+		for (const maxPerRequest of [182, 600]) {
+			expect(
+				await handler(
+					{ type: "context", messages },
+					{ model: { ...anthropicCtx.model, inputLimits: { images: { maxPerRequest } } } },
+				),
+			).toBeUndefined();
+		}
+	});
+
+	test("obeys another provider's declared count without applying Anthropic dimension rules", async () => {
+		const newest = image(pngBytes(9500, 1));
+		const messages = [user([image(pngBytes(1, 1)), image(pngBytes(2, 1)), newest])];
+		const result = (await registeredHandler()(
+			{ type: "context", messages },
+			{
+				model: {
+					provider: "other-provider",
+					id: "vision-model",
+					inputLimits: { images: { maxPerRequest: 2 } },
+				},
+			},
+		)) as { messages: AgentMessage[] };
+		const content = guardedContent(result?.messages, 0);
+		expect(content[0]?.text).toContain("most recent 2 images");
+		expect(content[1]?.type).toBe("image");
+		expect(content[2]).toBe(newest);
+	});
+
+	test.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1])(
+		"invalid count metadata (%s) uses the Anthropic fallback but does not invent another provider's cap",
+		async (maxPerRequest) => {
+			const handler = registeredHandler();
+			const event = {
+				type: "context" as const,
+				messages: [user(Array.from({ length: 101 }, () => image(pngBytes(1, 1))))],
+			};
+			const inputLimits = { images: { maxPerRequest } };
+			const result = (await handler(event, {
+				model: { ...anthropicCtx.model, inputLimits },
+			})) as { messages: AgentMessage[] };
+			const content = guardedContent(result?.messages, 0);
+			expect(content[0]?.text).toContain("most recent 100 images");
+			expect(content.filter((block) => block.type === "image")).toHaveLength(100);
+			expect(
+				await handler(event, { model: { provider: "other-provider", inputLimits } }),
+			).toBeUndefined();
+		},
+	);
+
+	test("already rejected oversized images do not consume the recent-image allowance", async () => {
+		const keep = image(pngBytes(1, 1));
+		const result = (await registeredHandler()(
+			{ type: "context", messages: [user([keep, image(pngBytes(9000, 1))])] },
+			{ model: { ...anthropicCtx.model, inputLimits: { images: { maxPerRequest: 1 } } } },
+		)) as { messages: AgentMessage[] };
+		const content = guardedContent(result?.messages, 0);
+		expect(content[0]).toBe(keep);
+		expect(content[1]?.text).toContain("8000px");
+	});
 });
