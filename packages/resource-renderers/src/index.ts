@@ -60,6 +60,7 @@ export {
 } from "./renderers/register";
 export { ReviewDraftContext, type ReviewDraftPersistence } from "./renderers/reviewDraftState";
 export { REVIEW_SURFACE_COMMANDS, REVIEW_SURFACE_SCOPE } from "./support/cursorKeys";
+export { DiffWrapToggle } from "./support/DiffWrapToggle";
 export {
 	FramedResourcePreview,
 	type FramedResourcePreviewProps,

@@ -113,6 +113,8 @@ export const PALETTE_PREVIEW_HOST: ResourceHost = {
 export function AppResourceHost({ children }: { children: ReactNode }) {
 	const fileLineWidth = useAppStore((state) => state.fileLineWidth);
 	const fileLineWidthBounded = useAppStore((state) => state.fileLineWidthBounded);
+	const diffWrapLines = useAppStore((state) => state.diffWrapLines);
+	const setDiffWrapLines = useAppStore((state) => state.setDiffWrapLines);
 	const markdownOutlineVisible = useAppStore((state) => state.markdownOutlineVisible);
 	const markdownOutlineSide = useAppStore((state) => state.markdownOutlineSide);
 	const setMarkdownOutlineVisible = useAppStore((state) => state.setMarkdownOutlineVisible);
@@ -121,6 +123,8 @@ export function AppResourceHost({ children }: { children: ReactNode }) {
 		() => ({
 			fileLineWidth,
 			fileLineWidthBounded,
+			diffWrapLines,
+			setDiffWrapLines,
 			markdownOutlineVisible,
 			setMarkdownOutlineVisible,
 			markdownOutlineSide,
@@ -128,6 +132,8 @@ export function AppResourceHost({ children }: { children: ReactNode }) {
 		[
 			fileLineWidth,
 			fileLineWidthBounded,
+			diffWrapLines,
+			setDiffWrapLines,
 			markdownOutlineVisible,
 			setMarkdownOutlineVisible,
 			markdownOutlineSide,

@@ -9,7 +9,12 @@ import {
 } from "./fixtures/app";
 import { commitFile, gitAs } from "./fixtures/git";
 import { E2E_DATA_DIR } from "./fixtures/paths";
-import { holdPierreWorkers, pierreDeletionsSide, selectPierreLine } from "./fixtures/pierre";
+import {
+	holdPierreWorkers,
+	pierreDeletionsSide,
+	pierreLineLayout,
+	selectPierreLine,
+} from "./fixtures/pierre";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const reviewTab = (page: Page) => page.locator('[data-testid="editor-tab"][data-kind="changes"]');
@@ -97,6 +102,16 @@ test("the Split/Inline and whitespace toggles are hidden when no file in the sco
 	await expect(page.getByTestId("changes-review-toggle-split")).toHaveCount(0);
 	await expect(page.getByTestId("changes-review-toggle-inline")).toHaveCount(0);
 	await expect(page.getByTestId("changes-review-toggle-whitespace")).toHaveCount(0);
+	await expect(page.getByTestId("diff-toggle-wrap")).toHaveCount(0);
+	await section(page, "README.md").getByTestId("view-toggle-code").click();
+	const wrap = page.getByTestId("diff-toggle-wrap");
+	await expect(wrap).toHaveAttribute("aria-pressed", "false");
+	await wrap.click();
+	await expect(wrap).toHaveAttribute("aria-pressed", "true");
+	await section(page, "README.md").getByTestId("view-toggle-markdown").click();
+	await expect(wrap).toHaveCount(0);
+	await section(page, "README.md").getByTestId("view-toggle-code").click();
+	await expect(wrap).toHaveAttribute("aria-pressed", "true");
 });
 
 test("the Split/Inline and whitespace toggles are hidden for an image-only scope", async ({
@@ -118,6 +133,7 @@ test("the Split/Inline and whitespace toggles are hidden for an image-only scope
 	await expect(page.getByTestId("changes-review-toggle-split")).toHaveCount(0);
 	await expect(page.getByTestId("changes-review-toggle-inline")).toHaveCount(0);
 	await expect(page.getByTestId("changes-review-toggle-whitespace")).toHaveCount(0);
+	await expect(page.getByTestId("diff-toggle-wrap")).toHaveCount(0);
 });
 
 test("the Split/Inline and whitespace toggles appear when a code file is in the scope", async ({
@@ -147,6 +163,36 @@ test("a code diff colors tokens through the shared code variables", async ({ pag
 	await row(page, "script.ts").click();
 	const codeDiff = section(page, "script.ts").getByTestId("diff-view");
 	await expect(codeDiff.locator('span[style*="--code-keyword"]').first()).toBeVisible();
+});
+
+test("the review toolbar wraps every source section and keeps the choice in One file", async ({
+	page,
+}) => {
+	const worktree = await seedThreeChanges(page);
+	const longLine = "long-source-token".repeat(45);
+	writeFileSync(join(worktree, "notes.txt"), `${longLine}\n`);
+	writeFileSync(join(worktree, "script.ts"), `export const payload = "${longLine}";\n`);
+	await row(page, "notes.txt").click();
+	await page.getByTestId("diff-toggle-wrap").click();
+	for (const path of ["notes.txt", "script.ts"]) {
+		await row(page, path).click();
+		const surface = section(page, path).getByTestId("diff-view");
+		await expect
+			.poll(async () => {
+				const layout = await pierreLineLayout(surface, longLine);
+				return layout.height > layout.lineHeight * 2 && layout.scrollWidth <= layout.width + 1;
+			})
+			.toBe(true);
+	}
+	await row(page, "notes.txt").click();
+	await page.getByTestId("changes-review-layout-single").click();
+	await expect(page.getByTestId("diff-toggle-wrap")).toHaveAttribute("aria-pressed", "true");
+	await expect
+		.poll(async () => {
+			const layout = await pierreLineLayout(section(page, "notes.txt"), longLine);
+			return layout.height > layout.lineHeight * 2;
+		})
+		.toBe(true);
 });
 
 test("a double click opens the per-file tab and a section's Open as tab does the same", async ({

@@ -8,24 +8,41 @@ const MARKER: Record<PlainRunKind, string> = {
 	addition: "+",
 };
 
-export function PlainCode({ runs, diff = false }: { runs: readonly PlainRun[]; diff?: boolean }) {
+export function PlainCode({
+	runs,
+	diff = false,
+	wrapLines = false,
+}: {
+	runs: readonly PlainRun[];
+	diff?: boolean;
+	wrapLines?: boolean;
+}) {
 	return (
 		<pre
 			data-testid="plain-code"
-			className="m-0 min-w-0 overflow-x-auto px-12 py-4 tr-code-editor text-text-default"
+			className={cn(
+				"m-0 min-w-0 overflow-x-auto px-12 py-4 tr-code-editor text-text-default",
+				wrapLines && "whitespace-pre-wrap [overflow-wrap:anywhere]",
+			)}
 		>
 			{runs.map((run) => (
 				<div
 					key={run.key}
 					data-kind={run.kind}
-					className={cn("flex", run.kind === "hunk" && "text-text-muted")}
+					className={cn(!wrapLines && "flex", run.kind === "hunk" && "text-text-muted")}
 				>
-					{diff ? (
-						<span className="select-none pr-8">
-							{run.lines.map(() => MARKER[run.kind]).join("\n")}
-						</span>
-					) : null}
-					<span>{run.lines.map((line) => line || " ").join("\n")}</span>
+					{wrapLines ? (
+						run.lines.map((line) => `${diff ? MARKER[run.kind] : ""}${line || " "}`).join("\n")
+					) : (
+						<>
+							{diff ? (
+								<span className="select-none pr-8">
+									{run.lines.map(() => MARKER[run.kind]).join("\n")}
+								</span>
+							) : null}
+							<span>{run.lines.map((line) => line || " ").join("\n")}</span>
+						</>
+					)}
 				</div>
 			))}
 		</pre>

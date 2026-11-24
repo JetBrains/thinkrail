@@ -6,6 +6,7 @@ import {
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import {
+	DiffWrapToggle,
 	RendererToggles,
 	ResourcePreview,
 	rendererImplementationKey,
@@ -201,6 +202,7 @@ function GitDiffPane({ tab }: { tab: GitDiffTab }) {
 						icon={copied ? CopiedCheck : Copy}
 					/>
 				) : null}
+				{renderer.capabilities.lineWrap ? <DiffWrapToggle /> : null}
 				<RendererToggles
 					candidates={candidates}
 					renderer={renderer}

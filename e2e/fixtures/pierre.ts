@@ -32,6 +32,20 @@ export function pierreLines(surface: Locator, text?: string): Locator {
 	return surface.locator(LINE, text === undefined ? {} : { hasText: text });
 }
 
+export async function pierreLineLayout(surface: Locator, text: string) {
+	return pierreLines(surface, text)
+		.last()
+		.evaluate((line) => {
+			const column = line.closest("[data-code]") ?? line;
+			return {
+				height: line.getBoundingClientRect().height,
+				lineHeight: Number.parseFloat(getComputedStyle(line).lineHeight),
+				width: column.clientWidth,
+				scrollWidth: column.scrollWidth,
+			};
+		});
+}
+
 export function pierreLineNumbers(surface: Locator): Locator {
 	return surface.locator("[data-column-number]");
 }

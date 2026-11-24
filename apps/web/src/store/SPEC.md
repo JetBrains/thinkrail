@@ -654,7 +654,9 @@ selector to hide its Projects rail and pane, so onboarding has the whole window.
   (`null` until the reader shows or hides the Markdown outline) and **`markdownOutlineSide: "left" |
   "right"`** (default right) are client-local the same way: `shell/markdownOutlinePreference` hydrates and
   persists them, `setMarkdownOutlineVisible` / `setMarkdownOutlineSide` change them, and `applyConfig` never
-  touches them. **`hiddenModels: ModelRef[]`** (`{ provider, id }` pairs) is a client-local model visibility
+  touches them. **`diffWrapLines: boolean`** (default false) is another client-local reading preference:
+  `shell/diffWrapPreference` hydrates and persists it, `setDiffWrapLines` changes it without a host round trip,
+  and `applyConfig` never overwrites it. **`hiddenModels: ModelRef[]`** (`{ provider, id }` pairs) is a client-local model visibility
   preference with pure **`hydrateHiddenModels(list)`** / **`setModelVisibility(model, visible)`** /
   **`toggleModelVisibility(model)`** actions; the store touches no storage — `chat/modelVisibility`
   hydrates and persists it, and `applyConfig` can never overwrite it. **`selectPickerModels(models,

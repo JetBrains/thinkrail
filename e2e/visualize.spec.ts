@@ -12,7 +12,7 @@ import {
 } from "./fixtures/app";
 import { clickTranscriptControl, waitForScrollStability } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
-import { pierreLines } from "./fixtures/pierre";
+import { pierreLineLayout, pierreLines } from "./fixtures/pierre";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const BASE_TS = 1_700_920_000_000;
@@ -547,6 +547,46 @@ test("closing a full-screen code preview keeps the card's editor showing the fil
 		await expect(dialog).toBeHidden();
 
 		await expect(lines).toContainText("cardGreeting");
+	} finally {
+		cleanup();
+	}
+});
+
+test("source comparison previews and their opened tabs share the wrapping preference", async ({
+	page,
+}) => {
+	const longLine = `export const payload = "${"abcdefghij".repeat(60)}";`;
+	const cleanup = writeMockups({
+		"before.ts": 'export const payload = "old";\n',
+		"after.ts": `${longLine}\n`,
+	});
+	try {
+		const card = await openVisualization(page, "source compare wrapping", {
+			type: "file",
+			path: `${MOCKUP_DIR}/after.ts`,
+			before: `${MOCKUP_DIR}/before.ts`,
+		});
+		const preview = card.getByTestId("resource-preview-diff");
+		await clickTranscriptControl(preview.getByTestId("tool-visualize-open-tab"));
+		const pane = page.locator('[data-testid="diff-pane"][data-compare]');
+		await expect(pane.getByTestId("diff-toggle-wrap")).toHaveAttribute("aria-pressed", "false");
+		await pane.getByTestId("diff-toggle-wrap").click();
+		await expect
+			.poll(async () => {
+				const layout = await pierreLineLayout(pane, longLine);
+				return layout.height > layout.lineHeight * 2 && layout.scrollWidth <= layout.width + 1;
+			})
+			.toBe(true);
+		await page.getByRole("tab").filter({ hasText: "source compare wrapping" }).click();
+		await clickTranscriptControl(preview.getByTestId("tool-visualize-fullscreen"));
+		const dialog = page.getByTestId("tool-visualize-fullscreen-dialog");
+		await expect(dialog.getByTestId("diff-toggle-wrap")).toHaveAttribute("aria-pressed", "true");
+		await expect
+			.poll(async () => {
+				const layout = await pierreLineLayout(dialog, longLine);
+				return layout.height > layout.lineHeight * 2;
+			})
+			.toBe(true);
 	} finally {
 		cleanup();
 	}

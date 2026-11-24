@@ -2888,11 +2888,13 @@ menu has closed, because a closing menu returns focus to its row; disabled
   and shows the unplaced strip. Byte-only
   original sides use the response's resolved original oid with `/blob`; an absent side is explicit, never a
   bytes value with a fabricated URL. The fixed toolbar keeps path and per-file review send, then exposes ¶
-  whitespace, modified-side copy, and **Split | Inline** only when the selected renderer advertises the
+  whitespace, modified-side copy, **Wrap lines**, and **Split | Inline** only when the selected renderer advertises the
   corresponding capability. It renders one `view-toggle-<renderer suffix>` segment per candidate when the
   registry returns more than one. Renderer choice replaces the old markdown-only `rendered` state; layout
-  and whitespace remain independent diff state. The review tab's toolbar carries the same whitespace and
-  `Split | Inline` controls for every section at once — but, because that toggle is pane-level across every
+  and whitespace remain independent diff state. **Wrap lines** reads and updates the client-local
+  `diffWrapLines` preference shared by source diffs, including file comparisons and resource previews; it
+  defaults off and does not change ordinary file views. The review tab's toolbar carries the same whitespace,
+  **Wrap lines**, and `Split | Inline` controls for every section at once — but, because that toggle is pane-level across every
   section rather than per-renderer, they follow `DiffPane`'s capability gates collectively: each control
   shows only when at least one file in the scope resolves (by path, through `diffRendererCapabilities`) to a
   renderer advertising it, so an all-Markdown/image/PDF/rich scope hides them instead of offering inert

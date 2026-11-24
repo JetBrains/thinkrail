@@ -55,6 +55,29 @@ test("without WebAssembly a 20k-line added file stays a handful of DOM nodes", a
 	const plain = page.getByTestId("diff-view").getByTestId("plain-code");
 	await expect(plain).toContainText(lines.at(-1) ?? "");
 	expect(await plain.evaluate((pre) => pre.querySelectorAll("*").length)).toBeLessThan(10);
+	await page.getByTestId("diff-toggle-wrap").click();
+	await expect(plain).toContainText("+export const v0 = 0;\n+export const v1 = 1;");
+	await expect(plain).toContainText(`+${lines.at(-1)}`);
+	expect(await plain.evaluate((pre) => pre.querySelectorAll("*").length)).toBeLessThan(10);
+});
+
+test("without WebAssembly wrapping fits long source lines and keeps their change markers", async ({
+	page,
+}) => {
+	await openWorkspaceWithScript(page);
+	const longLine = `export const payload = "${"abcdefghij".repeat(60)}";`;
+	writeFileSync(join(worktree(), "script.ts"), `${SCRIPT[0]}\n${longLine}\n`);
+	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).dblclick();
+	const plain = page.getByTestId("diff-view").getByTestId("plain-code");
+	await expect(plain).toContainText(longLine);
+	expect(await plain.evaluate((pre) => pre.scrollWidth > pre.clientWidth)).toBe(true);
+	await page.getByTestId("diff-toggle-wrap").click();
+	await expect(plain).toContainText(`+${SCRIPT[0]}\n+${longLine}`);
+	await expect
+		.poll(() => plain.evaluate((pre) => pre.scrollWidth <= pre.clientWidth + 1))
+		.toBe(true);
+	expect(await plain.evaluate((pre) => getComputedStyle(pre).whiteSpace)).toBe("pre-wrap");
 });
 
 test("without WebAssembly a phone-class code file shows its lines as plain text, and Monaco still shows the file", async ({

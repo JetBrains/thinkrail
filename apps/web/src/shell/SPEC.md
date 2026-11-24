@@ -101,7 +101,11 @@ After `main.tsx`'s synchronous first-paint apply, Shell is the sole mounted them
 `WORKSPACE_MOCKUP_DIR` — and none when `hasNativeMessageBridge(globalThis)` finds an Electrobun or WebView2
 message bridge on the page, because those answer every frame and a mockup script could reach native code
 ([[module-resource-renderers]], [[electrobun-compatibility]]). The check runs after the desktop preload,
-which installs the bridges before any page script.
+which installs the bridges before any page script. It also supplies the store's source-diff wrapping
+preference and setter to `ResourcePreferencesProvider`. `main.tsx` initializes `diffWrapPreference` before
+rendering: only the stored literal `true` enables wrapping; absent, malformed or inaccessible storage leaves
+it off. Changes persist through the existing host-qualified browser storage or injected native stable
+preference adapter, so reopening a client restores its reading choice independently of host configuration.
 
 ## Workbench behavior
 

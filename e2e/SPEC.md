@@ -744,7 +744,7 @@ lands in the sandbox and a new detection source is pinned everywhere at once.
   `e2e/fixtures/git.ts` is the one place specs shell out to `git` (`git`, `gitQuiet`, `gitText`, `gitAs`,
   `commitFile`); `gitAs`/`commitFile` pin a throwaway e2e identity so a seeded commit's authorship never
   depends on the developer machine's real git config. `e2e/fixtures/pierre.ts` is the one place specs
-  touch `@pierre/diffs`' DOM and worker (`pierreLines`, `pierreLineNumber`, `selectPierreLine`,
+  touch `@pierre/diffs`' DOM and worker (`pierreLines`, `pierreLineNumber`, `pierreLineLayout`, `selectPierreLine`,
   `pierreCollapsedContext`, `pierreDeletionsSide`, `holdPierreWorkers`): a Pierre release that renames
   `data-line`, `data-column-number`, `data-unmodified-lines` or `data-deletions` is a one-file repair, and no spec
   encodes how a line is selected. A probe that reveals a line inside a Pierre surface holds the worker script
@@ -755,7 +755,9 @@ lands in the sandbox and a new detection source is pinned everywhere at once.
   resize and hide the auxiliary stacks.
   `e2e/no-webassembly.spec.ts` launches Chromium with `--js-flags=--jitless`, which removes
   `WebAssembly` from the page and its workers alike, and pins that a diff, a phone-class code file, Monaco
-  and a chat fence still show their source as plain text.
+  and a chat fence still show their source as plain text. Source-diff wrapping probes cover the native Pierre
+  layout in split and unified views, persistence across reload and the Changes scope toolbar, capability
+  gating for rich renderers, and the WASM-free fallback's preserved source markers and bounded DOM.
 - **Consumes:** the built web artifact, the host's public boot/wire behavior, sanctioned server test-fixture
   exports, the desktop's clipboard reader (`apps/desktop/src/nativeClipboard.ts`, with a fake helper spawner), CLI binary, the locator, ready-document poller and `within` deadline from [[module-artifact-tests]], shared
   retrying teardown helper, git, Chromium, and Playwright. Standalone native/installer smoke and shared

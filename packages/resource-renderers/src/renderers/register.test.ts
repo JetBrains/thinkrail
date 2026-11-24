@@ -35,21 +35,22 @@ test("bundled renderer registrations declare only supported diff controls", () =
 					copy: renderer.capabilities.copy,
 					layout: renderer.capabilities.layout,
 					whitespace: renderer.capabilities.whitespace,
+					lineWrap: renderer.capabilities.lineWrap === true,
 				},
 			]),
 		),
 	).toEqual({
-		"thinkrail/binary": { copy: false, layout: false, whitespace: false },
-		"thinkrail/code": { copy: true, layout: true, whitespace: true },
-		"thinkrail/csv": { copy: true, layout: false, whitespace: false },
-		"thinkrail/html": { copy: false, layout: false, whitespace: false },
-		"thinkrail/image": { copy: false, layout: false, whitespace: false },
-		"thinkrail/json": { copy: true, layout: false, whitespace: false },
-		"thinkrail/lfs": { copy: false, layout: false, whitespace: false },
-		"thinkrail/markdown": { copy: false, layout: false, whitespace: false },
-		"thinkrail/notebook": { copy: true, layout: false, whitespace: false },
-		"thinkrail/pdf": { copy: false, layout: false, whitespace: false },
-		"thinkrail/svg": { copy: false, layout: false, whitespace: false },
+		"thinkrail/binary": { copy: false, layout: false, whitespace: false, lineWrap: false },
+		"thinkrail/code": { copy: true, layout: true, whitespace: true, lineWrap: true },
+		"thinkrail/csv": { copy: true, layout: false, whitespace: false, lineWrap: false },
+		"thinkrail/html": { copy: false, layout: false, whitespace: false, lineWrap: false },
+		"thinkrail/image": { copy: false, layout: false, whitespace: false, lineWrap: false },
+		"thinkrail/json": { copy: true, layout: false, whitespace: false, lineWrap: false },
+		"thinkrail/lfs": { copy: false, layout: false, whitespace: false, lineWrap: false },
+		"thinkrail/markdown": { copy: false, layout: false, whitespace: false, lineWrap: false },
+		"thinkrail/notebook": { copy: true, layout: false, whitespace: false, lineWrap: false },
+		"thinkrail/pdf": { copy: false, layout: false, whitespace: false, lineWrap: false },
+		"thinkrail/svg": { copy: false, layout: false, whitespace: false, lineWrap: false },
 	});
 });
 
@@ -58,8 +59,14 @@ test("diff capabilities resolve from a path before content loads", () => {
 	try {
 		const scope = { kind: "uncommitted" } as const;
 		const resolve = (path: string, selectedId?: string) => {
-			const { layout, whitespace } = diffRendererCapabilities("ws", path, scope, selectedId, false);
-			return { layout, whitespace };
+			const { layout, whitespace, lineWrap } = diffRendererCapabilities(
+				"ws",
+				path,
+				scope,
+				selectedId,
+				false,
+			);
+			return { layout, whitespace, lineWrap: lineWrap === true };
 		};
 		expect({
 			md: resolve("docs/a.md"),
@@ -69,12 +76,12 @@ test("diff capabilities resolve from a path before content loads", () => {
 			ts: resolve("src/a.ts"),
 			mdAsCode: resolve("docs/a.md", "thinkrail/code"),
 		}).toEqual({
-			md: { layout: false, whitespace: false },
-			png: { layout: false, whitespace: false },
-			pdf: { layout: false, whitespace: false },
-			svg: { layout: false, whitespace: false },
-			ts: { layout: true, whitespace: true },
-			mdAsCode: { layout: true, whitespace: true },
+			md: { layout: false, whitespace: false, lineWrap: false },
+			png: { layout: false, whitespace: false, lineWrap: false },
+			pdf: { layout: false, whitespace: false, lineWrap: false },
+			svg: { layout: false, whitespace: false, lineWrap: false },
+			ts: { layout: true, whitespace: true, lineWrap: true },
+			mdAsCode: { layout: true, whitespace: true, lineWrap: true },
 		});
 	} finally {
 		for (const dispose of disposers.reverse()) dispose();

@@ -15,6 +15,7 @@ export const codeRenderer: ResourceRenderer = {
 		copy: true,
 		layout: true,
 		whitespace: true,
+		lineWrap: true,
 		boundedDiff: "large",
 		preload: true,
 	},

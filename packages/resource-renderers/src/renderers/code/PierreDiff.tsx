@@ -17,6 +17,7 @@ import { Button, IconButton } from "@thinkrail/ui/button";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useResourcePreferences } from "../../host";
 import type {
 	ResourceContent,
 	ResourceDiffProps,
@@ -233,6 +234,7 @@ function PierreDiffSurface({
 }: ResourceDiffProps) {
 	const t = useT();
 	const plain = usePierrePlain();
+	const { diffWrapLines } = useResourcePreferences();
 	const originalText = textSide(original);
 	const modifiedText = textSide(modified);
 	const originalHash = contentHash(original);
@@ -471,14 +473,14 @@ function PierreDiffSurface({
 			hunkSeparators: "line-info" as const,
 			lineDiffType: "word" as const,
 			parseDiffOptions: { ignoreWhitespace },
-			overflow: "scroll" as const,
+			overflow: diffWrapLines ? ("wrap" as const) : ("scroll" as const),
 			disableFileHeader: true,
 			enableLineSelection: review !== undefined,
 			enableGutterUtility: review !== undefined,
 			onLineSelectionEnd: openPointerSelection,
 			unsafeCSS: CURSOR_SIDE_CSS,
 		}),
-		[ignoreWhitespace, layout, openPointerSelection, review],
+		[diffWrapLines, ignoreWhitespace, layout, openPointerSelection, review],
 	);
 	usePierreFocus(
 		rootRef,
@@ -515,7 +517,7 @@ function PierreDiffSurface({
 					</p>
 				) : null}
 				{plain ? (
-					<PlainCode runs={plainDiffRuns(fileDiff)} diff />
+					<PlainCode runs={plainDiffRuns(fileDiff)} diff wrapLines={diffWrapLines} />
 				) : (
 					<FileDiff<DiffAnnotationMetadata>
 						fileDiff={fileDiff}
