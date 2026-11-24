@@ -54,6 +54,11 @@ export interface LayoutTabFocusRequest {
 
 export type RegisterChatRename = (tabId: string, begin: (name: string) => void) => () => void;
 
+export interface TabSelectOptions {
+	keep?: boolean;
+	moveFocus?: boolean;
+}
+
 export interface PreparedLayoutClose {
 	document: WorkspaceLayoutDocument;
 	onAccepted: (current?: { document: WorkspaceLayoutDocument; attention: LayoutAttention }) => void;
@@ -663,7 +668,7 @@ export interface SharedGroupProps {
 	onSelectTab: (
 		location: LayoutGroupLocation,
 		tabId: string,
-		options?: { center?: boolean; keep?: boolean },
+		options?: TabSelectOptions & { center?: boolean },
 	) => void;
 	onFocusGroup: (location: LayoutGroupLocation, selectedTabId?: string) => void;
 	onFocusAdjacentGroup: (delta: -1 | 1, fromGroupId?: string) => void;
