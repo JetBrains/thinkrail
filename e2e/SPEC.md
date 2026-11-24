@@ -614,6 +614,11 @@ the lane shares one host. A test that changes one restores it before it ends; ot
 the same test under `--repeat-each`, inherit it. Host-owned `recentModels` are the exception: every explicit
 model pick appends to them and no wire call restores them, so a model-picker scenario never assumes an empty
 shortlist — it reveals the provider groups (`revealModelGroups`) and asserts only the head of the recents.
+The chat-history search index ([[submodule-server-history]]) is host memory too and revalidates lazily, so
+a scenario's `history.search` can answer with an earlier scenario's or repeat's deleted chats until it has
+read the scenario's own. A scenario that acts on a hit therefore searches for a prompt with a per-run tag,
+never a fixed text an earlier run's chat could share, unless an earlier search already returned one of its
+own chats.
 
 **GitHub review states** (`topbar-review.spec.ts`) need a real-looking PR without a network. Origin is
 `git@github.com:<repo>.git` — what both the host's configured-URL read and `git remote get-url` see — with
