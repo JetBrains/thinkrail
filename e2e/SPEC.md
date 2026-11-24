@@ -608,7 +608,9 @@ sign out every stored credential, and fail unless at most ambient env providers 
 teardown attempts every cleanup step even when one fails. Before any fixture reset
 deletes transcript storage, it lists and disposes every live session through the public wire; disposal aborts
 and settles an unfinished provider turn first, so a test ending mid-turn cannot recreate a headerless JSONL
-behind the next scenario. Consent tests reset the choice over the real settings wire and cover on-by-default preference priming,
+behind the next scenario. The reset finds the host's port in the project's `baseURL`, not with an HTTP
+request: Playwright keeps one keep-alive socket pool per worker, and the host closes a socket idle for 8–12 s
+on its 4 s sweep, so the first request of the next test could land on a socket being closed (`read ECONNRESET`). Consent tests reset the choice over the real settings wire and cover on-by-default preference priming,
 Done/ordinary-close acceptance, immediate off refusal, persistence failures and retries, confirmed reloads,
 cross-client convergence, prompt priority, and pre-v65 fallback.
 
