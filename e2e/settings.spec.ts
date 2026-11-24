@@ -62,10 +62,10 @@ test("a toast over Settings can be dismissed without closing Settings, and Escap
 	await expect(dialog).toBeHidden();
 });
 
-test("Settings is as tall as the window allows, no wider than its nav and a reading measure, and its nav is a strip on a phone", async ({
+test("Settings is as tall as the window allows, no wider than its nav and a reading measure, on whole pixels, and its nav is a strip on a phone", async ({
 	page,
 }) => {
-	await page.setViewportSize({ width: 1600, height: 1000 });
+	await page.setViewportSize({ width: 1601, height: 1000 });
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await page.getByTestId("open-settings").click();
@@ -74,15 +74,22 @@ test("Settings is as tall as the window allows, no wider than its nav and a read
 	expect(box?.height).toBe(1000 - 48);
 	expect(box?.width).toBeLessThanOrEqual(1028);
 	expect(box?.width).toBeGreaterThan(900);
-	const nav = await dialog.getByRole("tablist").boundingBox();
+	const pane = await page.getByTestId("settings-scroller").boundingBox();
+	expect(pane?.x).toBe(Math.round(pane?.x ?? 0.5));
+	const tablist = dialog.getByRole("tablist");
+	const nav = await tablist.boundingBox();
 	expect(nav?.width).toBeLessThanOrEqual(220);
 	await expect(dialog.getByRole("button", { name: "Close", exact: true })).toBeVisible();
 
+	await page.setViewportSize({ width: 1601, height: 800 });
+	expect(await tablist.evaluate((list) => list.scrollHeight > list.clientHeight)).toBe(true);
+	const scrollingNav = await tablist.boundingBox();
+	expect(scrollingNav?.y).toBe(Math.round(scrollingNav?.y ?? 0.5));
+
 	await page.setViewportSize({ width: 390, height: 780 });
-	const strip = dialog.getByRole("tablist");
-	await expect(strip).toHaveAttribute("aria-orientation", "vertical");
-	const first = await strip.getByRole("tab").first().boundingBox();
-	const second = await strip.getByRole("tab").nth(1).boundingBox();
+	await expect(tablist).toHaveAttribute("aria-orientation", "vertical");
+	const first = await tablist.getByRole("tab").first().boundingBox();
+	const second = await tablist.getByRole("tab").nth(1).boundingBox();
 	expect(second?.y).toBe(first?.y);
 	await page.keyboard.press("Escape");
 	await expect(dialog).toBeHidden();
