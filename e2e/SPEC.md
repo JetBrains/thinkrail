@@ -18,6 +18,9 @@ explicit, authenticated, on-demand runs.
 
 ## Execution model
 
+The session-state mark-read/unread case also checks the corresponding chat tab's live attention marker
+alongside the workspace indicator, without changing tab selection.
+
 Per-test isolation is `resetState()` in `fixtures/app.ts`: it clears the host's `projects.json`,
 `workspaces.json`, every chat in `chats.json` and the `chats/` folders, turns, reviews, artifact indexes and
 kept copies, worktrees and pi
