@@ -10,6 +10,11 @@ import type {
 	NativeWindowState,
 } from "@thinkrail/contracts";
 import Electrobun, { Electroview } from "electrobun/view";
+import {
+	createClipboardBridge,
+	NATIVE_CLIPBOARD_GLOBAL,
+	needsNativeClipboard,
+} from "./clipboardBridge";
 import { installExternalLinkRouting } from "./externalNavigation";
 import {
 	createPageZoomBridge,
@@ -162,6 +167,14 @@ if (readWindowChromeFlag(initialWindowChrome, "windowControls") === true) {
 	});
 	Object.defineProperty(globals, NATIVE_WINDOW_CONTROLS_GLOBAL, {
 		value: windowControlsBridge,
+		writable: false,
+		configurable: false,
+		enumerable: false,
+	});
+}
+if (needsNativeClipboard(navigator.platform)) {
+	Object.defineProperty(globals, NATIVE_CLIPBOARD_GLOBAL, {
+		value: createClipboardBridge(() => rpc.request.readClipboard()),
 		writable: false,
 		configurable: false,
 		enumerable: false,

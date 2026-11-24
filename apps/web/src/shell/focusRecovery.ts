@@ -1,5 +1,10 @@
-import { TABBABLE_SELECTOR } from "@thinkrail/ui/focus";
-import { canFocus, focusTarget, REGION_SELECTOR, regionLandingTarget } from "./regions";
+import {
+	canFocus,
+	FOCUS_DEFAULT_SELECTOR,
+	focusTarget,
+	TABBABLE_SELECTOR,
+} from "@thinkrail/ui/focus";
+import { REGION_SELECTOR, regionLandingTarget } from "./regions";
 
 const LIST_ATTRIBUTE = "data-focus-list";
 const ROW_ATTRIBUTE = "data-focus-row";
@@ -8,7 +13,6 @@ const FALLBACK_ATTRIBUTE = "data-focus-fallback";
 const LIST_SELECTOR = `[${LIST_ATTRIBUTE}]`;
 const ROW_SELECTOR = `[${ROW_ATTRIBUTE}]`;
 const PRIMARY_SELECTOR = "[data-focus-row-primary]";
-const FOCUS_DEFAULT_SELECTOR = "[data-focus-default]";
 const LAYER_SELECTOR = '[role="dialog"], [role="alertdialog"], [role="menu"], [aria-modal="true"]';
 const WATCHED_ATTRIBUTES = ["disabled", "hidden", "inert"];
 const GRACE_FRAMES = 180;

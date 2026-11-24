@@ -10,6 +10,7 @@ import {
 	type RefObject,
 	useEffect,
 	useEffectEvent,
+	useLayoutEffect,
 	useRef,
 	useState,
 } from "react";
@@ -23,11 +24,12 @@ import {
 	SettingsDialogContainer,
 	type SettingsJump,
 	SettingsJumpContext,
+	SettingsRowCursorContext,
 	useSettingsKeyboard,
 	walkKey,
 } from "@/settingsKit";
-import { SettingsSection, useAppStore } from "@/store";
-import { loadInAppSurvey } from "@/transport";
+import { SettingsSection, selectInstalledExtensions, useAppStore } from "@/store";
+import { loadInAppSurvey, supportsExtensionSettings } from "@/transport";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { ChatSettings } from "./ChatSettings";
 import { EnvironmentSettings } from "./EnvironmentSettings";
@@ -46,6 +48,7 @@ import { SubagentsSettings } from "./SubagentsSettings";
 import { useSettingsCatalogContext } from "./settingsCatalog";
 import { resolveSettingsSection, settingsNavGroups } from "./settingsNav";
 import {
+	installedExtensionSearchEntries,
 	type SettingsSearchEntry,
 	searchSettings,
 	settingsSearchEntries,
@@ -150,6 +153,7 @@ function SettingsFrame({
 	const target = useAppStore((s) => s.settingsTarget);
 	const catalogContext = useSettingsCatalogContext();
 	const { protocolVersion } = catalogContext;
+	const extensionCatalog = useAppStore((s) => s.extensionCatalog);
 	useProviderStatus();
 	const resultKeys = useLocalKeys("settings", LOCAL_KEY_DEFAULTS.settings);
 	const groups = settingsNavGroups(protocolVersion, updateSettings !== undefined);
@@ -165,7 +169,13 @@ function SettingsFrame({
 	const results = showResults
 		? searchSettings(
 				query,
-				settingsSearchEntries(t, groups, catalogContext, searchEntries),
+				settingsSearchEntries(t, groups, catalogContext, [
+					...(searchEntries ?? []),
+					...installedExtensionSearchEntries(
+						selectInstalledExtensions(extensionCatalog),
+						supportsExtensionSettings(protocolVersion),
+					),
+				]),
 				sectionLabels,
 			)
 		: [];
@@ -303,11 +313,6 @@ function SettingsFrame({
 
 	const onResultKeyDown = (event: KeyboardEvent<HTMLDivElement>, index: number) => {
 		if (event.defaultPrevented || isImeComposing(event.nativeEvent)) return;
-		const plain = !(event.altKey || event.ctrlKey || event.metaKey || event.shiftKey);
-		if (plain && event.key === "Enter") {
-			event.preventDefault();
-			return jumpToResult(index);
-		}
 		const key = walkKey(event.nativeEvent, resultKeys.match(event.nativeEvent));
 		if (key === null || key === "reset") return;
 		event.preventDefault();
@@ -320,6 +325,8 @@ function SettingsFrame({
 			case "left":
 				return focusTab();
 			case "right":
+			case "enter":
+			case "space":
 				return jumpToResult(index);
 			case "up":
 				return index === 0 ? fieldRef.current?.focus() : focusResult(index - 1);
@@ -339,6 +346,10 @@ function SettingsFrame({
 		toResults: returnsToResults ? backToResults : undefined,
 		onRowFocus: (rowId) => lastFocused.current.set(selected, rowId),
 	});
+	const { cursor } = keyboard;
+	useLayoutEffect(() => {
+		cursor.set(lastFocused.current.get(selected) ?? null);
+	}, [cursor, lastFocused, selected]);
 
 	return (
 		<>
@@ -403,9 +414,11 @@ function SettingsFrame({
 						onFocus={keyboard.onFocus}
 					>
 						<SettingsDialogContainer value={container}>
-							<SettingsJumpContext value={jump}>
-								{sectionContent(selected, { layoutSettings, keyboardSettings, updateSettings })}
-							</SettingsJumpContext>
+							<SettingsRowCursorContext value={cursor}>
+								<SettingsJumpContext value={jump}>
+									{sectionContent(selected, { layoutSettings, keyboardSettings, updateSettings })}
+								</SettingsJumpContext>
+							</SettingsRowCursorContext>
 						</SettingsDialogContainer>
 					</div>
 				</div>

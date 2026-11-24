@@ -6,7 +6,7 @@ import {
 	MODAL_LAYER_SELECTOR,
 	platformFamily,
 } from "@/lib";
-import { dictationFieldOf } from "./field";
+import { dictationFieldOf, inExcludedRoot } from "./field";
 import type { DictationPhase } from "./session";
 
 export const HOLD_MS = 300;
@@ -38,7 +38,12 @@ export function chordTarget(
 	if (dictating?.contains(document.activeElement)) return dictating;
 	const focused = dictationFieldOf(document.activeElement);
 	if (focused) return focused;
-	if (hasLayer(document, MODAL_LAYER_SELECTOR) || isTextEntryTarget(document.activeElement)) {
+	const active = document.activeElement;
+	if (
+		hasLayer(document, MODAL_LAYER_SELECTOR) ||
+		isTextEntryTarget(active) ||
+		inExcludedRoot(active)
+	) {
 		return null;
 	}
 	if (lastFallback?.isConnected) return lastFallback;

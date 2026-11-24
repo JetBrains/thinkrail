@@ -61,7 +61,7 @@ import { type ChatRow, LARGE_USER_MESSAGE, type TurnDividerData } from "./rows";
 import { formatElapsed, formatTokens } from "./SessionStatsBar";
 import { ToolCard } from "./ToolCard";
 import { ToolRendererBody } from "./ToolRendererBody";
-import { getToolChrome, getToolSummary, getToolWidth } from "./toolRegistry";
+import { getToolChrome, getToolSummary, getToolWidth, useToolRegistry } from "./toolRegistry";
 import type { CompactionState } from "./types";
 
 function ChatTurnViewImpl({
@@ -607,7 +607,8 @@ function ToolRow({
 	onOpenFile?: ((path: string) => void) | undefined;
 }) {
 	const t = useT();
-	if (getToolChrome(row.toolName) === "bare") {
+	const registry = useToolRegistry();
+	if (getToolChrome(row.toolName, registry) === "bare") {
 		const renderProps: ToolRenderProps = {
 			toolCallId: row.toolCallId,
 			toolName: row.toolName,
@@ -622,12 +623,12 @@ function ToolRow({
 			<div
 				className={cn(
 					"tr-text-ui text-text-default",
-					getToolWidth(row.toolName) === "content" && CONTENT_WIDTH_BREAKOUT,
+					getToolWidth(row.toolName, registry) === "content" && CONTENT_WIDTH_BREAKOUT,
 				)}
 			>
 				<ToolRendererBody
 					{...renderProps}
-					imageLabel={getToolSummary(t, row.toolName, renderProps)}
+					imageLabel={getToolSummary(t, row.toolName, renderProps, registry)}
 				/>
 				<ToolPromptSlot toolCallId={row.toolCallId} className="mt-8" />
 			</div>

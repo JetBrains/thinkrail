@@ -79,6 +79,59 @@ test.each([
 	},
 );
 
+const EXTENSION_ROOTS: FrameRoots = {
+	...ROOTS,
+	foreignRoots: () => ["/opt/thinkrail/data/extensions", "/opt/thinkrail/my-weather"],
+};
+
+test.each([
+	"http://localhost:4317/extensions/%40acme%2Fsecret-weather/1.2.0-0123456789ab/dist/web.js",
+	"http://127.0.0.1:4317/extensions/secret-weather/1.2.0-0123456789ab/dist/web.js",
+	"views://web/extensions/secret-weather/1.2.0-0123456789ab/dist/web.js",
+	"/opt/thinkrail/data/extensions/installs/abc/npm/node_modules/secret-weather/server/index.ts",
+	"/opt/thinkrail/data/extensions/host/shims/123-4.ts",
+	"file:///opt/thinkrail/my-weather/server/index.ts",
+	"/opt/thinkrail/my-weather/node_modules/dep/index.js",
+])("an installed extension's frame %j is external, with no name", (filename) => {
+	expect(normalizeFrameFilename(filename, EXTENSION_ROOTS)).toMatchObject({
+		filename: EXTERNAL_FRAME,
+		inApp: false,
+	});
+	const properties = sanitizeExceptionProperties(
+		{
+			$exception_list: [
+				{
+					type: "Error",
+					stacktrace: {
+						type: "raw",
+						frames: [{ filename, function: "fetchSecretWeather", lineno: 3, colno: 1 }],
+					},
+				},
+			],
+			$thinkrail_chunk_ids: { [filename]: "ab8fcdab-5c22-55ed-bec8-0f9acb6a407e" },
+			source: "ui",
+			scope: "tool-renderer",
+		},
+		EXTENSION_ROOTS,
+	);
+	const sent = JSON.stringify(properties);
+	for (const secret of ["weather", "1.2.0", "0123456789ab", "fetchSecretWeather", "extensions/"]) {
+		expect(sent).not.toContain(secret);
+	}
+});
+
+test("the app's own frames beside an installed extension's stay in-app", () => {
+	expect(
+		normalizeFrameFilename("http://localhost:4317/assets/index-abc.js", EXTENSION_ROOTS),
+	).toMatchObject({ filename: "web/assets/index-abc.js", inApp: true });
+	expect(
+		normalizeFrameFilename("/opt/thinkrail/packages/server/src/host/server.ts", EXTENSION_ROOTS),
+	).toMatchObject({ filename: "packages/server/src/host/server.ts", inApp: true });
+	expect(
+		normalizeFrameFilename("/opt/thinkrail/data/extensions-notes/x.ts", EXTENSION_ROOTS).filename,
+	).toBe("data/extensions-notes/x.ts");
+});
+
 test("chunk ids pass only as UUIDs, from the SDK frame or the browser's url map", () => {
 	const id = "ab8fcdab-5c22-55ed-bec8-0f9acb6a407e";
 	const url = "http://127.0.0.1:4317/assets/index-abc.js";

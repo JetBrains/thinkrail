@@ -5,6 +5,7 @@ import { SettingsSection } from "@/store";
 import type { SettingsCatalogContext } from "./settingsCatalog";
 import { settingsNavGroups } from "./settingsNav";
 import {
+	installedExtensionSearchEntries,
 	type SettingsSearchEntry,
 	searchSettings,
 	settingsSearchEntries,
@@ -129,4 +130,28 @@ describe("Settings search", () => {
 		expect(results.map((result) => result.entry.id)).not.toContain("shortcut:gone");
 		expect(results.find((result) => result.entry === shortcut)?.sectionLabel).toBe("Keyboard");
 	});
+});
+
+test("installed extensions and their declared settings are found by their own words", () => {
+	const palette = {
+		name: "@acme/palette",
+		title: "Palette",
+		description: "Colour palettes in chat.",
+		enabled: true,
+		tools: [],
+		hasChildExtensions: false,
+		kind: "installed" as const,
+		state: "loaded" as const,
+		settings: [{ key: "contrast", default: true, title: "Contrast ratings" }],
+	};
+	const injected = installedExtensionSearchEntries([palette], true);
+	expect(injected.map((item) => item.id)).toEqual([
+		"installed-extension-@acme/palette",
+		"extension-setting-@acme/palette-contrast",
+	]);
+	const entries = settingsSearchEntries(t, groups(), LATEST, injected);
+	expect(ids("contrast ratings", entries)[0]).toBe("extension-setting-@acme/palette-contrast");
+	expect(ids("palette", entries)).toContain("installed-extension-@acme/palette");
+	expect(installedExtensionSearchEntries([palette], false)).toHaveLength(1);
+	expect(installedExtensionSearchEntries([{ ...palette, state: "failed" }], true)).toHaveLength(1);
 });

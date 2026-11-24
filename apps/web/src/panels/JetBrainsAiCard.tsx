@@ -21,9 +21,18 @@ import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton, withIconClass } from "@thinkrail/ui/button";
 import { Switch } from "@thinkrail/ui/switch";
+import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { copyText } from "@/lib";
-import { SettingsGroup, SettingsNumberField, type SettingsReset, SettingsRow } from "@/settingsKit";
+import {
+	SETTINGS_ROW_FOCUS,
+	SETTINGS_ROW_INSET,
+	SettingsGroup,
+	SettingsNumberField,
+	type SettingsReset,
+	SettingsRow,
+	useSettingsRowStop,
+} from "@/settingsKit";
 import { getTransport } from "@/transport";
 import { SETTING, settingProps } from "./settingsCatalog";
 
@@ -37,13 +46,10 @@ type Notice =
 
 interface Marks {
 	readonly tabIndex?: number;
-	readonly "data-setting-stop"?: "";
-	readonly "data-setting-side"?: "";
 }
 
 const NO_MARKS: Marks = {};
-const STOP_MARKS: Marks = { tabIndex: 0, "data-setting-stop": "" };
-const SIDE_MARKS: Marks = { tabIndex: 0, "data-setting-side": "" };
+const ROW_MARKS: Marks = { tabIndex: 0 };
 
 function useJetBrainsCentral(status: JbcentralStatus, onChanged: () => void | Promise<void>) {
 	const [busyAction, setBusyAction] = useState<JbcentralAction | null>(null);
@@ -126,13 +132,11 @@ type Central = ReturnType<typeof useJetBrainsCentral>;
 
 function CentralActions({
 	central,
-	first = NO_MARKS,
-	rest = NO_MARKS,
+	marks = NO_MARKS,
 	recheckWhenAbsent = false,
 }: {
 	central: Central;
-	first?: Marks;
-	rest?: Marks;
+	marks?: Marks;
 	recheckWhenAbsent?: boolean;
 }) {
 	const t = useT();
@@ -147,7 +151,7 @@ function CentralActions({
 				iconLeft={Loader2}
 				loading
 				data-testid="jetbrains-configuring"
-				{...first}
+				{...marks}
 			>
 				{t(ACTION_BUSY_LABEL[busyAction])}
 			</Button>
@@ -158,7 +162,7 @@ function CentralActions({
 			<SignInButton
 				label={t("settings.jbcentral.signIn")}
 				signingIn={signingIn}
-				marks={first}
+				marks={marks}
 				onSignIn={() => void signIn()}
 			/>
 		);
@@ -171,7 +175,7 @@ function CentralActions({
 					size="m"
 					iconLeft={RefreshCw}
 					data-testid="jetbrains-retry"
-					{...first}
+					{...marks}
 					onClick={() => void runAction(retryAction)}
 				>
 					{t("common.retry")}
@@ -179,7 +183,7 @@ function CentralActions({
 				{status.configured ? (
 					<ActionButton
 						action="disconnect"
-						marks={rest}
+						marks={marks}
 						onAction={() => void runAction("disconnect")}
 					/>
 				) : null}
@@ -190,13 +194,13 @@ function CentralActions({
 		return (
 			<ActionButton
 				action={primaryAction}
-				marks={first}
+				marks={marks}
 				onAction={() => void runAction(primaryAction)}
 			/>
 		);
 	}
 	if (needsRecheck(status) || (recheckWhenAbsent && status.state === "absent")) {
-		return <RecheckButton marks={first} onChanged={onChanged} />;
+		return <RecheckButton marks={marks} onChanged={onChanged} />;
 	}
 	return null;
 }
@@ -294,6 +298,7 @@ export function JetBrainsAiSettings({
 	const central = useJetBrainsCentral(status, onChanged);
 	const quotaRow = settingProps(t, SETTING.jetbrainsQuota);
 	const intervalRow = settingProps(t, SETTING.jetbrainsQuotaInterval);
+	const cardRow = useSettingsRowStop(SETTING.jetbrainsCentral.id);
 	return (
 		<SettingsGroup
 			title={t("settings.jbcentral.title")}
@@ -301,13 +306,13 @@ export function JetBrainsAiSettings({
 			testId="settings-jetbrains"
 		>
 			<div
-				data-setting-row={SETTING.jetbrainsCentral.id}
+				{...cardRow}
 				data-setting-id={SETTING.jetbrainsCentral.id}
 				data-testid="jetbrains-ai-card"
 				data-state={central.visibleState}
 				data-configured={central.configured}
 				data-installed={central.installed}
-				className="border-border-muted border-b py-12"
+				className={cn("border-border-muted border-b py-12", SETTINGS_ROW_INSET, SETTINGS_ROW_FOCUS)}
 			>
 				<div className="flex flex-col gap-8 rounded-sm bg-control-bg px-12 py-8">
 					<div className="flex flex-wrap items-start justify-between gap-12">
@@ -319,20 +324,15 @@ export function JetBrainsAiSettings({
 								status={status}
 								install={install}
 								onChanged={onChanged}
-								marks={SIDE_MARKS}
+								marks={ROW_MARKS}
 								recheck={false}
 							/>
 						</div>
 						<div className="flex shrink-0 flex-wrap items-center gap-4">
-							<CentralActions
-								central={central}
-								first={STOP_MARKS}
-								rest={SIDE_MARKS}
-								recheckWhenAbsent
-							/>
+							<CentralActions central={central} marks={ROW_MARKS} recheckWhenAbsent />
 						</div>
 					</div>
-					<CentralNotices central={central} marks={SIDE_MARKS} />
+					<CentralNotices central={central} marks={ROW_MARKS} />
 				</div>
 			</div>
 			{quota ? (

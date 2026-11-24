@@ -1,19 +1,34 @@
-import { describe, expect, it, spyOn } from "bun:test";
+import { describe, expect, it, jest, spyOn } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DefaultPackageManager, SettingsManager } from "@earendil-works/pi-coding-agent";
+import {
+	DefaultPackageManager,
+	type InlineExtension,
+	SettingsManager,
+} from "@earendil-works/pi-coding-agent";
 import { SPEC_SECTION } from "pi-spec-graph";
-import { type HostSessionServices, registryInlineExtensions, workspaceFiles } from "../extensions";
+import { Type } from "typebox";
+import {
+	builtinServerExtensions,
+	EXTENSION_LOAD_TIMEOUT_MS,
+	type HostSessionServices,
+	installedExtensions,
+	registryInlineExtensions,
+	startInstalledExtensions,
+	workspaceFiles,
+} from "../extensions";
 import { artifactsGuard } from "./artifactsGuard";
 import {
 	buildResourceLoader,
 	bumpPackagesRevision,
 	childBaseExtensionFactories,
 	childExtensionFactories,
+	childInstalledExtensionFactories,
 	disabledExtensions,
 	extensionSettings,
+	HOST_INLINE_FACTORIES,
 	isLoaderPolicyStale,
 	listProjectAliasSkillNames,
 	listSkillCatalog,
@@ -28,6 +43,7 @@ import {
 } from "./extensions";
 import { headlessSearchPolicy } from "./headlessSearch";
 import { oversizedImageGuard } from "./imageGuard";
+import { createMcpEngine, HOST_BUILTIN_EXTENSION_NAMES } from "./mcp";
 import { createPiSettings } from "./packages";
 import { writeFixturePiPackage } from "./packages/testFixtures";
 import type { SkillAdmissionContext } from "./skillAdmission";
@@ -72,6 +88,9 @@ function writeSkill(root: string, name: string, description: string): void {
 		`---\nname: ${name}\ndescription: ${description}\n---\n\n# ${name}\n\nPortable fixture.\n`,
 	);
 }
+
+const nameOf = (inline: InlineExtension): string =>
+	typeof inline === "function" ? "fn" : inline.name;
 
 function restoreEnvironment(original: Record<string, string | undefined>): void {
 	for (const [name, value] of Object.entries(original)) {
@@ -636,6 +655,250 @@ describe("registry extensions", () => {
 		}
 	});
 
+	it("rebuilds behind the same loader when an installed extension loads or goes away", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-installed-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		const dataDir = join(root, "data");
+		for (const dir of [project, home, agentDir, dataDir]) mkdirSync(dir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		const stop = startInstalledExtensions({ dataDir, onChange: () => {} });
+		try {
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(
+				project,
+				settingsManager,
+				() => ctx(true),
+				[],
+				[],
+				hostServices,
+			);
+			const paths = () => loader.getExtensions().extensions.map((extension) => extension.path);
+			expect(paths()).not.toContain("<inline:ext:loader-installed>");
+			const folder = join(root, "ext");
+			mkdirSync(join(folder, "server"), { recursive: true });
+			writeFileSync(
+				join(folder, "package.json"),
+				JSON.stringify({
+					name: "loader-installed",
+					thinkrail: { api: "1.0", server: "server/index.ts" },
+				}),
+			);
+			writeFileSync(
+				join(folder, "server", "index.ts"),
+				'export default { name: "loader-installed", extensions: [() => {}] };\n',
+			);
+			const declarations = join(dataDir, "extensions.json");
+			writeFileSync(declarations, JSON.stringify({ extensions: [folder] }));
+			await installedExtensions()?.reconcile();
+			bumpPackagesRevision();
+			expect(isLoaderPolicyStale(loader)).toBe(true);
+			await loader.reload();
+			expect(isLoaderPolicyStale(loader)).toBe(false);
+			expect(paths()).toContain("<inline:ext:loader-installed>");
+			expect(paths()).toContain("<inline:visualize>");
+			writeFileSync(declarations, JSON.stringify({ extensions: [] }));
+			await installedExtensions()?.reconcile();
+			await loader.reload();
+			expect(paths()).not.toContain("<inline:ext:loader-installed>");
+		} finally {
+			stop();
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("starts a chat past an installed factory that never settles, with that extension's load error", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-hung-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		const dataDir = join(root, "data");
+		for (const dir of [project, home, agentDir, dataDir]) mkdirSync(dir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		const folder = join(root, "ext");
+		mkdirSync(join(folder, "server"), { recursive: true });
+		writeFileSync(
+			join(folder, "package.json"),
+			JSON.stringify({
+				name: "hung-factory",
+				thinkrail: { api: "1.0", server: "server/index.ts" },
+			}),
+		);
+		writeFileSync(
+			join(folder, "server", "index.ts"),
+			'export default { name: "hung-factory", extensions: [() => new Promise(() => {})] };\n',
+		);
+		writeFileSync(join(dataDir, "extensions.json"), JSON.stringify({ extensions: [folder] }));
+		const stop = startInstalledExtensions({ dataDir, onChange: () => {} });
+		try {
+			await installedExtensions()?.reconcile();
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			jest.useFakeTimers();
+			let built: Awaited<ReturnType<typeof buildResourceLoader>> | undefined;
+			const building = buildResourceLoader(
+				project,
+				settingsManager,
+				() => ctx(true),
+				[],
+				[],
+				hostServices,
+			).then((loader) => {
+				built = loader;
+			});
+			while (!built) {
+				await new Promise((resolve) => setImmediate(resolve));
+				if (jest.getTimerCount() > 0) jest.advanceTimersByTime(EXTENSION_LOAD_TIMEOUT_MS);
+			}
+			jest.useRealTimers();
+			await building;
+			const result = built?.getExtensions();
+			expect(result?.extensions.map((extension) => extension.path)).toContain("<inline:visualize>");
+			expect(result?.errors).toContainEqual(
+				expect.objectContaining({
+					error: "hung-factory did not finish loading within 10 s",
+				}),
+			);
+		} finally {
+			jest.useRealTimers();
+			stop();
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("never lets an installed extension take a host-owned tool, a host command or a pi package's tool", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-shadow-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		const dataDir = join(root, "data");
+		for (const dir of [project, home, join(agentDir, "extensions"), dataDir])
+			mkdirSync(dir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		const tool = (name: string) =>
+			`pi.registerTool({ name: "${name}", label: "x", description: "x", parameters: Type.Object({}), async execute() { return { content: [], details: {} }; } });`;
+		writeFileSync(
+			join(agentDir, "extensions", "weather.ts"),
+			`import { Type } from "typebox";\nexport default (pi) => { ${tool("weather")} };\n`,
+		);
+		const names = [
+			"ask_user_question",
+			"set_title",
+			"Agent",
+			"tool_search",
+			"mcp__docs__search",
+			"weather",
+			"shadow_own",
+		];
+		const folder = join(root, "shadow");
+		mkdirSync(join(folder, "server"), { recursive: true });
+		writeFileSync(
+			join(folder, "package.json"),
+			JSON.stringify({ name: "shadow", thinkrail: { api: "1.0", server: "server/index.ts" } }),
+		);
+		writeFileSync(
+			join(folder, "server", "index.ts"),
+			`import { Type } from "typebox";\nexport default { name: "shadow", extensions: [(pi) => { ${names.map(tool).join(" ")} pi.registerCommand("mcp", { handler: async () => {} }); }] };\n`,
+		);
+		writeFileSync(join(dataDir, "extensions.json"), JSON.stringify({ extensions: [folder] }));
+		const stop = startInstalledExtensions({
+			dataDir,
+			onChange: () => {},
+			hostToolFactories: HOST_INLINE_FACTORIES,
+		});
+		const stub = (name: string) => (pi: Parameters<typeof headlessSearchPolicy>[0]) => {
+			pi.registerTool({
+				name,
+				label: "x",
+				description: "x",
+				parameters: Type.Object({}),
+				execute: async () => ({ content: [], details: {} }),
+			});
+		};
+		try {
+			await installedExtensions()?.reconcile();
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(
+				project,
+				settingsManager,
+				() => ctx(true),
+				[],
+				[
+					stub("Agent"),
+					stub("mcp__docs__search"),
+					...createMcpEngine({ loadConfig: () => ({ servers: [], errors: [] }) }).extensions,
+				],
+				hostServices,
+			);
+			const { extensions } = loader.getExtensions();
+			const owner = (name: string) =>
+				extensions.find((extension) => extension.tools.has(name))?.path;
+			const paths = extensions.map((extension) => extension.path);
+			expect(paths).toContain("builtin:mcp");
+			expect(paths).toContain("builtin:tool-search");
+			expect(owner("ask_user_question")).toBe("<inline:ask-user-question>");
+			for (const name of ["set_title", "Agent", "mcp__docs__search"]) {
+				expect(owner(name)).toMatch(/^<inline:\d+>$/);
+			}
+			expect(owner("tool_search")).toBe("builtin:tool-search");
+			expect(owner("weather")).toBe(join(agentDir, "extensions", "weather.ts"));
+			expect(owner("shadow_own")).toBe("<inline:ext:shadow>");
+			const commandOwner = extensions.find((extension) => extension.commands.has("mcp"))?.path;
+			expect(commandOwner).toBe("builtin:mcp");
+			const status = JSON.parse(readFileSync(join(dataDir, "extensions", "status.json"), "utf8"));
+			expect(status.extensions[0]).toMatchObject({
+				state: "loaded",
+				tools: ["Agent", "tool_search", "mcp__docs__search", "weather", "shadow_own"],
+				shadowed: ["ask_user_question", "set_title"],
+			});
+		} finally {
+			stop();
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("reserves every named inline extension the host composes for itself", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-names-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		for (const dir of [project, home, agentDir]) mkdirSync(dir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		try {
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(
+				project,
+				settingsManager,
+				() => ctx(true),
+				[],
+				createMcpEngine({ loadConfig: () => ({ servers: [], errors: [] }) }).extensions,
+				hostServices,
+			);
+			const { extensions, errors } = loader.getExtensions();
+			const registry = new Set(builtinServerExtensions.map((entry) => entry.extension.name));
+			const hostNamed = [
+				...extensions.map((extension) => extension.path),
+				...errors.map((e) => e.path),
+			]
+				.map((path) => /^(?:<inline:([^>]+)>|builtin:(.+))$/.exec(path))
+				.flatMap((match) => (match ? [(match[1] ?? match[2] ?? "").replace(/#\d+$/, "")] : []))
+				.filter((name) => !/^\d+$/.test(name) && !registry.has(name));
+			expect(hostNamed.length).toBeGreaterThan(0);
+			const children = [...childBaseExtensionFactories(), ...childExtensionFactories("w1")]
+				.map((inline) => nameOf(inline).replace(/#\d+$/, ""))
+				.filter((name) => name !== "fn" && !registry.has(name));
+			for (const name of [...hostNamed, ...children]) {
+				expect<readonly string[]>(HOST_BUILTIN_EXTENSION_NAMES).toContain(name);
+			}
+		} finally {
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("marks a loader stale when an extension setting changes and current again after reload", async () => {
 		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-settings-"));
 		const project = join(root, "project");
@@ -748,6 +1011,33 @@ describe("registry extensions", () => {
 			inlines.map((inline) => (typeof inline === "function" ? "fn" : inline.name));
 		expect(names(children.slice(3))).toEqual(names(registryInlineExtensions("childExtensions")));
 		expect(names(children.slice(3))).toEqual(["web-access"]);
+	});
+
+	it("hands an installed extension's child half over apart from the host's child set", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-child-installed-"));
+		const folder = join(root, "ext");
+		mkdirSync(join(folder, "server"), { recursive: true });
+		writeFileSync(
+			join(folder, "package.json"),
+			JSON.stringify({
+				name: "child-installed",
+				thinkrail: { api: "1.0", server: "server/index.ts" },
+			}),
+		);
+		writeFileSync(
+			join(folder, "server", "index.ts"),
+			'export default { name: "child-installed", extensions: [], childExtensions: [() => {}] };\n',
+		);
+		writeFileSync(join(root, "extensions.json"), JSON.stringify({ extensions: [folder] }));
+		const stop = startInstalledExtensions({ dataDir: root, onChange: () => {} });
+		try {
+			await installedExtensions()?.reconcile();
+			expect(childExtensionFactories("w1").slice(3).map(nameOf)).toEqual(["web-access"]);
+			expect(childInstalledExtensionFactories().map(nameOf)).toEqual(["ext:child-installed"]);
+		} finally {
+			stop();
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 
 	it("loads web access with its skill and drops both while the extension is off", async () => {
@@ -875,6 +1165,75 @@ describe("registry extensions", () => {
 				}
 			}
 			expect(input.workflow).toBe("none");
+		} finally {
+			setDisabledExtensionsResolver(() => new Set());
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("leaves a user's install of the vanilla /insights package out while session insights is on", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-superseded-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const extensionEntry = createRequire(import.meta.url).resolve(
+			"@thinkrail/ext-session-insights/server",
+		);
+		const corePackage = join(
+			createRequire(extensionEntry).resolve("@thinkrail/pi-session-insights/package.json"),
+			"..",
+		);
+		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [corePackage] }));
+		const restore = stubSkillEnv(home, agentDir);
+		let disabled = new Set<string>();
+		setDisabledExtensionsResolver(() => disabled);
+		try {
+			const settingsManager = createPiSettings(project, agentDir, {
+				projectTrusted: true,
+				packages: "enabled",
+			});
+			const loader = await buildResourceLoader(project, settingsManager, () => ctx(true));
+			const commands = () =>
+				loader.getExtensions().extensions.flatMap((extension) => [...extension.commands.keys()]);
+			expect(loader.getExtensions().errors).toEqual([]);
+			expect(commands()).not.toContain("insights");
+			expect(isLoaderPolicyStale(loader)).toBe(false);
+
+			disabled = new Set(["session-insights"]);
+			expect(isLoaderPolicyStale(loader)).toBe(true);
+			await loader.reload();
+			expect(commands()).toContain("insights");
+			expect(isLoaderPolicyStale(loader)).toBe(false);
+			disabled = new Set();
+			expect(isLoaderPolicyStale(loader)).toBe(true);
+		} finally {
+			setDisabledExtensionsResolver(() => new Set());
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("a loader without a superseded package is not stale when a superseding extension flips", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-superseded-none-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		for (const dir of [project, home, agentDir]) mkdirSync(dir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		let disabled = new Set<string>();
+		setDisabledExtensionsResolver(() => disabled);
+		try {
+			const settingsManager = createPiSettings(project, agentDir, {
+				projectTrusted: true,
+				packages: "enabled",
+			});
+			const loader = await buildResourceLoader(project, settingsManager, () => ctx(true));
+			disabled = new Set(["session-insights"]);
+			expect(isLoaderPolicyStale(loader)).toBe(false);
 		} finally {
 			setDisabledExtensionsResolver(() => new Set());
 			restore();

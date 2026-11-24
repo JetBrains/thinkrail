@@ -250,7 +250,7 @@ test("a keyed gateway is found, saved to models.json, chatted with, edited and r
 	await page.getByRole("button", { name: "Cancel" }).click();
 	await expect(endpoint).toHaveCount(1);
 
-	await endpoint.getByTestId("custom-endpoints-edit").focus();
+	await endpoint.focus();
 	await page.keyboard.press("Delete");
 	await page.getByTestId("custom-endpoints-remove-confirm").click();
 	await expect(endpoint).toHaveCount(0);

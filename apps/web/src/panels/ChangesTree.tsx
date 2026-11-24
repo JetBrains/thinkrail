@@ -1,11 +1,11 @@
 import type { GitFileChange } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { DiffStatBadge } from "@thinkrail/ui/diff-stat-badge";
+import { TreeRow } from "@thinkrail/ui/tree-row";
 import { firstClickOnly } from "../lib";
 import type { TabIntent } from "../store";
 import { ChangeRowActions, ROW_MENU_SLOT } from "./ChangeRowActions";
 import { buildChangesTree, type ChangeTreeNode, statusNameClass } from "./changesModel";
-import { DiffStatBadge } from "./DiffStatBadge";
-import { TreeRow } from "./TreeRow";
 import { Tree } from "./treeNavigation";
 import { ViewedMark } from "./ViewedMark";
 

@@ -28,6 +28,8 @@ import {
 import {
 	captureCenterNavigation,
 	chatTabId,
+	type ExtensionTab,
+	editorSessionId,
 	type FileTab,
 	isCenterNavigationCurrent,
 	isFileComparison,
@@ -5124,6 +5126,37 @@ test("chat, document, and plan tabs never enter the preview slot", () => {
 	expect(s.previewTabByWorkspace.ws1).toBe("ws1:a.ts");
 	expect(s.tabsByWorkspace.ws1).toHaveLength(5);
 	expect(s.layoutIntents.at(-1)).toMatchObject({ kind: "open", intent: "keep" });
+});
+
+test("an extension panel tab is a session-less keep, one per extension, panel and params", () => {
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	const store = useAppStore.getState();
+	store.openTab(fileTab("ws1", "a.ts"), "preview");
+	const panel = (id: string, params: Record<string, string>): ExtensionTab => ({
+		kind: "extension",
+		id,
+		workspaceId: "ws1",
+		name: "",
+		extension: "insights",
+		panel: "sessions",
+		titleKey: "common.retry",
+		params,
+	});
+
+	store.openDoc(panel("first", { a: "1", b: "2" }));
+	store.openDoc(panel("second", { b: "2", a: "1" }));
+	store.openDoc(panel("third", { a: "other" }));
+
+	const s = useAppStore.getState();
+	expect(s.tabsByWorkspace.ws1?.map((tab) => tab.id)).toEqual(["ws1:a.ts", "first", "third"]);
+	expect(s.previewTabByWorkspace.ws1).toBe("ws1:a.ts");
+	expect(s.activeTabByWorkspace.ws1).toBe("third");
+	expect(s.layoutIntents.at(-2)).toMatchObject({
+		kind: "open",
+		intent: "keep",
+		tab: { id: "first", params: { b: "2", a: "1" } },
+	});
+	expect(editorSessionId(panel("first", {}))).toBeNull();
 });
 
 test("a keep on an already-open tab releases ITS workspace's slot, never the active one's", () => {

@@ -1,9 +1,11 @@
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
-import { readSuggestions } from "./suggestions";
+import { isRefused, readSuggestions } from "./suggestions";
 
 export function SuggestionsList({ args, result }: ToolRenderProps) {
 	const t = useT();
+	if (isRefused(result))
+		return <p className="tr-text-ui text-text-muted">{t("nextSteps.refused.body")}</p>;
 	const suggestions = readSuggestions(args, result);
 	if (suggestions.length === 0)
 		return <p className="tr-text-ui text-text-muted">{t("nextSteps.list.empty")}</p>;

@@ -1,0 +1,15 @@
+{
+	"name": "e2e-ext-incompatible",
+	"version": "2.0.0",
+	"description": "An extension built for a future extension API.",
+	"keywords": [
+		"thinkrail-extension"
+	],
+	"type": "module",
+	"thinkrail": {
+		"api": "2.0",
+		"title": "Future cards",
+		"server": "./server.ts",
+		"web": "./web.js"
+	}
+}

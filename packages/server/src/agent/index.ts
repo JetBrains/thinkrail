@@ -23,6 +23,7 @@ export {
 	saveCustomEndpoint,
 } from "./customEndpoints";
 export {
+	delegationRootDir,
 	type ReviewSubagentRun,
 	readChildTranscript,
 	refreshSubagentConcurrency,
@@ -34,6 +35,7 @@ export {
 	type BundledExtensionFactory,
 	type BundledExtensions,
 	bumpPackageSwitchGeneration,
+	HOST_INLINE_FACTORIES,
 	listProjectAliasSkillNames,
 	listSkillCatalog,
 	listSkillCommands,
@@ -45,6 +47,7 @@ export {
 } from "./extensions";
 export {
 	effectiveMcpServerConfig,
+	HOST_BUILTIN_EXTENSION_NAMES,
 	type McpConfigFile,
 	mcpEntryFingerprint,
 	mcpPolicyOf,
@@ -88,7 +91,9 @@ export * from "./oneshot";
 export {
 	handlePiSettingsFileChanged,
 	handleProjectPiSettingsChanged,
+	type PiPackagesInstallOutcome,
 	type PiPackagesTarget,
+	piNpmCommand,
 	piPackagesCatalog,
 	piPackagesCheckUpdates,
 	piPackagesInstall,
@@ -99,6 +104,7 @@ export {
 	primeProjectPiSettings,
 	primeUserPiSettings,
 	publishPiPackagesChanged,
+	refreshInstalledExtensions,
 	refreshPiPackages,
 	setPiPackagesPublisher,
 } from "./piPackages";

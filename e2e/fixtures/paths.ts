@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { MAX_E2E_SHARDS } from "../shardPlan";
 import { claimPortBlock, PORT_BLOCK_SLOTS, PORT_BLOCK_STRIDE } from "./portBlock";
 
@@ -95,6 +95,13 @@ export const E2E_DESKTOP_USER_DATA = join(E2E_DATA_DIR, "desktop-user-data");
 export const E2E_PICK_DIR_POINTER = join(E2E_DATA_DIR, "pick-dir");
 
 export const E2E_INSTALLED_FONTS = join(E2E_DATA_DIR, "installed-fonts.json");
+
+/** The community catalog the host reads (`THINKRAIL_EXTENSION_CATALOG_URL`); a missing file is an unreachable catalog. */
+export const E2E_EXTENSION_CATALOG = join(E2E_DATA_DIR, "extension-catalog.json");
+export const E2E_EXTENSION_CATALOG_URL = pathToFileURL(E2E_EXTENSION_CATALOG).href;
+
+/** Disposable copies of the extension fixtures a test installs from a folder. */
+export const E2E_EXTENSION_FIXTURES_DIR = join(E2E_DATA_DIR, "extension-fixtures");
 
 export const E2E_SPEECH_FIXTURE_DIR = join(E2E_DATA_DIR, "speech-fixture");
 

@@ -1,6 +1,6 @@
 // Must run under Node from inside the fixture: the bare import resolves pi from there, never from the repo.
-import { readFileSync, realpathSync } from "node:fs";
-import { dirname } from "node:path";
+import { readdirSync, readFileSync, realpathSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const [, , specPath] = process.argv;
@@ -36,6 +36,12 @@ const tools = new Map(extension ? [...extension.tools.entries()] : []);
 for (const name of spec.tools) {
 	if (!tools.has(name))
 		fail(`tool ${name} not registered (have: ${[...tools.keys()].join(", ") || "none"})`);
+}
+
+const commands = new Map(extension ? [...extension.commands.entries()] : []);
+for (const name of spec.commands ?? []) {
+	if (!commands.has(name))
+		fail(`command /${name} not registered (have: ${[...commands.keys()].join(", ") || "none"})`);
 }
 
 const skills = loader.getSkills().skills.map((skill) => skill.name);
@@ -79,6 +85,8 @@ for (const testCase of spec.cases) {
 	const tool = tools.get(testCase.tool)?.definition;
 	if (!tool) continue;
 	const label = `${testCase.tool} ${testCase.name}`;
+	const ctx = scriptedContext(testCase.ui);
+	if (testCase.branch) ctx.sessionManager = { getBranch: () => testCase.branch };
 	let result;
 	try {
 		result = await tool.execute(
@@ -86,7 +94,7 @@ for (const testCase of spec.cases) {
 			testCase.args,
 			undefined,
 			undefined,
-			scriptedContext(testCase.ui),
+			ctx,
 		);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
@@ -126,10 +134,65 @@ for (const testCase of spec.cases) {
 	}
 }
 
+// A command runs against a scripted context: `tui` / `rpc` collect notifications, `print` has no UI and
+// writes to stderr, which the runner captures for the case.
+for (const testCase of spec.commandCases ?? []) {
+	const command = commands.get(testCase.command);
+	if (!command) continue;
+	const label = `/${testCase.command} ${testCase.name}`;
+	const notes = [];
+	const statuses = [];
+	const ctx = {
+		mode: testCase.mode,
+		hasUI: testCase.mode !== "print",
+		cwd: spec.cwd,
+		ui: {
+			notify: (text, level) => notes.push({ text, level: level ?? "info" }),
+			setStatus: (_key, text) => statuses.push(text),
+		},
+	};
+	let stderr = "";
+	const write = process.stderr.write;
+	if (testCase.mode === "print")
+		process.stderr.write = (chunk) => {
+			stderr += String(chunk);
+			return true;
+		};
+	try {
+		await command.handler(testCase.args, ctx);
+	} catch (error) {
+		fail(`${label}: unexpected error: ${error instanceof Error ? error.message : String(error)}`);
+		continue;
+	} finally {
+		process.stderr.write = write;
+	}
+	const text = notes.map((note) => note.text).join("\n");
+	if (testCase.expectLevel && !notes.some((note) => note.level === testCase.expectLevel))
+		fail(
+			`${label}: no ${testCase.expectLevel} notification (got ${notes.map((n) => n.level).join(", ") || "none"})`,
+		);
+	for (const needle of testCase.expectNotify ?? []) {
+		if (!text.includes(needle)) fail(`${label}: notification lacks ${JSON.stringify(needle)}`);
+	}
+	for (const needle of testCase.expectStderr ?? []) {
+		if (!stderr.includes(needle)) fail(`${label}: stderr lacks ${JSON.stringify(needle)}`);
+	}
+	if (statuses.length > 0 && statuses.at(-1) !== undefined)
+		fail(`${label}: left a status behind (${JSON.stringify(statuses.at(-1))})`);
+	for (const { dir, suffix } of testCase.expectFiles ?? []) {
+		let names = [];
+		try {
+			names = readdirSync(join(spec.agentDir, dir));
+		} catch {}
+		if (!names.some((name) => name.endsWith(suffix)))
+			fail(`${label}: no ${dir}/*${suffix} under the agent dir`);
+	}
+}
+
 if (failures.length > 0) {
 	for (const failure of failures) console.error(`  ✗ ${failure}`);
 	process.exit(1);
 }
 console.log(
-	`  ✓ ${spec.name}: ${spec.tools.length} tool(s), ${spec.skills.length} skill(s), ${spec.cases.length} case(s) — loaded from ${extension.path}`,
+	`  ✓ ${spec.name}: ${spec.tools.length} tool(s), ${spec.skills.length} skill(s), ${(spec.commands ?? []).length} command(s), ${spec.cases.length + (spec.commandCases ?? []).length} case(s) — loaded from ${extension.path}`,
 );

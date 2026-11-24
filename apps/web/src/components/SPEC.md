@@ -27,7 +27,8 @@ vocabulary of the two search surfaces, and the shared loading-skeleton primitive
     it with the boundary's untranslated `reportId` (never the displayed, translated `label`) to the one
     reporter installed via `setErrorBoundaryReporter` (wired by
     `main.tsx` to the transport's error reports; reporter failures are swallowed). The seam keeps this
-    module store/transport-free.
+    module store/transport-free. `reportBoundaryError(error, reportId)` is the same seam for a boundary
+    with its own fallback (chat's per-tool-renderer boundary).
 - **`CustomIcon.tsx`** — renders an SVG from `public/custom-icons/` as a themeable `currentColor` glyph
   via a CSS `mask-image` span (`.custom-icon*` classes in `index.css`), so a custom glyph sizes with
   `size-*` and colours with `text-*` exactly like a Remix icon. Names are a typed union
@@ -86,7 +87,7 @@ vocabulary of the two search surfaces, and the shared loading-skeleton primitive
   chunk. A failed load reaches the `ErrorBoundary` as with plain `lazy`; renders never retry it, only the
   next `preload()` does. Known limit: on a slow link, or when the revealing data is already in the store
   at mount, the first mount still takes the `lazy` path.
-- **Public surface:** `ErrorBoundary`, `isChunkLoadError` — imported directly via
+- **Public surface:** `ErrorBoundary`, `isChunkLoadError`, `setErrorBoundaryReporter`, `reportBoundaryError` — imported directly via
   `@/components/ErrorBoundary` (no barrel; the placeholders come from `@thinkrail/ui/skeleton`); `AttentionDot` via
   `@/components/AttentionDot`; `RunningIcon` via `@/components/RunningIcon`; `CustomIcon`,
   `CustomIconName` via `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the

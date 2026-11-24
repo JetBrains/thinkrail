@@ -32,17 +32,24 @@ import { commitWorkspaceLayout } from "../layoutState";
 const sessionHydration = new Map<string, Promise<boolean>>();
 const AUTO_OPEN_CHAT_LIMIT = 4;
 
-let autoOpenAttemptGeneration = 0;
-const autoOpenAttemptedWorkspaceIds = new Set<string>();
+interface AutoOpenAttempt {
+	connectionGeneration: number;
+	spent: boolean;
+}
 
-function claimAutoOpenAttempt(workspaceId: string, connectionGeneration: number): boolean {
-	if (connectionGeneration !== autoOpenAttemptGeneration) {
-		autoOpenAttemptGeneration = connectionGeneration;
-		autoOpenAttemptedWorkspaceIds.clear();
+const autoOpenAttempts = new Map<string, AutoOpenAttempt>();
+
+function claimAutoOpenAttempt(
+	workspaceId: string,
+	connectionGeneration: number,
+): AutoOpenAttempt | null {
+	const previous = autoOpenAttempts.get(workspaceId);
+	if (previous && (previous.spent || previous.connectionGeneration === connectionGeneration)) {
+		return null;
 	}
-	if (autoOpenAttemptedWorkspaceIds.has(workspaceId)) return false;
-	autoOpenAttemptedWorkspaceIds.add(workspaceId);
-	return true;
+	const attempt = { connectionGeneration, spent: false };
+	autoOpenAttempts.set(workspaceId, attempt);
+	return attempt;
 }
 
 export function hydrateChatResource(workspaceId: string, sessionId: string): Promise<boolean> {
@@ -248,6 +255,7 @@ export function useWorkspaceChatCatalogReconciliation(
 				if (live()) toast.error(errorText(error), t("workbench.chat.loadFailed"));
 				return null;
 			});
+		let autoOpen: AutoOpenAttempt | null = null;
 		void getTransport()
 			.request("session.list", { workspaceId })
 			.then(async (summaries) => {
@@ -331,7 +339,8 @@ export function useWorkspaceChatCatalogReconciliation(
 						}
 					}
 				}
-				const autoOpenAlreadyAttempted = !claimAutoOpenAttempt(workspaceId, connectionGeneration);
+				autoOpen = claimAutoOpenAttempt(workspaceId, connectionGeneration);
+				const autoOpenAlreadyAttempted = autoOpen === null;
 				const toOpen: typeof summaries = [];
 				const toHistory: typeof summaries = [];
 				for (const summary of [...summaries].sort((a, b) => b.updatedAt - a.updatedAt)) {
@@ -413,6 +422,7 @@ export function useWorkspaceChatCatalogReconciliation(
 					const state = useAppStore.getState();
 					const activate = handledRouteSessionId === null && openedCount === 0;
 					openedCount += 1;
+					if (autoOpen) autoOpen.spent = true;
 					const routed = layoutOpenOptionsForNavigation(state, workspaceId, navigation);
 					state.enqueueLayoutIntent({
 						kind: "open",
@@ -438,6 +448,11 @@ export function useWorkspaceChatCatalogReconciliation(
 			})
 			.catch((error: unknown) => {
 				if (live()) toast.error(errorText(error), t("workbench.chat.loadWorkspaceFailed"));
+			})
+			.finally(() => {
+				if (autoOpen && isConnectedGeneration(useAppStore.getState(), connectionGeneration)) {
+					autoOpen.spent = true;
+				}
 			});
 		return () => {
 			current = false;

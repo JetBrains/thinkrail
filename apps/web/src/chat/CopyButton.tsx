@@ -25,6 +25,7 @@ export function CopyButton({
 			size="s"
 			icon={copied ? Check : Copy}
 			data-testid="chat-copy"
+			data-hint-reveal
 			data-copied={copied || undefined}
 			label={accessibleLabel}
 			onClick={() => {

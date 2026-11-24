@@ -441,7 +441,7 @@ the per-file diff tab. `ChangesPanel` remains arrangement-agnostic and is fed it
 | Changes List Row | inline in `ChangesPanel` | `change-item` (`data-active`, `data-viewed`) | Flat changed-file row |
 | Changes Tree | `panels/ChangesTree.tsx` | file rows `change-item`, folders `change-tree-folder` | Folder tree of changed files |
 | Viewed Mark | `panels/ViewedMark.tsx` → `ViewedMark` | `change-viewed` | Check glyph on a row the review tab marked viewed |
-| Diff-Stat Badge | `panels/DiffStatBadge.tsx` | — | Per-file / per-folder `+N −M` |
+| Diff-Stat Badge | `@thinkrail/ui/diff-stat-badge` | — | Per-file / per-folder `+N −M` |
 | Empty state | inline | `changes-empty` | No changes in this scope |
 | Error state | inline | `changes-error` / `changes-retry` | Failed read + Retry |
 
@@ -500,14 +500,14 @@ are the Top Bar's Connection Status and the Chat Header's Session Stats Bar.
 | Models | `panels/ModelsSettings.tsx` → `ModelsSettings` | Chat and review models, the GPT context window, prompt cache, visible models |
 | Providers | `panels/ProvidersSettings.tsx` → `ProvidersSettings` | In-app provider auth, JetBrains AI (`panels/JetBrainsAiCard.tsx` → `JetBrainsAiSettings`), custom servers |
 | Subagents | `panels/SubagentsSettings.tsx` → `SubagentsSettings` | Global subagent settings and this workspace's override |
-| Extensions & skills | `panels/ExtensionsSettings.tsx` → `ExtensionsSettings` | Built-in extensions, skills from other agents, pi packages and built-ins |
+| Extensions & skills | `panels/ExtensionsSettings.tsx` → `ExtensionsSettings` | Built-in and installed ThinkRail extensions, Browse of the community catalog, skills from other agents, pi packages and built-ins |
 | MCP servers | `panels/McpSettings.tsx` → `McpSettings` (+ `panels/McpServerDialogs.tsx`) | User and project MCP servers (`mcp-server-row`, `mcp-add-dialog`, `mcp-approve-dialog`); user servers also without a workspace |
 | Prompt templates | `panels/TemplatesSettings.tsx` → `TemplatesSettings` | Project / global prompt templates (`template-row`, `template-starters`) |
 | Environment | `panels/EnvironmentSettings.tsx` → `EnvironmentSettings` | The pi config folder and host environment variables (Save / Discard) |
 | Appearance | `panels/AppearanceSettings.tsx` → `AppearanceSettings` | Theme mode, theme lists, contrast, custom themes |
 | Text & fonts | `panels/TextFontsSettings.tsx` → `TextFontsSettings` | Interface and code fonts, both line widths, custom fonts |
 | Chat | `panels/ChatSettings.tsx` → `ChatSettings` | Message order, composer size, question panel height |
-| Layout | `shell/LayoutSettings.tsx` → `LayoutSettings` (injected into the dialog) | Presets list, Smart view, Markdown outline position |
+| Layout | `shell/LayoutSettings.tsx` → `LayoutSettings` (injected into the dialog) | Presets list, Markdown outline position |
 | Keyboard | `shell/KeyboardSettings.tsx` → `KeyboardSettings` (injected) | Double Shift and the shortcut editor, a tree by area |
 | Language | `panels/LanguageSettings.tsx` → `LanguageSettings` | Interface language and the language files folder |
 | Voice input | `panels/VoiceSettings.tsx` → `VoiceSettings` | Dictation switch, model download, language, shortcut |

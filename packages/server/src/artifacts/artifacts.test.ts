@@ -19,6 +19,7 @@ import { basename, join } from "node:path";
 import { setTrashImplementationForTests } from "../trash";
 import {
 	artifactsStoreRoot,
+	checkArtifactFiles,
 	discardArtifact,
 	isArtifactPath,
 	isSameFile,
@@ -611,6 +612,88 @@ test("what a tool showed and what the user picked become results; working files 
 	});
 });
 
+test("a file passes the artifact check exactly when the index would list it, named as the index names it", async () => {
+	write(`${CONTEXT}/mockups/a.html`, "a");
+	write(`${CONTEXT}/mockups/dist/index.html`, "built");
+	write(`${CONTEXT}/app/node_modules/x/index.js`, "dep");
+	write(`${CONTEXT}/real.md`, "real");
+	write("README.md", "readme");
+	symlinkSync(join(root, CONTEXT, "real.md"), join(root, CONTEXT, "alias.md"));
+	symlinkSync(join(root, CONTEXT, "mockups"), join(root, CONTEXT, "mockups-link"));
+	const inside = `${CONTEXT}/mockups/a.html`;
+	expect(
+		checkArtifactFiles(
+			[inside, `./${CONTEXT}/x/../mockups/a.html`, join(root, inside), `${CONTEXT}/real.md`],
+			root,
+		),
+	).toEqual([{ path: inside }, { path: inside }, { path: inside }, { path: `${CONTEXT}/real.md` }]);
+	const refusals = checkArtifactFiles(
+		[
+			`${CONTEXT}/../../README.md`,
+			"README.md",
+			`${CONTEXT}/.gitignore`,
+			`${CONTEXT}/mockups/dist/index.html`,
+			`${CONTEXT}/app/node_modules/x/index.js`,
+			`${CONTEXT}/alias.md`,
+			`${CONTEXT}/mockups-link/a.html`,
+			`${CONTEXT}/missing.md`,
+			`${CONTEXT}/mockups`,
+		],
+		root,
+	).map((check) => ("error" in check ? check.error : ""));
+	expect(refusals[0]).toContain("not inside");
+	expect(refusals[1]).toContain("not inside");
+	expect(refusals[2]).toContain("not inside");
+	expect(refusals[3]).toContain("`dist`");
+	expect(refusals[4]).toContain("`node_modules`");
+	expect(refusals[5]).toContain("link");
+	expect(refusals[6]).toContain("link");
+	expect(refusals[7]).toBe("no such file");
+	expect(refusals[8]).toBe("not a regular file");
+
+	await reconcileArtifacts("w1");
+	const listed = new Set((await listArtifacts("w1")).artifacts.map((entry) => entry.path));
+	expect(listed).toEqual(new Set([inside, `${CONTEXT}/real.md`]));
+});
+
+test("a file the index's bounded walk never reaches fails the artifact check, as it is never listed", async () => {
+	for (let index = 0; index < 5_000; index++) write(`${CONTEXT}/asset-${index}.png`, "png");
+	write(`${CONTEXT}/reports/r.md`, "r");
+	const [report] = checkArtifactFiles([`${CONTEXT}/reports/r.md`], root);
+	expect(report && "error" in report ? report.error : "").toContain("more than 5000 entries");
+	await reconcileArtifacts("w1");
+	const listed = new Set((await listArtifacts("w1")).artifacts.map((entry) => entry.path));
+	expect(listed.has(`${CONTEXT}/reports/r.md`)).toBe(false);
+});
+
+test("a published file is a flagged result that keeps the flag across a move", async () => {
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
+	write(`${CONTEXT}/mockups/a.html`, "a");
+	write(`${CONTEXT}/mockups/helper.html`, "h");
+	await observeArtifactSessionEvent("w1", "s1", {
+		type: "tool_execution_end",
+		toolCallId: "present-1",
+		toolName: "present_files",
+		published: [`${CONTEXT}/mockups/a.html`, "src/app.ts"],
+	});
+	let rows = await byPath();
+	expect(rows.get(`${CONTEXT}/mockups/a.html`)).toMatchObject({
+		role: "result",
+		reason: "published",
+		published: true,
+	});
+	expect(rows.get(`${CONTEXT}/mockups/helper.html`)).toMatchObject({
+		role: "working",
+		reason: "unshown",
+	});
+	expect(rows.get(`${CONTEXT}/mockups/helper.html`)?.published).toBeUndefined();
+
+	renameSync(join(root, `${CONTEXT}/mockups/a.html`), join(root, `${CONTEXT}/mockups/b.html`));
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_settled" });
+	rows = await byPath();
+	expect(rows.get(`${CONTEXT}/mockups/b.html`)).toMatchObject({ published: true });
+});
+
 test("paths linked in the run's last reply become results, not those of earlier messages", async () => {
 	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
 	write(`${CONTEXT}/reports/r.json`, "{}");
@@ -705,7 +788,7 @@ test("a prompt delivered inside a run starts its own round: changes and the earl
 
 test("chats taking turns on a file record each round once, so earlier rounds keep their marker", async () => {
 	await observeArtifactSessionEvent("w1", "s0", { type: "agent_start" });
-	write(`${CONTEXT}/shared.md`, "v0");
+	write(`${CONTEXT}/shared.md`, "start");
 	await observeArtifactSessionEvent("w1", "s0", { type: "agent_settled" });
 	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
 	await observeArtifactSessionEvent("w1", "s2", { type: "agent_start" });

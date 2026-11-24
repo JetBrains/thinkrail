@@ -10,15 +10,27 @@ export interface SettingsPress {
 	readonly keyCode: number;
 }
 
-export type WalkKey = "up" | "down" | "home" | "end" | "left" | "right" | "reset" | "escape";
+export type WalkKey =
+	| "up"
+	| "down"
+	| "home"
+	| "end"
+	| "left"
+	| "right"
+	| "enter"
+	| "space"
+	| "reset"
+	| "escape";
 
-const ARROW_KEYS: Readonly<Record<string, WalkKey>> = {
+const PLAIN_KEYS: Readonly<Record<string, WalkKey>> = {
 	ArrowUp: "up",
 	ArrowDown: "down",
 	ArrowLeft: "left",
 	ArrowRight: "right",
 	Home: "home",
 	End: "end",
+	Enter: "enter",
+	" ": "space",
 	Escape: "escape",
 };
 
@@ -29,23 +41,53 @@ export function walkKey(press: SettingsPress, local: string | null): WalkKey | n
 	if (isImeComposing(press)) return null;
 	if (local === "settings.reset") return "reset";
 	const twin = twinArrow(local);
-	if (twin !== undefined) return ARROW_KEYS[twin] ?? null;
-	return modified(press) ? null : (ARROW_KEYS[press.key] ?? null);
+	if (twin !== undefined) return PLAIN_KEYS[twin] ?? null;
+	return modified(press) ? null : (PLAIN_KEYS[press.key] ?? null);
 }
 
+export type WalkPlace = "row" | "button" | "control" | "outside";
+
 export interface WalkContext {
+	readonly place: WalkPlace;
 	readonly textEntry: boolean;
 	readonly multiline: boolean;
-	readonly onSide: boolean;
+	readonly caretAtEnd: boolean;
+	readonly native: boolean;
+	readonly inForm: boolean;
 }
 
 export type WalkAction =
 	| { readonly kind: "row"; readonly delta: 1 | -1 }
 	| { readonly kind: "edge"; readonly edge: "first" | "last" }
-	| { readonly kind: "side"; readonly delta: 1 | -1 }
+	| { readonly kind: "forward" }
+	| { readonly kind: "button"; readonly delta: 1 | -1 }
+	| { readonly kind: "activate"; readonly space: boolean }
+	| { readonly kind: "along"; readonly delta: 1 | -1 }
+	| { readonly kind: "exit" }
 	| { readonly kind: "nav" }
 	| { readonly kind: "reset" }
 	| { readonly kind: "escape" };
+
+const sideways = (place: WalkPlace, delta: 1 | -1): WalkAction | null => {
+	switch (place) {
+		case "row":
+			return delta === 1 ? { kind: "forward" } : { kind: "nav" };
+		case "button":
+			return { kind: "button", delta };
+		case "control":
+			return { kind: "along", delta };
+		case "outside":
+			return delta === 1 ? null : { kind: "nav" };
+	}
+};
+
+const press = (ctx: WalkContext, space: boolean): WalkAction | null => {
+	if (ctx.native) return null;
+	if (ctx.place === "row") return { kind: "activate", space };
+	if (ctx.place !== "control") return null;
+	if (space ? ctx.textEntry : ctx.multiline || (ctx.textEntry && ctx.inForm)) return null;
+	return { kind: "exit" };
+};
 
 export function walkAction(key: WalkKey | null, ctx: WalkContext): WalkAction | null {
 	switch (key) {
@@ -56,14 +98,20 @@ export function walkAction(key: WalkKey | null, ctx: WalkContext): WalkAction | 
 		case "end":
 			return ctx.textEntry ? null : { kind: "edge", edge: key === "home" ? "first" : "last" };
 		case "right":
-			return ctx.textEntry ? null : { kind: "side", delta: 1 };
 		case "left":
-			if (ctx.textEntry) return null;
-			return ctx.onSide ? { kind: "side", delta: -1 } : { kind: "nav" };
+			if (!ctx.textEntry) return sideways(ctx.place, key === "right" ? 1 : -1);
+			return key === "right" && ctx.caretAtEnd && !ctx.multiline && ctx.place === "control"
+				? { kind: "along", delta: 1 }
+				: null;
+		case "enter":
+		case "space":
+			return press(ctx, key === "space");
 		case "reset":
 			return { kind: "reset" };
 		case "escape":
-			return { kind: "escape" };
+			return ctx.place === "control" || ctx.place === "button"
+				? { kind: "exit" }
+				: { kind: "escape" };
 		default:
 			return null;
 	}
@@ -79,7 +127,6 @@ export type NavAction =
 export function navAction(press: SettingsPress, local: string | null): NavAction | null {
 	if (isImeComposing(press)) return null;
 	if (local === "settings.nav.search") return { kind: "search" };
-	if (!modified(press) && (press.key === "Enter" || press.key === " ")) return { kind: "enter" };
 	switch (walkKey(press, local)) {
 		case "up":
 			return { kind: "select", delta: -1 };
@@ -90,6 +137,8 @@ export function navAction(press: SettingsPress, local: string | null): NavAction
 		case "end":
 			return { kind: "edge", edge: "last" };
 		case "right":
+		case "enter":
+		case "space":
 			return { kind: "enter" };
 		case "left":
 			return { kind: "stay" };

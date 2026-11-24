@@ -106,6 +106,7 @@ function DeleteChatButton({
 			<button
 				type="button"
 				data-testid="history-delete-chat"
+				data-hint-reveal
 				aria-label={t("chat.history.deleteChat")}
 				onClick={(event) => {
 					event.stopPropagation();
@@ -260,6 +261,7 @@ function PromptRow({
 				icon={Save}
 				size="s"
 				data-testid="history-save-template"
+				data-hint-reveal
 				label={t("chat.history.saveTemplate")}
 				tooltip={
 					saveShortcut === ""
@@ -286,6 +288,7 @@ function PromptRow({
 						icon={CornerUpRight}
 						size="s"
 						data-testid="history-jump"
+						data-hint-reveal
 						label={t("chat.history.jump")}
 						tooltip={t("chat.history.jumpTooltip", { shortcut: "⇧⏎" })}
 						onClick={(e) => {

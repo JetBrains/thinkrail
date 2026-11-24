@@ -1,7 +1,12 @@
 import { FOCUS_GROUP_BINDINGS, type KeybindingId } from "../keybindings";
 import { openChatInTab } from "../panels/openChat";
 import { SETTING_ATTR } from "../settingsKit";
-import { selectChatAttended, selectHistoryTarget, useAppStore } from "../store";
+import {
+	selectActiveFilePath,
+	selectChatAttended,
+	selectHistoryTarget,
+	useAppStore,
+} from "../store";
 import {
 	focusCenterRegion,
 	focusPreviousRegion,
@@ -36,6 +41,17 @@ export function toggleBottomPanel(): void {
 	const state = useAppStore.getState();
 	const workspaceId = state.activeWorkspaceId;
 	if (workspaceId) state.enqueueLayoutIntent({ kind: "toggle-bottom", workspaceId });
+}
+
+export function toggleAllPanels(): void {
+	const state = useAppStore.getState();
+	const workspaceId = state.activeWorkspaceId;
+	if (workspaceId) state.enqueueLayoutIntent({ kind: "toggle-all-panels", workspaceId });
+}
+
+/** Hides the left, right and bottom panes of the workspace's frame, remembering what it hid for `view.toggleAllPanels`. */
+export function hideAllPanels(workspaceId: string): void {
+	useAppStore.getState().enqueueLayoutIntent({ kind: "hide-all-panels", workspaceId });
 }
 
 export function openChatHistory(): void {
@@ -82,13 +98,21 @@ export function focusProjects(toggleProjectsHome: () => void): void {
 	focusRegionOfKind("home");
 }
 
-export function showFiles(mode: "all" | "changed"): void {
+const ACTIVE_FILE_ROW = '[role="treeitem"][aria-current="true"]';
+
+export function showFiles(mode: "all" | "changed", { activeRow = false } = {}): void {
 	const state = useAppStore.getState();
 	const workspaceId = state.activeWorkspaceId;
 	if (!workspaceId) return;
 	state.setFilesMode(mode);
 	state.requestToolView(workspaceId, "files");
-	focusToolBody("files", (body) => body.querySelector(`[data-files-mode="${mode}"]`) !== null);
+	const activePath = activeRow && mode === "all" ? selectActiveFilePath(state, workspaceId) : null;
+	if (activePath !== null) state.revealInFiles(workspaceId, activePath);
+	focusToolBody(
+		"files",
+		(body) => body.querySelector(`[data-files-mode="${mode}"]`) !== null,
+		activePath !== null ? ACTIVE_FILE_ROW : undefined,
+	);
 }
 
 export function focusTerminal(): void {

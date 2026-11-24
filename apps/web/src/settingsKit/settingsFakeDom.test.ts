@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll } from "bun:test";
 import type { LocalKeyEvent } from "@thinkrail/ui/local-keys";
 import { act, isValidElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import type { WalkRect } from "./settingsWalk";
 
 const FORM_TAGS = new Set(["BUTTON", "INPUT", "SELECT", "TEXTAREA"]);
 
@@ -21,6 +22,9 @@ export class FakeNode {
 	readonly children: FakeNode[];
 	parentElement: FakeNode | null = null;
 	hidden = false;
+	rect: WalkRect | null = null;
+	selectionStart: number | null = null;
+	selectionEnd: number | null = null;
 	onClick: (() => void) | null = null;
 
 	constructor(tag: string, attributes: Record<string, string>, children: FakeNode[]) {
@@ -35,6 +39,9 @@ export class FakeNode {
 	}
 	get ownerDocument() {
 		return { activeElement: dom.focused };
+	}
+	get value(): string {
+		return this.attributes.get("value") ?? "";
 	}
 
 	getAttribute(name: string) {
@@ -85,6 +92,14 @@ export class FakeNode {
 		dom.log.push(`click ${nameOf(this)}`);
 		this.onClick?.();
 	}
+	select() {
+		this.selectionStart = 0;
+		this.selectionEnd = this.value.length;
+		dom.log.push(`select ${nameOf(this)}`);
+	}
+	getBoundingClientRect(): WalkRect {
+		return this.rect ?? { top: 0, bottom: 0, left: 0 };
+	}
 	scrollIntoView() {
 		dom.log.push(`scroll ${nameOf(this)}`);
 	}
@@ -125,14 +140,29 @@ export const h = (tag: string, attributes: Record<string, string> = {}, ...child
 	new FakeNode(tag, attributes, children);
 
 export const row = (id: string, ...children: FakeNode[]) =>
+	h("div", { "data-setting-row": id, "data-name": id, tabindex: "-1" }, ...children);
+export const holder = (id: string, ...children: FakeNode[]) =>
 	h("div", { "data-setting-row": id }, ...children);
 export const control = (...children: FakeNode[]) =>
 	h("div", { "data-setting-control": "" }, ...children);
 export const button = (name: string, attributes: Record<string, string> = {}) =>
 	h("button", { "data-name": name, tabindex: "0", ...attributes });
-export const side = (name: string, attributes: Record<string, string> = {}) =>
-	button(name, { "data-setting-side": "", ...attributes });
-export const reset = (name: string) => side(name, { "data-setting-reset": "" });
+export const reset = (name: string) => button(name, { "data-setting-reset": "" });
+export const toggle = (name: string) => button(name, { role: "switch" });
+export const field = (name: string, value = "") =>
+	h("input", { type: "text", "data-name": name, tabindex: "0", value });
+export const choice = (name: string, ...options: string[]) =>
+	h(
+		"div",
+		{ role: "listbox", "data-name": name },
+		...options.map((option, index) =>
+			h("button", {
+				role: "option",
+				"data-name": option,
+				tabindex: index === 0 ? "0" : "-1",
+			}),
+		),
+	);
 export const item = (name: string, ...children: FakeNode[]) =>
 	h("li", { role: "treeitem", "data-name": name, tabindex: "-1" }, ...children);
 export const named = (root: FakeNode, name: string) => {
@@ -142,6 +172,50 @@ export const named = (root: FakeNode, name: string) => {
 };
 export const nameOf = (node: FakeNode | null | undefined) =>
 	node?.getAttribute("data-name") ?? null;
+
+const VOID_TAGS = new Set(["input", "br", "img", "hr", "meta", "link", "area", "col", "wbr"]);
+const ENTITIES: Readonly<Record<string, string>> = {
+	"&quot;": '"',
+	"&#x27;": "'",
+	"&#39;": "'",
+	"&lt;": "<",
+	"&gt;": ">",
+	"&amp;": "&",
+};
+
+export function parseMarkup(markup: string): FakeNode {
+	const stack: { tag: string; attributes: Record<string, string>; children: FakeNode[] }[] = [
+		{ tag: "div", attributes: {}, children: [] },
+	];
+	const close = () => {
+		const open = stack.pop();
+		const parent = stack.at(-1);
+		if (!open || !parent) throw new Error("fake DOM: unbalanced markup");
+		const node = new FakeNode(open.tag, open.attributes, open.children);
+		node.hidden = "hidden" in open.attributes;
+		parent.children.push(node);
+	};
+	for (const [tag] of markup.matchAll(/<[^>]+>/g)) {
+		if (tag.startsWith("</")) {
+			close();
+			continue;
+		}
+		const name = /^<([\w-]+)/.exec(tag)?.[1]?.toLowerCase() ?? "div";
+		const attributes: Record<string, string> = {};
+		for (const [, key = "", value = ""] of tag
+			.slice(name.length + 1)
+			.matchAll(/([^\s=/>]+)(?:="([^"]*)")?/g)) {
+			attributes[key.toLowerCase()] = value.replace(
+				/&(quot|#x27|#39|lt|gt|amp);/g,
+				(entity) => ENTITIES[entity] ?? entity,
+			);
+		}
+		stack.push({ tag: name, attributes, children: [] });
+		if (VOID_TAGS.has(name) || tag.endsWith("/>")) close();
+	}
+	if (stack.length !== 1) throw new Error("fake DOM: unbalanced markup");
+	return new FakeNode("div", {}, stack[0]?.children ?? []);
+}
 
 export function press(code: string, key = code, init: Partial<LocalKeyEvent> = {}): LocalKeyEvent {
 	return {

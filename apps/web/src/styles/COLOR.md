@@ -68,6 +68,68 @@ equals `border-default` is not a second weight, it is a second name).
 | Effects | `overlay` · `sunken` | written per light/dark by the theme engine |
 | Strict-consumer editor roles | `editor-selection-bg` · `editor-selection-text` · `editor-selection-highlight-bg` · `editor-find-match-bg` · `widget-shadow` | `publish: false`; Monaco/xterm read them directly and no Tailwind utility is emitted |
 | Media | `media-checker-tile` | `publish: false`; the transparency checkerboard tile that `index.css`'s `.media-backdrop` paints behind every image and vector preview, derived from `text` at the `soft` (20%) step so it is light-on-dark in a dark theme and the conventional `#ccc`-on-white in a light one — a dark logo on a transparent PNG must never read as "no image" |
+| Categorical | `series-1` … `series-8`, `ramp-1` … `ramp-4` (+ `publish: false` `ramp-5`) | the data-visualization palette; see *Categorical series* |
+
+## Categorical series
+
+Charts need hues that tell categories apart, which no semantic role was for. The categorical roles are
+**derived from palette entries every theme already has** (option A of the session-insights decision map),
+so no manifest changes and older user themes keep working; a role's `from` may name a manifest's syntax
+or ANSI entry as `syntax.<key>` / `ansi.<key>` (`scripts/colors.ts` maps them to the runtime's
+`--code-*` / `--ansi-*` variables). When themes need to differ on a series, it gets its own manifest key
+(step 5 below).
+
+| role | from | reads as | session insights uses it for |
+| --- | --- | --- | --- |
+| `series-1` | `info` | blue | search and discovery tools |
+| `series-2` | `syntax.type` | orange (teal in High Contrast Dark) | writing tools |
+| `series-3` | `syntax.annotation` | violet (pale yellow in High Contrast Dark) | model calls; JSON booleans |
+| `series-4` | `warning` | amber | shell runs |
+| `series-5` | `ansi.cyan` | cyan | reading tools; JSON strings |
+| `series-6` | `ansi.magenta` | magenta | subagents |
+| `series-7` | `syntax.tag` | green (blue in High Contrast Dark) | planning tools (`todo_*`, `spec_*`) |
+| `series-8` | `ansi.brightBlack` | neutral grey | everything unclassified |
+| `ramp-1` … `ramp-5` | `ansi.blue` at `soft` · `muted` · `strong` · `firm` · full | one hue, low → high | the trace overview's activity density; the transition matrix's cells (1–4); the context chart's cache split (1, 2, 4) |
+
+- A series means nothing on its own: the legend next to the chart names it. `series-1` and `series-4`
+  share hues with `feedback-info` / `feedback-warning`, so a chart never encodes success or failure with a
+  series; failures use `feedback-error`.
+- Call sites: `thinkrail-extensions/session-insights/web` — `trace/TraceTree.tsx` (`text-series-n` icons,
+  `bg-series-n` legend swatches), `details/JsonViewer.tsx` (JSON value types), the turn cards' badges
+  (`text-series-6`, plan steps `text-series-7`, skills `text-series-5`), subagent roles (`trace/roles.ts`
+  hashes a role onto a series for its text, icon and lane), the SVG share bars of the errors section and
+  the subagent tab (`fill-series-n` beside `fill-feedback-success` / `fill-feedback-error`), and the
+  canvases of the trace, the turn strips, the timeline, the day view and the subagent waves
+  (`trace/palette.ts` reads `--series-n` and `--ramp-n`). The timeline's who-blocks band reuses series by
+  actor (you `primary`, model `series-3`, tool `series-4`, subagent `series-6`, background `series-2`);
+  its legend names them. Plan bands use `series-7` (planning), skills `series-5` (workflow) or `series-1`.
+  The context chart maps a request's categories onto series (`context/look.ts`: tools `series-8`, system
+  `series-1`, skills `series-5`, summaries `series-7`, your messages `primary`, replies `series-3`, tool
+  results `series-6`, thinking `series-2`; its waffle and legend as `bg-*`) and its cache split — the
+  strip, its own *Cache* legend group and the request diff's share bars (`fill-ramp-n`) — onto the
+  sequential ramp (read `ramp-4`, written `ramp-2`, uncached `ramp-1`): a share, not a verdict, so
+  `feedback-error` marks only misses; the cache-read level is a dashed `text-default` line and each model's
+  context window a dashed `text-muted` one (dotted when it is the largest observed); the cost chart draws calls in `series-3` with the context as a `feedback-warning` line; the
+  files matrix marks edits `series-2`, writes `series-4`, reads `series-5` and failed edits
+  `feedback-error`. The statistics' usage chart stacks models by rank onto `series-3`, `-1`, `-5`, `-2`,
+  `-7`, `-4` (projects onto `-1` … `-7`), the rest `series-8`, pi's subagent mirror `series-6` and other
+  usage `text-subtle`, with spend outside pi's total as a dashed `series-6` outline and change markers in
+  `feedback-warning`; the hotspot list's read · edit · write bar and the heat tree reuse the files matrix's
+  roles (touch bar `series-1`, changes `text-series-2`, rework `feedback-error`); a finding's Wilson bar is
+  `feedback-error` with the rule's threshold in `feedback-warning`.
+- The statistics' action sequences colour activities by family: searches and web `series-1`, reads
+  `series-5`, edits `series-2`, every shell run (tests, builds, linters, git, other) `series-4`, plans
+  and specs `series-7`, subagents `series-6`, questions to you `primary`, skills `series-3`, MCP and the
+  rest `series-8` (`stats/activityLook.ts`: swatches `bg-*`, process-map frames `border-*`, edges
+  `stroke-*`). The transition matrix's cells use the ramp's first four steps by share (with the context
+  chart's cache swatches and share bars, the DOM's only ramp users, so `ramp-1…4` are published;
+  `ramp-5` stays canvas-only), its after-error dot
+  `feedback-error`. "What follows an error" draws recovery in `feedback-success`, failures in
+  `feedback-error` (another failure on `feedback-error-muted`), the other states on their family's series
+  and outcomes `feedback-success` / `feedback-info` / `feedback-warning` / `text-subtle` (recovered, later,
+  never, ended) — outcomes, so the feedback roles are the meaning. Slice and session comparisons mark side A
+  `series-1` and side B `series-6`; verdict pills use the feedback roles (better success, worse error,
+  higher / lower info).
 
 ## Focus ring
 
@@ -95,6 +157,14 @@ When the container holds other focusable controls with their own ring, scope it 
   as Canvas, and `outline-hidden` keeps a system-colour outline there.
 - **Text fields** (input, textarea, composer shell, inline rename) keep the `control-border-active` border
   swap and add the outset ring.
+- **Settings rows** (and their tree items) show focus as a whole row: `focus-ring-row` fills the row with
+  `primary-subtle` and draws a 2px `focus-ring` bar on its left edge, an inset shadow, with a transparent
+  outline that forced colours paint. It is a focus utility like the rings, applied as
+  `focus-visible:focus-ring-row` and kept with `has-[:focus-visible]:focus-ring-row` while focus is inside
+  the row, so a focused Reset or option keeps its own ring on top of the row fill
+  ([settingsKit/SPEC.md](../settingsKit/SPEC.md), *The model*). A control being edited inside the row adds
+  `focus-ring-editing`, a 1px `focus-ring` outline 3px out around the whole control: a deliberate second
+  frame — the ring says which option, the frame says the arrows now change this value.
 - **Selected and focused** stay apart: where selection draws an accent border or ring, focus uses the
   outset ring, so the gap shows which row has focus. Where the focusable child fills the selected row and
   an outset ring would spill into the next row (Specs tree rows), the row drops its selection ring while a
@@ -131,9 +201,11 @@ No region is dimmed. A veil that muted every region but the active one (`region-
 was too strong. Mark the active region; do not dim the others.
 
 A Settings search jump flashes the row it lands on (`data-setting-flash`,
-[settingsKit/SPEC.md](../settingsKit/SPEC.md)) with a `primary-subtle` **background**, held about 0.8 s
-and faded over the rest of 1.6 s, static under `prefers-reduced-motion`. It is a highlight, not a focus
-signal: the row's control already shows the ring, so the flash never draws one.
+[settingsKit/SPEC.md](../settingsKit/SPEC.md)) with a `primary-soft` **background**, held about 0.8 s
+and faded over the rest of 1.6 s into whatever the row shows underneath, static under
+`prefers-reduced-motion`. It is one step above the focused row's `primary-subtle` fill, so it reads on the
+row the jump focused; a `primary-subtle` flash vanished into that fill. It is a highlight, not a focus
+signal: the row already shows `focus-ring-row`, so the flash never draws a ring.
 
 ## Transparency: one form only
 
@@ -166,8 +238,11 @@ The roles these consumers *share* with components (`--container-*-bg`, `--text-m
 mapped in `@theme inline`; the ones **only** they read (`--editor-selection-*`,
 `--editor-find-match-bg`, `--widget-shadow`, and the stylesheet-only `--media-checker-tile`) are
 `publish: false` and unmapped — a utility nothing can use is dead weight. Values that strict JS consumers
-need reach them canonicalised to hex via `cssColorToHex` (`lib/utils.ts`), because the built CSS is minified
-and Monaco/xterm accept hex only.
+need reach them canonicalised to hex via `cssColorToHex` (`@thinkrail/ui/theme`, re-exported by `lib`),
+because the built CSS is minified and Monaco/xterm accept hex only. Canvas consumers (the session-insights
+trace) resolve a role through a probe element's computed `color` — an absolute colour even for a
+`color-mix()` role — and canonicalise that, so canvas never parses `color-mix()` itself; they re-read on
+the `[data-theme]` swap (`onThemeSwap`).
 
 **What they do NOT cover, deliberately.** Each of these libraries paints far more than we hand it, and
 the remainder comes from its own built-in palette:
@@ -178,6 +253,7 @@ the remainder comes from its own built-in palette:
 | Pierre | file/diff canvas and gutter, foreground/line numbers/selection, syntax variables, success additions, error deletions, separator/annotation surfaces, code family/size | Pierre core layout/effects for properties not bridged; no `@pierre/theme` preset is applied |
 | xterm | background, foreground, cursor, both selection colours, all 16 ANSI | xterm defaults for `cursorAccent` and `selectionInactiveBackground` |
 | mermaid | the `themeVariables` map in `thinkrail-extensions/visualize/web/mermaid.ts` | mermaid's `base` theme for anything absent from that map |
+| session-insights trace canvas | every colour it paints, from the roles in `trace/palette.ts` | nothing — it draws no colour of its own |
 
 This is a bounded, accepted gap, not an oversight. Monaco alone exposes ~200 colour keys; enumerating
 them would be a large and brittle surface, and the base is chosen from the manifest's appearance and
@@ -190,7 +266,8 @@ Every case is a JSON edit followed by `bun run colors:generate`.
 
 1. **A theme should look different** → edit `themes/bundled/<theme>.theme.json`. Nothing else changes,
    and no regeneration is needed: manifests are read at runtime.
-2. **A role should point somewhere else** → change its `from` in `colors.json`.
+2. **A role should point somewhere else** → change its `from` in `colors.json` (a palette key, or a
+   `syntax.` / `ansi.` entry).
 3. **A new role** → add it to `roles` with `from`, an optional `alpha` step, and `publish`
    (`true` → a Tailwind utility; `false` → read directly by Monaco/xterm/mermaid/`global.css`).
 4. **A new tint** → an `alpha` step from `scale`, never a `/N` at the call site. If the step itself is

@@ -5,6 +5,7 @@ import { QuietScrollArea } from "../components/QuietScrollArea";
 import { ProjectTree } from "../panels/ProjectTree";
 import { WelcomePanel } from "../panels/WelcomePanel";
 import { selectOnboardingActive, useAppStore } from "../store";
+import { useChatActions, useLeftRailFooter } from "./extensionEntryPoints";
 import { useKeybindingKeys } from "./keybindingState";
 import {
 	AuxiliaryPaneHeader,
@@ -15,7 +16,6 @@ import {
 	DEFAULT_LAYOUT_PRESET_ID,
 	resolveLayoutPreset,
 } from "./layout";
-import { renderShortcutsRailButton } from "./ShortcutsDialog";
 import { hasNativeShortcuts } from "./useAppShortcuts";
 import type { CollapsibleRegion } from "./useCollapsibleRegion";
 
@@ -51,6 +51,8 @@ export function ProjectHome({
 	const toggleShortcut = useKeybindingKeys("view.toggleLeft");
 	const [nativeShortcuts] = useState(hasNativeShortcuts);
 	const newWorkspaceShortcut = useKeybindingKeys("workspace.new", { browser: !nativeShortcuts });
+	const railFooter = useLeftRailFooter();
+	const chatActions = useChatActions();
 	const entry: AuxiliaryRailToolEntry = {
 		key: PROJECTS_RAIL_ENTRY_KEY,
 		region: "left",
@@ -82,7 +84,7 @@ export function ProjectHome({
 							onActivate={toggle}
 						/>
 					)}
-					footer={renderShortcutsRailButton}
+					footer={railFooter}
 				/>
 			)}
 			<ResizablePanelGroup
@@ -135,7 +137,10 @@ export function ProjectHome({
 										className="min-h-0 flex-1"
 										viewportClassName="p-panel-inset"
 									>
-										<ProjectTree newWorkspaceShortcut={newWorkspaceShortcut} />
+										<ProjectTree
+											newWorkspaceShortcut={newWorkspaceShortcut}
+											chatActions={chatActions}
+										/>
 									</QuietScrollArea>
 								</div>
 							</section>

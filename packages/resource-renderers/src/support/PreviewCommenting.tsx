@@ -1,6 +1,13 @@
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
+import {
+	type ReadingCommand,
+	scrollBeforeStep,
+	scrollReading,
+	spansOverlap,
+	stepRevealDelta,
+} from "@thinkrail/ui/reading";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	type FocusEvent,
@@ -14,6 +21,7 @@ import {
 	useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { useFocusHome } from "../host";
 import type { ReviewThread, SurfaceReview } from "../registry";
 import {
 	type BlockCursorState,
@@ -21,6 +29,7 @@ import {
 	blockIndexAt,
 	blockRange,
 	blockRangeLines,
+	blockSpan,
 	blockText,
 	type CursorBlock,
 	cursorBlockElements,
@@ -28,9 +37,10 @@ import {
 	firstVisibleBlock,
 } from "./blockCursor";
 import { CURSOR_PROXY_HOST, type CursorOption, CursorProxy } from "./CursorProxy";
-import { cursorCommand, useReviewSurfaceKeys } from "./cursorKeys";
+import { readingCursorKey, useReviewSurfaceKeys } from "./cursorKeys";
 import { mapPreviewSelection } from "./previewAnchor";
 import { ReviewComposer } from "./ReviewComposer";
+import { READER_SCOPE, useReaderKeys, viewportSpan } from "./readingSurface";
 import { revealReviewCard } from "./revealFocus";
 import { markReviewRegions, type SourceLineRange, stampedSelectionLines } from "./sourceLines";
 
@@ -86,6 +96,8 @@ export function PreviewCommenting({
 }) {
 	const t = useT();
 	const keys = useReviewSurfaceKeys();
+	const readerKeys = useReaderKeys();
+	const home = useFocusHome();
 	const iconRef = useRef<HTMLButtonElement>(null);
 	const draggingRef = useRef(false);
 	const [selection, setSelection] = useState<SourceLineRange | null>(null);
@@ -263,14 +275,68 @@ export function PreviewCommenting({
 		elements[blockIndexAt(cursorBlocksOf(elements), shown)]?.scrollIntoView({ block: "nearest" });
 	};
 
+	const placeCursor = (line: number | undefined) => {
+		if (line !== undefined) setBlockCursor({ line, anchor: null });
+		setCursorShown(true);
+	};
+
+	const readBlocks = (
+		command: ReadingCommand,
+		scroller: HTMLElement,
+		elements: readonly HTMLElement[],
+		blocks: readonly CursorBlock[],
+		at: number,
+	) => {
+		const view = viewportSpan(scroller);
+		const shownAt = (index: number) => {
+			const span = blockSpan(elements, index);
+			return span !== null && spansOverlap(span, view);
+		};
+		if (command.kind === "page" || command.kind === "edge") {
+			scrollReading(scroller, command);
+			if (command.kind === "edge") {
+				placeCursor((command.direction < 0 ? blocks[0] : blocks.at(-1))?.start);
+			} else if (shownAt(at)) placeCursor(undefined);
+			else placeCursor(blocks[elements.findIndex((_element, index) => shownAt(index))]?.start);
+			return;
+		}
+		const current = blockSpan(elements, at);
+		if (command.kind !== "line" || !current) return;
+		if (!spansOverlap(current, view)) {
+			const visible = elements.flatMap((_element, index) => (shownAt(index) ? [index] : []));
+			placeCursor(blocks[(command.direction > 0 ? visible[0] : visible.at(-1)) ?? at]?.start);
+			return;
+		}
+		const before = scroller.scrollTop;
+		scroller.scrollTop += scrollBeforeStep(view, current, command.direction);
+		if (scroller.scrollTop !== before) {
+			placeCursor(undefined);
+			return;
+		}
+		const next = blockSpan(elements, at + command.direction);
+		const block = blocks[at + command.direction];
+		if (!next || !block) return;
+		scroller.scrollTop += stepRevealDelta(view, next);
+		placeCursor(block.start);
+	};
+
 	const onCursorKey = (event: KeyboardEvent<HTMLDivElement>) => {
 		const scroller = scrollerRef.current;
-		const command = cursorCommand(event.nativeEvent, keys);
-		if (!scroller || !command) return;
+		if (!scroller) return;
+		const key = readingCursorKey(event.nativeEvent, keys, readerKeys);
+		if (!key) return;
 		const elements = cursorBlockElements(scroller);
 		const blocks = cursorBlocksOf(elements);
 		const start = blockCursor ?? firstVisibleBlock(elements, scroller);
-		const outcome = start ? blockCursorCommand(blocks, start, command) : null;
+		if (key.kind === "reading") {
+			if (key.command.kind === "side") return;
+			event.preventDefault();
+			if (start) {
+				readBlocks(key.command, scroller, elements, blocks, blockIndexAt(blocks, start.line));
+			}
+			return;
+		}
+		const outcome = start ? blockCursorCommand(blocks, start, key.command) : null;
 		if (!outcome) return;
 		event.preventDefault();
 		if (outcome.kind === "comment") {
@@ -281,7 +347,8 @@ export function PreviewCommenting({
 		}
 		setBlockCursor(outcome.state);
 		setCursorShown(true);
-		elements[blockIndexAt(blocks, outcome.state.line)]?.scrollIntoView({ block: "nearest" });
+		const target = blockSpan(elements, blockIndexAt(blocks, outcome.state.line));
+		if (target) scroller.scrollTop += stepRevealDelta(viewportSpan(scroller), target);
 	};
 
 	const onCursorFocus = (event: FocusEvent<HTMLDivElement>) => {
@@ -327,6 +394,7 @@ export function PreviewCommenting({
 		<div
 			ref={attachScroller}
 			data-testid={testid}
+			data-key-scope={READER_SCOPE}
 			className={cn(
 				surfaceClassName,
 				CURSOR_PROXY_HOST,
@@ -336,6 +404,7 @@ export function PreviewCommenting({
 			{cursorOption ? (
 				<CursorProxy
 					ref={setProxy}
+					focusDefault={home}
 					label={t("viewer.markdown.blocks")}
 					option={cursorOption}
 					onKeyDown={onCursorKey}

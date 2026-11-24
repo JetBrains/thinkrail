@@ -88,16 +88,23 @@ describe("the keybinding list", () => {
 		);
 	});
 
-	test("splits the suggestion keys into one rebindable row per chip, in the chat's shared scope", () => {
+	test("splits the suggestion keys into one rebindable global row per chip", () => {
 		const sends = list().entries.filter(({ command }) => command.startsWith("suggestions.send"));
 		expect(
-			sends.map(({ command, title, position, scope }) => [command, title, position, scope]),
+			sends.map(({ command, title, position, scope, surface }) => [
+				command,
+				title,
+				position,
+				scope,
+				surface,
+			]),
 		).toEqual(
 			Array.from({ length: 9 }, (_, index) => [
 				`suggestions.send${index + 1}`,
 				"shortcuts.suggestions.sendOne",
 				index + 1,
-				"suggestions",
+				null,
+				"general",
 			]),
 		);
 	});
