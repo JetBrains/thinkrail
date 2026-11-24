@@ -19,8 +19,10 @@ This package is the walkthrough of ThinkRail's extension guide; it uses only
 [`@thinkrail/extension-sdk`](../../packages/extension-sdk/README.md).
 
 - `package.json` carries the `thinkrail` manifest and the `thinkrail-extension` keyword. pi and typebox
-  are peer dependencies: ThinkRail provides them.
-- `server/index.ts` — the server half: a `defineServerExtension` descriptor whose `sessionExtensions`
+  are peer dependencies: ThinkRail provides them. The SDK is a dev dependency, so installing the
+  published extension does not install its build toolchain.
+- `server/index.ts` — the server half: a descriptor checked with the type-only `ServerExtension`
+  contract whose `sessionExtensions`
   registers the pi tool, reading the extension's own boolean setting `contrast` per session.
   `server/palette.ts` is the colour maths.
 - `web/index.tsx` — the web half: a `defineWebExtension` descriptor registering `PaletteCard` for the

@@ -1,8 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import {
-	defineServerExtension,
-	type ExtensionSessionServices,
-} from "@thinkrail/extension-sdk/server";
+import type { ExtensionSessionServices, ServerExtension } from "@thinkrail/extension-sdk/server";
 import { Type } from "typebox";
 import { buildPalette, HARMONIES, type Harmony, paletteText } from "./palette";
 
@@ -39,7 +36,7 @@ function paletteTool(session: ExtensionSessionServices) {
 	};
 }
 
-export default defineServerExtension({
+export default {
 	name: "@thinkrail/example-extension-palette",
 	title: "Palette",
 	description:
@@ -55,4 +52,4 @@ export default defineServerExtension({
 				"Rate every colour's WCAG contrast against white and black text, for the agent and on the card.",
 		},
 	},
-});
+} satisfies ServerExtension;
