@@ -466,6 +466,7 @@ test("save writes only reported facts with derived output and conservative compa
 			id,
 			name: "Company gateway",
 			baseUrl: "https://llm.corp.example/v1",
+			api: "openai-completions",
 			hasApiKey: true,
 			models: [
 				model("known", { contextWindow: 131_072, maxTokens: defaultMaxTokens(131_072) }),
@@ -490,6 +491,290 @@ test("saved endpoints become available pi models, and a keyless one gets pi's pl
 	expect(available).toMatchObject({ id: "qwen3:14b", contextWindow: 40_960 });
 	expect((await listCustomEndpoints())[0]?.hasApiKey).toBe(false);
 });
+
+test("a handwritten Responses server stays visible and an older client preserves its API and images", async () => {
+	const pi = await runtime();
+	writeFileSync(
+		path,
+		JSON.stringify({
+			providers: {
+				"custom-responses": {
+					name: "Responses gateway",
+					api: "openai-responses",
+					baseUrl: "https://gw.example/v1",
+					apiKey: "sk-saved",
+					models: [{ id: "vision", input: ["text", "image"], contextWindow: 32_768 }],
+				},
+			},
+		}),
+	);
+	const [listed] = await listCustomEndpoints();
+	expect(listed).toMatchObject({
+		id: "custom-responses",
+		api: "openai-responses",
+		hasApiKey: true,
+	});
+	if (!listed) throw new Error("the Responses server was not listed");
+	expect(listed.models[0]?.vision).toBe(true);
+	expect(JSON.stringify(listed)).not.toContain("sk-saved");
+	await saveCustomEndpoint({
+		id: listed.id,
+		name: "Renamed gateway",
+		baseUrl: listed.baseUrl,
+		models: listed.models,
+	});
+	expect(providers()[listed.id]).toMatchObject({
+		name: "Renamed gateway",
+		api: "openai-responses",
+		apiKey: "sk-saved",
+		models: [{ id: "vision", input: ["text", "image"] }],
+	});
+	expect(settledAvailableModels(pi).find((item) => item.provider === listed.id)).toMatchObject({
+		api: "openai-responses",
+		input: ["text", "image"],
+	});
+	await removeCustomEndpoint(listed.id);
+	expect(await listCustomEndpoints()).toEqual([]);
+});
+
+test("a saved Responses server streams through pi's Responses adapter with image input", async () => {
+	const bodies: Record<string, unknown>[] = [];
+	const item = {
+		id: "msg_1",
+		type: "message",
+		role: "assistant",
+		status: "completed",
+		content: [{ type: "output_text", text: "Image received", annotations: [] }],
+	};
+	const events = [
+		{ type: "response.created", response: { id: "resp_1" } },
+		{ type: "response.output_item.added", output_index: 0, item: { ...item, content: [] } },
+		{ type: "response.output_text.delta", output_index: 0, delta: "Image received" },
+		{ type: "response.output_item.done", output_index: 0, item },
+		{ type: "response.completed", response: { id: "resp_1", status: "completed", output: [item] } },
+	];
+	const { url, seen } = serve(
+		{
+			"POST /v1/responses": async (request) => {
+				bodies.push(JSON.parse(await request.text()));
+				return new Response(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(""), {
+					headers: { "content-type": "text/event-stream" },
+				});
+			},
+		},
+		"sk-responses",
+	);
+	const pi = await runtime();
+	const [endpoint] = await saveCustomEndpoint({
+		name: "Responses",
+		api: "openai-responses",
+		baseUrl: `${url}/v1/responses`,
+		apiKey: "sk-responses",
+		models: [model("vision", { contextWindow: 32_768, vision: true })],
+	});
+	expect(endpoint).toMatchObject({ api: "openai-responses", baseUrl: `${url}/v1` });
+	expect(providers()[endpoint?.id ?? ""]).not.toHaveProperty("compat");
+	const saved = settledAvailableModels(pi).find((item) => item.provider === endpoint?.id);
+	if (!saved) throw new Error("the saved Responses model is not available");
+	const reply = await pi.completeSimple(saved, {
+		messages: [
+			{
+				role: "user",
+				content: [
+					{ type: "text", text: "Describe this image" },
+					{ type: "image", data: "cGl4ZWw=", mimeType: "image/png" },
+				],
+				timestamp: Date.now(),
+			},
+		],
+	});
+	expect(reply).toMatchObject({
+		stopReason: "stop",
+		content: [{ type: "text", text: "Image received" }],
+	});
+	expect(seen).toEqual(["POST /v1/responses Bearer sk-responses"]);
+	expect(bodies[0]).toMatchObject({
+		model: "vision",
+		stream: true,
+		max_output_tokens: 8_192,
+		input: [
+			{
+				role: "user",
+				content: [
+					{ type: "input_text", text: "Describe this image" },
+					{ type: "input_image", image_url: "data:image/png;base64,cGl4ZWw=" },
+				],
+			},
+		],
+	});
+	expect(bodies[0]).not.toHaveProperty("messages");
+});
+
+test("switching a provider's API keeps handwritten compat and updates pi's available model", async () => {
+	const pi = await runtime();
+	const [saved] = await saveCustomEndpoint({
+		name: "Gateway",
+		api: "openai-responses",
+		baseUrl: "https://gw.example/v1",
+		models: [model("a")],
+	});
+	if (!saved) throw new Error("the Responses server was not saved");
+	const config = providers();
+	config[saved.id] = { ...config[saved.id], compat: { supportsDeveloperRole: true } };
+	writeFileSync(path, JSON.stringify({ providers: config }));
+	const draft = { id: saved.id, name: saved.name, baseUrl: saved.baseUrl, models: saved.models };
+	await saveCustomEndpoint({ ...draft, api: "openai-completions" });
+	expect(providers()[saved.id]?.compat).toEqual({
+		supportsStore: false,
+		supportsDeveloperRole: true,
+		maxTokensField: "max_tokens",
+	});
+	expect(settledAvailableModels(pi).find((item) => item.provider === saved.id)?.api).toBe(
+		"openai-completions",
+	);
+	await saveCustomEndpoint({ ...draft, api: "openai-responses" });
+	expect((await listCustomEndpoints())[0]?.api).toBe("openai-responses");
+	expect(providers()[saved.id]?.compat).toMatchObject({ supportsDeveloperRole: true });
+	expect(settledAvailableModels(pi).find((item) => item.provider === saved.id)?.api).toBe(
+		"openai-responses",
+	);
+});
+
+test("an API switch refuses a selected model pinned to another API without changing its file", async () => {
+	await runtime();
+	writeFileSync(
+		path,
+		JSON.stringify({
+			providers: {
+				"custom-gw": {
+					api: "openai-completions",
+					baseUrl: "https://gw.example/v1",
+					apiKey: "sk-saved",
+					models: [{ id: "a", api: "openai-completions" }],
+				},
+			},
+		}),
+	);
+	const draft = {
+		id: "custom-gw",
+		name: "Renamed",
+		baseUrl: "https://gw.example/v1",
+		models: [model("a")],
+	};
+	await saveCustomEndpoint({ ...draft, api: "openai-completions" });
+	const before = readFileSync(path, "utf8");
+	await expect(saveCustomEndpoint({ ...draft, api: "openai-responses" })).rejects.toThrow(
+		"models.json",
+	);
+	expect(readFileSync(path, "utf8")).toBe(before);
+	await saveCustomEndpoint({ ...draft, api: "openai-responses", models: [model("b")] });
+	expect((await listCustomEndpoints())[0]?.api).toBe("openai-responses");
+});
+
+test("an API switch allows a model that already selects the requested API", async () => {
+	const pi = await runtime();
+	writeFileSync(
+		path,
+		JSON.stringify({
+			providers: {
+				"custom-gw": {
+					api: "openai-completions",
+					baseUrl: "https://gw.example/v1",
+					apiKey: "sk-saved",
+					models: [{ id: "a", api: "openai-responses" }],
+				},
+			},
+		}),
+	);
+	await saveCustomEndpoint({
+		id: "custom-gw",
+		name: "Gateway",
+		baseUrl: "https://gw.example/v1",
+		api: "openai-responses",
+		models: [model("a")],
+	});
+	expect((await listCustomEndpoints())[0]?.api).toBe("openai-responses");
+	expect(settledAvailableModels(pi).find((item) => item.provider === "custom-gw")?.api).toBe(
+		"openai-responses",
+	);
+});
+
+test("an API switch ignores an unmanaged modelOverrides API that pi does not apply", async () => {
+	const pi = await runtime();
+	writeFileSync(
+		path,
+		JSON.stringify({
+			providers: {
+				"custom-gw": {
+					api: "openai-completions",
+					baseUrl: "https://gw.example/v1",
+					apiKey: "sk-saved",
+					models: [{ id: "a" }],
+					modelOverrides: { a: { api: "openai-completions" } },
+				},
+			},
+		}),
+	);
+	await saveCustomEndpoint({
+		id: "custom-gw",
+		name: "Gateway",
+		baseUrl: "https://gw.example/v1",
+		api: "openai-responses",
+		models: [model("a")],
+	});
+	expect(providers()["custom-gw"]?.modelOverrides).toEqual({ a: { api: "openai-completions" } });
+	expect(settledAvailableModels(pi).find((item) => item.provider === "custom-gw")?.api).toBe(
+		"openai-responses",
+	);
+});
+
+test("unchanged provider API edits preserve a model pinned to a different API", async () => {
+	const pi = await runtime();
+	writeFileSync(
+		path,
+		JSON.stringify({
+			providers: {
+				"custom-gw": {
+					api: "openai-completions",
+					baseUrl: "https://gw.example/v1",
+					apiKey: "sk-saved",
+					models: [{ id: "a", api: "openai-responses" }],
+				},
+			},
+		}),
+	);
+	await saveCustomEndpoint({
+		id: "custom-gw",
+		name: "Renamed",
+		baseUrl: "https://gw.example/v1",
+		api: "openai-completions",
+		models: [model("a")],
+	});
+	expect(providers()["custom-gw"]).toMatchObject({
+		name: "Renamed",
+		models: [{ id: "a", api: "openai-responses" }],
+	});
+	expect(settledAvailableModels(pi).find((item) => item.provider === "custom-gw")?.api).toBe(
+		"openai-responses",
+	);
+});
+
+test.each([null, "", "anthropic-messages", 133])(
+	"an invalid custom endpoint API (%j) cannot create a provider",
+	async (api) => {
+		await runtime();
+		const draft = JSON.parse(
+			JSON.stringify({
+				name: "Gateway",
+				baseUrl: "https://gw.example/v1",
+				api,
+				models: [model("a")],
+			}),
+		);
+		await expect(saveCustomEndpoint(draft)).rejects.toThrow("API");
+		expect(existsSync(path)).toBe(false);
+	},
+);
 
 test("edits keep hand-added fields and the user's context window, clear managed overrides and guard the saved key", async () => {
 	await runtime();

@@ -28,6 +28,7 @@ import {
 	CLIENT_ERROR_REPORT_PROTOCOL_VERSION,
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
 	CONTINUATION_PROTOCOL_VERSION,
+	CUSTOM_ENDPOINT_API_PROTOCOL_VERSION,
 	CUSTOM_ENDPOINT_ID_PREFIX,
 	CUSTOM_ENDPOINTS_PROTOCOL_VERSION,
 	CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION,
@@ -390,7 +391,7 @@ test("host search and its previews are pinned to v106", () => {
 });
 
 test("the community catalog is pinned to v132", () => {
-	expect(PROTOCOL_VERSION).toBe(132);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(EXTENSION_BROWSE_PROTOCOL_VERSION);
 	expect(EXTENSION_BROWSE_PROTOCOL_VERSION).toBe(132);
 	expect(WS_METHODS.extensionsBrowse).toBe("extensions.browse");
 });
@@ -592,6 +593,12 @@ test("custom server models take a targeted context window from v116, outside the
 	expect(isSharedModelContextTarget({ provider: "openai", override: 1_050_000 })).toBe(false);
 	expect(isSharedModelContextTarget({ provider: custom, override: null })).toBe(false);
 	expect(isSharedModelContextTarget({ provider: custom, override: 300_000 })).toBe(false);
+});
+
+test("custom server API selection is gated independently from the original endpoint editor", () => {
+	expect(CUSTOM_ENDPOINT_API_PROTOCOL_VERSION).toBe(133);
+	expect(CUSTOM_ENDPOINT_API_PROTOCOL_VERSION).toBeGreaterThan(CUSTOM_ENDPOINTS_PROTOCOL_VERSION);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CUSTOM_ENDPOINT_API_PROTOCOL_VERSION);
 });
 
 test("resource metadata rides the two content reads from v75", () => {

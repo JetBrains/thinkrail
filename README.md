@@ -73,7 +73,7 @@ For latest version, see the [Releases page](https://github.com/JetBrains/thinkra
 
 - **Your own model servers.** Go to Settings → Providers → Custom servers and connect a company LLM gateway or a model running on your own machine. Any OpenAI-compatible server fits: LiteLLM, sglang, vLLM, Ollama, LM Studio, or llama.cpp.
 
-  - The **Find models** button lists the models available on the server, together with their capabilities. The server is saved to `pi`'s `models.json`. The models models appear in the chat model picker, and in the `pi` CLI alike.
+  - Choose the server's **API**: **Chat Completions** or **Responses**. The **Find models** button lists the models available on the server, together with their capabilities. The server is saved to `pi`'s `models.json`. Its models appear in the chat model picker, and in the `pi` CLI alike.
 
 - **Desktop app or browser.** A native desktop app, or the `thinkrail` CLI that opens the same app in your browser. Both embed the same engine host. App state lives under `~/.thinkrail`.
 

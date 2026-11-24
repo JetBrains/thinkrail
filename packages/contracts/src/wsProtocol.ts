@@ -147,7 +147,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 132;
+export const PROTOCOL_VERSION = 133;
+export const CUSTOM_ENDPOINT_API_PROTOCOL_VERSION = 133;
 export const EXTENSION_BROWSE_PROTOCOL_VERSION = 132;
 export const INSTALLED_EXTENSIONS_PROTOCOL_VERSION = 131;
 export const EXTENSION_QUERY_PROTOCOL_VERSION = 130;
@@ -909,6 +910,8 @@ export function isCustomEndpointId(id: string): boolean {
 	return id.startsWith(CUSTOM_ENDPOINT_ID_PREFIX);
 }
 
+export type CustomEndpointApi = "openai-completions" | "openai-responses";
+
 /** What the server reported about a model; `null` means it did not say, so pi's default applies. */
 export interface CustomEndpointModel {
 	id: string;
@@ -927,6 +930,8 @@ export interface CustomEndpoint {
 	id: string;
 	name: string;
 	baseUrl: string;
+	/** Absent on hosts before v133, which only manage Chat Completions. */
+	api?: CustomEndpointApi;
 	hasApiKey: boolean;
 	models: CustomEndpointModel[];
 }
@@ -955,6 +960,8 @@ export interface CustomEndpointDraft {
 	id?: string;
 	name: string;
 	baseUrl: string;
+	/** Omitted to keep the saved API, or use Chat Completions for a new server. */
+	api?: CustomEndpointApi;
 	/** Omitted to keep the saved key; an empty string removes it. */
 	apiKey?: string;
 	models: CustomEndpointModel[];

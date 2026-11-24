@@ -260,12 +260,18 @@ re-opened transcripts provider-valid.
     reverting is a manual `models.json` edit.
   - `customEndpoints` — the settings adapter for the user's own OpenAI-compatible servers (a company
     gateway or a local llama.cpp / vLLM / sglang / Ollama / LM Studio server), again a `models.json` editor
-    and not a registry: each is a `custom-*` provider with `api: "openai-completions"`, served by pi like any
-    hand-written one, so the pi CLI sees the same models. Only `custom-*` entries are listed, edited or
-    removed; every other provider is left byte-for-byte alone. A saved address the form would refuse
+    and not a registry: each is a `custom-*` provider with `api: "openai-completions"` or
+    `"openai-responses"`, served by pi like any hand-written one, so the pi CLI sees the same models.
+    The form owns the provider-level API; an omitted draft API preserves the saved choice, or defaults
+    a new provider to Chat Completions. Other values are refused before writing. Manually configured
+    Responses providers are listed too. Switching APIs refuses a selected model whose explicit
+    `models[].api` would still route it differently, directing the user to `models.json`;
+    unchanged-API edits preserve those handwritten overrides. pi does not apply an `api` inside
+    `modelOverrides`, so that unmanaged field is preserved without blocking a switch. Only `custom-*`
+    entries are listed, edited or removed; every other provider is left byte-for-byte alone. A saved address the form would refuse
     (credentials, a query string, not http/https) is not listed either, so its secret never reaches a
     client; pi still serves it.
-    - **Probe without a server kind.** The base URL loses `/models` / `/chat/completions` / `/completions`
+    - **Probe without a server kind.** The base URL loses `/models` / `/chat/completions` / `/completions` / `/responses`
       suffixes and is refused with credentials or a query string. The host `GET`s `<base>/models` (5s) and,
       only on a 404 for a base without `/v1`, `<base>/v1/models` once (whose failure is reported unless it
       is also a 404). The only standard part of that
@@ -295,11 +301,13 @@ re-opened transcripts provider-valid.
       context the draft's value is kept, or omitted when there is none. A user window only widens a
       detected context and is not used without one, as pi-ai clamps each request to the window pi uses
       and fitting down would only lose a saved value (#1350). The fit runs only on Save, so a larger user
-      window never raises a value that fits. Cost is zero. A new provider
+      window never raises a value that fits. Cost is zero. A new Chat Completions provider
       gets conservative compat (`supportsStore: false`, `supportsDeveloperRole: false`, `maxTokensField:
       "max_tokens"`) because pi detects compat from the URL and would send OpenAI-only fields to an unknown
-      host; every OpenAI-compatible server accepts these. An edit keeps the provider's `compat` and every
-      field the form doesn't manage, and removes the managed fields (`maxTokens`, `reasoning`, `input`)
+      host; every Chat Completions-compatible server accepts these. A new Responses provider uses pi's
+      own API defaults. Switching to Chat Completions adds its defaults beneath any handwritten compat.
+      An edit otherwise keeps the provider's `compat` and every field the form doesn't manage, and
+      removes the managed fields (`maxTokens`, `reasoning`, `input`)
       from that model's `modelOverrides`, which pi would otherwise apply over the saved values. The
       context window is not one of them: `models[].contextWindow` holds only the detected value, which is
       what the listing reports, and `modelOverrides.<id>.contextWindow` is the user's own value, owned by
