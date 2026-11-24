@@ -819,7 +819,7 @@ offering it for an HTML file and not for Markdown, and the file tab's toolbar ca
 file too, whose single renderer would otherwise hide the toolbar. Visualize coverage
 (`visualize.spec.ts`) independently seeds short historical tool-call/result transcripts through the
 sanctioned session fixture before workspace entry. It pins completed/default-expanded diagrams,
-fullscreen SVG growth, pan/reset/Escape and claimed WebKit pinch gestures, exact comparison pros/cons
+inline zoom without viewport growth, fullscreen SVG growth, pan/reset/Escape and claimed WebKit pinch gestures, exact comparison pros/cons
 and recommendation, and assistant mermaid fences alongside tool diagrams re-rendering to the host's
 `--container-elevated-bg` after selecting a discovered opposite appearance in real settings. Malformed
 source is seeded as a successful historical tool result (`isError: false`) so both tool and chat exercise
@@ -831,7 +831,10 @@ interactive with scripts only, Preview switching to static frames with same-orig
 available) that survives a reload. A huge comparison opts in through Show diff anyway while an unrelated file changes every 400 ms (each
 write its own watcher frame, past the 300 ms quiet flush), so updates keep landing inside the expensive first
 mount. These regressions need no provider,
-prompt submission, route mock, or screenshot. Extension on/off coverage (`extensions-settings.spec.ts`) drives the
+prompt submission, route mock, or screenshot. Markdown Mermaid coverage (`markdown-mermaid.spec.ts`) also
+pins a small diagram's natural height, the tall-diagram cap at two window heights, zoom/pan inside that
+fixed viewport, ordinary wheel scrolling of the surrounding Markdown, and the retained fullscreen path.
+Extension on/off coverage (`extensions-settings.spec.ts`) drives the
 real Settings → Extensions & skills switch of every shipped extension (`visualize`, `ask-user-question`,
 `web-access`, and the web-only `hint-mode` row the host catalog lacks) through `settings.update`, proves it
 survives a reload, and seeds a historical `visualize` call that must still render

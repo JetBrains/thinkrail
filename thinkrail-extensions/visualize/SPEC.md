@@ -84,13 +84,23 @@ passed as `before` when it should stay visible. The workspace and chat come from
 its rows, so review sends land in the chat that shows the card; with no host or scope (a subagent transcript)
 the card shows only the links. The
 registration is primary, expanded by default and `width: "content"`; its title or diagram/comparison/file
-summary is available without rendering. A diagram or comparison grows with its content; a file preview fills
+summary is available without rendering. A diagram or comparison grows with its bounded diagram viewports; a file preview fills
 its fixed frame, has no intrinsic width and so keeps the chat column's width. Invalid or streaming arguments
 remain defensive and tool errors preserve readable result text.
 
-`MermaidView` renders a diagram at its natural size — `useMaxWidth: false` for every diagram kind in
+`MermaidView` keeps the diagram's natural size — `useMaxWidth: false` for every diagram kind in
 mermaid's default config, scaled down to the available width by CSS — so a content-width parent can size to
-it; with mermaid's default (`width="100%"`) a diagram has no intrinsic width and never grows. It derives
+it; with mermaid's default (`width="100%"`) a diagram has no intrinsic width and never grows. Its inline
+viewport caps that natural height at `min(60vh, 480px)`: small drawings keep their natural height. The
+shared `PanZoomView` transforms only the outer SVG for inline zoom, leaving its unzoomed layout height
+alone, so zoom never grows the viewport or shifts the prose below it. A compact toolbar below the drawing
+owns zoom/reset and the fullscreen action without covering diagram labels. Mouse drag pans the clipped
+viewport within the rendered SVG's bounds, clamping the current pan after zoom or a viewport/drawing
+resize so zooming out cannot leave a blank canvas. CSS owns the viewport height; measurement only bounds
+pan. Ordinary wheel and touch scrolling continue on the surrounding page. Modifier-wheel zoom and
+WebKit pinch belong to the diagram, as in fullscreen. The fullscreen canvas retains its own scrollable
+pan/zoom state and available width. All callers (Markdown fences, diagram and comparison cards) use this
+same inline behavior, without an app-level setting. It derives
 mermaid's strict-mode theme from the host's CSS variables and re-renders after a
 completed `data-theme` swap, or after a font settings change that moves the code family (resolved from
 `.tr-code-block` through `@thinkrail/ui/fonts`' `watchFont`, re-rendered once that face has loaded) or a
