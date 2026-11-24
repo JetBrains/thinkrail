@@ -203,6 +203,11 @@ control's own content (a preview's frames or notice), and a click after a dialog
 fixed-height preview is taller than the transcript beside the default bottom terminal, so its toolbar
 sits above the fold at the latest edge, and each tool-step expansion moves the edge a following chat then
 animates to.
+An anchored extension prompt reveals itself from wherever the chat stands on its first frame. Asked while
+the chat-open placement still holds the latest edge, its growth is pinned first and a prompt taller than
+the transcript beside the default bottom terminal (an approval with a 40vh argument list) shows its
+bottom; asked once the chat has settled, it shows its question. `extension-dialogs.spec.ts` settles the
+chat before asking and again before measuring, then scrolls the list into view before reading its end.
 Entering a workspace auto-opens its latest chat, and a pending questionnaire there claims focus and reveal
 at once. Workbench shortcuts pressed afterwards are user input, and the card yields to them. Questionnaire
 attention coverage therefore closes and reopens the chat after arranging the workbench.

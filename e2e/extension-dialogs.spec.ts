@@ -238,9 +238,11 @@ test("an approval lists the call's whole input inside the prompt, anchored or do
 }) => {
 	const wire = await routeWire(page);
 	const sessionId = await openSeededChat(page, "Approval lists the input");
+	const chatScroll = page.getByTestId("chat-scroll");
 	const group = page.getByTestId("activity-group").first();
 	const topic = "A very long research topic, written out in full detail. ".repeat(60).trim();
 
+	await waitForScrollStability(chatScroll);
 	wire.ask({
 		id: "extui-anchored",
 		sessionId,
@@ -256,11 +258,14 @@ test("an approval lists the call's whole input inside the prompt, anchored or do
 	await expect(input.locator("dt")).toHaveText(["title", "topic", "team"]);
 	await expect(input.locator("dd")).toHaveText(["Fix login", topic, "ENG"]);
 	await expect(step).toHaveAttribute("data-expanded", "false");
+	await waitForScrollStability(chatScroll);
+	await expect(prompt.getByTestId("ext-ui-title")).toBeInViewport();
 	const bounded = await input.evaluate((list) => ({
 		scrolls: list.scrollHeight > list.clientHeight,
 		bound: list.clientHeight <= window.innerHeight * 0.4 + 1,
 	}));
 	expect(bounded).toEqual({ scrolls: true, bound: true });
+	await input.scrollIntoViewIfNeeded();
 	await input.evaluate((list) => {
 		list.scrollTop = list.scrollHeight;
 	});
