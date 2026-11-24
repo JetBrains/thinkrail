@@ -20,7 +20,7 @@ import {
 } from "./model";
 import { centerSplitGeometry } from "./tabActions";
 import type { LayoutCenterGroup, LayoutCenterNode, LayoutCenterSplit } from "./types";
-import type { SharedGroupProps, WorkbenchProps } from "./workbenchShared";
+import type { SharedGroupProps, TabSelectOptions, WorkbenchProps } from "./workbenchShared";
 import {
 	CenterSplitTarget,
 	GroupTabBody,
@@ -53,8 +53,8 @@ export const CenterGroupView = memo(function CenterGroupView({
 	const splitGeometry = centerSplitGeometry(size);
 	const selected = group.tabs.find((tab) => tab.id === selectedId) ?? group.tabs[0];
 	const groupRemoval = removeLayoutGroup(t, shared.document, location);
-	const applySelect = (tabId: string, keep?: boolean) => {
-		shared.onSelectTab(location, tabId, { center: true, ...(keep !== undefined ? { keep } : {}) });
+	const applySelect = (tabId: string, options?: TabSelectOptions) => {
+		shared.onSelectTab(location, tabId, { center: true, ...options });
 	};
 	return (
 		<section
