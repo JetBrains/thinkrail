@@ -442,8 +442,21 @@ export function childExtensionFactories(workspaceId: string): InlineExtension[] 
 		headlessSearchPolicy,
 		...(specsEnabledFor(workspaceId) ? [specGraphExtension] : []),
 		skillCatalog,
-		...registryInlineExtensions("childExtensions", isExtensionDisabled),
+		...childRegistryFactories(false),
 	];
+}
+
+/** Installed extensions' child halves: `pi-delegation` loads them after every host-owned child factory. */
+export function childInstalledExtensionFactories(): InlineExtension[] {
+	return childRegistryFactories(true);
+}
+
+function childRegistryFactories(installed: boolean): InlineExtension[] {
+	return registryInlineExtensions(
+		"childExtensions",
+		isExtensionDisabled,
+		serverExtensions().filter((entry) => (entry.installed !== undefined) === installed),
+	);
 }
 
 interface LoaderInputs {

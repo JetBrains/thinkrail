@@ -25,6 +25,7 @@ import {
 	bumpPackagesRevision,
 	childBaseExtensionFactories,
 	childExtensionFactories,
+	childInstalledExtensionFactories,
 	disabledExtensions,
 	extensionSettings,
 	HOST_INLINE_FACTORIES,
@@ -1010,6 +1011,33 @@ describe("registry extensions", () => {
 			inlines.map((inline) => (typeof inline === "function" ? "fn" : inline.name));
 		expect(names(children.slice(3))).toEqual(names(registryInlineExtensions("childExtensions")));
 		expect(names(children.slice(3))).toEqual(["web-access"]);
+	});
+
+	it("hands an installed extension's child half over apart from the host's child set", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-child-installed-"));
+		const folder = join(root, "ext");
+		mkdirSync(join(folder, "server"), { recursive: true });
+		writeFileSync(
+			join(folder, "package.json"),
+			JSON.stringify({
+				name: "child-installed",
+				thinkrail: { api: "1.0", server: "server/index.ts" },
+			}),
+		);
+		writeFileSync(
+			join(folder, "server", "index.ts"),
+			'export default { name: "child-installed", extensions: [], childExtensions: [() => {}] };\n',
+		);
+		writeFileSync(join(root, "extensions.json"), JSON.stringify({ extensions: [folder] }));
+		const stop = startInstalledExtensions({ dataDir: root, onChange: () => {} });
+		try {
+			await installedExtensions()?.reconcile();
+			expect(childExtensionFactories("w1").slice(3).map(nameOf)).toEqual(["web-access"]);
+			expect(childInstalledExtensionFactories().map(nameOf)).toEqual(["ext:child-installed"]);
+		} finally {
+			stop();
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 
 	it("loads web access with its skill and drops both while the extension is off", async () => {
