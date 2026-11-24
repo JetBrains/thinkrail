@@ -67,6 +67,25 @@ test("a rejection keeps the last answer and marks the check failed", () => {
 	expect(answered).toEqual({ status: { connected: false }, failed: false, pending: null });
 });
 
+test("an unverified answer is a failed check, not a sign-out", () => {
+	const unverified = { connected: false, unverified: true } as const;
+	const known = { status: { connected: true, login: "octo" }, failed: false, pending: null };
+	expect(
+		githubProbe(githubProbe(known, { type: "start", id: 1 }), {
+			type: "answer",
+			id: 1,
+			status: unverified,
+		}),
+	).toEqual({ ...known, failed: true });
+
+	const first = githubProbe(
+		githubProbe({ status: null, failed: false, pending: null }, { type: "start", id: 1 }),
+		{ type: "answer", id: 1, status: unverified },
+	);
+	expect(first).toEqual({ status: null, failed: true, pending: null });
+	expect(view({ status: first.status, failed: first.failed })).not.toContain(notConnected);
+});
+
 test("only the latest request settles the probe", () => {
 	let probe = githubProbe({ status: null, failed: false, pending: null }, { type: "start", id: 1 });
 	probe = githubProbe(probe, { type: "start", id: 2 });

@@ -145,8 +145,9 @@ pushes nothing rather than opening a PR for another branch with this one's title
    `gh auth status` is a network round-trip, and a gh that *works* but reports oddly, e.g. a stale
    second-host token, must never get its one-click path skipped) and it is **async with an 8s
    kill** — the in-process host shares one event loop, a synchronous probe would freeze every
-   session. A probe that finds gh installed + authed (a transient flow failure) and the offline
-   seam stay unnamed — the silent compare fallback remains.
+   session. A probe that finds gh installed + authed (a transient flow failure) or can't confirm it
+   (`unverified`, e.g. no network; see `github/SPEC.md`) and the offline seam stay unnamed — the
+   silent compare fallback remains.
 6. Every result carries `dirtyFiles` (uncommitted-change count) so the client can warn that those
    won't be in the PR. Dirty state never blocks. The server-side `openPr` result also carries the exact
    refreshed `branch` used for push/gh/compare; the host CASes the review snapshot against that branch and

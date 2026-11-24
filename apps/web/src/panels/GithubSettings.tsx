@@ -31,7 +31,7 @@ export type GithubProbeEvent =
 export function githubProbe(probe: GithubProbe, event: GithubProbeEvent): GithubProbe {
 	if (event.type === "start") return { ...probe, pending: event.id };
 	if (event.id !== probe.pending) return probe;
-	return event.type === "answer"
+	return event.type === "answer" && !event.status.unverified
 		? { status: event.status, failed: false, pending: null }
 		: { ...probe, failed: true, pending: null };
 }

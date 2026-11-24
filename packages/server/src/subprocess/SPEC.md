@@ -83,7 +83,7 @@ never what a particular child's output means.
 
   `github`'s `githubAuthStatus` (`github.ts`) used to be a third — a `spawnSync` HTTPS call on the single
   event loop — until it moved onto `runBounded`, which is also why `ghSetupProblem` no longer hand-rolls its
-  own TERM+KILL escalation: both `gh auth status` probes now share this module's timeout mechanics instead
+  own TERM+KILL escalation: the `gh auth status` probe now uses this module's timeout mechanics instead
   of duplicating them.
 
   The census above is about *unbounded waits*, not about every spawn in the repo — the rest are already

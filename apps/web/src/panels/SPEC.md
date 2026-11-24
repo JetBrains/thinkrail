@@ -1130,9 +1130,9 @@ a project picker, the prompt hero, and the reused
   offered in both states and stays enabled while busy (`aria-busy`, clicks ignored), as Providers' Refresh
   does, because disabling the focused button dropped focus and the next Esc closed Settings. Only an answered
   probe is a status, and only the latest request's: reopening the section shows the last answer while it
-  re-probes, and a failed request never reads as signed out — it keeps the answer, or with none shows a
-  could-not-check notice. Before any answer the block is a skeleton; `data-connected` exists only once
-  gh has answered);
+  re-probes, and a failed request or an `unverified` answer (gh couldn't confirm its account) never
+  reads as signed out — it keeps the answer, or with none shows a could-not-check notice. Before any
+  answer the block is a skeleton; `data-connected` exists only once gh has answered);
   **`LanguageSettings`** (gated by `LOCALES_PROTOCOL_VERSION`; a store-integrating container over the
   props-driven `LanguagePage`, whose derivations come from [[submodule-web-i18n]]): the **Interface
   language** is an **expensive** list choice — arrows only move a pending pick, Enter or Space applies it,

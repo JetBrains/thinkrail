@@ -573,6 +573,7 @@ describe("openPr — push lifecycle and cache invalidation", () => {
 			async () => null,
 		);
 		expect(result.action).toBe("compare");
+		expect(result).not.toHaveProperty("ghProblem");
 		expect((await findBranchReviewOutcome(repo, "feature")).value).toEqual({
 			kind: "pull-request",
 			number: 7,
