@@ -515,7 +515,7 @@
     },
     "pi-extensions/next-steps": {
       "name": "@thinkrail/pi-next-steps",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "devDependencies": {
         "@earendil-works/pi-coding-agent": "catalog:",
         "@earendil-works/pi-tui": "catalog:",

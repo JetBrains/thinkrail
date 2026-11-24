@@ -52,6 +52,12 @@ export function suggestionsOnBranch(branch: readonly SessionEntry[]): string[] {
 		if (!entry || OUT_OF_CONVERSATION.has(entry.type)) continue;
 		if (entry.type !== "message") return [];
 		const message = entry.message;
+		if (
+			message.role === "assistant" &&
+			message.stopReason === "stop" &&
+			!message.content.some((block) => block.type === "toolCall")
+		)
+			continue;
 		if (message.role !== "toolResult" || message.toolName !== NEXT_STEPS_TOOL_NAME) return [];
 		if (message.isError || !isNextStepsDetails(message.details)) return [];
 		return message.details.suggestions;

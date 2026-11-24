@@ -29,6 +29,8 @@ interface ParityCase {
 	expectText?: string[];
 	expectTerminate?: boolean;
 	expectRender?: { width?: number; contains?: string[] };
+	/** Session entries the tool reads through `ctx.sessionManager.getBranch()`. */
+	branch?: unknown[];
 }
 
 /** A slash command run with a scripted context: notifications are collected, print mode's stderr too. */
@@ -319,18 +321,48 @@ const EXPECTATIONS: Record<string, Expectation> = {
 		cases: [
 			{
 				tool: "suggest_next_steps",
-				name: "suggestions-end-the-turn",
+				name: "suggestions-ask-for-the-final-message",
 				args: { suggestions: ["  Run the   e2e suite ", "run the e2e suite", "Open a PR"] },
-				expectText: ["Shown to the user as one-click next messages"],
-				expectTerminate: true,
+				expectText: ["one-click next messages", "Now write your final message"],
+				expectTerminate: false,
 				expectRender: { width: 80, contains: ["1. Run the e2e suite", "2. Open a PR"] },
 			},
 			{
 				tool: "suggest_next_steps",
-				name: "blank-suggestions-still-end-the-turn",
-				args: { suggestions: ["   "] },
-				expectText: ["No usable suggestions"],
+				name: "an-answer-written-before-the-call-ends-the-turn",
+				args: { suggestions: ["Open a PR"] },
+				branch: [
+					{
+						type: "message",
+						id: "a1",
+						parentId: null,
+						timestamp: "",
+						message: {
+							role: "assistant",
+							content: [
+								{ type: "text", text: "Fixed. ".repeat(40) },
+								{
+									type: "toolCall",
+									id: "parity-an-answer-written-before-the-call-ends-the-turn",
+									name: "suggest_next_steps",
+									arguments: { suggestions: ["Open a PR"] },
+								},
+							],
+							stopReason: "toolUse",
+							timestamp: 1,
+						},
+					},
+				],
+				expectText: ["Your turn is over"],
 				expectTerminate: true,
+				expectRender: { width: 80, contains: ["1. Open a PR"] },
+			},
+			{
+				tool: "suggest_next_steps",
+				name: "blank-suggestions-still-ask-for-the-final-message",
+				args: { suggestions: ["   "] },
+				expectText: ["No usable suggestions", "Now write your final message"],
+				expectTerminate: false,
 				expectRender: { width: 80, contains: ["No usable suggestions."] },
 			},
 		],

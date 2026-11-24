@@ -35,10 +35,15 @@ function assistantTurn(calls: Array<[id: string, name: string]>, streaming = fal
 				{ type: "text", text: "Done." },
 				...calls.map(([id, name]) => ({ type: "toolCall", id, name, arguments: {} })),
 			],
-			stopReason: "toolUse",
+			stopReason: calls.length > 0 ? "toolUse" : "stop",
 		} as unknown as AssistantMessage,
 	};
 }
+
+const finalAnswer = (overrides: Partial<AssistantMessage> = {}, streaming = false): ChatTurn => {
+	const turn = assistantTurn([], streaming) as Extract<ChatTurn, { kind: "assistant" }>;
+	return { ...turn, id: "a2", message: { ...turn.message, ...overrides } };
+};
 
 const done = (suggestions: string[]): ToolResultState => ({
 	status: "done",
@@ -73,14 +78,25 @@ describe("deriveComposerSuggestions", () => {
 		expect(deriveComposerSuggestions(undefined)).toEqual([]);
 	});
 
-	test("offers nothing once anything follows the call", () => {
+	test("keeps the suggestions through the final message written after the call", () => {
+		const turns = [...source().turns, finalAnswer(), { kind: "system", id: "closer" } as ChatTurn];
+		expect(deriveComposerSuggestions(source({ turns }))).toEqual(["Run the tests", "Open a PR"]);
+	});
+
+	test("offers nothing once anything but a finished final message follows the call", () => {
 		for (const later of [
 			{ ...userTurn, id: "u2" },
 			{ kind: "error", id: "e1", text: "boom" } as ChatTurn,
-			{ ...assistantTurn([]), id: "a2" },
+			{ ...assistantTurn([["r1", "read_test"]]), id: "a2" },
+			finalAnswer({ stopReason: "error" }),
+			finalAnswer({}, true),
 		]) {
 			expect(deriveComposerSuggestions(source({ turns: [...source().turns, later] }))).toEqual([]);
 		}
+	});
+
+	test("a final message alone offers nothing", () => {
+		expect(deriveComposerSuggestions(source({ turns: [userTurn, finalAnswer()] }))).toEqual([]);
 	});
 
 	test("offers nothing for an errored or unfinished call", () => {
