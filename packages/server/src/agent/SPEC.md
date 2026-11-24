@@ -1282,8 +1282,10 @@ re-opened transcripts provider-valid.
     `.agents/skills`, so capped filesystem batches carry truthful skill-change evidence without making
     `watch` depend on `agent`. The fixed project/personal alias roots are registered as candidate skill paths
     **whether or not they exist yet**, so a `loader.reload()` picks up one a branch switch / pull / clone
-    creates mid-session (plugin dirs are the set installed at construction — a plugin added later
-    needs a fresh session); classification still only counts dirs that actually exist. Still never arbitrary
+    creates mid-session. Every reload also re-reads the installed Claude plugin manifest before refreshing
+    the existing loader's skill paths, so newly installed plugins appear, upgraded install paths replace old
+    ones, and removed plugins disappear even when their cache folders remain on disk. Current admission
+    applies before these paths reach pi; classification still only counts dirs that actually exist. Still never arbitrary
     dot-directory scanning, plugin caches, commands, or nested downward discovery. Pi remains the parser:
     vendor-only macros/hooks/models/subagents/metadata are not emulated. First-name-wins precedence is
     Pi native/configured/shared → ThinkRail-bundled → personal aliases → project aliases, so a repo can
@@ -1318,8 +1320,8 @@ re-opened transcripts provider-valid.
     The host resolves the context via the **`setSkillAdmissionResolver`** seam (keyed by `workspaceId`, fails
     closed); `buildResourceLoader` takes the resolver as a thunk and `skillsGate` re-resolves **both** the admission
     context (`getCtx`) **and** the live compatibility source set (fresh discovery) on every `loader.reload()`, so
-    `session.reloadResources` picks up a mid-session trust grant, skill/group toggle, **or a newly-appeared alias
-    dir** — and a late-appearing project alias is still classified + trust-gated, never slipping through as an
+    `session.reloadResources` picks up a mid-session trust grant, skill/group toggle, **a newly-appeared alias
+    dir or a changed plugin installation** — and a late-appearing project alias is still classified + trust-gated, never slipping through as an
     unclassified load. Personal and bundled resources are never trust-gated (only the enable/disable layer), and
     this gate is scoped to the compatibility aliases. pi-native project resources (`.pi/` settings, extensions,
     skills, prompts and themes, `SYSTEM.md`, ancestor `.agents/skills`) follow pi-level trust instead: pi gates

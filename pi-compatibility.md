@@ -364,6 +364,14 @@ restart and toggle-reload regressions on upgrades.
     loader…").
   - pi's `parseGitUrl` reads only `git:` and `https?|ssh|git://` as git; everything else, `file://`
     included, is a path. `extensions.json` follows the same rule (`extensionSourceKind`).
+- **Portable skill roots on reload** — [[submodule-server-agent]], `resolveSkillInputs` in `extensions.ts`.
+  Pi 1.6.0's `DefaultResourceLoader` retains the supplied `additionalSkillPaths` array by reference and
+  reads it on every reload, but exposes no path setter or pre-reload resolver. The host retains its existing
+  in-place refresh and re-discovers explicit alias roots and current Claude manifest install paths before
+  applying admission; it does not scan the plugin cache or swap the session's loader. **Removal gate:**
+  a public path setter/resolver that preserves reload admission and first-name-wins precedence can replace
+  the shared-array contract. Re-check the constructor and reload in installed `resource-loader.js` and
+  run `agent/extensions.test.ts`'s installed-Claude-plugin lifecycle and admission cases.
 - **Account-scoped model availability** — [[submodule-server-agent]], `modelAvailability.ts`. Pi's
   `openai` provider lists its whole API catalog under Sign in with ChatGPT (its `filterAllModels` drops
   only classifiers), so the host keeps the ids in pi's `openai-codex` catalog; Central proxies advertise
