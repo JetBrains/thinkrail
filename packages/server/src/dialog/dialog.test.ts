@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -36,6 +36,21 @@ test("Windows picker: a PowerShell FolderBrowserDialog, -Sta, owned by a top-mos
 		expect(script).toContain("} catch { }");
 	}
 });
+
+const SHELL_WARM_UP_TIMEOUT_MS = 120_000;
+
+beforeAll(() => {
+	if (process.platform !== "win32") return;
+	for (const picker of pickersFor("win32")) {
+		const shell = picker.cmd[0] ?? "";
+		if (!Bun.which(shell)) continue;
+		const warmUp = Bun.spawnSync([shell, "-NoProfile", "-NonInteractive", "-Command", "exit 0"], {
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		expect(warmUp.exitCode).toBe(0);
+	}
+}, SHELL_WARM_UP_TIMEOUT_MS);
 
 for (const picker of pickersFor("win32")) {
 	const shell = picker.cmd[0] ?? "";
