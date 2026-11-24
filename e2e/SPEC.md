@@ -220,6 +220,11 @@ the new socket (a replayed read keeps its id): the pass sends the read while it 
 Showing a side or the bottom focuses its selected tab (its edge-rail control when no tab renders) one
 animation frame after the region renders; a probe that then focuses inside the shown region first waits
 for that endpoint, or a late frame moves focus away from the probe's target.
+A keybinding override set over the host wire (`fixtures/keybindings.ts`) reaches the page as the
+`settings.changed` push on the page's own socket, and the wire's reply does not wait for the page to
+handle it, so a key pressed right after the reply can still meet the old binding. A probe sets the override
+before it opens the surface that reads it, since every later reply on the page's socket comes after the
+push, or waits for the rebound chord to show (`aria-keyshortcuts`, a key cap) before its first press.
 Monaco wheel probes reach the editor through an actionability-checked `hover()`, never a measured box:
 a box read before the editor's layout settles can be a stale one whose centre lies under the left panel's
 resize separator. Each CDP wheel event scrolls Monaco 50 px whatever its delta (one synthetic tick), so a

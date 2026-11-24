@@ -465,8 +465,7 @@ test.describe("rebound review keys", () => {
 	test("a comment rebound onto Alt+Tab opens the composer from the diff cursor instead of its Tab walk", async ({
 		page,
 	}) => {
-		const { cursor } = await openCursorDiff(page);
-		await setKeybindings(page, { "review.surface.comment": ["Alt+Tab"] });
+		const { cursor } = await openCursorDiff(page, { "review.surface.comment": ["Alt+Tab"] });
 		await expect(cursor).toBeFocused();
 		await page.keyboard.press("Alt+Tab");
 		await expect(page.getByTestId("review-composer-input")).toBeFocused();
