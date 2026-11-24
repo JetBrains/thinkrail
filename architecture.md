@@ -156,8 +156,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
    passively auto-opens a bounded number of the newest unplaced sessions that are still live or carry open
    todos (a single most-recent session opens as a fallback when nothing qualifies and nothing is placed yet,
    so a workspace never lands empty while chat history exists), and lists everything else in history for
-   explicit reopen. This one auto-open attempt fires once per surface-workspace connection, not on every
-   catalog re-read, and a surface resolving an exact-chat route target defers it entirely to that target.
+   explicit reopen. This one auto-open attempt fires once per surface and workspace for the page's life, not
+   on every catalog re-read or reconnect, and a surface resolving an exact-chat route target defers it
+   entirely to that target.
    `session.created` supplies that history-only live delta when another frontend starts a session; reconnect
    repairs a missed delta through `session.list`, and the normalized state snapshot carries every chat's
    name, so a chat this client never listed is named without a `session.list`. The client is a **stateless
