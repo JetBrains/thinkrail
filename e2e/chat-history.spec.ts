@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test, type WebSocketRoute } from "@playwright/test";
@@ -323,9 +324,10 @@ test("a closed chat can be moved to trash from history", async ({ page }) => {
 		messages: [{ role: "user", text: "remove this transcript", timestamp: BASE_TS }],
 	});
 	setMtime(doomed.path, BASE_TS);
+	const searchPrompt = `delete this from search ${randomUUID()}`;
 	const searchDoomed = seedWorkspaceSession(repoCwd(), {
 		name: "search trash chat",
-		messages: [{ role: "user", text: "delete this from search", timestamp: BASE_TS + 10_000 }],
+		messages: [{ role: "user", text: searchPrompt, timestamp: BASE_TS + 10_000 }],
 	});
 	setMtime(searchDoomed.path, BASE_TS + 10_000);
 	const kept = seedWorkspaceSession(repoCwd(), {
@@ -349,10 +351,10 @@ test("a closed chat can be moved to trash from history", async ({ page }) => {
 	await expect(page.getByText("remove this transcript")).toHaveCount(0);
 
 	await page.getByTestId("chat-input").press("Control+r");
-	await page.getByTestId("history-query").fill("delete this from search");
+	await page.getByTestId("history-query").fill(searchPrompt);
 	const searchRow = page
 		.locator('[data-testid="history-item"][data-kind="prompt"]')
-		.filter({ hasText: "delete this from search" });
+		.filter({ hasText: searchPrompt });
 	await searchRow.getByTestId("history-delete-chat").click();
 	await expect(page.getByTestId("history-overlay")).toHaveCount(0);
 	await expect.poll(() => existsSync(searchDoomed.path)).toBe(false);
