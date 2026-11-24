@@ -805,7 +805,9 @@ word-boundary cut, found by words past the cut), an inline rename that starts fr
 from the optimistic first send; it cannot persist a sent prompt without a provider, so the live path's
 durability is the server unit test's. Palette name coverage (`search-palette.spec.ts`) seeds a named chat in
 a workspace the page never opened, finds it by a word only its title holds, renames it from a second wire
-client while the palette stays open, and pins that the page sent no `session.list` for either. Find in Files coverage (`find-in-files.spec.ts`) writes its probe
+client while the palette stays open, and pins that the page sent no `session.list` for either. Its preview-cap scenario grows `notes.txt` only once
+the palette's host search has settled (no group indexing or refreshing): a re-ask stats the grown file and
+switches the pane to too large without reading it, so the refused refresh would never be asked. Find in Files coverage (`find-in-files.spec.ts`) writes its probe
 files into the fixture repository as an untracked folder removed after every test — a binary with NUL
 bytes so `git grep -I` skips it, and a file past the host's line limit — and pins the chord, grouping
 and counts, the Monaco preview and the open-at-line selection overlay, the restored window, smart-case
