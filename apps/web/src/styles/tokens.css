@@ -34,6 +34,13 @@
 	--panel-inset: var(--space-8);
 	--tree-indent: var(--space-8);
 	--chat-gutter: var(--space-8);
+	--dialog-center: 50%;
+}
+
+@supports (left: round(50%, 1px)) {
+	:root {
+		--dialog-center: round(50%, 1px);
+	}
 }
 
 @property --chat-transcript-width {
