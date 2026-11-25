@@ -38,6 +38,7 @@ paste into the folder, and extensions
   through `WorkspaceFiles.ensureArtifactsDir` before saving — so recreating a folder someone cleaned never
   leaves files git would stage;
   `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;
+  `@thinkrail/shared/packageInstallError` → `packageInstallError()`;
   `@thinkrail/shared/stripAnsi` → `stripAnsi()`, `plainText()`;
   `@thinkrail/shared/toolHomes` → `toolHomeEnv(home)`, the environment that points every agent tool's
   config home (Claude Code, Codex, Gemini, Copilot, Kimi, Grok) under one sandbox home and clears the
@@ -167,6 +168,13 @@ paste into the folder, and extensions
   to pattern-match. It lives here because both ends of the seam need it and neither may import the other:
   the module that knows the failure throws it (today `server/src/git`, for a vanished commit scope) and the
   host's request handler reads it onto `WsResponse.errorCode`.
+- **/packageInstallError** — `packageInstallError(error)`: a failed package install as a `CodedError`
+  whose message is pi's text unchanged. npm's `E404` / "is not in this registry" in the captured output
+  is `PACKAGE_NOT_FOUND`; a network failure (`ENOTFOUND`, `EAI_AGAIN`, `ECONNREFUSED`, `ECONNRESET`,
+  `ETIMEDOUT`, `ENETUNREACH`, `EHOSTUNREACH`, "request to … failed") is `PACKAGE_REGISTRY_UNREACHABLE`;
+  anything else is `PACKAGE_INSTALL_FAILED`. It lives here because pi's install (`server/src/agent`) and
+  the installed-extension runtime (`server/src/extensions/installed`, which may not import `agent`) both
+  install packages.
 - **/removeTree** — `removeTree(path, options?)`: delete a tree that a child process ran from, and keep
   trying while the failure is one a short wait can resolve (`EBUSY`, `EMFILE`, `ENFILE`, `ENOTEMPTY`,
   `EPERM`, `EACCES`) — ten attempts with a linear 100 ms backoff by default. It exists because Windows

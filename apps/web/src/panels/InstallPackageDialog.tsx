@@ -1,4 +1,4 @@
-import { RiInformationLine } from "@remixicon/react";
+import { RiArrowDownSLine, RiArrowRightSLine, RiInformationLine } from "@remixicon/react";
 import {
 	type ExtensionCatalogEntry,
 	type PackageInstallResult,
@@ -77,7 +77,13 @@ export type InstallStep =
 	| { kind: "installing"; name: string }
 	| { kind: "installed"; summary: PackageInstallResult }
 	| { kind: "scopeUnsupported"; name: string }
-	| { kind: "failed"; name: string; message: string; outcome: InstallFailureOutcome };
+	| {
+			kind: "failed";
+			name: string;
+			message: string;
+			details?: string;
+			outcome: InstallFailureOutcome;
+	  };
 
 export function installedExtension(
 	result: PackageInstallResult,
@@ -93,8 +99,30 @@ const NOTHING_ADDED_CODES: ReadonlySet<WsErrorCode> = new Set<WsErrorCode>([
 	"PACKAGE_OFFLINE",
 	"PACKAGE_UNTRUSTED",
 	"PACKAGE_INSTALL_FAILED",
+	"PACKAGE_NOT_FOUND",
+	"PACKAGE_REGISTRY_UNREACHABLE",
 	"PACKAGE_SETTINGS_WRITE_FAILED",
 ]);
+
+const INSTALL_FAILURE_KEYS: Partial<Record<WsErrorCode, MessageKey>> = {
+	PACKAGE_NOT_FOUND: "settings.packages.installDialog.failedNotFound",
+	PACKAGE_REGISTRY_UNREACHABLE: "settings.packages.installDialog.failedUnreachable",
+	PACKAGE_INSTALL_FAILED: "settings.packages.installDialog.failedOther",
+};
+
+/** A failed install in plain words, with the host's raw text kept as details for the codes that carry npm's output. */
+export function installFailureText(
+	t: Translator,
+	error: unknown,
+): { message: string; details?: string } {
+	if (error instanceof RequestTimeoutError) {
+		return { message: t("settings.packages.installDialog.timedOut") };
+	}
+	const raw = errorText(error, t("settings.packages.actionFailed"));
+	const code = wsErrorCode(error);
+	const key = code === undefined ? undefined : INSTALL_FAILURE_KEYS[code];
+	return key ? { message: t(key), details: raw } : { message: raw };
+}
 
 export function installFailureOutcome(error: unknown): InstallFailureOutcome {
 	if (error instanceof RequestTimeoutError) return "timedOut";
@@ -263,6 +291,37 @@ function SourceHelp() {
 					</Fragment>
 				))}
 			</div>
+		</div>
+	);
+}
+
+function FailureDetails({ details }: { details: string }) {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const id = useId();
+	return (
+		<div className="flex flex-col gap-4">
+			<Button
+				variant="ghost"
+				size="s"
+				className="self-start"
+				iconLeft={open ? RiArrowDownSLine : RiArrowRightSLine}
+				aria-expanded={open}
+				aria-controls={id}
+				data-testid="install-package-error-details-toggle"
+				onClick={() => setOpen((value) => !value)}
+			>
+				{t("settings.packages.installDialog.failedDetails")}
+			</Button>
+			{open ? (
+				<pre
+					id={id}
+					data-testid="install-package-error-details"
+					className="max-h-160 select-text overflow-auto whitespace-pre-wrap break-words rounded-sm border border-border-muted bg-container-workspace-bg p-8 tr-code-text-small text-text-muted"
+				>
+					{details}
+				</pre>
+			) : null}
 		</div>
 	);
 }
@@ -459,6 +518,7 @@ export function InstallPackageBody({
 						<SettingsNotice variant="error" testId="install-package-error">
 							<span className="break-words">{step.message}</span>
 						</SettingsNotice>
+						{step.details ? <FailureDetails details={step.details} /> : null}
 						{step.outcome === "timedOut" ? null : (
 							<span className="tr-text-metadata text-text-muted">
 								{step.outcome === "nothingAdded"
@@ -536,12 +596,12 @@ export function InstallPackageDialog({
 				setStep({ kind: "scopeUnsupported", name: label });
 				return;
 			}
-			const outcome = installFailureOutcome(error);
-			const message =
-				outcome === "timedOut"
-					? t("settings.packages.installDialog.timedOut")
-					: errorText(error, t("settings.packages.actionFailed"));
-			setStep({ kind: "failed", name: label, message, outcome });
+			setStep({
+				kind: "failed",
+				name: label,
+				...installFailureText(t, error),
+				outcome: installFailureOutcome(error),
+			});
 		}
 	};
 

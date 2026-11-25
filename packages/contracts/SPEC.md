@@ -1500,11 +1500,14 @@ and what it loaded, never pi's own types.
   edit, a chat load that installed something, an update, or a package or extension switch.
 - Error codes: `PACKAGE_SOURCE_INVALID` (also an unsupported `type` / `scope`, validated at the boundary),
   `PACKAGE_OFFLINE` (npm/git only; local installs work offline), `PACKAGE_UNTRUSTED`, `PACKAGE_UNKNOWN`,
-  `PACKAGE_INSTALL_FAILED`, `PACKAGE_REMOVE_FAILED`, `PACKAGE_UPDATE_FAILED`,
+  `PACKAGE_INSTALL_FAILED` (with its two named causes, `PACKAGE_NOT_FOUND` — npm found no such package
+  or dependency — and `PACKAGE_REGISTRY_UNREACHABLE`; all three carry pi's text, npm's output included),
+  `PACKAGE_REMOVE_FAILED`, `PACKAGE_UPDATE_FAILED`,
   `PACKAGE_SETTINGS_WRITE_FAILED`, and `PACKAGE_INSTALLED_UNLISTED` — the declaration was persisted but
   the host could not produce the row; of the install codes only `PACKAGE_SOURCE_INVALID`,
-  `PACKAGE_OFFLINE`, `PACKAGE_UNTRUSTED`, `PACKAGE_INSTALL_FAILED` and `PACKAGE_SETTINGS_WRITE_FAILED`
-  are raised before anything is written, and a client may claim "nothing was added" only for those.
+  `PACKAGE_OFFLINE`, `PACKAGE_UNTRUSTED`, the three install-failure codes and `PACKAGE_SETTINGS_WRITE_FAILED`
+  are raised before anything is written. A client that does not know a newer code shows the message and
+  makes no "nothing was added" claim, and a client may claim "nothing was added" only for those.
 
 ## Installed extensions
 

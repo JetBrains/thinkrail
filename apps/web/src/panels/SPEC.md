@@ -1614,7 +1614,10 @@ a project picker, the prompt hero, and the reused
   progress log, no Cancel — pi has none) → **Installed** (name · version · description, chips for every
   tool / command / skill / prompt it added, and one line: "Installed globally — new chats have it now;
   open chats pick it up when idle"; no switch here — the row in the list is the only state control) or
-  **Failed** (the host's message,
+  **Failed** (`installFailureText`: for `PACKAGE_NOT_FOUND`, `PACKAGE_REGISTRY_UNREACHABLE` and
+  `PACKAGE_INSTALL_FAILED` one plain sentence — npm found no such package or dependency / the registry
+  could not be reached / the install stopped with an error — with the host's raw text, npm's own output
+  included, behind a closed **Details** toggle; for any other code the host's message as it is;
   "Nothing was added to your settings" only for the codes the host raises before it writes
   (`installFailureOutcome`), "It may have been added anyway — check the list" for any other error, Back /
   Retry; a `RequestTimeoutError` instead says to check the list, since the install may still complete). A package that installs but contributes nothing loadable

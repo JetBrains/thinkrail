@@ -14,6 +14,7 @@ import {
 	InstallPackageBody,
 	type InstallStep,
 	installFailureOutcome,
+	installFailureText,
 	installStepHeader,
 	sourceDisplayName,
 } from "./InstallPackageDialog";
@@ -198,6 +199,44 @@ test("only a failure the host raised before persisting means nothing was added",
 	);
 	expect(installFailureOutcome(new Error("socket closed"))).toBe("unknown");
 	expect(installFailureOutcome(new RequestTimeoutError("slow"))).toBe("timedOut");
+});
+
+test("an install failure says what happened and keeps npm's text as details", () => {
+	const npm =
+		"npm install nope --prefix /p --legacy-peer-deps --no-audit --no-fund failed with code 1:\nnpm error code E404";
+	expect(installFailureText(t, new RequestError("PACKAGE_NOT_FOUND", npm))).toEqual({
+		message: t("settings.packages.installDialog.failedNotFound"),
+		details: npm,
+	});
+	expect(installFailureText(t, new RequestError("PACKAGE_REGISTRY_UNREACHABLE", npm)).message).toBe(
+		"Couldn't reach the npm registry. Check your internet connection or proxy, then retry.",
+	);
+	expect(installFailureText(t, new RequestError("PACKAGE_INSTALL_FAILED", npm))).toEqual({
+		message: "The install stopped with an error. The details say why.",
+		details: npm,
+	});
+	expect(installFailureText(t, new RequestError("PACKAGE_OFFLINE", "pi is offline"))).toEqual({
+		message: "pi is offline",
+	});
+	expect(installFailureText(t, new RequestTimeoutError("slow")).details).toBeUndefined();
+	expect(installFailureOutcome(new RequestError("PACKAGE_NOT_FOUND", npm))).toBe("nothingAdded");
+	expect(installFailureOutcome(new RequestError("PACKAGE_REGISTRY_UNREACHABLE", npm))).toBe(
+		"nothingAdded",
+	);
+	const failed = render("w1", CATALOG, {
+		kind: "failed",
+		name: "nope",
+		message: t("settings.packages.installDialog.failedNotFound"),
+		details: npm,
+		outcome: "nothingAdded",
+	});
+	expect(failed).toContain("npm couldn&#x27;t find this package");
+	expect(failed).toContain('data-testid="install-package-error-details-toggle"');
+	expect(failed).toContain('aria-expanded="false"');
+	expect(failed).not.toContain("E404");
+	expect(
+		render("w1", CATALOG, { kind: "failed", name: "x", message: "m", outcome: "unknown" }),
+	).not.toContain("install-package-error-details-toggle");
 });
 
 test("each step has its dialog title", () => {

@@ -251,7 +251,9 @@ A folder source is never copied: it loads from where it is, and nothing under it
   `discoverAndLoadExtensions`, `createAgentSession` for the guard), `typebox` (`Type`, the guard),
   `@thinkrail/extension-api/installed` (the manifest reader), `@thinkrail/extension-api/server` (the
   descriptor types), `@thinkrail/contracts`,
-  `@thinkrail/shared/codedError`, `log`, Node `fs` / `path` / `os` / `crypto`.
+  `@thinkrail/shared/codedError`, `@thinkrail/shared/packageInstallError` (the dialog's install,
+  `stage`, captures npm's output and names the failure with it; reconcile installs and updates keep pi's
+  default output), `log`, Node `fs` / `path` / `os` / `crypto`.
 - **Forbidden:** the parent registry and its siblings (the skill resolver and the reserved names arrive
   as options), `agent`, `host`, `settings`, `persistence` (the data dir arrives as an option), spawning
   npm or git itself, writing inside a folder source or outside `<data dir>/extensions*`.

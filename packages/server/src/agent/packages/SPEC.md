@@ -119,9 +119,16 @@ this module never spawns npm or git itself.
     discovered) or `±builtin:<name>` in the scope that
     decides the built-in; a resource inside a package is refused with `PACKAGE_SOURCE_INVALID`.
   - Error codes: `PACKAGE_SOURCE_INVALID`, `PACKAGE_OFFLINE`, `PACKAGE_UNTRUSTED`, `PACKAGE_UNKNOWN`,
-    `PACKAGE_INSTALL_FAILED`, `PACKAGE_REMOVE_FAILED`, `PACKAGE_UPDATE_FAILED`,
+    `PACKAGE_INSTALL_FAILED` / `PACKAGE_NOT_FOUND` / `PACKAGE_REGISTRY_UNREACHABLE`, `PACKAGE_REMOVE_FAILED`, `PACKAGE_UPDATE_FAILED`,
     `PACKAGE_SETTINGS_WRITE_FAILED`; `PACKAGE_INSTALLED_UNLISTED` is the façade's (declaration persisted,
     row not produced). Messages carry pi's text and never reach analytics.
+  - **An install captures npm's output.** `installPiPackage` opens its package manager with pi's
+    `commandOutput: "capture"`, so npm and git write nothing to the host's terminal, never prompt, and a
+    failure's message ends with the output's tail. `packageInstallError` (`@thinkrail/shared`) reads that
+    text once into `PACKAGE_NOT_FOUND` (npm `E404`), `PACKAGE_REGISTRY_UNREACHABLE` (`ENOTFOUND`,
+    `ECONNREFUSED`, `ETIMEDOUT`, …) or `PACKAGE_INSTALL_FAILED`, so the install dialog can say what happened
+    without parsing text. Update, remove and update checks keep pi's default `inherit` and their short
+    messages (deferred: their rows would show the whole tail).
 
 ## Deferred
 

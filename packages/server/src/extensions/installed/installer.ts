@@ -2,8 +2,10 @@ import { type Dirent, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { join, relative } from "node:path";
 import { DefaultPackageManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 
+export type CommandOutput = "inherit" | "capture";
+
 export interface ExtensionInstaller {
-	install(source: string, installDir: string): Promise<string>;
+	install(source: string, installDir: string, output?: CommandOutput): Promise<string>;
 	hasUpdate(source: string, installDir: string): Promise<boolean>;
 }
 
@@ -15,11 +17,13 @@ function packageManager(
 	installDir: string,
 	npmCommand: NpmCommand,
 	sources: readonly string[] = [],
+	commandOutput: CommandOutput = "inherit",
 ): DefaultPackageManager {
 	const command = npmCommand();
 	return new DefaultPackageManager({
 		cwd: installDir,
 		agentDir: installDir,
+		commandOutput,
 		settingsManager: SettingsManager.inMemory({
 			packages: [...sources],
 			...(command && command.length > 0 ? { npmCommand: command } : {}),
@@ -48,9 +52,9 @@ export function pruneHostOwnedDependencies(dir: string): void {
 
 export function piExtensionInstaller(npmCommand: NpmCommand = () => undefined): ExtensionInstaller {
 	return {
-		async install(source, installDir) {
+		async install(source, installDir, output = "inherit") {
 			mkdirSync(installDir, { recursive: true });
-			const manager = packageManager(installDir, npmCommand);
+			const manager = packageManager(installDir, npmCommand, [], output);
 			await manager.install(source);
 			const root = manager.getInstalledPath(source, "user");
 			if (root === undefined)
