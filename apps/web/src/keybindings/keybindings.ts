@@ -14,10 +14,40 @@ export const FOCUS_GROUP_BINDINGS = [
 	"focus.group9",
 ] as const;
 
+export const SUGGESTION_KEYS = {
+	send: [
+		"suggestions.send1",
+		"suggestions.send2",
+		"suggestions.send3",
+		"suggestions.send4",
+		"suggestions.send5",
+		"suggestions.send6",
+		"suggestions.send7",
+		"suggestions.send8",
+		"suggestions.send9",
+	],
+	edit: [
+		"suggestions.edit1",
+		"suggestions.edit2",
+		"suggestions.edit3",
+		"suggestions.edit4",
+		"suggestions.edit5",
+		"suggestions.edit6",
+		"suggestions.edit7",
+		"suggestions.edit8",
+		"suggestions.edit9",
+	],
+} as const;
+
+export type SuggestionKeybindingId =
+	| (typeof SUGGESTION_KEYS.send)[number]
+	| (typeof SUGGESTION_KEYS.edit)[number];
+
 export type KeybindingId =
 	| "view.toggleLeft"
 	| "view.toggleRight"
 	| "view.toggleBottom"
+	| "view.toggleAllPanels"
 	| "view.files"
 	| "view.changes"
 	| "workspace.new"
@@ -34,7 +64,8 @@ export type KeybindingId =
 	| "tab.moveToNextGroup"
 	| "group.splitRight"
 	| "shortcuts.open"
-	| (typeof FOCUS_GROUP_BINDINGS)[number];
+	| (typeof FOCUS_GROUP_BINDINGS)[number]
+	| SuggestionKeybindingId;
 
 type PlatformScope = "apple" | "other";
 
@@ -61,6 +92,7 @@ export const KEYBINDINGS: Readonly<Record<KeybindingId, readonly [KeyChord, ...K
 	"view.toggleLeft": [{ code: "KeyB", key: "B", mod: true }],
 	"view.toggleRight": [{ code: "KeyJ", key: "J", mod: true }],
 	"view.toggleBottom": [{ code: "KeyJ", key: "J", mod: true, shift: true }],
+	"view.toggleAllPanels": [{ code: "F12", key: "F12", mod: true, shift: true }],
 	"workspace.new": [
 		{ code: "KeyN", key: "N", mod: true },
 		{ code: "KeyN", key: "N", mod: true, alt: true },
@@ -98,6 +130,24 @@ export const KEYBINDINGS: Readonly<Record<KeybindingId, readonly [KeyChord, ...K
 	],
 	"group.splitRight": [{ code: "Backslash", key: "\\", mod: true }],
 	"shortcuts.open": [{ typed: true, key: "?", mod: true }],
+	"suggestions.send1": [{ code: "Digit1", key: "1", alt: true }],
+	"suggestions.send2": [{ code: "Digit2", key: "2", alt: true }],
+	"suggestions.send3": [{ code: "Digit3", key: "3", alt: true }],
+	"suggestions.send4": [{ code: "Digit4", key: "4", alt: true }],
+	"suggestions.send5": [{ code: "Digit5", key: "5", alt: true }],
+	"suggestions.send6": [{ code: "Digit6", key: "6", alt: true }],
+	"suggestions.send7": [{ code: "Digit7", key: "7", alt: true }],
+	"suggestions.send8": [{ code: "Digit8", key: "8", alt: true }],
+	"suggestions.send9": [{ code: "Digit9", key: "9", alt: true }],
+	"suggestions.edit1": [{ code: "Digit1", key: "1", alt: true, shift: true }],
+	"suggestions.edit2": [{ code: "Digit2", key: "2", alt: true, shift: true }],
+	"suggestions.edit3": [{ code: "Digit3", key: "3", alt: true, shift: true }],
+	"suggestions.edit4": [{ code: "Digit4", key: "4", alt: true, shift: true }],
+	"suggestions.edit5": [{ code: "Digit5", key: "5", alt: true, shift: true }],
+	"suggestions.edit6": [{ code: "Digit6", key: "6", alt: true, shift: true }],
+	"suggestions.edit7": [{ code: "Digit7", key: "7", alt: true, shift: true }],
+	"suggestions.edit8": [{ code: "Digit8", key: "8", alt: true, shift: true }],
+	"suggestions.edit9": [{ code: "Digit9", key: "9", alt: true, shift: true }],
 };
 
 export function onPlatform(chord: KeyChord, apple: boolean): boolean {

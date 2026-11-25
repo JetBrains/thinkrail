@@ -7,8 +7,8 @@ import type {
 } from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
 import { VIRTUALIZED_DIFF_LINES } from "@thinkrail/resource-renderers";
+import { extendFolderChain, startFolderChain } from "@thinkrail/ui/folder-chains";
 import { ancestorPaths, tupleKey, turnTimeLabel } from "../lib";
-import { extendFolderChain, startFolderChain } from "./folderChains";
 
 export function statusNameClass(status: GitFileStatus): string {
 	switch (status) {

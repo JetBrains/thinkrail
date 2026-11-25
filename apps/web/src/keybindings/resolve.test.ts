@@ -476,9 +476,20 @@ describe("local commands", () => {
 			"trees",
 			"review.surface",
 			"transcript",
+			"reader",
 			"settings.nav",
 			"settings",
 			"settings.list",
+		]);
+		expect(resolved.local.has("reading")).toBe(false);
+		expect(actsIn(resolved, "reading")).toEqual(["transcript", "reader"]);
+		expect(local(resolved, "reader")).toEqual([
+			"arrows.left=KeyH",
+			"arrows.down=KeyJ",
+			"arrows.up=KeyK",
+			"arrows.right=KeyL",
+			"reading.top=KeyG",
+			"reading.bottom=Shift+KeyG",
 		]);
 		expect(resolved.byId.get("trees.search")?.scope).toBe("trees");
 		expect(resolved.byId.get("trees.search")?.plain).toBe(true);
@@ -615,6 +626,7 @@ describe("local commands", () => {
 			{ scope: "review", command: "review.nextUnreviewed" },
 			{ scope: "review.surface", command: "arrows.down" },
 			{ scope: "transcript", command: "arrows.down" },
+			{ scope: "reader", command: "arrows.down" },
 			{ scope: "settings.nav", command: "arrows.down" },
 			{ scope: "settings", command: "arrows.down" },
 			{ scope: "settings.list", command: "arrows.down" },

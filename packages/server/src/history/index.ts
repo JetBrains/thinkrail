@@ -1,5 +1,11 @@
 export { displayTranscriptMessages } from "./displayTranscript";
-export { type ExtractedSession, extractSession, type HistoryEntry } from "./extract";
+export {
+	type EntryLocation,
+	type ExtractedSession,
+	extractSession,
+	type HistoryEntry,
+	locateEntry,
+} from "./extract";
 export {
 	clampLimit,
 	getHistoryIndex,

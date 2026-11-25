@@ -52,6 +52,7 @@ import {
 	listSessions,
 	listSkillCatalog,
 	listSkillCommands,
+	listSubagentCatalog,
 	markWorkspaceRead,
 	markWorkspaceUnread,
 	notifyExtUi,
@@ -121,7 +122,7 @@ import { forgetWorkspaceChanges, revertChange, undoChange } from "../changes";
 import { selectDirectory } from "../dialog";
 import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
 import { hostEnvironmentStatus, updateHostEnvironment } from "../environment";
-import { listExtensionCatalog } from "../extensions";
+import { createExtensionQueries, listExtensionCatalog } from "../extensions";
 import {
 	completeSurvey,
 	confirmInAppSurvey,
@@ -206,7 +207,7 @@ import {
 	sendableComments,
 	updateComment,
 } from "../reviews";
-import { getConfig, noteRecentModel, updateConfig } from "../settings";
+import { getConfig, noteRecentModel, setSubagentEnabled, updateConfig } from "../settings";
 import { evictSpecIndex, evictSpecRoot, projectHasSpecs, specGraph } from "../spec";
 import { cancelSpeechInstall, installSpeech, removeSpeech } from "../speech";
 import {
@@ -277,6 +278,7 @@ import {
 	workspaceDiffStats,
 } from "../workspaces";
 import { ackSend } from "./ackSend";
+import { copyLocalAttachment } from "./attachments";
 import { sessionProviderAnalytics } from "./authAnalytics";
 import { startChatSession } from "./chatSession";
 import {
@@ -290,6 +292,13 @@ import {
 	seesChats,
 } from "./chats";
 import { continuationStatus, startContinuation } from "./continuations";
+import { extensionHostServices } from "./extensionHost";
+import {
+	extensionsBrowse,
+	extensionsCheckUpdates,
+	extensionsRemove,
+	extensionsUpdate,
+} from "./extensions";
 import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { provisionInitialTerminal } from "./initialTerminal";
@@ -341,7 +350,11 @@ import { withChangeLock, withReviewLock } from "./reviewLock";
 import { runObservation } from "./runAnalytics";
 import { hostSearch, publishSearchText } from "./search";
 import { trailingSingleFlight } from "./sessionStateList";
-import { findWorkspaceReviewOutcome, scheduleLifecyclePass } from "./settledLifecycle";
+import {
+	findWorkspaceReviewOutcome,
+	scheduleLifecyclePass,
+	stampTerminalActivity,
+} from "./settledLifecycle";
 import { taskObservation } from "./taskAnalytics";
 import {
 	claimItemFix,
@@ -353,6 +366,16 @@ import {
 } from "./todoReview";
 
 const log = logger("host");
+
+const extensionQueries = createExtensionQueries({
+	isDisabled: (name) => getConfig().disabledExtensions.includes(name),
+	services: extensionHostServices,
+});
+
+/** After a `disabledExtensions` change: stops and drops the query tables of the extensions now off. */
+export function releaseDisabledExtensionQueries(): void {
+	extensionQueries.releaseDisabled();
+}
 
 export interface RequestContext {
 	clientKey: string;
@@ -1187,7 +1210,7 @@ const handlers: WsHandlers = {
 	}),
 	"terminal.write": (p, ctx) => {
 		const workspaceId = writeTerminal(p.id, p.data, ctx.clientKey);
-		if (workspaceId) recordWorkspaceActivity(workspaceId);
+		stampTerminalActivity(workspaceId, p.data);
 		return { ok: true } as const;
 	},
 	"terminal.resize": (p, ctx) => {
@@ -1215,7 +1238,23 @@ const handlers: WsHandlers = {
 			admissionContextFor(project, ws.skillOverrides ?? {}, getConfig().otherAgentSkills),
 		);
 	},
+	"subagent.setEnabled": (p) => {
+		setSubagentEnabled(p?.name, p?.enabled);
+		return { ok: true };
+	},
+	"subagent.list": (p) => {
+		if (p.workspaceId === undefined) return listSubagentCatalog();
+		const ws = getWorkspace(p.workspaceId);
+		const project = listProjects().find((candidate) => candidate.id === ws.projectId);
+		const admission = admissionContextFor(
+			project,
+			ws.skillOverrides ?? {},
+			getConfig().otherAgentSkills,
+		);
+		return listSubagentCatalog(ws.worktreePath, admission.piResourceTrusted);
+	},
 	"extension.list": () => listExtensionCatalog(new Set(getConfig().disabledExtensions)),
+	"extension.query": (p) => extensionQueries.query(p),
 	"packages.list": (p) => packagesList(p),
 	"packages.install": (p) => packagesInstall(p),
 	"packages.remove": (p) => packagesRemove(p),
@@ -1223,11 +1262,16 @@ const handlers: WsHandlers = {
 	"packages.checkUpdates": (p) => packagesCheckUpdates(p),
 	"packages.setResourceEnabled": (p) => packagesSetResourceEnabled(p),
 	"packages.reveal": (p) => packagesReveal(p),
+	"extensions.remove": (p) => extensionsRemove(p),
+	"extensions.update": (p) => extensionsUpdate(p),
+	"extensions.checkUpdates": (p) => extensionsCheckUpdates(p),
+	"extensions.browse": (p) => extensionsBrowse(p),
 	"locales.list": () => readLocalLocales(),
 	"locales.reveal": () => revealDataFolder(localesDir()),
 	"themes.list": () => readUserThemes(),
 	"themes.reveal": () => revealDataFolder(themesDir()),
 	"fonts.list": () => readUserFonts(),
+	"attachments.copyLocal": (p) => copyLocalAttachment(p.workspaceId, p.path),
 	"fonts.installed": () => listInstalledFonts(),
 	"fonts.reveal": () => revealDataFolder(fontsDir()),
 	"speech.install": (p) => {

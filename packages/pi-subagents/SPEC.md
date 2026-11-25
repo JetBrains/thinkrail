@@ -34,7 +34,7 @@ choice was settled: the decision log below.
   Default and legacy factories own their completion lifetime per factory invocation: reload ends that
   lifetime, while parent-turn abort does not. Late tool updates are dropped by Pi after the tool returns.
 - `createSubagentsExtension(options?)` — the compatible runner-scoped extension factory. Options include
-  `service?`, `delegationRoot?`, `scope?`, `isEnabled?`, and `canDeliverCompletion?`.
+  `service?`, `delegationRoot?`, `scope?`, `isEnabled?`, `isAgentEnabled?(name)`, and `canDeliverCompletion?`.
 - `createSubagents(options: SubagentsExtensionOptions & { service: DelegationService })` — an explicitly
   retained, portable parent owner exposing only `extension`, `flushCompletions({ atTurnEnd? })` and
   synchronous `dispose()`. Its injected service remains embedder-owned. One immutable parent identity is established
@@ -51,6 +51,13 @@ choice was settled: the decision log below.
   that unstarted child before rejecting. `canDeliverCompletion` defaults to true and temporarily gates
   both transcript append and automatic wake-up, without closing the owner or losing pending outcomes.
   An embedder flushes after a provisional deletion rolls back or registration becomes addressable.
+- `isAgentEnabled(name)` defaults to true. It filters the per-turn advertised definition snapshot and is
+  checked live before assembly, after asynchronous child setup (a newly disabled unstarted child is
+  disposed) and when a run leaves the concurrency queue (its first `onUpdate`, the `running` transition):
+  a disabled role is then cancelled through `ChildHandle.abort` with reason `Subagent "<name>" is
+  disabled.` before any provider work — a foreground call rejects with that message, a background run
+  completes `aborted` with it as `abortReason`. Every refusal uses that message. Definition/model pins
+  remain snapshotted; availability is live. Running children and completion delivery are unaffected.
 - `SUBAGENT_COMPLETION_MESSAGE` — the custom-message type the web's background result row keys on;
   `SubagentCompletionDetails` (the run's `DelegationRunDetails` plus `delivery: CompletionDelivery` —
   `wake` | `run` | `appended`, see Result delivery), mirrored into `@thinkrail/contracts`.

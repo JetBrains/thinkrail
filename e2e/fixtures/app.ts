@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
-import { expect } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import type { SessionSummary, Workspace } from "@thinkrail/contracts";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import {
@@ -118,8 +118,21 @@ function resetState(): void {
 
 	rmSync(join(E2E_DATA_DIR, "workspaces.json"), { force: true });
 	resetChats();
+	resetInstalledExtensions();
 
 	writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
+}
+
+function resetInstalledExtensions(): void {
+	const file = join(E2E_DATA_DIR, "extensions.json");
+	let declared: unknown = [];
+	try {
+		declared = JSON.parse(readFileSync(file, "utf8")).extensions ?? [];
+	} catch {
+		return;
+	}
+	if (Array.isArray(declared) && declared.length === 0) return;
+	writeFileSync(file, `${JSON.stringify({ extensions: [] }, null, 2)}\n`);
 }
 
 function resetChats(): void {
@@ -139,8 +152,8 @@ function resetChats(): void {
 	renameSync(staged, file);
 }
 
-export async function stagePlainFolder(page: Page): Promise<string> {
-	await disposeLiveSessions(page);
+export async function stagePlainFolder(): Promise<string> {
+	await disposeLiveSessions();
 	resetState();
 	rmSync(E2E_PLAIN_DIR, { recursive: true, force: true });
 	mkdirSync(E2E_PLAIN_DIR, { recursive: true });
@@ -157,12 +170,12 @@ export function loadPersistedWorkspaces(): Workspace[] {
 	}
 }
 
-async function disposeLiveSessions(page: Page): Promise<void> {
+async function disposeLiveSessions(): Promise<void> {
 	const workspaces = loadPersistedWorkspaces();
 	if (workspaces.length === 0) return;
-	const health = await page.request.get("/health");
-	const hostUrl = new URL(health.url());
-	await health.dispose();
+	const { baseURL } = test.info().project.use;
+	if (!baseURL) throw new Error("The fixture reset needs the project's host baseURL");
+	const hostUrl = new URL(baseURL);
 	const port = Number(hostUrl.port) || (hostUrl.protocol === "https:" ? 443 : 80);
 	const wire = await E2eWire.connect(port);
 	try {
@@ -198,13 +211,13 @@ export async function createWorkspaceViaDialog(page: Page): Promise<Workspace> {
 	return created;
 }
 
-export async function resetApp(page: Page): Promise<void> {
-	await disposeLiveSessions(page);
+export async function resetApp(): Promise<void> {
+	await disposeLiveSessions();
 	resetState();
 }
 
 export async function openAppFresh(page: Page): Promise<void> {
-	await resetApp(page);
+	await resetApp();
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 }

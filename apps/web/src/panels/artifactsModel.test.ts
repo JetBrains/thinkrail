@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
 	ARTIFACTS_PROTOCOL_VERSION,
 	type SpecGraphNode,
+	type WorkspaceArtifact,
 	type WorkspaceArtifactsSnapshot,
 } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
@@ -12,6 +13,7 @@ import {
 	artifactTimeLabel,
 	artifactTree,
 	mentionText,
+	outputEntries,
 	type SmartGroup,
 	smartGroups,
 } from "./artifactsModel";
@@ -379,4 +381,50 @@ test("a folder that holds results itself becomes the parent of the result folder
 		},
 	]);
 	expect(view.unattached).toEqual([]);
+});
+
+test("outputs are the live published files, newest first, a repeated name carrying its folder", () => {
+	const at = (
+		path: string,
+		changedAt: number,
+		{
+			state = "live",
+			published = true,
+		}: { state?: WorkspaceArtifact["state"]; published?: boolean } = {},
+	): WorkspaceArtifact => ({
+		path: `.thinkrail/context/${path}`,
+		state,
+		size: 1,
+		changedAt,
+		firstSeenAt: 1,
+		...(published ? { published: true as const } : {}),
+	});
+	const rows = artifactRows(
+		{
+			workspaceId: "w1",
+			dir: ".thinkrail/context",
+			outputs: null,
+			artifacts: [
+				at("round-4/FINDINGS.md", 9),
+				at("mockups/checkout.html", 8),
+				at("mockups/_work/checkout-v1.html", 7, { published: false }),
+				at("NSCal.lean", 6),
+				at("round-3/FINDINGS.md", 5),
+				at("gone/report.md", 4, { state: "deleted" }),
+				at("FINDINGS.md", 3),
+				at("FINDINGS.html", 2),
+			],
+		},
+		{ sessionId: null, highlightSince: 0, showIgnored: false, specs: [] },
+	);
+	expect(
+		outputEntries(rows.artifacts).map(({ name, type, folder }) => [name, type, folder]),
+	).toEqual([
+		["FINDINGS", "MD", "round-4"],
+		["checkout", "HTML", null],
+		["NSCal.lean", null, null],
+		["FINDINGS", "MD", "round-3"],
+		["FINDINGS", "MD", null],
+		["FINDINGS", "HTML", null],
+	]);
 });

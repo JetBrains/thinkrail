@@ -1,13 +1,16 @@
 import { expect, test } from "bun:test";
 import { ARROW_TWIN_COMMANDS } from "@thinkrail/ui/keyboard";
 import { type LocalKeymap, localKeys } from "@thinkrail/ui/local-keys";
+import { READING_COMMANDS } from "@thinkrail/ui/reading";
 import {
 	type CursorKeyEvent,
 	composerSubmit,
 	cursorCommand,
 	REVIEW_SURFACE_COMMANDS,
 	REVIEW_SURFACE_SCOPE,
+	readingCursorKey,
 } from "./cursorKeys";
+import { READER_SCOPE } from "./readingSurface";
 
 const MAC = "MacIntel";
 const LINUX = "Linux x86_64";
@@ -205,6 +208,76 @@ test("a local command the surface does not own passes its chord through", () => 
 	);
 	expect(cursorCommand(key("Enter", { altKey: true }), rebound)).toBeNull();
 	expect(composerSubmit(key("Enter", { altKey: true }), rebound)).toBe("save");
+});
+
+const READER_DEFAULTS = [...ARROW_TWIN_COMMANDS, ...READING_COMMANDS];
+const reader = localKeys(keymap(LINUX), READER_SCOPE, READER_DEFAULTS);
+
+const readerWith = (
+	...chords: [string, { code: string; key: string; shift?: true; mod?: true }][]
+) =>
+	localKeys(
+		keymap(
+			LINUX,
+			new Map([
+				[
+					READER_SCOPE,
+					[
+						...ARROW_TWIN_COMMANDS.map(({ id, chords: [chord] }) => ({ id, chord })),
+						...chords.map(([id, chord]) => ({ id, chord })),
+					],
+				],
+			]),
+		),
+		READER_SCOPE,
+		READER_DEFAULTS,
+	);
+
+test("the block cursor reads plain walks and extends a shifted twin", () => {
+	const press = (event: CursorKeyEvent) => readingCursorKey(event, linux, reader);
+	expect(press(key("j"))).toEqual({ kind: "reading", command: { kind: "line", direction: 1 } });
+	expect(press(key("ArrowUp"))).toEqual({
+		kind: "reading",
+		command: { kind: "line", direction: -1 },
+	});
+	expect(press(key(" "))).toEqual({ kind: "reading", command: { kind: "page", direction: 1 } });
+	expect(press(key("G", { shiftKey: true }, "KeyG"))).toEqual({
+		kind: "reading",
+		command: { kind: "edge", direction: 1 },
+	});
+	expect(press(key("J", { shiftKey: true }))).toEqual({
+		kind: "cursor",
+		command: { kind: "move", direction: "down", extend: true },
+	});
+	expect(press(key("End", { shiftKey: true }))).toEqual({
+		kind: "cursor",
+		command: { kind: "edge", edge: "last", extend: true },
+	});
+	expect(press(key("Enter"))).toEqual({ kind: "cursor", command: { kind: "comment" } });
+	expect(press(key("Escape"))).toEqual({ kind: "cursor", command: { kind: "escape" } });
+	expect(press(key("v"))).toBeNull();
+});
+
+test("an exact reader key wins over a shifted twin's extension; the review actions keep theirs", () => {
+	const rebound = readerWith(
+		["reading.top", { code: "KeyM", key: "M", shift: true, mod: true }],
+		["reading.bottom", { code: "KeyJ", key: "J", shift: true }],
+	);
+	const press = (event: CursorKeyEvent) => readingCursorKey(event, linux, rebound);
+	expect(press(key("J", { shiftKey: true }))).toEqual({
+		kind: "reading",
+		command: { kind: "edge", direction: 1 },
+	});
+	expect(press(key("K", { shiftKey: true }))).toEqual({
+		kind: "cursor",
+		command: { kind: "move", direction: "up", extend: true },
+	});
+	expect(press(key("G", { shiftKey: true }, "KeyG"))).toBeNull();
+	expect(press(key("M", { shiftKey: true, ctrlKey: true }))).toEqual({
+		kind: "cursor",
+		command: { kind: "comment" },
+	});
+	expect(press({ ...key("J", { shiftKey: true }), isComposing: true })).toBeNull();
 });
 
 test("the composer saves on Mod+Enter and sends on Shift+Mod+Enter", () => {

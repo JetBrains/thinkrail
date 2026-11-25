@@ -1,5 +1,6 @@
 import { useT } from "@thinkrail/locales/react";
 import { onFontsChange } from "@thinkrail/ui/fonts";
+import { readingCommand } from "@thinkrail/ui/reading";
 import type { editor } from "monaco-editor/editor/editor.api.js";
 import {
 	useEffect,
@@ -20,10 +21,12 @@ import {
 	editorFont,
 	ensureMonaco,
 	fileEditorOptions,
+	readCode,
 	remeasureEditorFonts,
 	revealLineNow,
 	syncFileModel,
 } from "./monacoSetup";
+import { READER_SCOPE, useReaderKeys } from "./readingSurface";
 import { focusCommentCardWhenRendered } from "./revealFocus";
 import {
 	applyReviewDecorations,
@@ -37,6 +40,8 @@ function focusLine(review: SurfaceReview): number | null {
 	const range = review.focus?.anchor.selectors.find((selector) => selector.kind === "lineRange");
 	return range?.kind === "lineRange" ? range.startLine : null;
 }
+
+const NATIVE_READING_KEYS = new Set(["PageUp", "PageDown", "ArrowLeft", "ArrowRight"]);
 
 function isEditorViewState(value: unknown): value is editor.ICodeEditorViewState {
 	if (typeof value !== "object" || value === null) return false;
@@ -57,6 +62,7 @@ export default function MonacoEditor({
 	onRevealHandled,
 }: ResourceViewProps) {
 	const t = useT();
+	const readerKeys = useReaderKeys();
 	const { fileLineWidth, fileLineWidthBounded } = useResourcePreferences();
 	ensureMonaco(useResourceHost().code);
 	const scope = useId().replace(/[^\w-]/g, "");
@@ -84,6 +90,7 @@ export default function MonacoEditor({
 		viewState,
 		review,
 		onViewState,
+		readerKeys,
 	});
 	const [reviewZones, setReviewZones] = useState<MonacoReviewZoneState>({
 		threads: [],
@@ -100,6 +107,7 @@ export default function MonacoEditor({
 			viewState,
 			review,
 			onViewState,
+			readerKeys,
 		};
 	});
 
@@ -124,7 +132,27 @@ export default function MonacoEditor({
 			: null;
 		threadsRef.current = threads;
 		commentingRef.current = commenting;
+		const reading = () => codeEditor.getRawOptions().readOnly === true;
+		const textFocus = codeEditor.onDidFocusEditorText(() => {
+			if (reading()) container.setAttribute("data-text-entry", "false");
+		});
+		const textBlur = codeEditor.onDidBlurEditorText(() => {
+			container.removeAttribute("data-text-entry");
+		});
+		const readingKeys = codeEditor.onKeyDown((event) => {
+			const press = event.browserEvent;
+			if (!reading() || !codeEditor.hasTextFocus() || NATIVE_READING_KEYS.has(press.key)) return;
+			const keys = latestRef.current.readerKeys;
+			const command = readingCommand(press, keys, keys.match(press, { textEntry: false }));
+			if (!command) return;
+			event.preventDefault();
+			event.stopPropagation();
+			readCode(codeEditor, command);
+		});
 		return () => {
+			readingKeys.dispose();
+			textFocus.dispose();
+			textBlur.dispose();
 			const saved = codeEditor.saveViewState();
 			if (saved) latestRef.current.onViewState?.(saved);
 			menuIcons.dispose();
@@ -214,7 +242,12 @@ export default function MonacoEditor({
 
 	return (
 		<>
-			<div ref={containerRef} data-focus-default className="h-full w-full text-left" />
+			<div
+				ref={containerRef}
+				data-focus-default
+				data-key-scope={READER_SCOPE}
+				className="h-full w-full text-left"
+			/>
 			<MonacoReviewZones
 				zones={reviewZones}
 				review={review}

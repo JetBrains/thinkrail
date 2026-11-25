@@ -32,6 +32,7 @@ import {
 	isCardBackground,
 	isInsidePreview,
 	isTextEntryTarget,
+	revealActiveTab,
 	shouldClaimQuestionFocus,
 } from "./focus";
 import { GhostPage } from "./ghost";
@@ -58,9 +59,9 @@ import {
 	hasOptionPreviews,
 	nudgeShowsOnPage,
 	openNotePatch,
+	pageKeyTarget,
 	parseQuestions,
 	type QState,
-	questionPageForKey,
 	selectOptionPatch,
 	toggleCustomPatch,
 	toggleMultiPatch,
@@ -223,7 +224,9 @@ export function AskUserQuestionCard({
 			const card = cardRef.current;
 			if (!card) return;
 			bodyRef.current?.scrollTo({ top: 0 });
-			focusCurrentQuestionPage(card);
+			if (!activeQuestionPage(card).contains(document.activeElement))
+				focusCurrentQuestionPage(card);
+			revealActiveTab(card);
 		});
 		return () => cancelAnimationFrame(frame);
 	}, [tab]);
@@ -332,12 +335,17 @@ export function AskUserQuestionCard({
 	const primaryEnabled = showContinue || canSubmit;
 	const paneSources = hasOptionPreviews(q) ? q.options.map(previewSource) : [];
 
+	const askForChoice = () => {
+		if (!canRespond) return;
+		if (collapsed) setDockCollapsed(toolCallId, false);
+		nudgeSeq.current += 1;
+		setNudge({ question: idx, seq: nudgeSeq.current });
+	};
+
 	const submitRound = () => {
 		if (!canRespond) return;
 		if (answers.length === 0) {
-			if (collapsed) setDockCollapsed(toolCallId, false);
-			nudgeSeq.current += 1;
-			setNudge({ question: idx, seq: nudgeSeq.current });
+			askForChoice();
 			return;
 		}
 		setNudge(null);
@@ -407,19 +415,14 @@ export function AskUserQuestionCard({
 			focusCurrentQuestionPage(event.currentTarget, focusAndReveal);
 			return;
 		}
-		if (
-			!multipleQuestions ||
-			event.altKey ||
-			event.ctrlKey ||
-			event.metaKey ||
-			isTextEntryTarget(event.target)
-		)
-			return;
+		if (event.altKey || event.ctrlKey || event.metaKey || isTextEntryTarget(event.target)) return;
 		const onTab = event.target instanceof Element && event.target.closest('[role="tab"]') !== null;
-		const next = questionPageForKey(event.key, idx, lastPage, onTab);
-		if (next == null) return;
+		const target = pageKeyTarget(event.key, idx, lastPage, { edges: onTab, canSubmit });
+		if (target === null) return;
 		event.preventDefault();
-		if (next !== idx) setTab(next);
+		if (target.kind === "submit") focusFoot("primary");
+		else if (target.kind === "needsChoice") askForChoice();
+		else if (target.page !== idx) setTab(target.page);
 	};
 
 	const closeNote = () => {
@@ -445,6 +448,7 @@ export function AskUserQuestionCard({
 
 	const tabs = multipleQuestions ? (
 		<div
+			ref={revealActiveTab}
 			role="tablist"
 			aria-label={t("tools.ask.tabsLabel")}
 			className={cn(

@@ -1,5 +1,6 @@
 import {
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	ARTIFACT_OUTPUTS_PROTOCOL_VERSION,
 	ARTIFACT_ROLES_PROTOCOL_VERSION,
 	ARTIFACTS_PROTOCOL_VERSION,
 	type BackgroundCommandSummary,
@@ -8,8 +9,11 @@ import {
 	CHATS_PROTOCOL_VERSION,
 	canMarkCompletionUnread,
 	DEFAULT_WORKSPACE_NAME,
+	EXTENSION_BROWSE_PROTOCOL_VERSION,
+	type ExtensionCatalogEntry,
 	firstPromptOfTexts,
 	type GitDiffScope,
+	INSTALLED_EXTENSIONS_PROTOCOL_VERSION,
 	isLiveResource,
 	isSessionWorking,
 	MCP_PROTOCOL_VERSION,
@@ -65,11 +69,14 @@ import type {
 import type {
 	ArtifactsView,
 	ChangesTabSection,
+	ChatPane,
 	ClosedChat,
 	ComposerFocusRequest,
 	EditorTab,
+	ExtensionCatalogRead,
 	FilesTreeView,
 	MarkedUnread,
+	PanelViewEntry,
 	PendingMarkUnread,
 	RouteChatTarget,
 	SessionRuntime,
@@ -193,6 +200,55 @@ export function selectOnboardingActive(
 ): boolean {
 	if (state.onboardingWizard === "shown") return !hasRepoProject(state.projects);
 	return state.onboardingWizard === "pending" && selectOnboardingEligible(state);
+}
+
+export function selectSupportsInstalledExtensions(state: ProtocolState): boolean {
+	return (
+		state.protocolVersion !== null && state.protocolVersion >= INSTALLED_EXTENSIONS_PROTOCOL_VERSION
+	);
+}
+
+export function selectSupportsExtensionBrowse(state: ProtocolState): boolean {
+	return (
+		state.protocolVersion !== null && state.protocolVersion >= EXTENSION_BROWSE_PROTOCOL_VERSION
+	);
+}
+
+export function selectBuiltinExtensions(catalog: ExtensionCatalogRead): ExtensionCatalogRead {
+	return Array.isArray(catalog) ? catalog.filter((entry) => entry.kind !== "installed") : catalog;
+}
+
+export function selectInstalledExtensions(catalog: ExtensionCatalogRead): ExtensionCatalogEntry[] {
+	return Array.isArray(catalog) ? catalog.filter((entry) => entry.kind === "installed") : [];
+}
+
+export interface InstalledWebHalf {
+	name: string;
+	url: string;
+	styles?: string;
+	shadowed?: string[];
+	serverTools?: string[];
+}
+
+export function selectInstalledWebHalves(
+	state: ProtocolState & { extensionCatalog: ExtensionCatalogRead },
+): InstalledWebHalf[] | null {
+	if (state.protocolVersion === null) return null;
+	if (!selectSupportsInstalledExtensions(state)) return [];
+	if (!Array.isArray(state.extensionCatalog)) return null;
+	return state.extensionCatalog.flatMap((entry) =>
+		entry.kind === "installed" && entry.web
+			? [
+					{
+						name: entry.name,
+						url: entry.web.url,
+						...(entry.web.styles ? { styles: entry.web.styles } : {}),
+						...(entry.web.shadowed?.length ? { shadowed: entry.web.shadowed } : {}),
+						...(entry.tools.length ? { serverTools: entry.tools } : {}),
+					},
+				]
+			: [],
+	);
 }
 
 export function selectSupportsMcp(state: ProtocolState): boolean {
@@ -763,6 +819,42 @@ export function selectLayoutTabPlaced(
 	return selectLayoutTabPlacement(state, workspaceId, tabId) !== null;
 }
 
+/** The chat has a tab in the center of the active workspace's view. */
+export function selectChatPlacedInCenter(
+	state: LayoutDocumentState & { activeWorkspaceId: string | null },
+	workspaceId: string,
+	sessionId: string,
+): boolean {
+	if (state.activeWorkspaceId !== workspaceId) return false;
+	const identity = layoutResourceIdentity({ kind: "chat", sessionId });
+	return selectLayoutIdentityPlacement(state, workspaceId, identity)?.area === "center";
+}
+
+export function selectChatPane(
+	state: { chatPanesByWorkspace: Record<string, Record<string, ChatPane>> },
+	workspaceId: string,
+	sessionId: string,
+): ChatPane | null {
+	return state.chatPanesByWorkspace[workspaceId]?.[sessionId] ?? null;
+}
+
+export function selectPanelViewState(
+	state: { panelViewStatesByWorkspace: Record<string, Record<string, PanelViewEntry>> },
+	workspaceId: string,
+	key: string,
+): unknown {
+	return state.panelViewStatesByWorkspace[workspaceId]?.[key]?.state;
+}
+
+/** How many times another placement handed this panel its view; a mounted panel remounts when it moves. */
+export function selectPanelViewEpoch(
+	state: { panelViewStatesByWorkspace: Record<string, Record<string, PanelViewEntry>> },
+	workspaceId: string,
+	key: string,
+): number {
+	return state.panelViewStatesByWorkspace[workspaceId]?.[key]?.epoch ?? 0;
+}
+
 export function selectAttentionCenterTab(
 	state: LayoutAttentionState,
 	workspaceId: string,
@@ -969,6 +1061,11 @@ export function selectActiveWorkspaceProjectId(state: ActiveWorkspaceState): str
 export function selectActiveRepoWorkspaceId(state: ActiveWorkspaceState): string | undefined {
 	const active = selectActiveWorkspace(state);
 	return active && !isChatWorkspace(active) ? active.id : undefined;
+}
+
+export function selectActiveSubagentProjectTrust(state: ProjectContextState) {
+	const workspaceId = selectActiveRepoWorkspaceId(state);
+	return workspaceId ? selectContextProject(state)?.piResourceTrust : undefined;
 }
 
 export function selectContextProject(state: ProjectContextState): Project | null {
@@ -1268,6 +1365,41 @@ export function selectChatFirstPrompt(
 	return runtime ? firstPromptOfTexts(userTurnTexts(runtime.turns)) : undefined;
 }
 
+export function selectChatPersisted(
+	state: ChatFirstPromptState,
+	workspaceId: string,
+	sessionId: string,
+): boolean {
+	if (selectChatFirstPrompt(state, workspaceId, sessionId)) return true;
+	return (
+		state.sessions[sessionId]?.turns.some(
+			(turn) => turn.kind === "user" || turn.kind === "assistant",
+		) ?? false
+	);
+}
+
+export function selectPersistedChatTabs(
+	state: { tabsByWorkspace: Record<string, EditorTab[]> } & ChatFirstPromptState,
+	workspaceId: string,
+): string[] {
+	const sessions: string[] = [];
+	for (const tab of state.tabsByWorkspace[workspaceId] ?? []) {
+		if (tab.kind !== "chat" || sessions.includes(tab.sessionId)) continue;
+		if (selectChatPersisted(state, workspaceId, tab.sessionId)) sessions.push(tab.sessionId);
+	}
+	return sessions;
+}
+
+export function selectChatWorkspaceSession(
+	state: ChatFirstPromptState,
+	workspaceId: string,
+): string | null {
+	for (const sessionId of Object.keys(state.sessionStateByWorkspace[workspaceId] ?? {})) {
+		if (selectChatPersisted(state, workspaceId, sessionId)) return sessionId;
+	}
+	return null;
+}
+
 export function selectChatWorkspaceFirstPrompt(
 	state: ChatFirstPromptState,
 	workspaceId: string,
@@ -1336,21 +1468,42 @@ export function supportsArtifactRoles(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= ARTIFACT_ROLES_PROTOCOL_VERSION;
 }
 
-export function selectArtifactsSmartOffered(state: {
-	artifactsSmart: boolean;
+const OUTPUTS_EXTENSION = "outputs";
+
+export function selectArtifactOutputsOffered(state: {
 	protocolVersion: number | null;
+	disabledExtensions: readonly string[];
 }): boolean {
-	return state.artifactsSmart && supportsArtifactRoles(state.protocolVersion);
+	return (
+		state.protocolVersion !== null &&
+		state.protocolVersion >= ARTIFACT_OUTPUTS_PROTOCOL_VERSION &&
+		!state.disabledExtensions.includes(OUTPUTS_EXTENSION)
+	);
 }
 
 export function selectArtifactsView(state: {
 	artifactsView: ArtifactsView | null;
-	artifactsSmart: boolean;
 	protocolVersion: number | null;
+	disabledExtensions: readonly string[];
 }): ArtifactsView {
-	const smart = selectArtifactsSmartOffered(state);
-	if (state.artifactsView === "smart") return smart ? "smart" : "list";
-	return state.artifactsView ?? (smart ? "smart" : "list");
+	const outputs = selectArtifactOutputsOffered(state);
+	const smart = supportsArtifactRoles(state.protocolVersion);
+	const fallback = outputs ? "outputs" : smart ? "smart" : "list";
+	const view = state.artifactsView ?? fallback;
+	if (view === "outputs") return outputs ? view : fallback;
+	if (view === "smart") return smart ? view : fallback;
+	return view;
+}
+
+export type ArtifactsRoundFilter = "published" | "results" | "all";
+
+export function selectArtifactsRoundFilter(state: {
+	artifactsView: ArtifactsView | null;
+	protocolVersion: number | null;
+	disabledExtensions: readonly string[];
+}): ArtifactsRoundFilter {
+	const view = selectArtifactsView(state);
+	return view === "outputs" ? "published" : view === "smart" ? "results" : "all";
 }
 
 export function supportsArtifacts(protocolVersion: number | null): boolean {

@@ -99,7 +99,6 @@ describe("availableSettings", () => {
 		const old = { ...LATEST, protocolVersion: FONTS_PROTOCOL_VERSION - 1 };
 		expect(ids(old)).toContain("chat-line-width");
 		expect(ids(old)).not.toContain("interface-font");
-		expect(ids(old)).not.toContain("smart-view");
 		const windows = { ...LATEST, protocolVersion: WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION - 1 };
 		expect(ids({ ...windows, hostPlatform: "win32" })).not.toContain("windows-shell");
 		const none = ids({ ...LATEST, protocolVersion: null }, false);

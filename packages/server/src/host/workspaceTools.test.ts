@@ -16,7 +16,6 @@ import {
 	chatName,
 	chatStateLabel,
 	clampFinalMessage,
-	composePrompt,
 	matchWorkspaces,
 	prepareAttachments,
 	resolveModel,
@@ -97,13 +96,6 @@ test("attachments: images become prompt images, other files absolute paths; miss
 		`Attachment not found or not a file: ${join(dir, "missing.txt")}`,
 	);
 	expect(() => prepareAttachments([dir], dir)).toThrow("not a file");
-});
-
-test("composePrompt lists non-image attachments after the prompt", () => {
-	expect(composePrompt("Do it", [])).toBe("Do it");
-	expect(composePrompt("Do it", ["/a/b.md", "/c.txt"])).toBe(
-		"Do it\n\nAttached files:\n- /a/b.md\n- /c.txt",
-	);
 });
 
 const state = (patch: Partial<SessionState>): SessionState => ({

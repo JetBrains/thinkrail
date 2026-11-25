@@ -93,6 +93,28 @@ const LONG_PROMPT = Array.from(
 	(_, i) => `Line ${i + 1} of a long request, so the transcript above the dock scrolls.`,
 ).join("\n\n");
 
+const EIGHT_HEADERS = [
+	"Scope",
+	"Branch",
+	"Commits",
+	"Reviewers",
+	"Changelog",
+	"Migration",
+	"Docs",
+	"Release",
+] as const;
+
+const EIGHT = {
+	questions: EIGHT_HEADERS.map((header, i) => ({
+		question: `Question ${i + 1}: which ${header.toLowerCase()} should the release use?`,
+		header,
+		options: [
+			{ label: `${header} first`, description: `The first ${header.toLowerCase()} choice.` },
+			{ label: `${header} second`, description: `The second ${header.toLowerCase()} choice.` },
+		],
+	})),
+} satisfies AskUserQuestionArgs;
+
 const RECORDER = `<!doctype html><html><body><main><h1>Rebind “Focus composer”</h1><input aria-label="Shortcut" placeholder="Press a shortcut…"><button>Save</button></main></body></html>`;
 
 const activeAsk = (page: Page) =>
@@ -138,6 +160,25 @@ function focusShownIn(scroller: Locator): Promise<boolean> {
 		return box.top >= top - 0.5 && box.bottom <= top + element.clientHeight + 0.5;
 	});
 }
+
+function activeTabShown(card: Locator): Promise<{ shown: boolean; scrollLeft: number }> {
+	return card.getByRole("tablist").evaluate((strip) => {
+		const chip = strip.querySelector('[role="tab"][aria-selected="true"]');
+		if (!chip) return { shown: false, scrollLeft: strip.scrollLeft };
+		const left = strip.getBoundingClientRect().left + strip.clientLeft;
+		const box = chip.getBoundingClientRect();
+		return {
+			shown: box.left >= left - 0.5 && box.right <= left + strip.clientWidth + 0.5,
+			scrollLeft: strip.scrollLeft,
+		};
+	});
+}
+
+const pageScroll = (page: Page) =>
+	page.evaluate(() => {
+		const root = document.scrollingElement;
+		return root ? [root.scrollLeft, root.scrollTop] : [0, 0];
+	});
 
 function isFocused(locator: Locator): Promise<boolean> {
 	return locator.evaluate((element) => element === element.ownerDocument.activeElement);
@@ -251,9 +292,9 @@ async function openHeldRound(
 	const states = await routeSessionStates(page);
 	await openFixtureProject(page);
 	const session = seedQuestionnaire(name, toolCallId, { questions: [ROLLOUT] }, BASE_TS);
+	const held = await states.hold(session.id, toolCallId);
 	await enterDefaultWorkspace(page);
 	await hideAuxiliaryWorkbench(page);
-	const held = await states.hold(session.id, toolCallId);
 	await openPersistedChat(page, name);
 	await expect(
 		page.getByTestId("chat-scroll").locator('[data-testid="ask-user-question"]').first(),
@@ -787,6 +828,171 @@ test("keys that move focus scroll the docked sheet just enough to show it, never
 		expect(await dock.boundingBox()).toEqual(dockBox);
 	} finally {
 		rmSync(session.path, { force: true });
+	}
+});
+
+test("paging an 8-question card in a narrow dock keeps its tab in view, scrolling only the tab strip", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 820, height: 760 });
+	await openFixtureProject(page);
+	const name = "eight tabs";
+	const session = seedQuestionnaire(name, "ask-keys-eight", EIGHT, BASE_TS, LONG_PROMPT);
+	try {
+		await enterDefaultWorkspace(page);
+		await hideAuxiliaryWorkbench(page);
+		await openPersistedChatAfterInput(page, name);
+		const card = activeAsk(page);
+		const question = card.getByTestId("ask-question-text");
+		const tabs = card.getByTestId("ask-tab");
+		const strip = card.getByRole("tablist");
+		const dock = page.getByTestId("chat-dock");
+		const transcript = page.getByTestId("chat-scroll").locator("[data-virtuoso-scroller]");
+		await expect(card.getByTestId("ask-option").first()).toBeFocused();
+		await waitForScrollStability(page.getByTestId("chat-scroll"));
+		const transcriptTop = await scrollTopOf(transcript);
+		expect(transcriptTop).toBeGreaterThan(0);
+		const dockBox = await dock.boundingBox();
+		expect(
+			await strip.evaluate((element) => element.scrollWidth > element.clientWidth + 1),
+			"the eight tabs overflow the dock header",
+		).toBe(true);
+		expect(await activeTabShown(card)).toEqual({ shown: true, scrollLeft: 0 });
+
+		for (let page_ = 1; page_ < EIGHT_HEADERS.length; page_ += 1) {
+			await page.keyboard.press("ArrowRight");
+			await expect(question).toHaveText(new RegExp(`^Question ${page_ + 1}:`));
+			await expect
+				.poll(async () => (await activeTabShown(card)).shown, {
+					message: `tab ${page_ + 1} is fully visible`,
+				})
+				.toBe(true);
+		}
+		expect((await activeTabShown(card)).scrollLeft).toBeGreaterThan(0);
+		if (chromium()) await shot(page.getByTestId("chat-view"), "ask-keyboard", "tabs-revealed");
+
+		for (let page_ = EIGHT_HEADERS.length - 2; page_ >= 0; page_ -= 1) {
+			await page.keyboard.press("ArrowLeft");
+			await expect(question).toHaveText(new RegExp(`^Question ${page_ + 1}:`));
+			await expect.poll(async () => (await activeTabShown(card)).shown).toBe(true);
+		}
+		expect((await activeTabShown(card)).scrollLeft).toBe(0);
+
+		await tabs.first().focus();
+		await page.keyboard.press("End");
+		await expect(question).toHaveText(/^Question 8:/);
+		await expect.poll(async () => (await activeTabShown(card)).shown).toBe(true);
+		await tabs.last().focus();
+		await page.keyboard.press("Home");
+		await expect(question).toHaveText(/^Question 1:/);
+		await expect.poll(async () => (await activeTabShown(card)).shown).toBe(true);
+
+		const clipped = await strip.evaluate((element) => {
+			const right = element.getBoundingClientRect().left + element.clientLeft + element.clientWidth;
+			const chips = Array.from(element.querySelectorAll('[role="tab"]'));
+			const index = chips.findIndex((chip) => chip.getBoundingClientRect().right > right + 1);
+			const chip = chips[index];
+			if (chip) element.scrollLeft += chip.getBoundingClientRect().left - (right - 24);
+			return index;
+		});
+		expect(clipped, "a tab is cut by the strip's right edge").toBeGreaterThan(0);
+		await tabs.nth(clipped).click({ position: { x: 4, y: 4 } });
+		await expect(question).toHaveText(new RegExp(`^Question ${clipped + 1}:`));
+		await expect.poll(async () => (await activeTabShown(card)).shown).toBe(true);
+
+		for (let page_ = clipped + 1; page_ < EIGHT_HEADERS.length; page_ += 1) {
+			await card.getByTestId("ask-continue").click();
+			await expect(question).toHaveText(new RegExp(`^Question ${page_ + 1}:`));
+			await expect.poll(async () => (await activeTabShown(card)).shown).toBe(true);
+		}
+
+		expect(await scrollTopOf(transcript)).toBe(transcriptTop);
+		expect(await dock.boundingBox()).toEqual(dockBox);
+		expect(await pageScroll(page)).toEqual([0, 0]);
+
+		const chatTab = page
+			.locator('[data-testid="editor-tab"][data-kind="chat"]')
+			.filter({ hasText: name });
+		await chatTab.hover();
+		await chatTab.getByTestId("editor-tab-close").click();
+		await expect(chatTab).toHaveCount(0);
+		await openPersistedChat(page, name);
+		await expect(question).toHaveText(/^Question 8:/);
+		await expect(tabs.last()).toHaveAttribute("data-active", "true");
+		await expect
+			.poll(async () => activeTabShown(card), {
+				message: "the restored last tab is shown on mount",
+			})
+			.toEqual({ shown: true, scrollLeft: expect.any(Number) });
+		expect((await activeTabShown(card)).scrollLeft).toBeGreaterThan(0);
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
+test("→ past the last question focuses Submit from an option, the last tab or the card, and asks for a choice while Submit is off", async ({
+	page,
+}) => {
+	const { card, path } = await openRound(page, "right to submit", ROUND);
+	try {
+		const question = card.getByTestId("ask-question-text");
+		const options = card.getByTestId("ask-option");
+		const submit = card.getByTestId("ask-submit");
+		const needsChoice = card.getByTestId("ask-needs-choice");
+		await page.keyboard.press("ArrowRight");
+		await expect(question).toHaveText("Which checks should the keys run?");
+		await expect(options.first()).toBeFocused();
+		await expect(submit).toBeDisabled();
+
+		await page.keyboard.press("ArrowRight");
+		await expect(needsChoice).toBeVisible();
+		await expect(needsChoice).toHaveText("Choose an option first");
+		await expect(options.first()).toBeFocused();
+		await expect(question).toHaveText("Which checks should the keys run?");
+
+		await page.keyboard.press("Enter");
+		await expect(needsChoice).toHaveCount(0);
+		await page.keyboard.press("ArrowRight");
+		await expect(submit).toBeFocused();
+		await page.keyboard.press("ArrowRight");
+		await expect(submit).toBeFocused();
+		await page.keyboard.press("ArrowLeft");
+		await expect(card.getByTestId("ask-skip")).toBeFocused();
+
+		await card.getByTestId("ask-tab").last().focus();
+		await page.keyboard.press("ArrowRight");
+		await expect(submit).toBeFocused();
+
+		await question.click();
+		await expect(card).toBeFocused();
+		await page.keyboard.press("ArrowRight");
+		await expect(submit).toBeFocused();
+
+		const other = card.getByTestId("ask-custom");
+		await other.focus();
+		await page.keyboard.type("ab");
+		await page.keyboard.press("ArrowLeft");
+		await page.keyboard.press("ArrowRight");
+		await expect(other).toBeFocused();
+		expect(await other.evaluate((field) => (field as HTMLTextAreaElement).selectionStart)).toBe(2);
+		await expect(question).toHaveText("Which checks should the keys run?");
+	} finally {
+		rmSync(path, { force: true });
+	}
+});
+
+test("→ on a single question asks for a choice, then focuses Submit", async ({ page }) => {
+	const { card, path } = await openRound(page, "single right", { questions: [ROLLOUT] });
+	try {
+		const options = card.getByTestId("ask-option");
+		await page.keyboard.press("ArrowRight");
+		await expect(card.getByTestId("ask-needs-choice")).toBeVisible();
+		await expect(options.first()).toBeFocused();
+		await page.keyboard.press("Enter");
+		await page.keyboard.press("ArrowRight");
+		await expect(card.getByTestId("ask-submit")).toBeFocused();
+	} finally {
+		rmSync(path, { force: true });
 	}
 });
 

@@ -124,6 +124,12 @@ const SUPPRESSION_DRAWN_ELSEWHERE: Record<string, { match: string; reason: strin
 			reason: "popover content: programmatic focus target",
 		},
 	],
+	"thinkrail-extensions/session-insights/web/search/SearchBox.tsx": [
+		{
+			match: "h-full min-w-0 flex-1 bg-transparent tr-text-metadata",
+			reason: "the search frame draws has-[input:focus-visible]:focus-ring",
+		},
+	],
 	"thinkrail-extensions/ask-user-question/web/controls.tsx": [
 		{
 			match: "focus-visible:outline-none",

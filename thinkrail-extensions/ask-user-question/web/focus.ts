@@ -1,3 +1,5 @@
+import { revealHorizontally } from "@thinkrail/ui/focus";
+
 export type QuestionFocusTarget =
 	| "none"
 	| "inside"
@@ -101,6 +103,11 @@ export function focusCurrentQuestionPage(card: HTMLElement, focus: Focuser = foc
 	if (!target) return;
 	if (!shouldFocusPageTarget(isTextEntryTarget(target), hasCoarsePointer())) return;
 	focus(target);
+}
+
+export function revealActiveTab(root: ParentNode | null): void {
+	const chip = root?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+	if (chip) revealHorizontally(chip);
 }
 
 export function focusQuestionAttention(card: HTMLElement, focus: Focuser = focusInPlace): void {

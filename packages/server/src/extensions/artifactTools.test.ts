@@ -11,9 +11,12 @@ function entry(name: string, tools: Record<string, ArtifactTool>): ServerExtensi
 }
 
 describe("artifactTools", () => {
-	it("knows the shipped tools that show files: visualize and ask_user_question", () => {
+	it("knows the shipped tools that show or publish files: visualize, ask_user_question and present_files", () => {
 		const tools = artifactTools(() => false);
-		expect([...tools.keys()].sort()).toEqual(["ask_user_question", "visualize"]);
+		expect([...tools.keys()].sort()).toEqual(["ask_user_question", "present_files", "visualize"]);
+		expect(
+			tools.get("present_files")?.published?.({}, { files: [".thinkrail/context/r.md"] }),
+		).toEqual([".thinkrail/context/r.md"]);
 	});
 
 	it("reads visualize's file paths and the diagram it saved", () => {

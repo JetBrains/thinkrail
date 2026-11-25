@@ -444,6 +444,7 @@ function TodoRow({
 					icon={Close}
 					size="s"
 					data-testid="todo-remove"
+					data-hint-reveal
 					data-focus-row-primary
 					label={t("chat.todo.remove")}
 					onClick={() => {

@@ -24,9 +24,10 @@ export function NotificationPermissionNotice({
 	const t = useT();
 	if (permission === "default") {
 		return (
-			<div data-setting-row="notifications-permission" className="py-12">
+			<div className="py-12">
 				<SettingsNotice
 					variant="info"
+					rowId="notifications-permission"
 					testId="notifications-permission-prompt"
 					action={
 						<Button

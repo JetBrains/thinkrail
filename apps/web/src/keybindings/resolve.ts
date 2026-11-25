@@ -1,5 +1,5 @@
 import type { MessageKey } from "@thinkrail/locales";
-import { isTypingChord, keyCap, twinArrow } from "@thinkrail/ui/keyboard";
+import { ariaKeyShortcuts, isTypingChord, keyCap, twinArrow } from "@thinkrail/ui/keyboard";
 import { type CommandShortcut, shortcutKeys } from "../commands";
 import { platformFamily } from "../lib";
 import {
@@ -496,6 +496,14 @@ export function keybindingLabel(
 	options: ShownOptions = {},
 ): string {
 	return keysLabel(keybindingKeys(keybindings, id, options), keybindings.platform);
+}
+
+export function keybindingAria(
+	keybindings: ResolvedKeybindings,
+	...ids: string[]
+): string | undefined {
+	const chords = ids.flatMap((id) => activeChords(keybindings, id));
+	return chords.length === 0 ? undefined : ariaKeyShortcuts(chords, keybindings.platform);
 }
 
 export function keybindingLabels(keybindings: ResolvedKeybindings, id: string): string[] {

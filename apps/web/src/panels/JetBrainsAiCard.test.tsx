@@ -102,19 +102,20 @@ describe("JetBrains AI in Settings", () => {
 		expect(interval).toContain('disabled=""');
 	});
 
-	test("Central's action is the row's stop; Recheck joins it in the header when Central is absent", () => {
+	test("the Central card is a walk row and its actions its buttons; Recheck joins it in the header when Central is absent", () => {
 		const connected = settings({
 			state: "configured",
 			version: "1.7.0",
 			signedOut: false,
 			proxyStopped: false,
 		});
-		expect(tag(connected, "jetbrains-disconnect")).toContain("data-setting-stop");
+		expect(tag(connected, "jetbrains-ai-card")).toContain('data-setting-row="jetbrains-central"');
+		expect(tag(connected, "jetbrains-ai-card")).toContain('tabindex="-1"');
 		expect(tag(connected, "jetbrains-disconnect")).toContain('tabindex="0"');
 		const absent = settings({ state: "absent" });
 		expect(absent.match(/data-testid="jetbrains-recheck"/g)).toHaveLength(1);
-		expect(tag(absent, "jetbrains-recheck")).toContain("data-setting-stop");
-		expect(tag(absent, "jetbrains-copy-cmd")).toContain("data-setting-side");
+		expect(tag(absent, "jetbrains-recheck")).toContain('tabindex="0"');
+		expect(tag(absent, "jetbrains-copy-cmd")).toContain('tabindex="0"');
 		expect(absent).toContain('data-testid="jetbrains-needs-install"');
 	});
 

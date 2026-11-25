@@ -2,8 +2,13 @@ import type { MessageKey } from "@thinkrail/locales";
 import { keyCap } from "@thinkrail/ui/keyboard";
 import { type CommandShortcut, shortcutKeys } from "../commands";
 import { platformFamily } from "../lib";
-import { displayShortcut, FOCUS_GROUP_BINDINGS, type KeybindingId, keysLabel } from "./keybindings";
-import { SUGGESTION_KEYS } from "./localKeys";
+import {
+	displayShortcut,
+	FOCUS_GROUP_BINDINGS,
+	type KeybindingId,
+	keysLabel,
+	SUGGESTION_KEYS,
+} from "./keybindings";
 import {
 	keybindingShortcut,
 	keybindingShortcuts,
@@ -19,6 +24,7 @@ export const SHORTCUT_SURFACES = [
 	"review",
 	"composer",
 	"transcript",
+	"reader",
 	"history",
 	"palette",
 	"findInFiles",
@@ -37,6 +43,7 @@ export const SHORTCUT_SURFACE_TITLES = {
 	review: "shortcuts.surface.review",
 	composer: "shortcuts.surface.composer",
 	transcript: "shortcuts.surface.transcript",
+	reader: "shortcuts.surface.reader",
 	history: "shortcuts.surface.history",
 	palette: "shortcuts.surface.palette",
 	findInFiles: "shortcuts.surface.findInFiles",
@@ -69,6 +76,8 @@ interface CatalogEntryBase {
 	readonly surface: ShortcutSurface;
 	readonly desktop?: true;
 	readonly scope?: string;
+	/** The web extension contributing the row, which the cheatsheet lists under that extension. */
+	readonly extension?: string;
 }
 
 export type ShortcutCatalogEntry = CatalogEntryBase &
@@ -106,6 +115,8 @@ const ESCAPE = { key: "Escape" } as const;
 const MENU = { key: "F10", shift: true } as const;
 const PAGE_UP = { key: "PageUp" } as const;
 const PAGE_DOWN = { key: "PageDown" } as const;
+const SPACE = { key: " " } as const;
+const SHIFT_SPACE = { key: " ", shift: true } as const;
 const TAB = { key: "Tab" } as const;
 
 const TWIN = {
@@ -113,6 +124,8 @@ const TWIN = {
 	down: { command: "arrows.down" },
 	up: { command: "arrows.up" },
 	right: { command: "arrows.right" },
+	top: { command: "reading.top" },
+	bottom: { command: "reading.bottom" },
 } as const satisfies Record<string, ShortcutTwin>;
 
 const inScope = (scope: string, entries: readonly ShortcutCatalogEntry[]): ShortcutCatalogEntry[] =>
@@ -182,6 +195,20 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 		bindingTitle: "commands.focus.group",
 	},
 	{
+		id: "suggestions.send",
+		title: "shortcuts.suggestions.send",
+		surface: "general",
+		bindings: SUGGESTION_KEYS.send,
+		bindingTitle: "shortcuts.suggestions.sendOne",
+	},
+	{
+		id: "suggestions.edit",
+		title: "shortcuts.suggestions.edit",
+		surface: "general",
+		bindings: SUGGESTION_KEYS.edit,
+		bindingTitle: "shortcuts.suggestions.editOne",
+	},
+	{
 		id: "dictation",
 		title: "shortcuts.dictation",
 		surface: "general",
@@ -196,6 +223,13 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 		title: "shortcuts.arrows.right",
 		surface: "general",
 		local: "arrows.right",
+	},
+	{ id: "reading.top", title: "shortcuts.reading.top", surface: "general", local: "reading.top" },
+	{
+		id: "reading.bottom",
+		title: "shortcuts.reading.bottom",
+		surface: "general",
+		local: "reading.bottom",
 	},
 	{ id: "tab.close", title: "shortcuts.closeTab", surface: "tabs", bindings: ["tab.close"] },
 	{
@@ -276,6 +310,12 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 		title: "shortcuts.toggleBottom",
 		surface: "panels",
 		bindings: ["view.toggleBottom"],
+	},
+	{
+		id: "view.toggleAllPanels",
+		title: "shortcuts.toggleAllPanels",
+		surface: "panels",
+		bindings: ["view.toggleAllPanels"],
 	},
 	{ id: "view.files", title: "shortcuts.showFiles", surface: "panels", bindings: ["view.files"] },
 	{
@@ -669,22 +709,6 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 			keys: [PAGE_UP, PAGE_DOWN],
 		},
 	]),
-	...inScope("suggestions", [
-		{
-			id: "suggestions.send",
-			title: "shortcuts.suggestions.send",
-			surface: "composer",
-			local: SUGGESTION_KEYS.send,
-			bindingTitle: "shortcuts.suggestions.sendOne",
-		},
-		{
-			id: "suggestions.edit",
-			title: "shortcuts.suggestions.edit",
-			surface: "composer",
-			local: SUGGESTION_KEYS.edit,
-			bindingTitle: "shortcuts.suggestions.editOne",
-		},
-	]),
 	...inScope("transcript", [
 		{
 			id: "transcript.up",
@@ -727,16 +751,24 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 			local: "transcript.open",
 		},
 		{
-			id: "transcript.firstLast",
-			title: "shortcuts.transcript.firstLast",
+			id: "transcript.first",
+			title: "shortcuts.transcript.first",
 			surface: "transcript",
-			keys: [HOME, END],
+			keys: [HOME],
+			twin: TWIN.top,
+		},
+		{
+			id: "transcript.last",
+			title: "shortcuts.transcript.last",
+			surface: "transcript",
+			keys: [END],
+			twin: TWIN.bottom,
 		},
 		{
 			id: "transcript.page",
 			title: "shortcuts.transcript.page",
 			surface: "transcript",
-			keys: [PAGE_UP, PAGE_DOWN],
+			keys: [PAGE_UP, PAGE_DOWN, SPACE, SHIFT_SPACE],
 		},
 		{
 			id: "transcript.toggle",
@@ -762,6 +794,51 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 			surface: "transcript",
 			keys: [ESCAPE],
 		},
+	]),
+	...inScope("reader", [
+		{ id: "reader.up", title: "shortcuts.reader.up", surface: "reader", keys: [UP], twin: TWIN.up },
+		{
+			id: "reader.down",
+			title: "shortcuts.reader.down",
+			surface: "reader",
+			keys: [DOWN],
+			twin: TWIN.down,
+		},
+		{
+			id: "reader.left",
+			title: "shortcuts.reader.left",
+			surface: "reader",
+			keys: [LEFT],
+			twin: TWIN.left,
+		},
+		{
+			id: "reader.right",
+			title: "shortcuts.reader.right",
+			surface: "reader",
+			keys: [RIGHT],
+			twin: TWIN.right,
+		},
+		{
+			id: "reader.page",
+			title: "shortcuts.reader.page",
+			surface: "reader",
+			keys: [PAGE_UP, PAGE_DOWN, SPACE, SHIFT_SPACE],
+		},
+		{
+			id: "reader.top",
+			title: "shortcuts.reader.top",
+			surface: "reader",
+			keys: [HOME],
+			twin: TWIN.top,
+		},
+		{
+			id: "reader.bottom",
+			title: "shortcuts.reader.bottom",
+			surface: "reader",
+			keys: [END],
+			twin: TWIN.bottom,
+		},
+		{ id: "reader.back", title: "shortcuts.reader.back", surface: "reader", keys: [ESCAPE] },
 	]),
 	...inScope("history", [
 		{
@@ -933,6 +1010,12 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 			keys: [HOME, END],
 		},
 		{
+			id: "settings.edit",
+			title: "shortcuts.settings.edit",
+			surface: "settings",
+			keys: [ENTER, { key: " " }],
+		},
+		{
 			id: "settings.actions",
 			title: "shortcuts.settings.actions",
 			surface: "settings",
@@ -950,13 +1033,13 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 			id: "settings.change",
 			title: "shortcuts.settings.change",
 			surface: "settings",
-			keys: [LEFT, RIGHT],
+			keys: [UP, DOWN, LEFT, RIGHT],
 		},
 		{
-			id: "settings.apply",
-			title: "shortcuts.settings.apply",
+			id: "settings.done",
+			title: "shortcuts.settings.done",
 			surface: "settings",
-			keys: [ENTER, { key: " " }],
+			keys: [ENTER, ESCAPE],
 		},
 		{
 			id: "settings.reset",
@@ -1090,6 +1173,7 @@ export interface ShortcutRow {
 	readonly id: string;
 	readonly title: MessageKey;
 	readonly surface: ShortcutSurface;
+	readonly extension?: string;
 	readonly chords: readonly ShortcutChordView[];
 	readonly conflicts: readonly ShortcutConflictView[];
 }
@@ -1173,12 +1257,15 @@ function bindingChords(
 }
 
 function row(
-	entry: Pick<ShortcutRow, "id" | "title" | "surface">,
+	entry: Pick<ShortcutRow, "id" | "title" | "surface" | "extension">,
 	chords: readonly ShortcutChordView[],
 	conflicts: readonly ShortcutConflictView[],
 ): ShortcutRow[] {
 	if (chords.length === 0 && conflicts.length === 0) return [];
-	return [{ id: entry.id, title: entry.title, surface: entry.surface, chords, conflicts }];
+	const { id, title, surface, extension } = entry;
+	return [
+		{ id, title, surface, ...(extension === undefined ? {} : { extension }), chords, conflicts },
+	];
 }
 
 export function keyChords(keys: readonly ShortcutKey[], platform: string): ShortcutChordView[] {
@@ -1262,7 +1349,7 @@ function extensionCommandRows({ desktop, keybindings }: ShortcutContext): Shortc
 	return keybindings.commands.flatMap(({ id, extension, enabled, title }) =>
 		extension !== null && enabled && title !== null
 			? row(
-					{ id, title, surface: "general" },
+					{ id, title, surface: "general", extension },
 					keybindingShortcuts(keybindings, id, { browser: !desktop }).map((shortcut) =>
 						chordView(shortcut, keybindings.platform),
 					),

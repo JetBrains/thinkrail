@@ -27,6 +27,7 @@ import {
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 import {
 	type CapturedHistory,
 	createDelegationService,
@@ -536,6 +537,85 @@ test("strict resource lookup fails closed for missing, cross-owner, corrupt, amb
 	symlinkSync(target, sessionFile);
 	await code(owner.reopenChild({ birth, session: sessionOptions }), "invalid-child-transcript");
 	await owner.release();
+});
+
+test("a resource worker tool wins over an installed child factory registering the same name", async () => {
+	const loads: string[] = [];
+	const calls: string[] = [];
+	const workTool =
+		(owner: string): ExtensionFactory =>
+		(pi) => {
+			loads.push(owner);
+			pi.registerTool({
+				name: "dag_work",
+				label: "Work",
+				description: "Do the work",
+				parameters: Type.Object({}),
+				execute: async () => {
+					calls.push(owner);
+					return { content: [{ type: "text", text: owner }], details: {} };
+				},
+			});
+		};
+	const core = createDelegationService({
+		delegationRoot: root,
+		scope: `scope-${serial++}`,
+		childInstalledExtensionFactories: [workTool("installed")],
+	});
+	const resource = await core.registerResource("shadow", context(), {
+		childExtensionFactories: [workTool("worker")],
+	});
+	const child = await resource.createChild({
+		...extensionSpec,
+		session: { ...extensionSpec.session, tools: ["dag_work"] },
+	});
+	faux.setResponses([
+		fauxAssistantMessage(fauxToolCall("dag_work", {})),
+		fauxAssistantMessage("DONE"),
+	]);
+	expect((await child.runQueued("work")).status).toBe("completed");
+	expect(loads).toEqual(["worker", "installed"]);
+	expect(calls).toEqual(["worker"]);
+	await resource.release();
+});
+
+test("a prompt cancelled while an installed child's input hook awaits never enters history", async () => {
+	const entered = gate();
+	const resume = gate();
+	const core = createDelegationService({
+		delegationRoot: root,
+		scope: `scope-${serial++}`,
+		childInstalledExtensionFactories: [
+			(pi) => {
+				pi.on("input", async (event) => {
+					if (event.text === "held") {
+						entered.resolve();
+						await resume.promise;
+					}
+				});
+			},
+		],
+	});
+	const resource = await core.registerResource("installed-cancel", context(), {});
+	const child = await resource.createChild(extensionSpec);
+	faux.setResponses([fauxAssistantMessage("NEXT_ONLY")]);
+	const running = child.runQueued("held");
+	await entered.promise;
+	const aborting = child.abort();
+	resume.resolve();
+	await aborting;
+	expect((await running).status).toBe("aborted");
+	const next = await child.runQueued("next");
+	expect(next.finalText).toBe("NEXT_ONLY");
+	const history = await core.captureHistory({
+		kind: "resource-child",
+		resourceId: "installed-cancel",
+		sessionId: child.sessionId,
+		entryId: next.historyEntryId,
+	});
+	expect(history.jsonl).toContain("next");
+	expect(history.jsonl).not.toContain("held");
+	await resource.release();
 });
 
 test("resource prompts and active steering are literal; idle/preflight steering cannot queue a later turn", async () => {

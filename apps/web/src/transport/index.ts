@@ -1,4 +1,10 @@
 export {
+	attachmentFailureText,
+	type PromptFileUploadOptions,
+	supportsChatAttachments,
+	uploadPromptFiles,
+} from "./attachments";
+export {
 	clientErrorReport,
 	installClientErrorReporting,
 	reportClientError,
@@ -26,9 +32,11 @@ export {
 	getTransport,
 	initTransport,
 	loadInAppSurvey,
+	refreshExtensionCatalog,
 	respondToTool,
 	runHostUpdate,
 	supportsChangeMutations,
+	supportsExtensionQuery,
 	supportsExtensionSettings,
 	supportsFonts,
 	supportsHostUpdateRun,

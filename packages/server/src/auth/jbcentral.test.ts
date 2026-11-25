@@ -6,10 +6,11 @@ import {
 	mkdtempSync,
 	readFileSync,
 	rmSync,
+	watch,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import { JBCENTRAL_STATUS_TTL_MS } from "@thinkrail/shared/jbcentral";
@@ -18,12 +19,19 @@ import {
 	configurePiRuntimeFactory,
 	createSession,
 	disposeAllSessions,
+	getPiRuntimeGeneration,
 	getSessionMessages,
 	listAvailableModels,
+	refreshInstalledExtensions,
 	setSessionManagerFactory,
 	usePiRuntime,
 } from "../agent";
-import { fixtureProviderExtensionSource } from "../agent/packages/testFixtures";
+import {
+	fixtureProviderExtensionRuns,
+	fixtureProviderExtensionSource,
+} from "../agent/packages/testFixtures";
+import { installedExtensions, serverExtensions, startInstalledExtensions } from "../extensions";
+import { writeExtension } from "../extensions/installed/testFixtures";
 import { resetConfigCache } from "../settings";
 import {
 	connectJbcentral,
@@ -736,6 +744,20 @@ describe("user extensions beside the Central artifact", () => {
 		await initializeJbcentralRuntime();
 	}
 
+	// macOS FSEvents can deliver a write made just before a watch is armed to that watch.
+	async function writeArtifactSettled(source: string): Promise<void> {
+		const seen = Promise.withResolvers<void>();
+		const probe = watch(dirname(artifactPath), (_event, entry) => {
+			if (entry === basename(artifactPath)) seen.resolve();
+		});
+		try {
+			writeFileSync(artifactPath, source);
+			await seen.promise;
+		} finally {
+			probe.close();
+		}
+	}
+
 	function expectNoCentralLeak(report: Awaited<ReturnType<typeof getProviderStatus>>): void {
 		expect(report.providers.map((provider) => provider.id)).not.toContain("central-test");
 		expect(JSON.stringify(report)).not.toContain("synthetic-sensitive-provider-name");
@@ -757,7 +779,7 @@ describe("user extensions beside the Central artifact", () => {
 	test("a leftover artifact in the standard agent dir never loads while the CLI is absent", async () => {
 		process.env.PI_CODING_AGENT_DIR = dirname(dirname(artifactPath));
 		process.env.PATH = "";
-		writeFileSync(artifactPath, syntheticExtension("leftover-model"));
+		await writeArtifactSettled(syntheticExtension("leftover-model"));
 		const runs = centralArtifactRuns();
 		await reboot();
 		expect(await getJbcentralStatus()).toEqual({ state: "absent" });
@@ -768,7 +790,7 @@ describe("user extensions beside the Central artifact", () => {
 
 	test("a configured artifact in the standard agent dir runs once per generation, only as Central", async () => {
 		process.env.PI_CODING_AGENT_DIR = dirname(dirname(artifactPath));
-		writeFileSync(artifactPath, syntheticExtension("central-model"));
+		await writeArtifactSettled(syntheticExtension("central-model"));
 		const runs = centralArtifactRuns();
 		await reboot();
 		expect((await getJbcentralStatus()).state).toBe("configured");
@@ -778,9 +800,53 @@ describe("user extensions beside the Central artifact", () => {
 		expectNoCentralLeak(report);
 	});
 
+	test("installed extensions loading at host start run neither the artifact nor a user extension again", async () => {
+		process.env.PI_CODING_AGENT_DIR = dirname(dirname(artifactPath));
+		writeFileSync(
+			join(dirname(artifactPath), "user-provider.ts"),
+			fixtureProviderExtensionSource("beside-central"),
+		);
+		await writeArtifactSettled(syntheticExtension("central-model"));
+		await reboot();
+		const generation = await getPiRuntimeGeneration();
+		const centralRuns = centralArtifactRuns();
+		const userRuns = fixtureProviderExtensionRuns("beside-central");
+		expect(userRuns).toBeGreaterThan(0);
+		const dataDir = join(root, "data");
+		mkdirSync(dataDir, { recursive: true });
+		let changes = 0;
+		const start = async (): Promise<() => void> => {
+			const stop = startInstalledExtensions({
+				dataDir,
+				onChange: () => {
+					changes += 1;
+					refreshInstalledExtensions();
+				},
+			});
+			await installedExtensions()?.reconcile();
+			return stop;
+		};
+
+		(await start())();
+		expect(changes).toBe(0);
+
+		const folder = writeExtension(join(root, "installed-ext"), { name: "installed-ext" });
+		writeFileSync(join(dataDir, "extensions.json"), JSON.stringify({ extensions: [folder] }));
+		const stop = await start();
+		try {
+			expect(serverExtensions().map((entry) => entry.extension.name)).toContain("installed-ext");
+			expect(changes).toBe(1);
+		} finally {
+			stop();
+		}
+		expect(await getPiRuntimeGeneration()).toBe(generation);
+		expect(centralArtifactRuns()).toBe(centralRuns);
+		expect(fixtureProviderExtensionRuns("beside-central")).toBe(userRuns);
+	});
+
 	test("the plain boot fallback never re-runs a failed artifact as a user extension", async () => {
 		process.env.PI_CODING_AGENT_DIR = dirname(dirname(artifactPath));
-		writeFileSync(artifactPath, syntheticExtension("failed-model", { fails: true }));
+		await writeArtifactSettled(syntheticExtension("failed-model", { fails: true }));
 		const runs = centralArtifactRuns();
 		await reboot();
 		expect(await getJbcentralStatus()).toMatchObject({ state: "load-failed", configured: true });

@@ -52,8 +52,9 @@ blocks like every other section: a page titled with its nav name (the native or 
 `panels/settingsCatalog.ts` it must match, so Settings search and the palette jump to it (this module never
 imports `panels`; the Settings search drift check keeps the two in step). The row's label is the status title;
 its description holds the detail, the progress bar and label, the inline error (`role=alert`), the version
-line and, when ready, the deferral note. Its actions are size-`m` buttons in phase order: the first is the
-row's stop, the rest are row sides (`data-setting-side`), each with an explicit `tabIndex`. The last-install
+line and, when ready, the deferral note. Its actions are size-`m` buttons in phase order, each with an
+explicit `tabIndex`: the row itself is the walk's stop and they are its buttons (→ walks them; Enter presses
+the only one, else lands on the first — [[submodule-web-settingskit]], *The walk*). The last-install
 failure callout, the fixed host guidance and the host restart guidance follow the row as notices.
 
 ## Native install journey

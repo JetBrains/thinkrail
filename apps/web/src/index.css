@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
 @import "./styles/generated/fonts.css";
 @import "./styles/generated/typography.css";
 @import "./styles/generated/colors.css";
@@ -6,6 +6,9 @@
 @import "./styles/tokens.css";
 @import "./styles/global.css";
 
+@source "./";
+@source not "./extensions/fixtures";
+@source "../index.html";
 @source "../../../packages/ui";
 @source "../../../packages/resource-renderers/src";
 @source "../../../thinkrail-extensions/*/web/**/*.{ts,tsx}";
@@ -245,6 +248,16 @@
 	outline: 1px solid var(--color-focus-ring);
 	outline-offset: -4px;
 }
+@utility focus-ring-row {
+	outline: 1px solid transparent;
+	outline-offset: -1px;
+	background-color: var(--color-primary-subtle);
+	box-shadow: inset 2px 0 0 var(--color-focus-ring);
+}
+@utility focus-ring-editing {
+	outline: 1px solid var(--color-focus-ring);
+	outline-offset: 3px;
+}
 @layer base {
 	:focus-visible {
 		@apply focus-ring;
@@ -283,22 +296,31 @@
 	}
 }
 
+/* Hint mode (thinkrail-extensions/hint-mode SPEC): hover-only controls show while its labels do. */
+html[data-hint-mode] [data-hint-reveal] {
+	opacity: 1;
+	visibility: visible;
+	transition: none;
+	outline: 1px dashed var(--color-primary);
+	outline-offset: -1px;
+}
+html[data-hint-mode] [data-hint-reveal="inline-flex"] {
+	display: inline-flex;
+}
+
 [data-setting-flash] {
 	animation: setting-flash 1.6s ease-out forwards;
 }
 @keyframes setting-flash {
 	0%,
 	50% {
-		background-color: var(--color-primary-subtle);
-	}
-	to {
-		background-color: transparent;
+		background-color: var(--color-primary-soft);
 	}
 }
 @media (prefers-reduced-motion: reduce) {
 	[data-setting-flash] {
 		animation: none;
-		background-color: var(--color-primary-subtle);
+		background-color: var(--color-primary-soft);
 	}
 }
 

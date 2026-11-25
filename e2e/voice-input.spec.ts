@@ -415,7 +415,7 @@ test("Settings turns voice input off and back on, and Delete frees its files and
 	await expect(voice.getByTestId("settings-voice-status")).toContainText("Ready");
 	await page.keyboard.press("Escape");
 	await expect(voice.getByText("Press Enter to apply")).toHaveCount(0);
-	await expect(allLanguages).toBeFocused();
+	await expect(voice.getByTestId("settings-voice-language")).toBeFocused();
 	await expect(allLanguages).toHaveAttribute("data-active", "true");
 
 	const toggle = voice.getByTestId("settings-voice-toggle");
@@ -428,10 +428,10 @@ test("Settings turns voice input off and back on, and Delete frees its files and
 		page.locator(`[data-testid="settings-search-result"][data-result-id="${id}"]`);
 	await search.fill("Speech language");
 	await result("voice-language").click();
-	await expect(toggle).toBeFocused();
+	await expect(voice.locator('[data-setting-row="voice-input"]')).toBeFocused();
 	await search.fill("Delete voice files");
 	await result("voice-files").click();
-	await expect(voice.getByTestId("settings-voice-delete")).toBeFocused();
+	await expect(voice.getByTestId("settings-voice-files")).toBeFocused();
 	await closeSettings(page);
 	await page.getByTestId("chat-input").focus();
 	await expect(mic(page)).toHaveCount(0);

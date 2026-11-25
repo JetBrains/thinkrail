@@ -1,19 +1,39 @@
-import { describe, expect, it, spyOn } from "bun:test";
+import { describe, expect, it, jest, spyOn } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DefaultPackageManager, SettingsManager } from "@earendil-works/pi-coding-agent";
+import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
+import {
+	createAgentSession,
+	DefaultPackageManager,
+	type InlineExtension,
+	ModelRuntime,
+	SessionManager,
+	SettingsManager,
+} from "@earendil-works/pi-coding-agent";
 import { SPEC_SECTION } from "pi-spec-graph";
-import { type HostSessionServices, registryInlineExtensions, workspaceFiles } from "../extensions";
+import { Type } from "typebox";
+import {
+	builtinServerExtensions,
+	EXTENSION_LOAD_TIMEOUT_MS,
+	type HostSessionServices,
+	installedExtensions,
+	registryInlineExtensions,
+	startInstalledExtensions,
+	workspaceFiles,
+} from "../extensions";
 import { artifactsGuard } from "./artifactsGuard";
 import {
 	buildResourceLoader,
 	bumpPackagesRevision,
 	childBaseExtensionFactories,
 	childExtensionFactories,
+	childInstalledExtensionFactories,
 	disabledExtensions,
 	extensionSettings,
+	HOST_INLINE_FACTORIES,
 	isLoaderPolicyStale,
 	listProjectAliasSkillNames,
 	listSkillCatalog,
@@ -28,6 +48,7 @@ import {
 } from "./extensions";
 import { headlessSearchPolicy } from "./headlessSearch";
 import { oversizedImageGuard } from "./imageGuard";
+import { createMcpEngine, HOST_BUILTIN_EXTENSION_NAMES } from "./mcp";
 import { createPiSettings } from "./packages";
 import { writeFixturePiPackage } from "./packages/testFixtures";
 import type { SkillAdmissionContext } from "./skillAdmission";
@@ -72,6 +93,9 @@ function writeSkill(root: string, name: string, description: string): void {
 		`---\nname: ${name}\ndescription: ${description}\n---\n\n# ${name}\n\nPortable fixture.\n`,
 	);
 }
+
+const nameOf = (inline: InlineExtension): string =>
+	typeof inline === "function" ? "fn" : inline.name;
 
 function restoreEnvironment(original: Record<string, string | undefined>): void {
 	for (const [name, value] of Object.entries(original)) {
@@ -530,6 +554,176 @@ describe("buildResourceLoader", () => {
 			rmSync(root, { recursive: true, force: true });
 		}
 	});
+
+	for (const excluding of [false, true]) {
+		for (const change of ["install", "upgrade", "remove"] as const) {
+			it(`reload re-reads installed Claude plugin paths after ${change} (exclusion branch: ${excluding})`, async () => {
+				const root = mkdtempSync(join(tmpdir(), "thinkrail-plugin-reload-"));
+				const project = join(root, "project");
+				const fixtureHome = join(root, "home");
+				const agentDir = join(root, "pi-agent");
+				const cache = join(fixtureHome, ".claude", "plugins", "cache", "market", "fixture");
+				const first = join(cache, "1.0.0");
+				const next = join(cache, "2.0.0");
+				const manifest = join(fixtureHome, ".claude", "plugins", "installed_plugins.json");
+				mkdirSync(project, { recursive: true });
+				mkdirSync(agentDir, { recursive: true });
+				writeSkill(join(first, "skills"), "plugin-widget", "first plugin version");
+				writeSkill(join(next, "skills"), "plugin-widget", "updated plugin version");
+				writeSkill(join(cache, "unlisted", "skills"), "unlisted-widget", "not installed");
+				writeSkill(join(first, "node_modules", "dep", "skills"), "dependency-widget", "not a root");
+				writeSkill(join(project, ".pi", "skills"), "native-widget", "native control");
+				const setInstalled = (installPath?: string): void => {
+					writeFileSync(
+						manifest,
+						JSON.stringify({
+							version: 2,
+							plugins: installPath ? { "fixture@market": [{ scope: "user", installPath }] } : {},
+						}),
+					);
+				};
+				setInstalled(change === "install" ? undefined : first);
+				const restore = stubSkillEnv(fixtureHome, agentDir);
+				try {
+					const loader = await buildResourceLoader(
+						project,
+						SettingsManager.create(project, agentDir, { projectTrusted: true }),
+						() => ctx(true),
+						excluding ? [join(agentDir, "extensions", "excluded.ts")] : [],
+					);
+					const widgets = () =>
+						loader
+							.getSkills()
+							.skills.filter((skill) => skill.name === "plugin-widget")
+							.map((skill) => skill.description);
+					expect(widgets()).toEqual(change === "install" ? [] : ["first plugin version"]);
+					setInstalled(change === "remove" ? undefined : change === "upgrade" ? next : first);
+					await loader.reload();
+					expect(widgets()).toEqual(
+						change === "remove"
+							? []
+							: [change === "upgrade" ? "updated plugin version" : "first plugin version"],
+					);
+					const names = loader.getSkills().skills.map((skill) => skill.name);
+					expect(names).toContain("native-widget");
+					expect(names).not.toContain("unlisted-widget");
+					expect(names).not.toContain("dependency-widget");
+				} finally {
+					restore();
+					rmSync(root, { recursive: true, force: true });
+				}
+			});
+		}
+	}
+
+	it("reload admits an installed Claude plugin only through current policy and retains project trust", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-plugin-admission-"));
+		const project = join(root, "project");
+		const fixtureHome = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(fixtureHome, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(fixtureHome, agentDir);
+		try {
+			let admission: SkillAdmissionContext = { ...ctx(false), otherAgentSkills: false };
+			const loader = await buildResourceLoader(
+				project,
+				SettingsManager.create(project, agentDir, { projectTrusted: false }),
+				() => admission,
+			);
+			const installPath = join(fixtureHome, ".claude", "plugins", "cache", "market", "fixture");
+			writeSkill(join(installPath, "skills"), "plugin-widget", "new plugin");
+			writeSkill(join(project, ".claude", "skills"), "project-widget", "untrusted project");
+			writeFileSync(
+				join(fixtureHome, ".claude", "plugins", "installed_plugins.json"),
+				JSON.stringify({ plugins: { "fixture@market": [{ scope: "user", installPath }] } }),
+			);
+			const hasPlugin = () =>
+				loader.getSkills().skills.some((skill) => skill.name === "plugin-widget");
+			await loader.reload();
+			expect(hasPlugin()).toBe(false);
+			admission = { ...admission, otherAgentSkills: true };
+			await loader.reload();
+			expect(hasPlugin()).toBe(true);
+			admission = { ...admission, disabledGroups: ["@plugins"] };
+			await loader.reload();
+			expect(hasPlugin()).toBe(false);
+			admission = { ...admission, overrides: { "plugin-widget": "on", "project-widget": "on" } };
+			await loader.reload();
+			expect(hasPlugin()).toBe(true);
+			expect(loader.getSkills().skills.some((skill) => skill.name === "project-widget")).toBe(
+				false,
+			);
+		} finally {
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("a live pi session refreshes installed Claude plugin skills without replacing the session or loader", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-plugin-session-"));
+		const project = join(root, "project");
+		const fixtureHome = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(fixtureHome, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(fixtureHome, agentDir);
+		try {
+			const faux = createFauxCore({ provider: "plugin-reload-probe", api: "plugin-reload-probe" });
+			const runtime = await ModelRuntime.create({
+				credentials: new InMemoryCredentialStore(),
+				modelsPath: null,
+				allowModelNetwork: false,
+			});
+			runtime.registerProvider(faux.provider, {
+				api: faux.api,
+				baseUrl: "http://faux.local",
+				apiKey: "fixture-only",
+				streamSimple: faux.streamSimple,
+				models: faux.models,
+			});
+			const settingsManager = SettingsManager.inMemory();
+			const loader = await buildResourceLoader(project, settingsManager, () => ctx(false));
+			const { session } = await createAgentSession({
+				cwd: project,
+				agentDir,
+				model: faux.getModel(),
+				modelRuntime: runtime,
+				settingsManager,
+				resourceLoader: loader,
+				sessionManager: SessionManager.inMemory(project),
+			});
+			try {
+				const sessionId = session.sessionId;
+				expect(session.systemPrompt).not.toContain("session-plugin-widget");
+				const installPath = join(fixtureHome, ".claude", "plugins", "cache", "market", "fixture");
+				const manifest = join(fixtureHome, ".claude", "plugins", "installed_plugins.json");
+				writeSkill(join(installPath, "skills"), "session-plugin-widget", "Session reload probe.");
+				writeFileSync(
+					manifest,
+					JSON.stringify({ plugins: { "fixture@market": [{ scope: "user", installPath }] } }),
+				);
+				await session.reload();
+				expect(session.systemPrompt).toContain("session-plugin-widget");
+				expect(session.resourceLoader).toBe(loader);
+				expect(session.sessionId).toBe(sessionId);
+
+				writeFileSync(manifest, JSON.stringify({ plugins: {} }));
+				await session.reload();
+				expect(session.systemPrompt).not.toContain("session-plugin-widget");
+				expect(session.resourceLoader).toBe(loader);
+				expect(session.sessionId).toBe(sessionId);
+				expect(faux.state.callCount).toBe(0);
+			} finally {
+				session.dispose();
+			}
+		} finally {
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
 });
 
 const hostServices: HostSessionServices = {
@@ -631,6 +825,250 @@ describe("registry extensions", () => {
 			expect(paths()).not.toContain("<inline:visualize>");
 		} finally {
 			setDisabledExtensionsResolver(() => new Set());
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("rebuilds behind the same loader when an installed extension loads or goes away", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-installed-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		const dataDir = join(root, "data");
+		for (const dir of [project, home, agentDir, dataDir]) mkdirSync(dir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		const stop = startInstalledExtensions({ dataDir, onChange: () => {} });
+		try {
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(
+				project,
+				settingsManager,
+				() => ctx(true),
+				[],
+				[],
+				hostServices,
+			);
+			const paths = () => loader.getExtensions().extensions.map((extension) => extension.path);
+			expect(paths()).not.toContain("<inline:ext:loader-installed>");
+			const folder = join(root, "ext");
+			mkdirSync(join(folder, "server"), { recursive: true });
+			writeFileSync(
+				join(folder, "package.json"),
+				JSON.stringify({
+					name: "loader-installed",
+					thinkrail: { api: "1.0", server: "server/index.ts" },
+				}),
+			);
+			writeFileSync(
+				join(folder, "server", "index.ts"),
+				'export default { name: "loader-installed", extensions: [() => {}] };\n',
+			);
+			const declarations = join(dataDir, "extensions.json");
+			writeFileSync(declarations, JSON.stringify({ extensions: [folder] }));
+			await installedExtensions()?.reconcile();
+			bumpPackagesRevision();
+			expect(isLoaderPolicyStale(loader)).toBe(true);
+			await loader.reload();
+			expect(isLoaderPolicyStale(loader)).toBe(false);
+			expect(paths()).toContain("<inline:ext:loader-installed>");
+			expect(paths()).toContain("<inline:visualize>");
+			writeFileSync(declarations, JSON.stringify({ extensions: [] }));
+			await installedExtensions()?.reconcile();
+			await loader.reload();
+			expect(paths()).not.toContain("<inline:ext:loader-installed>");
+		} finally {
+			stop();
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("starts a chat past an installed factory that never settles, with that extension's load error", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-hung-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		const dataDir = join(root, "data");
+		for (const dir of [project, home, agentDir, dataDir]) mkdirSync(dir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		const folder = join(root, "ext");
+		mkdirSync(join(folder, "server"), { recursive: true });
+		writeFileSync(
+			join(folder, "package.json"),
+			JSON.stringify({
+				name: "hung-factory",
+				thinkrail: { api: "1.0", server: "server/index.ts" },
+			}),
+		);
+		writeFileSync(
+			join(folder, "server", "index.ts"),
+			'export default { name: "hung-factory", extensions: [() => new Promise(() => {})] };\n',
+		);
+		writeFileSync(join(dataDir, "extensions.json"), JSON.stringify({ extensions: [folder] }));
+		const stop = startInstalledExtensions({ dataDir, onChange: () => {} });
+		try {
+			await installedExtensions()?.reconcile();
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			jest.useFakeTimers();
+			let built: Awaited<ReturnType<typeof buildResourceLoader>> | undefined;
+			const building = buildResourceLoader(
+				project,
+				settingsManager,
+				() => ctx(true),
+				[],
+				[],
+				hostServices,
+			).then((loader) => {
+				built = loader;
+			});
+			while (!built) {
+				await new Promise((resolve) => setImmediate(resolve));
+				if (jest.getTimerCount() > 0) jest.advanceTimersByTime(EXTENSION_LOAD_TIMEOUT_MS);
+			}
+			jest.useRealTimers();
+			await building;
+			const result = built?.getExtensions();
+			expect(result?.extensions.map((extension) => extension.path)).toContain("<inline:visualize>");
+			expect(result?.errors).toContainEqual(
+				expect.objectContaining({
+					error: "hung-factory did not finish loading within 10 s",
+				}),
+			);
+		} finally {
+			jest.useRealTimers();
+			stop();
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("never lets an installed extension take a host-owned tool, a host command or a pi package's tool", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-shadow-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		const dataDir = join(root, "data");
+		for (const dir of [project, home, join(agentDir, "extensions"), dataDir])
+			mkdirSync(dir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		const tool = (name: string) =>
+			`pi.registerTool({ name: "${name}", label: "x", description: "x", parameters: Type.Object({}), async execute() { return { content: [], details: {} }; } });`;
+		writeFileSync(
+			join(agentDir, "extensions", "weather.ts"),
+			`import { Type } from "typebox";\nexport default (pi) => { ${tool("weather")} };\n`,
+		);
+		const names = [
+			"ask_user_question",
+			"set_title",
+			"Agent",
+			"tool_search",
+			"mcp__docs__search",
+			"weather",
+			"shadow_own",
+		];
+		const folder = join(root, "shadow");
+		mkdirSync(join(folder, "server"), { recursive: true });
+		writeFileSync(
+			join(folder, "package.json"),
+			JSON.stringify({ name: "shadow", thinkrail: { api: "1.0", server: "server/index.ts" } }),
+		);
+		writeFileSync(
+			join(folder, "server", "index.ts"),
+			`import { Type } from "typebox";\nexport default { name: "shadow", extensions: [(pi) => { ${names.map(tool).join(" ")} pi.registerCommand("mcp", { handler: async () => {} }); }] };\n`,
+		);
+		writeFileSync(join(dataDir, "extensions.json"), JSON.stringify({ extensions: [folder] }));
+		const stop = startInstalledExtensions({
+			dataDir,
+			onChange: () => {},
+			hostToolFactories: HOST_INLINE_FACTORIES,
+		});
+		const stub = (name: string) => (pi: Parameters<typeof headlessSearchPolicy>[0]) => {
+			pi.registerTool({
+				name,
+				label: "x",
+				description: "x",
+				parameters: Type.Object({}),
+				execute: async () => ({ content: [], details: {} }),
+			});
+		};
+		try {
+			await installedExtensions()?.reconcile();
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(
+				project,
+				settingsManager,
+				() => ctx(true),
+				[],
+				[
+					stub("Agent"),
+					stub("mcp__docs__search"),
+					...createMcpEngine({ loadConfig: () => ({ servers: [], errors: [] }) }).extensions,
+				],
+				hostServices,
+			);
+			const { extensions } = loader.getExtensions();
+			const owner = (name: string) =>
+				extensions.find((extension) => extension.tools.has(name))?.path;
+			const paths = extensions.map((extension) => extension.path);
+			expect(paths).toContain("builtin:mcp");
+			expect(paths).toContain("builtin:tool-search");
+			expect(owner("ask_user_question")).toBe("<inline:ask-user-question>");
+			for (const name of ["set_title", "Agent", "mcp__docs__search"]) {
+				expect(owner(name)).toMatch(/^<inline:\d+>$/);
+			}
+			expect(owner("tool_search")).toBe("builtin:tool-search");
+			expect(owner("weather")).toBe(join(agentDir, "extensions", "weather.ts"));
+			expect(owner("shadow_own")).toBe("<inline:ext:shadow>");
+			const commandOwner = extensions.find((extension) => extension.commands.has("mcp"))?.path;
+			expect(commandOwner).toBe("builtin:mcp");
+			const status = JSON.parse(readFileSync(join(dataDir, "extensions", "status.json"), "utf8"));
+			expect(status.extensions[0]).toMatchObject({
+				state: "loaded",
+				tools: ["Agent", "tool_search", "mcp__docs__search", "weather", "shadow_own"],
+				shadowed: ["ask_user_question", "set_title"],
+			});
+		} finally {
+			stop();
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("reserves every named inline extension the host composes for itself", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-names-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		for (const dir of [project, home, agentDir]) mkdirSync(dir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		try {
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(
+				project,
+				settingsManager,
+				() => ctx(true),
+				[],
+				createMcpEngine({ loadConfig: () => ({ servers: [], errors: [] }) }).extensions,
+				hostServices,
+			);
+			const { extensions, errors } = loader.getExtensions();
+			const registry = new Set(builtinServerExtensions.map((entry) => entry.extension.name));
+			const hostNamed = [
+				...extensions.map((extension) => extension.path),
+				...errors.map((e) => e.path),
+			]
+				.map((path) => /^(?:<inline:([^>]+)>|builtin:(.+))$/.exec(path))
+				.flatMap((match) => (match ? [(match[1] ?? match[2] ?? "").replace(/#\d+$/, "")] : []))
+				.filter((name) => !/^\d+$/.test(name) && !registry.has(name));
+			expect(hostNamed.length).toBeGreaterThan(0);
+			const children = [...childBaseExtensionFactories(), ...childExtensionFactories("w1")]
+				.map((inline) => nameOf(inline).replace(/#\d+$/, ""))
+				.filter((name) => name !== "fn" && !registry.has(name));
+			for (const name of [...hostNamed, ...children]) {
+				expect<readonly string[]>(HOST_BUILTIN_EXTENSION_NAMES).toContain(name);
+			}
+		} finally {
 			restore();
 			rmSync(root, { recursive: true, force: true });
 		}
@@ -748,6 +1186,33 @@ describe("registry extensions", () => {
 			inlines.map((inline) => (typeof inline === "function" ? "fn" : inline.name));
 		expect(names(children.slice(3))).toEqual(names(registryInlineExtensions("childExtensions")));
 		expect(names(children.slice(3))).toEqual(["web-access"]);
+	});
+
+	it("hands an installed extension's child half over apart from the host's child set", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-child-installed-"));
+		const folder = join(root, "ext");
+		mkdirSync(join(folder, "server"), { recursive: true });
+		writeFileSync(
+			join(folder, "package.json"),
+			JSON.stringify({
+				name: "child-installed",
+				thinkrail: { api: "1.0", server: "server/index.ts" },
+			}),
+		);
+		writeFileSync(
+			join(folder, "server", "index.ts"),
+			'export default { name: "child-installed", extensions: [], childExtensions: [() => {}] };\n',
+		);
+		writeFileSync(join(root, "extensions.json"), JSON.stringify({ extensions: [folder] }));
+		const stop = startInstalledExtensions({ dataDir: root, onChange: () => {} });
+		try {
+			await installedExtensions()?.reconcile();
+			expect(childExtensionFactories("w1").slice(3).map(nameOf)).toEqual(["web-access"]);
+			expect(childInstalledExtensionFactories().map(nameOf)).toEqual(["ext:child-installed"]);
+		} finally {
+			stop();
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 
 	it("loads web access with its skill and drops both while the extension is off", async () => {
@@ -875,6 +1340,75 @@ describe("registry extensions", () => {
 				}
 			}
 			expect(input.workflow).toBe("none");
+		} finally {
+			setDisabledExtensionsResolver(() => new Set());
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("leaves a user's install of the vanilla /insights package out while session insights is on", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-superseded-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const extensionEntry = createRequire(import.meta.url).resolve(
+			"@thinkrail/ext-session-insights/server",
+		);
+		const corePackage = join(
+			createRequire(extensionEntry).resolve("@thinkrail/pi-session-insights/package.json"),
+			"..",
+		);
+		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [corePackage] }));
+		const restore = stubSkillEnv(home, agentDir);
+		let disabled = new Set<string>();
+		setDisabledExtensionsResolver(() => disabled);
+		try {
+			const settingsManager = createPiSettings(project, agentDir, {
+				projectTrusted: true,
+				packages: "enabled",
+			});
+			const loader = await buildResourceLoader(project, settingsManager, () => ctx(true));
+			const commands = () =>
+				loader.getExtensions().extensions.flatMap((extension) => [...extension.commands.keys()]);
+			expect(loader.getExtensions().errors).toEqual([]);
+			expect(commands()).not.toContain("insights");
+			expect(isLoaderPolicyStale(loader)).toBe(false);
+
+			disabled = new Set(["session-insights"]);
+			expect(isLoaderPolicyStale(loader)).toBe(true);
+			await loader.reload();
+			expect(commands()).toContain("insights");
+			expect(isLoaderPolicyStale(loader)).toBe(false);
+			disabled = new Set();
+			expect(isLoaderPolicyStale(loader)).toBe(true);
+		} finally {
+			setDisabledExtensionsResolver(() => new Set());
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("a loader without a superseded package is not stale when a superseding extension flips", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-superseded-none-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		for (const dir of [project, home, agentDir]) mkdirSync(dir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		let disabled = new Set<string>();
+		setDisabledExtensionsResolver(() => disabled);
+		try {
+			const settingsManager = createPiSettings(project, agentDir, {
+				projectTrusted: true,
+				packages: "enabled",
+			});
+			const loader = await buildResourceLoader(project, settingsManager, () => ctx(true));
+			disabled = new Set(["session-insights"]);
+			expect(isLoaderPolicyStale(loader)).toBe(false);
 		} finally {
 			setDisabledExtensionsResolver(() => new Set());
 			restore();

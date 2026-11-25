@@ -28,6 +28,8 @@ export {
 	KEYBINDINGS,
 	type KeybindingId,
 	type KeyChord,
+	SUGGESTION_KEYS,
+	type SuggestionKeybindingId,
 } from "./keybindings";
 export {
 	APP_LOCAL_COMMANDS,
@@ -35,7 +37,6 @@ export {
 	isAppLocalScope,
 	LOCAL_KEY_DEFAULTS,
 	LOCAL_SCOPES,
-	SUGGESTION_KEYS,
 } from "./localKeys";
 export {
 	APP_LOCAL_SET,
@@ -43,6 +44,7 @@ export {
 	type ExtensionCommandSet,
 	globalHolder,
 	type KeybindingConflict,
+	keybindingAria,
 	keybindingKeys,
 	keybindingLabel,
 	keybindingLabels,

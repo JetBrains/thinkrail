@@ -17,6 +17,8 @@ const MAX_WAIT_MS = 1000;
 const MAX_PATHS = 100;
 const STARTUP_NUDGE_MS = 750;
 const MAX_PREWARM_ONLY_WATCHES = 8;
+const WATCH_RETRY_INITIAL_MS = 30_000;
+const WATCH_RETRY_MAX_MS = 300_000;
 
 const IGNORED_SEGMENTS = new Set([".git", "node_modules"]);
 const IGNORED_NAMES = new Set([".DS_Store"]);
@@ -318,7 +320,7 @@ function ignoredWorktreeDirs(worktreePath: string, paths: string[]): Promise<Rea
 function watchRecursive(
 	root: string,
 	onEvent: (relPath: string | null) => void,
-	onError: () => void,
+	onError: (error: unknown) => void,
 ): TreeWatcher {
 	const watcher = watch(root, { recursive: true }, (_event, filename) => {
 		onEvent(typeof filename === "string" ? filename.replaceAll("\\", "/") : null);
@@ -338,6 +340,7 @@ interface RemoteRefWatch {
 interface WatchEntry {
 	watcher: TreeWatcher;
 	coalescer: Coalescer;
+	rootPath: string;
 	rootIno: number;
 	nudgeTimer: ReturnType<typeof setTimeout> | null;
 	ready: Promise<WorkspaceWatchReadyResult>;
@@ -350,6 +353,21 @@ interface WatchEntry {
 }
 
 const entries = new Map<string, WatchEntry>();
+const retries = new Map<
+	string,
+	{ rootPath: string; rootIno: number; delayMs: number; retryAt: number }
+>();
+
+function failWatch(workspaceId: string, rootPath: string, rootIno: number, error: unknown): void {
+	const previous = retries.get(workspaceId);
+	stopWatch(workspaceId);
+	if ((error as NodeJS.ErrnoException | undefined)?.code !== "ENOSPC") return;
+	const delayMs =
+		previous?.rootPath === rootPath && previous.rootIno === rootIno
+			? Math.min(previous.delayMs * 2, WATCH_RETRY_MAX_MS)
+			: WATCH_RETRY_INITIAL_MS;
+	retries.set(workspaceId, { rootPath, rootIno, delayMs, retryAt: Date.now() + delayMs });
+}
 
 function settleReady(entry: WatchEntry): void {
 	if (entry.readySettled) return;
@@ -369,7 +387,7 @@ export function ensureWatch(
 ): Promise<WorkspaceWatchReadyResult> {
 	const prewarm = options?.prewarm === true;
 	const workspaces = loadWorkspaces();
-	for (const id of [...entries.keys()]) {
+	for (const id of new Set([...entries.keys(), ...retries.keys()])) {
 		if (!workspaces.some((w) => w.id === id)) stopWatch(id);
 	}
 	const ws = workspaces.find((w) => w.id === workspaceId);
@@ -383,7 +401,7 @@ export function ensureWatch(
 		return startupFallback;
 	}
 	const existing = entries.get(workspaceId);
-	if (existing && existing.rootIno === rootIno) {
+	if (existing && existing.rootPath === ws.worktreePath && existing.rootIno === rootIno) {
 		if (!prewarm) existing.prewarmOnly = false;
 		else if (existing.prewarmOnly) {
 			entries.delete(workspaceId);
@@ -393,6 +411,12 @@ export function ensureWatch(
 	}
 	const replacesRealWatch = existing !== undefined && !existing.prewarmOnly;
 	if (existing) stopWatch(workspaceId);
+	const retry = retries.get(workspaceId);
+	if (retry) {
+		if (retry.rootPath !== ws.worktreePath || retry.rootIno !== rootIno)
+			retries.delete(workspaceId);
+		else if (Date.now() < retry.retryAt) return startupFallback;
+	}
 
 	const coalescer = createCoalescer({
 		quietMs: QUIET_MS,
@@ -418,9 +442,10 @@ export function ensureWatch(
 			if (isRepoMetaPath(rel)) scheduleRepoMeta(workspaceId, watcher);
 			if (!isIgnoredPath(rel)) coalescer.add(null, skillChangeOf(rel));
 		};
-		const onError = () => {
+		const onError = (error: unknown) => {
+			if (entries.get(workspaceId)?.watcher !== watcher) return;
 			log.warn(`worktree watcher failed for workspace ${workspaceId}`);
-			stopWatch(workspaceId);
+			failWatch(workspaceId, ws.worktreePath, rootIno, error);
 		};
 		const watcher = WATCH_EACH_DIRECTORY
 			? watchTree(ws.worktreePath, {
@@ -438,6 +463,7 @@ export function ensureWatch(
 		const entry: WatchEntry = {
 			watcher,
 			coalescer,
+			rootPath: ws.worktreePath,
 			rootIno,
 			nudgeTimer: null,
 			ready,
@@ -453,6 +479,7 @@ export function ensureWatch(
 		if (entry.prewarmOnly) evictExcessPrewarmOnlyWatches();
 		void watcher.ready.then(() => {
 			if (entries.get(workspaceId) !== entry) return;
+			retries.delete(workspaceId);
 			entry.nudgeTimer = setTimeout(() => {
 				if (entries.get(workspaceId) !== entry) return;
 				entry.nudgeTimer = null;
@@ -474,8 +501,8 @@ export function ensureWatch(
 			syncRemoteRefWatch(workspaceId, entry);
 		}
 		return ready;
-	} catch {
-		stopWatch(workspaceId);
+	} catch (error) {
+		failWatch(workspaceId, ws.worktreePath, rootIno, error);
 		coalescer.dispose();
 		log.warn(`could not watch worktree for workspace ${workspaceId}`);
 		return startupFallback;
@@ -483,6 +510,7 @@ export function ensureWatch(
 }
 
 export function stopWatch(workspaceId: string): void {
+	retries.delete(workspaceId);
 	const entry = entries.get(workspaceId);
 	if (!entry) return;
 	entries.delete(workspaceId);
@@ -498,4 +526,5 @@ export function stopWatch(workspaceId: string): void {
 
 export function stopAllWatches(): void {
 	for (const id of [...entries.keys()]) stopWatch(id);
+	retries.clear();
 }

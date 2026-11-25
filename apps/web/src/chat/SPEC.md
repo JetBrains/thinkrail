@@ -213,7 +213,8 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   `markdown`/`tool`/`activity` row precedes the next round opener (see `divider`) (`finalAnswerRowIds`, supplied by every
   transcript integration as `isFinalAnswer`); a non-final markdown row renders plain, without the action.
   A later `tool`/`activity` row holding only suggestions calls (`carriesComposerSuggestions`) does not
-  count: by contract that call comes after the final answer (*Composer suggestions*).
+  count. Rounds recorded before the call moved ahead of the final answer end with that row
+  (*Composer suggestions*).
   Both go through **one shared layout**, `MessageWithCopy` (in `turns.tsx`): a `relative` wrapper that
   overlays the action **inside the role's bottom corner on the same line as content** — bottom-left for
   an assistant answer (`left-0 bottom-0`), bottom-right for a user bubble (`right-0 bottom-8`, aligned
@@ -336,7 +337,8 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   `failure`) counts; a failed rename or an extension notice never relabels a round. A round cut short
   by a steer (last reply `toolUse`) has no outcome and keeps the plain time — except a reply ending in a
   qualifying suggestions call (`endingSuggestionsCall`, the predicate the chips use, *Composer
-  suggestions*): that call ended the run by contract, so a reloaded round reads done like the live one. A
+  suggestions*). In rounds recorded before the call moved ahead of the final answer, that call ended
+  the run, so a reloaded round reads done like the live one. A
   generic "`toolUse` with every result in" rule was rejected: pi persists no `terminate`, and a crash
   after an ordinary tool batch looks the same. Times under 1s are dropped;
   an instant error with nothing else to report is the bare rule. The written files show as **two chips
@@ -356,8 +358,9 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
 - A third chip, **“N artifacts”**, lists what the round left in the artifacts folder — which the git receipt
   below cannot see, the folder being ignored. `ChatTranscript` hands `deriveRows` this chat's
   `sessionRoundArtifacts`: the live artifacts whose host **round markers** ([[submodule-server-artifacts]])
-  include one of this chat's rounds, results only while the Smart view is on and the host is v124+, every
-  artifact file otherwise. A round keeps those whose marker falls in its window — the same
+  include one of this chat's rounds, filtered to what the Artifacts view in use shows
+  (`selectArtifactsRoundFilter`): the published files under Outputs, the results under Smart, every
+  artifact file under List and Tree — so the chip and the panel never disagree. A round keeps those whose marker falls in its window — the same
   opener-to-next-opener rule as the receipts below; the host stamps a round with the delivered prompt's own
   timestamp, so a follow-up queued into a running agent gets its own round — and a later round that touches
   a file again lists it too without taking it from the earlier one. Rows are named by their path inside the artifacts folder; the chip reveals the
@@ -481,14 +484,32 @@ content and their own controls, which a treeitem's name would flatten and its ro
 - **Built from data, not the DOM.** The visible items derive from the projected rows plus the fold cache
   (`foldOverride`), in visual order for both message orders (rows reverse, steps inside a row never do),
   so a move can target a row Virtuoso unmounted. The sidebar trees' rule (`lib`'s `resolveTreeMove`)
-  resolves ↑/↓ and k/j, Home/End, → and l (expand, else first child), ← and h (collapse, else parent);
-  PgUp/PgDn go to the farthest mounted item within one viewport; Enter toggles. Keys are unmodified,
-  IME-safe and read only on the article itself (inner controls keep theirs). The arrow twins, C
-  (`transcript.copy`) and O (`transcript.open`) are rebindable local keys of scope `transcript`
-  ([[submodule-web-keybindings]], *Local keys*), matched by physical `code` (a Russian layout's `с`
-  copies) through `useLocalKeys`, which `useTranscriptNavigation` hands the controller on every render;
-  the arrows, Home/End, PgUp/PgDn, Enter and Esc are locked. Expansion clicks the item's own toggle
-  (`data-activity-node-toggle`, `data-chat-item-toggle`), so fold-geometry preservation still runs.
+  resolves → and l (expand, else first child), ← and h (collapse, else parent); Enter toggles.
+- **Reading keys** (user, 2026-11-20; `@thinkrail/ui/reading`, [[module-ui]]). ↓/j and ↑/k **scroll
+  before they step**: while the current item's own extent (`ownReadingSpan`: up to its first nested item,
+  so an expanded group's header steps into its steps) reaches past the viewport edge in that direction, the feed
+  scrolls `READING_LINE` (40 px), clamped so the edge lands exactly in view; only then does the cursor
+  move to the neighbouring item, revealed minimally (a short item whole, a tall one its near edge plus a
+  line), so a tall message is read to its end instead of skipped. A cursor item wholly off screen
+  re-anchors to the first (↓) or last (↑) visible item without scrolling. Space/PgDn and Shift+Space/PgUp
+  scroll a page (`readingPage`: the viewport less a line) and keep the cursor while its item still
+  shows, else move it to the first visible item. g/Home and Shift+G/End go to the ends: the cursor
+  takes the first or last item and the feed scrolls to that extreme — an item of a latest row through
+  `scrollToLatest`, so reaching it re-follows; a history edge at once (a mounted target takes focus
+  synchronously, so Home then j still walks from the first item). A history bottom then converges:
+  `revealRow` aligns the last row's end and, on "found", the feed takes the exact extreme again — one jump
+  uses Virtuoso's estimated `scrollHeight` and stops short of history taller than its estimate; a top
+  needs no second pass, as nothing above `scrollTop` 0 can grow. Line and page scrolls are
+  keyboard-provenance scrolls through the scroll hook's `keyboardScrollBy` / `scrollPage` (a reader
+  moving toward history detaches, one reaching the latest edge re-follows), never `revealElement`.
+  PgUp/PgDn used to jump to the farthest mounted item in a viewport (replaced, 2026-11-20). Keys are
+  unmodified, IME-safe and read only on the article itself (inner controls keep theirs). The arrow twins, the reading twins g / Shift+G (`reading.top` /
+  `reading.bottom`, shared scope `reading`), C (`transcript.copy`) and O (`transcript.open`) are
+  rebindable local keys of scope `transcript` ([[submodule-web-keybindings]], *Local keys*), matched by
+  physical `code` (a Russian layout's `с` copies) through `useLocalKeys`, which `useTranscriptNavigation`
+  hands the controller on every render; the arrows, Home/End, PgUp/PgDn, Space, Enter and Esc are
+  locked. Expansion clicks the item's own toggle (`data-activity-node-toggle`, `data-chat-item-toggle`),
+  so fold-geometry preservation still runs.
 - **Item actions.** C copies the message source, a thought's text or a tool call's result text (nothing
   for an Activity group, a running tool or a skill/review card) with a "Copied" toast; O opens the path of
   `read`/`edit`/`write` and the single-spec tools (`spec_create`/`spec_get`/`spec_update`) through the same
@@ -502,9 +523,10 @@ content and their own controls, which a treeitem's name would flatten and its ro
   (`focusAndReveal`; unconfirmed with the user, the recommended answer): the question is the chat's focus
   home. The controller learns of it through the `waitingQuestion()` option `ChatView` passes down (the
   dock's claim, else `null`), and `transcriptKeyAction` turns Esc into `question` when one waits.
-- **Scrolling stays the controller's.** A mounted target that sticks out is revealed with
-  `revealElement` (`nearest`, user-navigation; nested items keep the breadcrumb inset), an unmounted one
-  with `revealRow` and focused on "found"; an unmounted latest row itself returns to the edge instead, so
+- **Scrolling stays the controller's.** A line step reveals a mounted target through `keyboardScrollBy`
+  (above); a Tab or ←/→ target that sticks out is revealed with `revealElement` (`nearest`,
+  user-navigation; nested items keep the breadcrumb inset in both), an unmounted one with `revealRow`
+  and focused on "found"; an unmounted latest row itself returns to the edge instead, so
   reaching the newest item re-follows rather than detaching. Focus always uses `preventScroll`, and a
   target already on screen only moves focus, so walking visible items never detaches a following reader
   — except on the latest row: a keyboard expand there (→/l, Enter, the menu's Expand) and focus entering
@@ -534,7 +556,8 @@ content and their own controls, which a treeitem's name would flatten and its ro
   for the feed: the feed carries `data-focus-park`, the shell's landing for a field's Esc
   ([[submodule-web-shell]], *Esc leaves a text field*), so the composer has no code for it. Focus rests on
   the feed with no ring and the draft and caret stay; `F` starts hint mode at once and ↑/↓ or j/k start
-  walking from the cursor (the parked-feed rule above). **While a docked question waits** the same Esc,
+  walking from the cursor (the parked-feed rule above), the page keys page the feed without a cursor and
+  g/G/Home/End go to an end with it. **While a docked question waits** the same Esc,
   draft or not, lands on its `[data-focus-claim]` (the shell's landing prefers a claim to the park), and
   the card's own Esc returns to the composer, so Esc toggles question ↔ composer (user, 2026-11-17). A
   plain Shift+Tab in the composer (no template slots, no open menu) goes to the docked
@@ -542,7 +565,7 @@ content and their own controls, which a treeitem's name would flatten and its ro
   through `focusAndReveal`), never to its Skip button, which the browser's own order would reach first. In the composer, Mod+↑ (`composer.enterTranscript`, rebindable; checked before plain ↑ recall) focuses the newest content item (a
   trailing round divider is skipped) when the draft is empty or one visual line, or the caret is already at
   its start; otherwise it first moves the caret to the start. PgUp/PgDn there page the transcript with
-  keyboard provenance and keep focus. `ChatTranscriptHandle.focusNewest()` / `scrollPage()` are the seams.
+  keyboard provenance (the same `readingPage` as the feed's) and keep focus. `ChatTranscriptHandle.focusNewest()` / `scrollPage()` are the seams.
   **Latest** activated from the keyboard (`detail === 0`) parks focus on the feed, returns to the edge and
   focuses the newest item once it mounts; **Stop** refocuses the composer explicitly; a jump-to-message
   focuses the row it revealed.
@@ -585,12 +608,60 @@ remain app-local. A registration is:
   **`resolveProminence`** seam — where a per-user override map (settings) can plug in later.
 
 Every registry read (renderer, summary, chrome, width, prominence) goes through one resolver: the exact tool
-name, else the longest app-local prefix registration (`registerToolRendererPrefix` — today only `mcp__`,
-because pi names MCP tools per server), else the default. Exact names always win, an empty prefix never
-matches, and extension descriptors stay exact-name only.
+name — a built-in registration first, else, among installed extensions whose renderers are currently
+registered, the one listed first by the host (the accepted loading window is in
+[[submodule-web-extensions]]) — else the longest app-local prefix registration
+(`registerToolRendererPrefix` — today only `mcp__`, because pi names MCP tools per server), else the
+default. A built-in exact name always wins, an empty prefix never matches, and
+extension descriptors stay exact-name only. An installed exact name that the extension's own server half
+registers never takes a name under an app prefix — the host's MCP tools beat an installed one on the
+server — and the loader never registers an installed renderer for a name the host keeps over that
+extension's server half (its `web.shadowed`). A card for a tool the extension's server half does not
+register is the extension's documented purpose and is accepted: a web half may draw a host MCP tool
+(`mcp__<server>__<tool>`) or a host tool that has no card of its own (`set_title`, `grep`), while the host
+still runs the tool; only a built-in card is never replaced.
+The order mirrors which tool the server actually runs (built-in
+tool-name precedence, host-owned tools before installed ones, then pi's first registration wins), so a
+card does not draw over another tool's result outside that window.
 
-Unregistered tools fall back to `DefaultToolRenderer`. A tool that needs user input mid-run takes one of
-two routes:
+**The registry is subscribable.** Installed web halves register after first render
+([[submodule-web-extensions]]): `reserveInstalledOwner(owner)` fixes an owner's precedence slot when its
+load starts (host-list order, independent of which bundle finishes first),
+`setInstalledToolRenderers(owner, toolRenderers)` replaces that owner's set atomically in its slot, and
+`removeInstalledToolRenderers(owner)` drops it and its slot, revealing the next owner of the same name (a
+failed load instead keeps an empty set in its slot).
+Every change publishes a new immutable `ToolRegistry` snapshot (with a `revision`). Readers take it through
+`useSyncExternalStore` hooks — `useToolRegistry()` for derivations, `useToolRenderer(name)` for the
+renderer itself, `useToolRegistryRevision()` — and pass the snapshot as the optional trailing `registry`
+argument of every resolver and derivation (`deriveRows`, `deriveInteractionStates`,
+`latestPendingInteraction` / `dockedInteraction` / `pendingInteraction`, `sessionGlance`,
+`estimateChatRowHeights`, `deriveMessageActions`, `deriveComposerSuggestions`, summaries, chrome, width,
+prominence, docking). A version counter beside an
+unchanged `getToolRenderer(name)` call is not enough: the React Compiler memoizes that call by its
+arguments, so the snapshot has to be an argument. The structure matters too: an unregistered tool is a
+routine step inside a collapsed activity group, so a late primary registration turns it into a card row
+and its removal turns it back. Without the argument the live snapshot is read, which keeps imperative
+callers and tests unchanged. Built-in registration at bootstrap behaves as before. In dev, registry state
+lives in `import.meta.hot.data`, so a hot update of the registry keeps every registration.
+
+Unregistered tools fall back to `DefaultToolRenderer`. **Every renderer renders inside its own
+`ToolRendererBoundary`** — in `ToolRendererBody`, in the composer dock (`DockedTool`) and on the plan page
+alike, built-in or installed: a
+renderer that throws shows `DefaultToolRenderer` for that one row (chat wraps it in
+`data-testid="tool-renderer-fallback"`) while the card chrome, result images and every other row keep
+working. The boundary gives the renderer another try when the renderer identity (an update), the
+`toolCallId`, the call's `status` or its `streaming` flag changes — so a card that threw on partial arguments
+renders once streaming ends or the result arrives (a result lands with the status change) — but not on
+other prop changes such as each streamed argument delta, so a permanently broken card retries a bounded
+number of times per call rather than on every render. It reports
+through `components`' `reportBoundaryError` (reportId `tool-renderer`, classifier only) **once per renderer
+function**, so a broken card in fifty rows is one report. A registration's `summary` runs outside any
+boundary (card headers, activity steps), so a throwing summary reads as no summary and reports once
+(`tool-summary`); a throwing `composerSuggestions` reader likewise reads as no suggestions
+(`tool-composer-suggestions`). Effects and event handlers are not caught by a boundary; they reach the window-level
+error reports. A new render site of a registered renderer must keep the boundary.
+
+A tool that needs user input mid-run takes one of two routes:
 - the extension-UI bridge (`pi.extensionUi` → `ExtUiPrompt`, below);
 - for a rich inline card, rendering from its `toolCall` args and replying through the props-only
   **`ToolRenderProps.interaction`**. `ToolRendererBody` fills it through `useToolInteraction`
@@ -700,30 +771,40 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   Subagent transcripts never mount `ChatView`. `deriveComposerSuggestions` (`composerSuggestions.ts`)
   reads them from the transcript alone, so nothing new is stored. Chips show only when all of these hold:
   - the session is idle with nothing queued;
-  - skipping the round-closer `system` turns, the last turn is a finished assistant message whose
+  - walking back over `system` turns and finished text-only replies (`stop`, no tool calls: the final
+    message written after the call), the first other turn is a finished assistant message whose
     **last** tool call has a `composerSuggestions` reader ([[module-extension-api]]);
   - that call's result is `done`;
   - the message holds no interactive call;
   - the owning extension is switched on (registrations carry their extension's name).
 
-  Any later turn (an error, a retry, the next user message) clears the row, and a reload restores it.
+  Any other later turn (an error, a retry, an unfinished or failed reply, more tool work, the next user
+  message) clears the row, and a reload restores it. The final message comes after the call because
+  text before a tool call can reach the user only as a server summary ([[module-pi-next-steps]],
+  *Decisions*). Rounds recorded when the call came last qualify the same way.
   The row shows at most one chip per send key — nine — whatever a reader returns.
-  A call that wasn't last never qualifies: pi only ends the turn when every result in the batch
-  terminates. A click, or the chip's key, goes through `performSend(text, [], "send")`, the same
+  A call that wasn't last in its message never qualifies: the work went on beside it. A click, or the chip's key, goes through `performSend(text, [], "send")`, the same
   draft-free path as Try again, so the composer draft survives. Shift+click, or the chip's edit key,
   instead puts the text into the input (`ComposerHandle.insertAtCaret`: the whole text into an empty
   input, else at the remembered caret with a separating space) and focuses it, sending nothing. A chip
   used by click or keyboard vanishes with the row; the shell's focus recovery then lands on the input,
   the chat region's `data-focus-default`, so the row needs no focus-list markup of its own. The keys
-  are the rebindable local commands `suggestions.send1…9` (`Alt+1…9`) and `suggestions.edit1…9`
-  (`Shift+Alt+1…9`, [[submodule-web-keybindings]]) of the shared scope both the input and the transcript
-  include. One native `keydown` listener on the chat root matches them through
-  `useLocalKeys` with the focused element's scope — the transcript feed's, else the input's for the input
-  and the chip row (which declares `data-key-scope="composer"`, so the binder yields there too) — and
-  nowhere else in the chat. It consumes the press (`preventDefault`, a repeat does nothing) only when
-  that chip is shown, so with no chip an Option chord still types its character. Each chip's tooltip
-  caps and `aria-keyshortcuts` come from the same keys. The copy is host keys (`chat.suggestions.*`):
-  the row is generic, and the extension supplies only the strings.
+  are the rebindable **global** chords `suggestions.send1…9` (`Alt+1…9`) and `suggestions.edit1…9`
+  (`Shift+Alt+1…9`, [[submodule-web-keybindings]]) and act **from anywhere except the terminal, the code
+  editor (Monaco), an open dialog and hint mode** (user, 2026-11-20 — this reverses the earlier "only in
+  the chat's input or conversation" rule, under which a chip could not be sent from the Files tree, a tab
+  strip or the question card). Every mounted `ChatView` registers its chips — session, root element,
+  strings, send and edit — in `suggestionTargets.ts` (`registerSuggestionTarget`, dropped on unmount);
+  `shell`'s binder resolves the **target chat** at the press (`suggestionTargetFor`): the chat containing
+  focus — even one without chips, so a press in one chat never sends another's — else the chat the shell's
+  Mod+L / history target names (`selectHistoryTarget`: the active center tab when it is a chat, else the
+  workspace's last chat tab), and consumes the press (`preventDefault`, a repeat does nothing) only when
+  that chat shows chip N, so with no chip an Option chord still types its character
+  ([[submodule-web-shell]], *Global chords*). A send leaves focus where it was; an edit focuses the input.
+  Each chip leads with a small muted number (`Keycaps`, `aria-hidden`, so its name stays the text), and its
+  tooltip caps and `aria-keyshortcuts` come from the resolved global chords, which `shell` passes down
+  (`suggestionShortcuts`, like `landingChord`). The copy is host keys (`chat.suggestions.*`): the row is
+  generic, and the extension supplies only the strings.
 - **Structured tool-file navigation** — `ChatView` accepts an optional `onOpenFile(path)` from the shell and
   passes it through every `ToolRenderProps` path (routine, primary, card, or bare). The shared tool-file
   primitive offers that action only for a non-empty relative path or an absolute path contained by
@@ -873,24 +954,40 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   a mapped message hit; see `store/SPEC.md` for the store-level request/clear contract and
   the workbench shell integration's open/reopen/hydrate half) — `ChatTranscript` is the sole consumer. Once
   `rows.length > 0`,
-  it resolves the request's `messageIndex` via `runtime.turnIdByMessageIndex` (present only on a
+  it resolves the target through the pure **`locateChatRow`** (`chatLocation.ts`): a request naming a
+  `toolCallId` lands on that call's row — its own `tool` row or the `activity` row grouping it
+  (`rowIndexForToolCall`, which reads the rows, so it works for a live runtime too); otherwise, or when the
+  chat does not show the call, it resolves the request's `messageIndex` via `runtime.turnIdByMessageIndex` (present only on a
   *hydrated* runtime — a live/already-open session's runtime, built by the event reducer, never carries
   one), falling back to scanning `turns` for the newest whose own text contains `anchorText`'s prefix — the
   same fallback also covers a hydrated map entry whose turn no longer contains the anchor (e.g. the
-  transcript changed underneath it). The resolved turn maps to a row via the pure **`rowIndexForTurn(rows,
+  transcript changed underneath it). The fallback never runs with an empty (or blank) prefix, which every
+  turn would match: a text-less target (a tool result, a tool-call-only assistant message) resolves only
+  through its `toolCallId` or the map. The resolved turn maps to a row via the pure **`rowIndexForTurn(rows,
   turnId)`** (`rows.ts`), called with the projected rows — a turn's own row for
   `user`/`system`/`error`/`retry`, or its first `:text:` row for `assistant` (whose turns dissolve
-  into `markdown`/`tool`/`activity` rows, never a row of their own)
+  into `markdown`/`tool`/`activity` rows, never a row of their own); an `assistant` turn with no text row
+  lands on its first tool call's row (`rowIndexForToolCall`), flagged nearest
   — then a cancellable, non-animated materialization derives the target from Virtuoso's measured size
   snapshot (with conservative estimates only for never-measured rows) before the controller-owned centered
   pixel correction. Materialization remains pending until the exact row stays mounted and measured at that
   alignment across stable frames; a transient mount during Virtuoso's estimate correction is not success.
   It never starts Virtuoso's internally retrying `scrollToIndex`, so reader takeover can cancel every
   outstanding write. Its lifecycle is keyed to request identity rather than streaming row-array churn, and
-  its live row-index resolver follows projections that change while the request is pending. A transient
-  `flashRowId` (rendered as `data-flash` + a `bg-primary-subtle` transition on the row wrapper, cleared after
-  1600ms) draws the eye only after the row mounts, and the same "found" result focuses the row (with
-  `preventScroll`, in whichever transcript mounted for the jump), so the keyboard lands where the reader looks. Resolving a row, explicit reader cancellation, or
+  its live row-index resolver follows projections that change while the request is pending. A request
+  naming a tool call that sits inside a group (an activity group, a thinking step's tools) opens those
+  folds first (`locateToolItem` finds the call's transcript item and the folds around it, `expandFolds`
+  opens them whether mounted or not) and, once the row is found, brings the call's own item into view
+  (`block: "nearest"`). A transient flashed item (`TranscriptProvider`'s flash context, rendered by
+  `TranscriptItem` as `data-flash` + a `bg-primary-subtle` transition, cleared after 1600ms) — that call's
+  item, else the row — draws the eye only after the row mounts, and the same "found" result focuses the row
+  (with `preventScroll`, in whichever transcript mounted for the jump), so the keyboard lands where the
+  reader looks — except for a request with `focus: false` (a chat pane's *Show in chat*, which reveals in
+  place while the reader works in the pane), which leaves focus where it is.
+  A landing that stands in for the target — the request is `approximate` (the host anchored the nearest
+  shown ancestor), the named tool call is not in the rows, or a text-less assistant message stands on its
+  first tool call — also toasts "showing the nearest message" (`chat.transcript.locatedNearest`) once the
+  row is found. Resolving a row, explicit reader cancellation, or
   exhausting the bounded materialization wait (toasted as "couldn't locate the message") clears that exact
   still-current request; an older effect may not clear a newer jump. Cancellation is the user-wins failure
   path and is intentionally silent rather than restarted against the reader. Effect teardown defers its
@@ -1268,7 +1365,13 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `h-panel-header-row` (`--panel-header-row-height`, currently 28px), the shared structural geometry with
   workbench Group Headers and the Changes toolbar, not a value pinned here; it never scrolls,
   and constrained widths clip/truncate TODO + status/usage text while preserving the trailing Skills
-  action. Its **Skills** button is the presentational **`SkillsButton`**
+  action. After the usage figures, before Resources, it renders `links` — a compact "<label> ↗" link per chat
+  action the shell offers (an extension panel opened for this chat, in a tab): `ChatView` receives
+  them as its `chatActions` prop (`lib`'s `ChatAction`, [[submodule-web-shell]] § Extension panels) and
+  shows them once the chat has a session file (the store's `selectChatPersisted`), so chat never reads
+  the extension registry. An action marked `pane` (it opens beside the chat) renders as a toggle instead
+  (`chatHeaderLinks`: a ghost `Button` with the action's icon and `aria-pressed`), pressed while this
+  chat's pane shows it; pressing it then closes the pane (*Chat pane* below). Its **Skills** button is the presentational **`SkillsButton`**
   primitive — a `BookOpen` pill, badged when a skill dir changed on disk — also shared with
   `NewWorkspaceDialog` so the two triggers cannot drift), and **`SkillsDialog`** (the **Skills manager**: a catalog
   grouped by source with **sticky section headers** — the first-party **ThinkRail** and **Pi** groups lead
@@ -1294,6 +1397,65 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   the line says each request lists at most `SKILL_LISTING_MAX_TOKENS` of it and the agent searches for the
   rest, since the model's window sets the budget in between. Past that ceiling it turns warning colour with
   a hint to switch unused groups off. All props-driven; behavior detail lives in the components' jsdoc.
+- **Attachments (`promptImages.tsx`, `attachments.ts`)** — any file, picked, pasted or dropped, joins one
+  draft beside the images (`PromptImagesState.files`: picked bytes or a local path; browser-local, never
+  persisted). **Classification:** contracts' `attachmentImageType` — a raster image by type or extension,
+  HEIC, TIFF and AVIF included, so one the webview cannot decode keeps its error chip on every path — takes
+  the image path above and goes to the model only, never to disk; SVG and every other file becomes a file chip (kind icon, name, size, "→ workspace"), refused onto an error chip over
+  `CHAT_ATTACHMENT_MAX_BYTES` (100 MB) or on a host below `CHAT_ATTACHMENTS_PROTOCOL_VERSION` (images still
+  work there). **The paperclip** (`AttachFilesButton`, composer bottom row and New Workspace) is an
+  `IconButton` (an explicit `tabIndex={0}`, the tab stop WebKit's Tab needs) over a hidden
+  `<input type="file" multiple>`: the webview's own chooser (GtkFileChooserNative
+  on Linux), never Electrobun's synchronous `openFileDialog`, which would block the in-process host. Open
+  returns focus to the field, the input's `cancel` event to the paperclip. **Send:** `Composer.onSubmit` may
+  answer a promise; until it settles the draft is held (field read-only, chips locked, a "Copying files…"
+  chip, sends refused) under an `AbortController` kept on the draft (`PromptImagesState.upload`, so a
+  remounted composer still reaches it). Esc in the field or the chip's × aborts it: the upload stops, nothing
+  is sent, the draft stays as it was — at once, also while a pasted file's host copy is still out (its late
+  answer only records the path, so the retry doesn't copy it twice; [[submodule-web-transport]]). The field's own editing keys are inert meanwhile — ↑/↓ recall, the `@` and
+  `/` menus (hidden) and template-slot Tab — so a cancel gives back exactly the held text; Esc, Shift+Tab to
+  the chips and the other focus moves still work. Whatever reaches the composer meanwhile merges instead of being lost —
+  restored queue text (Stop, Edit on a queued message, a failed queued send) goes above the held text
+  (`withRestoredDraft`, the one rule), restored images join as new chips, history Insert / Insert-and-send,
+  a suggestion and a template add their text the same way, and an extension's composer edit waits for the
+  hold to end. An accepted answer removes only what it sent — the held text (`withoutSentDraft`) and the
+  chips present at submit; a refused one, or `onSubmit` throwing (*Couldn't send*), keeps everything with
+  the reason on the command-error chip, and each file the host already wrote keeps its path
+  (`PromptFile.copied`), so a retry does not copy it twice. `ChatView` hands the files to transport's `uploadPromptFiles` in order —
+  picked bytes over HTTP (`PUT /attachments/`, never the socket), a pasted local path by name
+  (`attachments.copyLocal`) — then sends the text with contracts' `withAttachedFiles` trailer (the
+  `start_workspace` format) listing the worktree-relative paths. New Workspace has no worktree yet, so it
+  copies into the host data dir, lists absolute paths, and its file chips name ThinkRail's attachments
+  folder ("→ attachments"), never the workspace. `/compact` and `/name` refuse a draft with files as
+  they refuse one with images. The sent bubble shows the trailer as plain text. **Keyboard:** the strip is one
+  horizontal `listbox` stop with a roving active option (`chipKeyAction`: ←/→/Home/End move, Delete lands on
+  the chip that takes the removed one's place, Backspace on the one before, the last removal or Esc returns
+  to the field); × is `tabIndex=-1`, for the mouse and hint mode. In New Workspace the strip precedes the
+  field in DOM, so the browser's order holds. The composer's strip sits above the shell in DOM while its Tab
+  place is between the model picker and the field, so there it leaves the browser's sequence and the
+  composer routes it: field Shift+Tab → chips (after a waiting question's claim), chips Shift+Tab → picker,
+  picker Tab → chips (the picker forwards its trigger's keys, `onTriggerKeyDown`, only outside an IME
+  composition), chips Tab → field. **Paste and drop** (`attachmentPasteDropHandlers`): drop works
+  anywhere on the composer (`onDragOver` on the fieldset). WebKitGTK ≥ 2.50.3 empties pasted and dropped
+  files (CVE-2025-13947), so a paste without files asks the optional native clipboard
+  (`__THINKRAIL_NATIVE_CLIPBOARD__`, feature-detected — the web has no desktop branch) only when it may hide
+  files (`pasteMayHideFiles`: a `Files`, `text/uri-list` or image type, empty text, or text that is a file
+  list by contracts' `copiedFilePaths` — `file://` URIs or GNOME's copied-files text, never bare paths, which
+  paste as text); that paste is taken over and, when the bridge has nothing, its own
+  text is inserted with `execCommand("insertText")` (undo intact), and announced files the desktop could not
+  list toast "Couldn't read the copied files" (a rejected read counts as `unreadable`). The read is pending work on the
+  draft it was pasted into (`reserve()`: the "Attaching…" chip, sends refused, so Enter cannot send the text
+  ahead of the screenshot) until its answer is applied; a paste during an upload is ignored. A late answer
+  applies only to that draft's generation, so a reset or reopened draft drops it; a chat switched away from
+  still gets its chips (the paste's owner), while the text fallback needs its own field still mounted —
+  otherwise it is dropped rather than typed into whichever field has focus. A copied image becomes `image.<subtype>` (`image.png` for a
+  screenshot); copied files arrive with their image bytes or as local paths, and an image file the desktop
+  sent without bytes (past its budget) or an `oversized` image lands on the error chip "too large to paste",
+  never in the workspace. A drop that announces `Files`, or a URI list it hands over empty
+  (WebKitGTK's view of a file-manager drag, `dropHidesFiles`), carries nothing and toasts — "Drag and drop
+  isn't available on Linux" where the desktop bridge is present, else the neutral "The dropped files didn't
+  come through" (a WebKitGTK browser, say); the composer accepts such drags (`dragMayCarryFiles`) and cancels a link
+  dropped outside the field. Removal gate: [[electrobun-compatibility]].
 - **Live session telemetry follows Pi's finalized boundaries.** `SessionStatsBar` renders only the host's
   authoritative `session.getStats` snapshot; the web never derives billed totals or context usage from
   message content. Totals include delegated subagent spend, which the host records into the parent as pi
@@ -1890,6 +2052,22 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   glance-based prompt/follow-up plus hydration fallback only for older hosts; the compatibility path skips
   an awaiting question rather than waking the agent past its blocker.
 
+## Chat pane
+
+A chat may show a pane beside it, inside its own center tab: the shell's extension panels opened for
+this chat ([[submodule-web-shell]] § Extension panels). `ChatView` takes it as an optional `pane` prop
+(`ChatPaneSlot`: the chat action's id, a label, the body element, the width and the resize and close
+callbacks) and renders through the props-only `ChatPaneSplit`: the whole chat (header, transcript,
+composer) on the left, the pane on the right, split by `@thinkrail/ui/resizable`'s keyboard-accessible
+handle (`chat-pane-resize`, arrow keys resize). The split's group and the chat's panel are always
+rendered, and only the handle and the pane come and go, so opening or closing a pane never remounts the
+transcript or the composer. Width is a percentage of the tab, stored per chat by the shell — half the
+tab by default, the chat at least 30 % and the pane at least 25 % — and reported once per resize
+gesture (at the drag's end; a keyboard step reports at once), so a drag does not re-render the chat.
+Each chat keeps its own pane and width; switching chats shows that chat's. The pane draws no chrome:
+the panel inside renders its own title, *Open as tab* and close controls. *Rejected:* a second center
+group (two tab strips, a stale analysis after a chat switch, a group left behind) and a new center tab.
+
 ## Chat Resources
 
 [[submodule-web-chat-resources]] owns the three presentation surfaces — header trigger, composer
@@ -1992,7 +2170,7 @@ Unknown custom messages retain their existing behavior.
 
 ## Boundary
 
-- **Public surface:** the registry API (`toolRegistry`), the shared workspace-file target canonicalizer
+- **Public surface:** the registry API (`toolRegistry`, plus `ToolRendererBoundary` for any other render site of a registered renderer), the shared workspace-file target canonicalizer
   (`fileTargets`), and the renderers (incl. the presentational
   `Markdown` — GFM + code highlighting, no store/transport; the rendering is fixed but the **prose skin** is the
   caller's via an optional `className` — chat uses the compact bubble skin (`tr-prose-chat`),
@@ -2034,7 +2212,7 @@ Unknown custom messages retain their existing behavior.
   (the hidden-models persistence seam `main.tsx` starts once: hydrates `store.hiddenModels` and writes it
   back through the stable client-preference adapter or host-qualified localStorage — the store itself
   touches no storage). `promptImages.tsx` is not an integration file: its one `store` import is the pure
-  prompt-image draft model. `useModelCatalog` is the shared
+  prompt-image draft model, and uploads reach it only through `Composer.onSubmit`. `useModelCatalog` is the shared
   models-catalog seam `panels/NewWorkspaceDialog` also imports per-file, so the two pickers cannot
   drift; on activation it **drops catalog authority synchronously** (a flag an earlier consumer set says
   nothing about the list this one inherited) and reads `model.list` only when the shared list is **empty** —

@@ -267,7 +267,9 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   Esc ladder from another panel and Shift+Tab from the composer, never Skip ([[submodule-web-chat]],
   [[submodule-web-shell]]). A **coarse pointer never gives up focus** at all: focusing a row (the Other input
   especially) raises the soft keyboard over someone who was reading. A **page change** follows a tap, so
-  it may focus — except into a text field on a coarse pointer (`shouldFocusPageTarget`). The transcript is
+  it may focus — except into a text field on a coarse pointer (`shouldFocusPageTarget`). It focuses a frame
+  later and only if focus is not on the new page yet, so a tap into its Other field before that frame keeps
+  the caret. The transcript is
   never scrolled for attention: the dock is always visible. The card used to reveal itself in the
   virtualized transcript through a bounded settling window that yielded to the user's first input; docking
   removed the reveal, the settling window and the `revealElement` / `cancelAutomaticReveal` members of the
@@ -304,7 +306,11 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   discussion** and focuses its text. Enter on the primary button goes on or sends; **the platform
   modifier + Enter** (`hasPlatformModifier`: Cmd on Apple, Ctrl elsewhere) **submits from anywhere in the
   card**, fields included; **←/→ switch questions** without wrapping outside text fields, except on Skip and
-  the primary button, where they move between the two; Home/End on the question tabs jump to the first or
+  the primary button, where they move between the two; **→ past the last question goes to Submit** — on an
+  option, the last question's tab or the card itself, on a single-question card too (one rule, user
+  2026-11-20; `pageKeyTarget`): it focuses Submit, or, while Submit is disabled, says "Choose an option
+  first" as the submit chord does and keeps focus (until then → on the last page was swallowed and Submit
+  was reachable only by ↓ or Tab); Home/End on the question tabs jump to the first or
   last question; Tab keeps moving
   focus (taking it for paging would trap keyboard users in the card — the terminal, which has no focus
   order, pages with Tab too). A legend states all of it. Inside the Other field ←/→/Home/End stay caret
@@ -322,7 +328,12 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   move only the nearest ancestor that actually scrolls (the dock body; inline, the plan page's scroller) just
   enough (block "nearest", the focus ring included) for the control to be fully visible. Not
   `scrollIntoView`, which scrolls every ancestor, the transcript and overflow-hidden boxes included. The
-  first focus claim and a page change focus in place: the body is at its top then. Until 2026-11-17 every
+  first focus claim and a page change focus in place: the body is at its top then. **The selected tab
+  stays in view:** a page change (←/→, Home/End, a chip click, Next), in the frame that focuses the page,
+  and the strip's mount (a remount restoring a cached page) move only the horizontally scrolling tab strip
+  just enough to show the selected chip (`revealActiveTab` over `@thinkrail/ui/focus`'s
+  `revealHorizontally`), never the transcript or the page; before 2026-11-20 a narrow dock left the open
+  question's chip past the strip's edge. Until 2026-11-17 every
   such focus used `preventScroll` alone, so ↓ walked below the edge of a capped dock.
   **Fields park focus on their own row.** Enter (no modifier) or plain Escape closes the note, Other or
   discuss text and moves focus to that field's row — the saved-note button, the Other row, the discuss

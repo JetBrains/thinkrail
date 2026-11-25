@@ -24,9 +24,12 @@ import {
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
 import { cn } from "@thinkrail/ui/utils";
-import { type ReactNode, useState } from "react";
+import { Fragment, type ReactNode, useState } from "react";
+import { webExtensionTitle } from "@/extensions";
 import {
 	SETTINGS_LIST_PRIMARY,
+	SETTINGS_ROW_FOCUS,
+	SETTINGS_ROW_INSET,
 	SETTINGS_TAG,
 	SettingsGroup,
 	SettingsList,
@@ -246,13 +249,21 @@ function looseRowId(entry: { path: string }): string {
 	return `file:${entry.path}`;
 }
 
-interface RowMenuControl {
+export interface RowMenuControl {
 	menuOpen?: boolean | undefined;
 	onMenuOpenChange?: ((open: boolean) => void) | undefined;
 }
 
-function menuControl({ menuOpen = false, onMenuOpenChange }: RowMenuControl) {
+export function menuControl({ menuOpen = false, onMenuOpenChange }: RowMenuControl) {
 	return onMenuOpenChange ? { open: menuOpen, onOpenChange: onMenuOpenChange } : {};
+}
+
+function supersedingTitle(
+	t: Translator,
+	by: NonNullable<PiPackageSummary["supersededBy"]>,
+): string {
+	const key = webExtensionTitle(by.name);
+	return key ? t(key) : by.title;
 }
 
 export function PackageRow({
@@ -289,7 +300,11 @@ export function PackageRow({
 			data-identity={summary.identity}
 			data-scope={summary.scope}
 			data-installed={installedPath === undefined ? "false" : "true"}
-			className="flex flex-col gap-4 border-border-muted border-b py-6 last:border-b-0"
+			className={cn(
+				"flex flex-col gap-4 border-border-muted border-b py-6 last:border-b-0",
+				SETTINGS_ROW_INSET,
+				SETTINGS_ROW_FOCUS,
+			)}
 		>
 			<div className="flex flex-wrap items-center gap-8">
 				<button
@@ -319,6 +334,9 @@ export function PackageRow({
 							)}
 						>
 							{summary.name}
+						</span>
+						<span data-testid="package-type" className={cn(SETTINGS_TAG, "text-text-muted")}>
+							{t("settings.packages.type")}
 						</span>
 						<span data-testid="package-kind" className={cn(SETTINGS_TAG, "text-text-muted")}>
 							{t(KIND_LABEL[summary.kind])}
@@ -419,6 +437,13 @@ export function PackageRow({
 					{t("settings.packages.shadowed")}
 				</span>
 			) : null}
+			{summary.supersededBy ? (
+				<span data-testid="package-superseded" className="px-4 tr-text-metadata text-text-subtle">
+					{t("settings.packages.supersededBy", {
+						extension: supersedingTitle(t, summary.supersededBy),
+					})}
+				</span>
+			) : null}
 			{loadError && installedPath !== undefined ? (
 				<LoadError
 					error={loadError}
@@ -467,7 +492,11 @@ export function LooseRow({
 			data-enabled={off ? "false" : "true"}
 			data-path={entry.path}
 			data-scope={entry.scope}
-			className="flex flex-col gap-4 border-border-muted border-b py-6 last:border-b-0"
+			className={cn(
+				"flex flex-col gap-4 border-border-muted border-b py-6 last:border-b-0",
+				SETTINGS_ROW_INSET,
+				SETTINGS_ROW_FOCUS,
+			)}
 		>
 			<div className="flex flex-wrap items-center gap-8">
 				<button
@@ -573,6 +602,14 @@ export interface PiPackagesGroupProps {
 	onUpdateAll: () => void;
 	onCheckUpdates: () => void;
 	onRetry?: (() => void) | undefined;
+	extensionRows?: readonly LeadingListRow[];
+	extraUpdates?: number;
+}
+
+export interface LeadingListRow {
+	id: string;
+	render: (menu: RowMenuControl) => ReactNode;
+	onRemove?: (() => void) | undefined;
 }
 
 export function PiPackagesGroup({
@@ -588,49 +625,83 @@ export function PiPackagesGroup({
 	onUpdateAll,
 	onCheckUpdates,
 	onRetry,
+	extensionRows = [],
+	extraUpdates = 0,
 }: PiPackagesGroupProps) {
 	const t = useT();
 	const [menuFor, setMenuFor] = useState<string | null>(null);
+	const menuProps = (id: string) => ({
+		menuOpen: menuFor === id,
+		onMenuOpenChange: (open: boolean) => setMenuFor(open ? id : null),
+	});
 	const group = (children: ReactNode) => (
 		<SettingsGroup
 			testId="settings-packages"
-			title={t("settings.catalog.installedPackages.label")}
+			title={t("settings.extensions.group.installed")}
 			description={t("settings.extensions.group.installedDescription")}
 		>
 			{children}
 		</SettingsGroup>
 	);
-	if (catalog === "loading") return group(<LoadingRegion rows={2} className="py-8" />);
+	const list = (rowIds: readonly string[], onRemove: (id: string) => void, rows: ReactNode) => (
+		<SettingsList
+			focusList="packages"
+			label={t("settings.extensions.group.installed")}
+			rowIds={[...extensionRows.map((row) => row.id), ...rowIds]}
+			settingId={SETTING.installedPackages.id}
+			testId="packages-list"
+			onRemove={(id) => {
+				const leading = extensionRows.find((row) => row.id === id);
+				if (leading) leading.onRemove?.();
+				else onRemove(id);
+			}}
+			onMenu={setMenuFor}
+		>
+			{extensionRows.map((row) => (
+				<Fragment key={row.id}>{row.render(menuProps(row.id))}</Fragment>
+			))}
+			{rows}
+		</SettingsList>
+	);
+	const leading = extensionRows.length > 0 ? list([], () => {}, null) : null;
+	if (catalog === "loading") {
+		return group(
+			<>
+				{leading}
+				<LoadingRegion rows={2} className="py-8" />
+			</>,
+		);
+	}
 	if (catalog === "failed") {
 		return group(
-			<SettingsNotice
-				variant="error"
-				testId="packages-failed"
-				action={
-					onRetry ? (
-						<Button
-							variant="outline"
-							size="s"
-							tabIndex={0}
-							data-testid="packages-retry"
-							onClick={onRetry}
-						>
-							{t("common.retry")}
-						</Button>
-					) : undefined
-				}
-			>
-				{t("settings.packages.loadFailed")}
-			</SettingsNotice>,
+			<>
+				{leading}
+				<SettingsNotice
+					variant="error"
+					rowId="packages-failed"
+					testId="packages-failed"
+					action={
+						onRetry ? (
+							<Button
+								variant="outline"
+								size="s"
+								tabIndex={0}
+								data-testid="packages-retry"
+								onClick={onRetry}
+							>
+								{t("common.retry")}
+							</Button>
+						) : undefined
+					}
+				>
+					{t("settings.packages.loadFailed")}
+				</SettingsNotice>
+			</>,
 		);
 	}
 	const ordered = [...catalog.packages].sort((a, b) =>
 		a.scope === b.scope ? a.name.localeCompare(b.name) : a.scope === "user" ? -1 : 1,
 	);
-	const menuProps = (id: string) => ({
-		menuOpen: menuFor === id,
-		onMenuOpenChange: (open: boolean) => setMenuFor(open ? id : null),
-	});
 	const removable = (id: string) => ordered.find((summary) => packageRowId(summary) === id);
 	return group(
 		<>
@@ -647,8 +718,8 @@ export function PiPackagesGroup({
 						<span data-testid="packages-check-error" className="text-feedback-error">
 							{checkError}
 						</span>
-					) : updates.size > 0 ? (
-						t("settings.packages.updatesAvailable", { count: updates.size })
+					) : updates.size + extraUpdates > 0 ? (
+						t("settings.packages.updatesAvailable", { count: updates.size + extraUpdates })
 					) : undefined
 				}
 				control={
@@ -668,12 +739,11 @@ export function PiPackagesGroup({
 					</Button>
 				}
 				sides={
-					updates.size > 0 ? (
+					updates.size + extraUpdates > 0 ? (
 						<Button
 							variant="primary"
 							size="m"
 							tabIndex={0}
-							data-setting-side=""
 							data-testid="packages-update-all"
 							onClick={onUpdateAll}
 						>
@@ -682,11 +752,11 @@ export function PiPackagesGroup({
 					) : null
 				}
 			/>
-			{ordered.length === 0 && catalog.loose.length === 0 ? (
+			{ordered.length === 0 && catalog.loose.length === 0 && extensionRows.length === 0 ? (
 				<div
 					data-testid="packages-empty"
 					data-setting-id={SETTING.installedPackages.id}
-					className="flex flex-col gap-2 py-8"
+					className="flex flex-col gap-2 px-8 py-8"
 				>
 					<span className="tr-text-ui text-text-default">{t("settings.packages.empty")}</span>
 					<span className="tr-text-metadata text-text-muted">
@@ -694,67 +764,81 @@ export function PiPackagesGroup({
 					</span>
 				</div>
 			) : (
-				<SettingsList
-					focusList="packages"
-					label={t("settings.catalog.installedPackages.label")}
-					rowIds={[...ordered.map(packageRowId), ...catalog.loose.map(looseRowId)]}
-					settingId={SETTING.installedPackages.id}
-					testId="packages-list"
-					onRemove={(id) => {
+				list(
+					[...ordered.map(packageRowId), ...catalog.loose.map(looseRowId)],
+					(id) => {
 						const target = removable(id);
 						if (target && !busy.has(piPackageKey(target))) {
 							onAction({ kind: "remove", rowKey: piPackageKey(target), target });
 						}
-					}}
-					onMenu={setMenuFor}
-				>
-					{ordered.map((summary) => {
-						const key = piPackageKey(summary);
-						return (
-							<PackageRow
-								key={key}
-								summary={summary}
-								updateAvailable={updates.has(key)}
-								expanded={expanded.has(key)}
-								busy={busy.has(key)}
-								error={errors.get(key)}
-								{...menuProps(packageRowId(summary))}
-								onToggleExpanded={() => onToggleExpanded(key)}
+					},
+					<>
+						{ordered.map((summary) => {
+							const key = piPackageKey(summary);
+							return (
+								<PackageRow
+									key={key}
+									summary={summary}
+									updateAvailable={updates.has(key)}
+									expanded={expanded.has(key)}
+									busy={busy.has(key)}
+									error={errors.get(key)}
+									{...menuProps(packageRowId(summary))}
+									onToggleExpanded={() => onToggleExpanded(key)}
+									onAction={onAction}
+								/>
+							);
+						})}
+						{catalog.loose.map((entry) => (
+							<LooseRow
+								key={entry.path}
+								entry={entry}
+								busy={busy.has(entry.path)}
+								error={errors.get(entry.path)}
+								{...menuProps(looseRowId(entry))}
 								onAction={onAction}
 							/>
-						);
-					})}
-					{catalog.loose.map((entry) => (
-						<LooseRow
-							key={entry.path}
-							entry={entry}
-							busy={busy.has(entry.path)}
-							error={errors.get(entry.path)}
-							{...menuProps(looseRowId(entry))}
-							onAction={onAction}
-						/>
-					))}
-				</SettingsList>
+						))}
+					</>,
+				)
 			)}
 		</>,
 	);
 }
 
-export function GalleryLink({ side = false }: { side?: boolean }) {
+export const EXTENSIONS_SHOWCASE_URL = "https://thinkrail.ai/extensions/";
+
+export function GalleryLinks({ extensions }: { extensions: boolean }) {
 	const t = useT();
-	return (
+	const links = [
+		...(extensions
+			? [
+					{
+						testId: "extensions-gallery-link",
+						href: EXTENSIONS_SHOWCASE_URL,
+						label: t("settings.extensions.gallery"),
+					},
+				]
+			: []),
+		{
+			testId: "packages-gallery-link",
+			href: "https://pi.dev/packages",
+			label: t("settings.packages.gallery"),
+		},
+	];
+	return links.map((link) => (
 		<a
-			data-testid="packages-gallery-link"
-			href="https://pi.dev/packages"
+			key={link.testId}
+			data-testid={link.testId}
+			href={link.href}
 			target="_blank"
 			rel="noopener noreferrer"
 			tabIndex={0}
-			data-setting-side={side ? "" : undefined}
 			className="tr-text-metadata text-primary underline underline-offset-2 focus-visible:focus-ring"
 		>
-			{t("settings.packages.gallery")} ↗
+			{link.label} ↗
 		</a>
-	);
+	));
 }
 
 function builtinTitle(t: Translator, name: string): string {

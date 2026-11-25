@@ -159,4 +159,5 @@ export interface ResourceEnvironment {
 	compact?: boolean;
 	htmlViewport?: HtmlViewport;
 	frameFocus?: FrameFocus;
+	focusHome?: boolean;
 }

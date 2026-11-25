@@ -83,8 +83,8 @@ jobs:
       - run: bun run test
 
   pi-packages:
-    name: Pi package parity (vanilla pi under Node)
-    timeout-minutes: 10
+    name: Published packages (vanilla pi and the extension SDK outside the repo)
+    timeout-minutes: 15
     needs: changes
     if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
@@ -99,6 +99,7 @@ jobs:
           node-version: 22
       - run: bun install --frozen-lockfile
       - run: bun run check:pi-packages
+      - run: bun run check:extension-packages
 
   e2e-shard:
     name: E2E (no-agent) shard ${{ matrix.shard }}/3
@@ -199,6 +200,8 @@ jobs:
       - run: bun test packages/spec-graph
       - run: bun test packages/pi-background-commands
       - run: bun test packages/server/src/subprocess
+      - name: Keyboard and settings source guards
+        run: bun test packages/ui/keyboard.test.ts packages/server/src/agent/packages/settingsView.test.ts
       - run: bun run test:windows-paths
       - run: bun test apps/desktop/src/windowsFrame.test.ts apps/desktop/src/windowChrome.test.ts apps/desktop/src/windowsWindowIcon.test.ts apps/desktop/src/windowsTaskbarIdentity.test.ts
       - run: bun run build:binary

@@ -1,0 +1,714 @@
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { expect, type Locator, type Page, test } from "@playwright/test";
+import type { KeybindingOverrides } from "@thinkrail/contracts";
+import {
+	createWorkspaceViaDialog,
+	openFixtureProject,
+	pressPlatformShortcut,
+	revealWorkbenchTool,
+} from "./fixtures/app";
+import { resetKeybindings, setKeybindings } from "./fixtures/keybindings";
+
+test.use({ viewport: { width: 1280, height: 760 } });
+
+const LINE = 40;
+
+const filesTree = (page: Page) => page.getByRole("tree", { name: "Files" });
+const fileRow = (page: Page, name: string) =>
+	filesTree(page)
+		.getByTestId("file-node")
+		.filter({ hasText: new RegExp(`^${name.replace(".", "\\.")}[MAUR]?$`) });
+const pane = (page: Page) => page.locator('[data-testid="editor-pane"]:visible');
+
+function longMarkdown(): string {
+	const intro = Array.from({ length: 6 }, (_, index) => `Opening paragraph ${index + 1}.`);
+	const fence = Array.from({ length: 60 }, (_, index) => `config line ${index + 1}`);
+	const outro = Array.from({ length: 20 }, (_, index) => `Closing paragraph ${index + 1}.`);
+	return [
+		"# Reading keys",
+		...intro,
+		["```text", ...fence, "```"].join("\n"),
+		...outro,
+		"The last block.",
+	].join("\n\n");
+}
+
+function nestedMarkdown(): string {
+	const children = Array.from({ length: 80 }, (_, index) => `  - Child ${index + 1}`);
+	return [
+		"# Nested list",
+		"",
+		"Before the list.",
+		"",
+		"- Parent item",
+		...children,
+		"- Sibling item",
+		"",
+		"After the list.",
+	].join("\n");
+}
+
+async function openReadingFolder(page: Page, keybindings?: KeybindingOverrides): Promise<string> {
+	await openFixtureProject(page);
+	if (keybindings) await setKeybindings(page, keybindings);
+	const workspace = await createWorkspaceViaDialog(page);
+	const root = workspace.worktreePath;
+	writeFileSync(join(root, "LONG.md"), `${longMarkdown()}\n`);
+	writeFileSync(join(root, "NESTED.md"), `${nestedMarkdown()}\n`);
+	writeFileSync(
+		join(root, "app.ts"),
+		`${Array.from({ length: 200 }, (_, index) => `export const value${index + 1} = ${index + 1};`).join("\n")}\n`,
+	);
+	writeFileSync(
+		join(root, "pages.ts"),
+		`${Array.from({ length: 600 }, (_, index) => `export const line${index + 1} = ${index + 1};`).join("\n")}\n`,
+	);
+	const header = Array.from({ length: 16 }, (_, col) => `column_${col + 1}_with_a_long_heading`);
+	const rows = Array.from({ length: 120 }, (_, row) =>
+		header.map((_name, col) => `row ${row + 1} cell ${col + 1}`).join(","),
+	);
+	writeFileSync(join(root, "data.csv"), `${[header.join(","), ...rows].join("\n")}\n`);
+	const tallRows = Array.from({ length: 300 }, (_, row) => {
+		const note =
+			row < 260
+				? `note ${row + 1}`
+				: `"${Array.from({ length: 12 }, (_line, line) => `line ${line + 1} of row ${row + 1}`).join("\n")}"`;
+		return `row ${row + 1} cell 1,${note}`;
+	});
+	writeFileSync(join(root, "tall.csv"), `${["name,note", ...tallRows].join("\n")}\n`);
+	const words = Array.from({ length: 2_000 }, (_, index) => `word${index + 1}`).join(" ");
+	writeFileSync(
+		join(root, "wrapped.ts"),
+		`export const words = "${words}";\nexport const after = 1;\n`,
+	);
+	const paragraphs = Array.from({ length: 80 }, (_, index) => `<p>Paragraph ${index + 1}</p>`);
+	writeFileSync(join(root, "page.html"), `<!doctype html><body>${paragraphs.join("")}</body>\n`);
+	mkdirSync(join(root, "nested"));
+	writeFileSync(join(root, "nested", "deep.md"), "# Deep file\n\nInside a folder.\n");
+	await revealWorkbenchTool(page, "files");
+	await expect(fileRow(page, "LONG.md")).toBeVisible();
+	return root;
+}
+
+async function scrollTop(scroller: Locator): Promise<number> {
+	return scroller.evaluate((element) => element.scrollTop);
+}
+
+async function openByKeyboard(page: Page, name: string): Promise<void> {
+	await fileRow(page, name).focus();
+	await page.keyboard.press("Enter");
+}
+
+test("Enter in the Files tree opens the file and moves focus into it, a click keeps it in the tree, Esc returns to the row", async ({
+	page,
+}) => {
+	await openReadingFolder(page);
+	await openByKeyboard(page, "LONG.md");
+	const preview = pane(page).getByTestId("markdown-preview");
+	const cursor = preview.getByTestId("review-cursor");
+	await expect(cursor).toBeFocused();
+	await expect(preview.locator("[data-review-block-cursor]")).toHaveText("Reading keys");
+	await expect(page.getByTestId("editor-tab").filter({ hasText: "LONG.md" })).toHaveAttribute(
+		"data-active",
+		"true",
+	);
+
+	await page.keyboard.press("Escape");
+	await expect(fileRow(page, "LONG.md")).toBeFocused();
+
+	await fileRow(page, "README.md").click();
+	await expect(page.getByTestId("editor-tab").filter({ hasText: "README.md" })).toHaveAttribute(
+		"data-active",
+		"true",
+	);
+	await expect(pane(page).getByTestId("markdown-preview")).toContainText("sample-project");
+	await page.waitForTimeout(300);
+	await expect(fileRow(page, "README.md")).toBeFocused();
+
+	await pressPlatformShortcut(page, "k");
+	const query = page.getByTestId("search-input");
+	await query.fill("/data.csv");
+	const hit = page.locator('[data-testid="search-row"][data-kind="file"]', { hasText: "data.csv" });
+	await expect(hit).toBeVisible({ timeout: 15_000 });
+	await expect(page.getByTestId("search-host-pending")).toHaveCount(0);
+	await query.press("Enter");
+	const table = pane(page).locator('[data-testid="csv-view"] [data-virtuoso-scroller]');
+	await expect(table).toBeFocused();
+});
+
+test("Esc from a file whose folder was collapsed opens the folder again and lands on the file's row", async ({
+	page,
+}) => {
+	await openReadingFolder(page);
+	const folder = filesTree(page)
+		.getByTestId("file-node")
+		.filter({ hasText: /^nested/ });
+	await folder.click();
+	await expect(folder).toHaveAttribute("aria-expanded", "true");
+	await openByKeyboard(page, "deep.md");
+	const cursor = pane(page).getByTestId("markdown-preview").getByTestId("review-cursor");
+	await expect(cursor).toBeFocused();
+
+	await folder.click();
+	await expect(folder).toHaveAttribute("aria-expanded", "false");
+	await expect(fileRow(page, "deep.md")).toHaveCount(0);
+	await pressPlatformShortcut(page, "1");
+	await expect(cursor).toBeFocused();
+
+	await page.keyboard.press("Escape");
+	await expect(fileRow(page, "deep.md")).toBeFocused();
+	await expect(fileRow(page, "deep.md")).toHaveAttribute("aria-current", "true");
+	await expect(folder).toHaveAttribute("aria-expanded", "true");
+});
+
+function focusedPlace(page: Page) {
+	return page.evaluate(() => {
+		const active = document.activeElement;
+		return {
+			tag: active?.tagName ?? null,
+			region: active?.closest("[data-region]")?.getAttribute("data-region-kind") ?? null,
+		};
+	});
+}
+
+test("an HTML file opened with Enter never takes the keyboard into its frame: F6, Esc and the chords still leave", async ({
+	page,
+}) => {
+	await openReadingFolder(page);
+	await openByKeyboard(page, "page.html");
+	const frame = pane(page).locator('[data-testid="html-frame-box"] iframe');
+	await expect(frame.contentFrame().getByText("Paragraph 1", { exact: true })).toBeVisible();
+	const tab = page.getByTestId("editor-tab").filter({ hasText: "page.html" }).getByRole("tab");
+	await expect(tab).toBeFocused({ timeout: 10_000 });
+
+	await page.keyboard.press("F6");
+	await expect.poll(() => focusedPlace(page)).toMatchObject({ tag: "BUTTON" });
+	expect((await focusedPlace(page)).region).not.toBe("center");
+	await page.keyboard.press("Shift+F6");
+	await expect(tab).toBeFocused();
+
+	const inPane = () =>
+		pane(page).evaluate((element) => ({
+			inside: element.contains(document.activeElement),
+			tag: document.activeElement?.tagName ?? null,
+		}));
+	await page.keyboard.press("Escape");
+	await expect.poll(inPane).toEqual({ inside: true, tag: "BUTTON" });
+	await page.keyboard.press("Escape");
+	await expect(fileRow(page, "page.html")).toBeFocused();
+
+	await pressPlatformShortcut(page, "1");
+	await expect.poll(inPane).toEqual({ inside: true, tag: "BUTTON" });
+	await pressPlatformShortcut(page, "Shift+E");
+	await expect(fileRow(page, "page.html")).toBeFocused();
+});
+
+test("j/k, Space and g/G read a Markdown file, and ↓ scrolls a tall block before the cursor moves on", async ({
+	page,
+}) => {
+	await openReadingFolder(page);
+	await openByKeyboard(page, "LONG.md");
+	const preview = pane(page).getByTestId("markdown-preview");
+	const cursor = preview.getByTestId("review-cursor");
+	const block = preview.locator("[data-review-block-cursor]");
+	await expect(cursor).toBeFocused();
+
+	await page.keyboard.press("j");
+	await expect(block).toHaveText("Opening paragraph 1.");
+	const fence = preview.locator("pre").first();
+	for (let press = 0; press < 12; press += 1) {
+		if ((await block.evaluate((element) => element.tagName)) === "PRE") break;
+		await page.keyboard.press("j");
+	}
+	await expect(block).toHaveJSProperty("tagName", "PRE");
+	const fenceTail = () =>
+		fence.evaluate((element) => {
+			const scroller = element.closest<HTMLElement>('[data-testid="markdown-preview"]');
+			if (!scroller) throw new Error("no scroller");
+			const box = scroller.getBoundingClientRect();
+			return element.getBoundingClientRect().bottom - (box.top + scroller.clientHeight);
+		});
+	expect(await fenceTail()).toBeGreaterThan(3 * LINE);
+	const before = await scrollTop(preview);
+	for (let press = 0; press < 3; press += 1) await page.keyboard.press("ArrowDown");
+	await expect.poll(() => scrollTop(preview)).toBe(before + 3 * LINE);
+	await expect(block).toHaveJSProperty("tagName", "PRE");
+	let tail = Number.POSITIVE_INFINITY;
+	for (let press = 0; press < 60; press += 1) {
+		if ((await block.evaluate((element) => element.tagName)) !== "PRE") break;
+		tail = await fenceTail();
+		await page.keyboard.press("j");
+	}
+	await expect(block).toHaveText("Closing paragraph 1.");
+	expect(tail).toBeLessThanOrEqual(1);
+	await page.keyboard.press("k");
+	await expect(block).toHaveJSProperty("tagName", "PRE");
+
+	const height = await preview.evaluate((element) => element.clientHeight);
+	const paged = await scrollTop(preview);
+	await page.keyboard.press("Space");
+	await expect.poll(() => scrollTop(preview)).toBe(paged + height - LINE);
+	await page.keyboard.press("Shift+Space");
+	await expect.poll(() => scrollTop(preview)).toBe(paged);
+
+	await page.keyboard.press("Shift+G");
+	await expect
+		.poll(() =>
+			preview.evaluate(
+				(element) => element.scrollHeight - element.clientHeight - element.scrollTop,
+			),
+		)
+		.toBeLessThanOrEqual(1);
+	await expect(block).toHaveText("The last block.");
+	await page.keyboard.press("g");
+	await expect.poll(() => scrollTop(preview)).toBe(0);
+	await expect(block).toHaveText("Reading keys");
+	await expect(cursor).toBeFocused();
+});
+
+function topInView(element: Locator): Promise<number> {
+	return element.evaluate((node) => {
+		const scroller = node.closest<HTMLElement>('[data-testid="markdown-preview"]');
+		if (!scroller) throw new Error("no scroller");
+		return node.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+	});
+}
+
+test("a parent bullet reads only its own line: j and k walk its nested list once, and the cursor lands on the children in view", async ({
+	page,
+}) => {
+	await openReadingFolder(page);
+	await fileRow(page, "NESTED.md").click();
+	const preview = pane(page).getByTestId("markdown-preview");
+	const cursor = preview.getByTestId("review-cursor");
+	const block = preview.locator("[data-review-block-cursor]");
+	const parent = preview.locator("li:has(li)");
+	await expect(preview.getByText("Child 80", { exact: true })).toBeAttached();
+	await preview.hover();
+	await page.mouse.wheel(0, 600);
+	await expect.poll(() => scrollTop(preview)).toBeGreaterThan(400);
+	await expect.poll(() => topInView(parent)).toBeLessThan(-200);
+	await page.getByTestId("editor-tab").filter({ hasText: "NESTED.md" }).getByRole("tab").click();
+	for (let press = 0; press < 20; press += 1) {
+		if (await cursor.evaluate((node) => node === document.activeElement)) break;
+		await page.keyboard.press("Tab");
+	}
+	await expect(cursor).toBeFocused();
+	await expect(block).toHaveText(/^Child \d+$/);
+	await expect(block).toBeInViewport();
+
+	await page.keyboard.press("g");
+	await expect.poll(() => scrollTop(preview)).toBe(0);
+	await expect(block).toHaveText("Nested list");
+	await page.keyboard.press("j");
+	await expect(block).toHaveText("Before the list.");
+	await page.keyboard.press("j");
+	await expect(block).toHaveText(/^Parent item/);
+	const atParent = await scrollTop(preview);
+	await page.keyboard.press("j");
+	await expect(block).toHaveText("Child 1");
+	expect(await scrollTop(preview)).toBe(atParent);
+	let previous = atParent;
+	for (let child = 2; child <= 80; child += 1) {
+		await page.keyboard.press("j");
+		await expect(block).toHaveText(`Child ${child}`);
+		const now = await scrollTop(preview);
+		expect(now).toBeGreaterThanOrEqual(previous);
+		previous = now;
+	}
+	await expect(block).toBeInViewport();
+	await page.keyboard.press("j");
+	await expect(block).toHaveText("Sibling item");
+
+	await page.keyboard.press("g");
+	await expect.poll(() => scrollTop(preview)).toBe(0);
+	await page.keyboard.press("j");
+	await page.keyboard.press("j");
+	await expect(block).toHaveText(/^Parent item/);
+	await page.keyboard.press("Space");
+	await expect.poll(() => scrollTop(preview)).toBeGreaterThan(0);
+	await expect(block).toHaveText(/^Child \d+$/);
+	await expect(block).toBeInViewport();
+	const paged = Number((await block.textContent())?.replace("Child ", ""));
+	if ((await topInView(block)) < -1) {
+		await page.keyboard.press("k");
+		await expect.poll(() => topInView(block)).toBeGreaterThanOrEqual(-1);
+		await expect(block).toHaveText(`Child ${paged}`);
+	}
+	for (let child = paged - 1; child >= 1; child -= 1) {
+		await page.keyboard.press("k");
+		await expect(block).toHaveText(`Child ${child}`);
+	}
+	await page.keyboard.press("k");
+	await expect(block).toHaveText(/^Parent item/);
+	await expect.poll(() => topInView(parent)).toBeGreaterThanOrEqual(-1);
+	await expect(cursor).toBeFocused();
+});
+
+test.describe("rebound reading keys", () => {
+	test.afterEach(async ({ page }) => resetKeybindings(page));
+
+	test("the end key rebound onto Shift+J goes to a Markdown file's end from the block cursor instead of extending its range, and Shift+K still extends", async ({
+		page,
+	}) => {
+		await openReadingFolder(page, { "reading.bottom": ["Shift+KeyJ"] });
+		await openByKeyboard(page, "LONG.md");
+		const preview = pane(page).getByTestId("markdown-preview");
+		const cursor = preview.getByTestId("review-cursor");
+		const block = preview.locator("[data-review-block-cursor]");
+		const range = preview.locator("[data-review-block-range]");
+		await expect(cursor).toBeFocused();
+		await expect(block).toHaveText("Reading keys");
+
+		await page.keyboard.press("Shift+J");
+		await expect
+			.poll(() =>
+				preview.evaluate(
+					(element) => element.scrollHeight - element.clientHeight - element.scrollTop,
+				),
+			)
+			.toBeLessThanOrEqual(1);
+		await expect(block).toHaveText("The last block.");
+		await expect(range).toHaveCount(0);
+
+		await page.keyboard.press("Shift+K");
+		await expect(block).toHaveText("Closing paragraph 20.");
+		await expect(range).toHaveCount(2);
+		await page.keyboard.press("Escape");
+		await expect(range).toHaveCount(0);
+		await page.keyboard.press("Shift+G");
+		await page.keyboard.press("k");
+		await expect(block).toHaveText("Closing paragraph 19.");
+		await expect(cursor).toBeFocused();
+	});
+});
+
+test("a table scrolls by line, page and sideways, then Esc goes back to its row", async ({
+	page,
+}) => {
+	await openReadingFolder(page);
+	await openByKeyboard(page, "data.csv");
+	const table = pane(page).locator('[data-testid="csv-view"] [data-virtuoso-scroller]');
+	await expect(table).toBeFocused();
+	await expect(table.getByText("row 12 cell 1", { exact: true })).toBeVisible();
+	await page.keyboard.press("j");
+	await expect.poll(() => scrollTop(table)).toBe(LINE);
+	const height = await table.evaluate((element) => element.clientHeight);
+	await page.keyboard.press("Space");
+	await expect.poll(() => scrollTop(table)).toBe(LINE + height - LINE);
+	await page.keyboard.press("l");
+	await expect.poll(() => table.evaluate((element) => element.scrollLeft)).toBe(LINE);
+	await page.keyboard.press("h");
+	await expect.poll(() => table.evaluate((element) => element.scrollLeft)).toBe(0);
+	await page.keyboard.press("Shift+G");
+	await expect
+		.poll(() =>
+			table.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop),
+		)
+		.toBeLessThanOrEqual(1);
+	await page.keyboard.press("Escape");
+	await expect(fileRow(page, "data.csv")).toBeFocused();
+});
+
+function settledDistanceFromEnd(scroller: Locator): Promise<number> {
+	return scroller.evaluate(async (element) => {
+		let previous = [element.scrollTop, element.scrollHeight];
+		let stable = 0;
+		for (let frame = 0; frame < 240 && stable < 20; frame += 1) {
+			await new Promise(requestAnimationFrame);
+			const now = [element.scrollTop, element.scrollHeight];
+			stable = now[0] === previous[0] && now[1] === previous[1] ? stable + 1 : 0;
+			previous = now;
+		}
+		return element.scrollHeight - element.clientHeight - element.scrollTop;
+	});
+}
+
+test("Shift+G in a long table whose last rows are taller than the rest reaches the last row, and g the first", async ({
+	page,
+}) => {
+	await openReadingFolder(page);
+	await openByKeyboard(page, "tall.csv");
+	const table = pane(page).locator('[data-testid="csv-view"] [data-virtuoso-scroller]');
+	await expect(table).toBeFocused();
+	await expect(table.getByText("row 1 cell 1", { exact: true })).toBeVisible();
+	const distanceFromEnd = () =>
+		table.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop);
+
+	await page.keyboard.press("Shift+G");
+	await expect.poll(distanceFromEnd).toBeLessThanOrEqual(1);
+	expect(await settledDistanceFromEnd(table)).toBeLessThanOrEqual(1);
+	await expect(table.getByText("line 12 of row 300")).toBeInViewport();
+	await expect(table).toBeFocused();
+
+	await page.keyboard.press("g");
+	await expect.poll(() => scrollTop(table)).toBe(0);
+	await expect(table.getByText("row 1 cell 1", { exact: true })).toBeInViewport();
+	await expect(table).toBeFocused();
+});
+
+async function editorState(editor: Locator) {
+	return editor.evaluate((root) => {
+		const active = root.querySelector(".line-numbers.active-line-number");
+		const first = Array.from(root.querySelectorAll<HTMLElement>(".view-line")).find((line) =>
+			line.textContent?.replace(/\u00a0/g, " ").startsWith("export const value1 ="),
+		);
+		const view = root.getBoundingClientRect();
+		return {
+			line: Number(active?.textContent ?? 0),
+			top: first ? Math.round(first.getBoundingClientRect().top - view.top) : null,
+			focused: root.contains(document.activeElement),
+			message: root.querySelector(".monaco-editor-overlaymessage") !== null,
+		};
+	});
+}
+
+test("read-only code reads with j/k, Space and g/G, F labels the page, and Esc returns to the tree", async ({
+	page,
+}) => {
+	await openReadingFolder(page);
+	await openByKeyboard(page, "app.ts");
+	const editor = pane(page).locator(".monaco-editor");
+	await expect.poll(async () => (await editorState(editor)).focused).toBe(true);
+	await expect.poll(async () => (await editorState(editor)).line).toBe(1);
+
+	const lineHeight = await editor.evaluate(
+		(root) => root.querySelector<HTMLElement>(".view-line")?.getBoundingClientRect().height ?? 0,
+	);
+	expect(lineHeight).toBeGreaterThan(0);
+	const start = (await editorState(editor)).top;
+	if (start === null) throw new Error("the first line is not rendered");
+	await page.keyboard.press("j");
+	await expect.poll(async () => (await editorState(editor)).line).toBe(2);
+	await expect
+		.poll(async () => (await editorState(editor)).top)
+		.toBe(Math.round(start - lineHeight));
+	expect((await editorState(editor)).message).toBe(false);
+	await page.keyboard.press("k");
+	await expect.poll(async () => (await editorState(editor)).line).toBe(1);
+	await expect.poll(async () => (await editorState(editor)).top).toBe(start);
+
+	await page.keyboard.press("Space");
+	await expect.poll(async () => (await editorState(editor)).line).toBeGreaterThan(10);
+	await page.keyboard.press("Shift+G");
+	await expect.poll(async () => (await editorState(editor)).line).toBe(201);
+	await page.keyboard.press("g");
+	await expect.poll(async () => (await editorState(editor)).line).toBe(1);
+	expect((await editorState(editor)).message).toBe(false);
+
+	await page.keyboard.press("f");
+	await expect(page.getByTestId("hint-mode")).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("hint-mode")).toHaveCount(0);
+	await expect.poll(async () => (await editorState(editor)).focused).toBe(true);
+
+	await page.keyboard.press("Escape");
+	await expect(fileRow(page, "app.ts")).toBeFocused();
+});
+
+async function shownLines(editor: Locator) {
+	return editor.evaluate((root) => {
+		const view = root.getBoundingClientRect();
+		const shown: number[] = [];
+		for (const number of root.querySelectorAll<HTMLElement>(
+			".margin-view-overlays .line-numbers",
+		)) {
+			const box = (number.parentElement ?? number).getBoundingClientRect();
+			if (box.top >= view.top - 0.5 && box.bottom <= view.bottom + 0.5) {
+				shown.push(Number(number.textContent));
+			}
+		}
+		shown.sort((a, b) => a - b);
+		return { first: shown[0] ?? 0, last: shown.at(-1) ?? 0 };
+	});
+}
+
+async function wheelAndSettle(page: Page, editor: Locator, notches: number) {
+	const before = await shownLines(editor);
+	for (let notch = 0; notch < notches; notch += 1) await page.mouse.wheel(0, 100);
+	await expect.poll(async () => (await shownLines(editor)).first).not.toBe(before.first);
+	let settled = await shownLines(editor);
+	for (let round = 0; round < 20; round += 1) {
+		await page.waitForTimeout(150);
+		const now = await shownLines(editor);
+		if (now.first === settled.first && now.last === settled.last) break;
+		settled = now;
+	}
+	return settled;
+}
+
+test("in read-only code scrolled away from its caret, j and ↑ step from the visible lines and Shift+Mod+M comments there", async ({
+	page,
+}) => {
+	await openReadingFolder(page);
+	await openByKeyboard(page, "app.ts");
+	const editor = pane(page).locator(".monaco-editor");
+	await expect.poll(async () => (await editorState(editor)).focused).toBe(true);
+	await expect.poll(async () => (await editorState(editor)).line).toBe(1);
+	await editor.locator(".margin").hover();
+
+	const below = await wheelAndSettle(page, editor, 6);
+	expect(below.first).toBeGreaterThan(2);
+	await page.keyboard.press("j");
+	await expect.poll(async () => (await shownLines(editor)).first).toBe(below.first + 1);
+	await expect.poll(async () => (await editorState(editor)).line).toBe(below.first + 1);
+
+	await pressPlatformShortcut(page, "Shift+M");
+	const composer = page.getByTestId("review-composer");
+	await expect(composer).toContainText(`Line ${below.first + 1}`);
+	await expect(page.getByTestId("review-composer-input")).toBeFocused();
+	await page.keyboard.press("Escape");
+	await expect(composer).toHaveCount(0);
+	await expect.poll(async () => (await editorState(editor)).focused).toBe(true);
+
+	const further = await wheelAndSettle(page, editor, 12);
+	expect(further.first).toBeGreaterThan(below.first + 1);
+	await page.keyboard.press("ArrowUp");
+	await expect.poll(async () => (await shownLines(editor)).last).toBe(further.last - 1);
+	await expect.poll(async () => (await editorState(editor)).line).toBe(further.last - 1);
+});
+
+async function wrappedView(editor: Locator) {
+	return editor.evaluate((root) => {
+		const guard = root.querySelector(".overflow-guard") ?? root;
+		const view = guard.getBoundingClientRect();
+		const content = root.querySelector(".lines-content")?.getBoundingClientRect();
+		const caret = root.querySelector<HTMLElement>(".cursors-layer .cursor");
+		const box = caret && caret.style.display !== "none" ? caret.getBoundingClientRect() : null;
+		const shown = box !== null && box.top >= view.top - 0.5 && box.bottom <= view.bottom + 0.5;
+		return {
+			scrolled: content ? Math.round(view.top - content.top) : 0,
+			caretTop: shown ? Math.round(box.top - view.top) : null,
+			height: Math.round(view.height),
+		};
+	});
+}
+
+async function wheelWrapped(page: Page, editor: Locator, notches: number) {
+	const before = (await wrappedView(editor)).scrolled;
+	for (let notch = 0; notch < notches; notch += 1) await page.mouse.wheel(0, 100);
+	await expect.poll(async () => (await wrappedView(editor)).scrolled).toBeGreaterThan(before);
+	let settled = await wrappedView(editor);
+	for (let round = 0; round < 20; round += 1) {
+		await page.waitForTimeout(150);
+		const now = await wrappedView(editor);
+		if (now.scrolled === settled.scrolled) break;
+		settled = now;
+	}
+	return settled;
+}
+
+test("in read-only code scrolled down a long wrapped line, j and ↑ step from its visible rows", async ({
+	page,
+}) => {
+	await openReadingFolder(page);
+	await openByKeyboard(page, "wrapped.ts");
+	const editor = pane(page).locator(".monaco-editor");
+	await expect.poll(async () => (await editorState(editor)).focused).toBe(true);
+	await expect.poll(async () => (await editorState(editor)).line).toBe(1);
+	await expect.poll(async () => (await wrappedView(editor)).caretTop).not.toBeNull();
+	const lineHeight = await editor.evaluate(
+		(root) => root.querySelector<HTMLElement>(".view-line")?.getBoundingClientRect().height ?? 0,
+	);
+	expect(lineHeight).toBeGreaterThan(0);
+	await editor.locator(".margin").hover();
+
+	const below = await wheelWrapped(page, editor, 10);
+	expect(below.scrolled).toBeGreaterThan(10 * lineHeight);
+	expect(below.caretTop).toBeNull();
+	await page.keyboard.press("j");
+	await expect
+		.poll(async () => Math.abs((await wrappedView(editor)).scrolled - below.scrolled - lineHeight))
+		.toBeLessThanOrEqual(1);
+	const stepped = await wrappedView(editor);
+	expect(stepped.caretTop).not.toBeNull();
+	expect(stepped.caretTop ?? Number.POSITIVE_INFINITY).toBeLessThan(lineHeight);
+	expect((await editorState(editor)).message).toBe(false);
+
+	const further = await wheelWrapped(page, editor, 5);
+	expect(further.caretTop).toBeNull();
+	await page.keyboard.press("ArrowUp");
+	await expect
+		.poll(async () =>
+			Math.abs((await wrappedView(editor)).scrolled - further.scrolled + lineHeight),
+		)
+		.toBeLessThanOrEqual(1);
+	const back = await wrappedView(editor);
+	expect(back.caretTop).not.toBeNull();
+	expect(back.caretTop ?? 0).toBeGreaterThan(back.height - 3 * lineHeight);
+});
+
+async function settledScroll(page: Page, editor: Locator): Promise<number> {
+	let settled = (await wrappedView(editor)).scrolled;
+	for (let round = 0; round < 20; round += 1) {
+		await page.waitForTimeout(150);
+		const now = (await wrappedView(editor)).scrolled;
+		if (now === settled) break;
+		settled = now;
+	}
+	return settled;
+}
+
+test("Space and Shift+Space page read-only code from the lines in view, also after a wheel, and bring the caret onto them", async ({
+	page,
+}) => {
+	await openReadingFolder(page);
+	await openByKeyboard(page, "pages.ts");
+	const editor = pane(page).locator(".monaco-editor");
+	await expect.poll(async () => (await editorState(editor)).focused).toBe(true);
+	await expect.poll(async () => (await editorState(editor)).line).toBe(1);
+	const caretLine = async () => (await editorState(editor)).line;
+	const offBy = (target: number) => async () =>
+		Math.abs((await wrappedView(editor)).scrolled - target);
+	const lineHeight = await editor.evaluate(
+		(root) => root.querySelector<HTMLElement>(".view-line")?.getBoundingClientRect().height ?? 0,
+	);
+	expect(lineHeight).toBeGreaterThan(0);
+	const { height } = await wrappedView(editor);
+	const pageBy = height - LINE;
+	const start = await shownLines(editor);
+	expect(start.first).toBe(1);
+
+	await page.keyboard.press("Space");
+	await expect.poll(offBy(pageBy)).toBeLessThanOrEqual(1);
+	const paged = await shownLines(editor);
+	expect(paged.first).toBeGreaterThanOrEqual(start.last - 2);
+	expect(paged.first).toBeLessThanOrEqual(start.last);
+	await expect.poll(caretLine).toBe(paged.first);
+
+	await editor.locator(".margin").hover();
+	const away = await wheelAndSettle(page, editor, 12);
+	const awayTop = (await wrappedView(editor)).scrolled;
+	expect(away.first).toBeGreaterThan(paged.last);
+	expect(awayTop).toBeGreaterThan(pageBy);
+	await page.keyboard.press("Space");
+	await expect.poll(offBy(awayTop + pageBy)).toBeLessThanOrEqual(1);
+	const onward = await shownLines(editor);
+	expect(onward.first).toBeGreaterThanOrEqual(away.last - 2);
+	expect(onward.first).toBeLessThanOrEqual(away.last);
+	await expect.poll(caretLine).toBe(onward.first);
+
+	await page.keyboard.press("Shift+Space");
+	await expect.poll(offBy(awayTop)).toBeLessThanOrEqual(1);
+	expect(await shownLines(editor)).toEqual(away);
+	expect(await caretLine()).toBe(onward.first);
+	await page.keyboard.press("Shift+Space");
+	await expect.poll(offBy(awayTop - pageBy)).toBeLessThanOrEqual(1);
+	const back = await shownLines(editor);
+	await expect.poll(caretLine).toBe(back.first);
+	await page.keyboard.press("j");
+	await expect.poll(caretLine).toBe(back.first + 1);
+	await expect.poll(async () => (await shownLines(editor)).first).toBe(back.first + 1);
+
+	await page.keyboard.press("Shift+G");
+	await expect.poll(caretLine).toBe(601);
+	const end = await settledScroll(page, editor);
+	await page.keyboard.press("k");
+	await page.keyboard.press("k");
+	await expect.poll(caretLine).toBe(599);
+	await expect.poll(offBy(end - 2 * lineHeight)).toBeLessThanOrEqual(1);
+	await page.keyboard.press("Space");
+	await expect.poll(offBy(end)).toBeLessThanOrEqual(1);
+	expect(await caretLine()).toBe(599);
+});

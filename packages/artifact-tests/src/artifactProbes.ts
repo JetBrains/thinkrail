@@ -45,6 +45,143 @@ const ASK_ANSWER = {
 	answers: [{ questionIndex: 0, question: "Which runtime?", kind: "option", answer: "Bun" }],
 };
 
+const EXTENSION_NAME = "artifact-probe-extension";
+const EXTENSION_TOOL = "artifact_extension_probe";
+const EXTENSION_PROMPT = "Probe the installed extension.";
+const EXTENSION_WEB = "export default { name: 'artifact-probe-extension', toolRenderers: {} };\n";
+const EXTENSION_STYLES = ".artifact-probe-a { color: red; }\n";
+const EXTENSION_SERVER = `import { createAgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
+import { label } from "./label.ts";
+export default {
+  name: ${JSON.stringify(EXTENSION_NAME)},
+  title: "Artifact probe",
+  extensions: [
+    (pi) => {
+      pi.registerTool({
+        name: ${JSON.stringify(EXTENSION_TOOL)},
+        label: label(),
+        description: "Reports whether this extension shares the host's pi",
+        parameters: Type.Object({}),
+        async execute(_id, _params, _signal, _onUpdate, ctx) {
+          const identity = {
+            sessionManager: ctx.sessionManager instanceof SessionManager,
+            createAgentSession: typeof createAgentSession === "function",
+          };
+          return { content: [{ type: "text", text: JSON.stringify(identity) }], details: identity };
+        },
+      });
+    },
+  ],
+};
+`;
+
+function writeInstalledExtension(root: string, dataDir: string): string {
+	const folder = join(root, "installed-extension");
+	mkdirSync(join(folder, "server"), { recursive: true });
+	mkdirSync(join(folder, "dist"), { recursive: true });
+	writeFileSync(
+		join(folder, "package.json"),
+		JSON.stringify({
+			name: EXTENSION_NAME,
+			version: "1.0.0",
+			type: "module",
+			thinkrail: {
+				api: "1.0",
+				server: "server/index.ts",
+				web: "dist/web.js",
+				styles: "dist/web.css",
+			},
+		}),
+	);
+	writeFileSync(join(folder, "server", "index.ts"), EXTENSION_SERVER);
+	writeFileSync(
+		join(folder, "server", "label.ts"),
+		'export const label = () => "Artifact probe";\n',
+	);
+	writeFileSync(join(folder, "dist", "web.js"), EXTENSION_WEB);
+	writeFileSync(join(folder, "dist", "web.css"), EXTENSION_STYLES);
+	mkdirSync(dataDir, { recursive: true });
+	writeFileSync(join(dataDir, "extensions.json"), JSON.stringify({ extensions: [folder] }));
+	return folder;
+}
+
+interface ListedExtension {
+	name: string;
+	kind?: string;
+	state?: string;
+	error?: string;
+	tools: string[];
+	web?: { url: string; styles?: string };
+}
+
+async function assertInstalledExtensionLoaded(socket: WebSocket, origin: string): Promise<void> {
+	let entry: ListedExtension | undefined;
+	for (let attempt = 0; attempt < 120; attempt += 1) {
+		const catalog = (await within(
+			rpc(socket, "extension.list", {}),
+			10_000,
+			"extension.list",
+		)) as ListedExtension[];
+		entry = catalog.find((candidate) => candidate.name === EXTENSION_NAME);
+		if (entry?.state) break;
+		await Bun.sleep(250);
+	}
+	assert(entry, "the installed extension never reached extension.list");
+	assert(
+		entry.kind === "installed" && entry.state === "loaded",
+		`the installed extension did not load on the host's pi: ${entry.state} ${entry.error ?? ""}`,
+	);
+	assert(entry.tools.includes(EXTENSION_TOOL), `the installed extension lists ${entry.tools}`);
+	assert(entry.web?.styles, "the installed extension's web half has no URLs");
+	for (const [url, type, body] of [
+		[entry.web.url, "text/javascript", EXTENSION_WEB],
+		[entry.web.styles, "text/css", EXTENSION_STYLES],
+	] as const) {
+		const response = await within(fetch(`${origin}${url}`), 10_000, `GET ${url}`);
+		assert(response.ok, `${url} answered ${response.status}`);
+		assert(
+			response.headers.get("content-type")?.startsWith(type),
+			`${url} is served as ${response.headers.get("content-type")}`,
+		);
+		assert(response.headers.get("x-content-type-options") === "nosniff", `${url} lacks nosniff`);
+		assert((await response.text()) === body, `${url} served other bytes`);
+	}
+}
+
+async function assertInstalledExtensionTool(
+	socket: WebSocket,
+	workspaceId: string,
+	sessionId: string,
+): Promise<void> {
+	await within(
+		rpc(socket, "session.prompt", { sessionId, text: EXTENSION_PROMPT }),
+		10_000,
+		"session.prompt",
+	);
+	let result: { isError?: boolean; content?: unknown } | undefined;
+	for (let attempt = 0; attempt < 240 && !result; attempt += 1) {
+		const transcript = (await within(
+			rpc(socket, "session.getMessages", { sessionId, workspaceId }),
+			10_000,
+			"session.getMessages",
+		)) as { messages: { role: string; toolName?: string; isError?: boolean; content?: unknown }[] };
+		result = transcript.messages.find(
+			(message) => message.role === "toolResult" && message.toolName === EXTENSION_TOOL,
+		);
+		if (!result) await Bun.sleep(250);
+	}
+	assert(result, "the installed extension's tool never ran in the artifact session");
+	const text = Array.isArray(result.content)
+		? result.content.map((block) => (block as { text?: string }).text ?? "").join("")
+		: "";
+	assert(
+		result.isError !== true &&
+			text === JSON.stringify({ sessionManager: true, createAgentSession: true }),
+		`the installed extension does not share the host's pi: ${text}`,
+	);
+}
+
 const MCP_STDIO_FIXTURE = `import { createInterface } from "node:readline";
 const reply = (id, result) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id, result }) + "\\n");
 createInterface({ input: process.stdin }).on("line", (line) => {
@@ -309,14 +446,80 @@ async function assertAskUserQuestionRoundTrip(
 	);
 }
 
-async function assertRegistryExtensionsRegisterTools(socket: WebSocket): Promise<void> {
-	const catalog = (await within(rpc(socket, "extension.list", {}), 10_000, "extension.list")) as {
-		name: string;
-		tools: string[];
-	}[];
+interface QueryProbeContext {
+	readonly socket: WebSocket;
+	readonly sessionId: string;
+}
+
+async function assertSessionInsightsListsTheChat({
+	socket,
+	sessionId,
+}: QueryProbeContext): Promise<void> {
+	const until = Date.now() + 30_000;
+	for (;;) {
+		const listed = (await within(
+			rpc(socket, "extension.query", {
+				extension: "session-insights",
+				method: "sessions.list",
+				params: { scope: { kind: "all" }, fresh: true },
+			}),
+			10_000,
+			"session-insights sessions.list",
+		)) as { state?: { phase?: unknown; indexed?: unknown }; rows?: unknown };
+		const { state, rows } = listed;
+		assert(
+			typeof state?.phase === "string" &&
+				["cold", "refreshing", "ready"].includes(state.phase) &&
+				typeof state.indexed === "number",
+			`sessions.list answered without an index state: ${JSON.stringify(listed)}`,
+		);
+		assert(Array.isArray(rows), `sessions.list answered without rows: ${JSON.stringify(listed)}`);
+		const listsChat = rows.some(
+			(row) =>
+				typeof row === "object" &&
+				row !== null &&
+				(row as { sessionId?: unknown }).sessionId === sessionId,
+		);
+		if (state.phase === "ready" && listsChat) return;
+		if (Date.now() > until) {
+			throw new Error(
+				`session-insights never listed the artifact chat ${sessionId}: ${JSON.stringify({ state, rows: rows.length })}`,
+			);
+		}
+		await Bun.sleep(250);
+	}
+}
+
+const QUERY_PROBES: Readonly<Record<string, (context: QueryProbeContext) => Promise<void>>> = {
+	"session-insights": assertSessionInsightsListsTheChat,
+};
+
+async function assertRegistryExtensionsLoad(context: QueryProbeContext): Promise<void> {
+	const catalog = (
+		(await within(rpc(context.socket, "extension.list", {}), 10_000, "extension.list")) as {
+			name: string;
+			tools: string[];
+			hasParentExtensions?: boolean;
+			apiVersion?: number;
+			kind?: string;
+		}[]
+	).filter((entry) => entry.kind !== "installed");
 	assert(catalog.length > 0, "extension.list returned no registry extensions");
-	for (const { name, tools } of catalog) {
-		assert(tools.length > 0, `registry extension ${name} registered no tools in the artifact`);
+	for (const { name, tools, hasParentExtensions, apiVersion } of catalog) {
+		const factories = hasParentExtensions !== false;
+		const queries = apiVersion !== undefined;
+		assert(
+			factories || queries,
+			`registry extension ${name} declares neither factories nor queries`,
+		);
+		if (factories) {
+			assert(tools.length > 0, `registry extension ${name} registered no tools in the artifact`);
+		}
+		if (queries) {
+			const probe = QUERY_PROBES[name];
+			assert(probe, `registry extension ${name} declares queries but the smoke has no query probe`);
+			await probe(context);
+		}
 	}
 }
 
@@ -450,6 +653,8 @@ const respond = (context) => {
   faux.appendResponses([respond]);
   const last = context.messages[context.messages.length - 1];
   if (last && last.role === "toolResult") return fauxAssistantMessage("Tool call attempted.");
+  if (last && last.role === "user" && JSON.stringify(last.content).includes(${JSON.stringify(EXTENSION_PROMPT)}))
+    return fauxAssistantMessage([fauxToolCall(${JSON.stringify(EXTENSION_TOOL)}, {})], { stopReason: "toolUse" });
   if (last && last.role === "user" && JSON.stringify(last.content).includes(${JSON.stringify(ASK_PROMPT)}))
     return fauxAssistantMessage(
       [fauxToolCall("ask_user_question", ${JSON.stringify(ASK_QUESTION)}, { id: ${JSON.stringify(ASK_TOOL_CALL_ID)} })],
@@ -536,6 +741,7 @@ export default function syntheticExternalExtension(pi) {
 		await defaultHost.stop();
 		defaultHost = undefined;
 
+		writeInstalledExtension(root, join(root, "data"));
 		const customEnv = hostEnvironment({
 			...baseEnv,
 			THINKRAIL_DATA_DIR: join(root, "data"),
@@ -608,6 +814,7 @@ export default function syntheticExternalExtension(pi) {
 			),
 			"bundled workflow skill is missing",
 		);
+		await assertInstalledExtensionLoaded(socket, customHost.origin);
 		writeMcpFixtures(root, agentDir, needsSignIn.url);
 		const created = (await within(
 			rpc(socket, "session.create", { workspaceId: workspace.id, model: externalModel }),
@@ -633,7 +840,8 @@ export default function syntheticExternalExtension(pi) {
 		);
 		await assertStrictVisualizeValidation(socket, workspace.id, created.sessionId);
 		await assertAskUserQuestionRoundTrip(socket, workspace.id, created.sessionId);
-		await assertRegistryExtensionsRegisterTools(socket);
+		await assertInstalledExtensionTool(socket, workspace.id, created.sessionId);
+		await assertRegistryExtensionsLoad({ socket, sessionId: created.sessionId });
 		await within(
 			rpc(socket, "session.dispose", { sessionId: created.sessionId }),
 			10_000,

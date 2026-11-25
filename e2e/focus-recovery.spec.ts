@@ -99,7 +99,7 @@ test("removing an MCP server in Settings focuses the next server's row inside th
 		await page.getByTestId("mcp-remove-confirm").click();
 		await expect(rows).toHaveCount(1);
 		const remaining = page.locator(`[data-testid="mcp-server-row"][data-name="${secondName}"]`);
-		await expect(remaining.getByTestId("mcp-server-details")).toBeFocused();
+		await expect(remaining).toBeFocused();
 		await expect(dialog).toBeVisible();
 
 		await page.keyboard.press("Shift+F10");

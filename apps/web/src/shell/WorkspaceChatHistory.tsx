@@ -14,16 +14,18 @@ import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import { useNow } from "../components/useNow";
-import { chatLabel, relativeTime } from "../lib";
+import { type ChatAction, chatLabel, relativeTime } from "../lib";
 import { openChatInTab } from "../panels/openChat";
 import {
 	type ClosedChat,
 	selectChatFirstPrompt,
+	selectChatPersisted,
 	selectWorkspaceById,
 	toast,
 	useAppStore,
 } from "../store";
 import { errorText, getTransport } from "../transport";
+import { useChatActions } from "./extensionEntryPoints";
 
 const StartingIcon = withIconClass(Loader2, "animate-spin motion-reduce:animate-none");
 
@@ -39,6 +41,7 @@ export function WorkspaceChatHistory({
 	const t = useT();
 	const closed = useAppStore((state) => state.closedChatsByWorkspace[workspaceId] ?? EMPTY_CHATS);
 	const chatStarting = useAppStore((state) => (state.chatStartsByWorkspace[workspaceId] ?? 0) > 0);
+	const chatActions = useChatActions();
 	const [open, setOpen] = useState(false);
 	const headingId = useId();
 	if (closed.length === 0) return null;
@@ -79,6 +82,7 @@ export function WorkspaceChatHistory({
 						chat={chat}
 						workspaceId={workspaceId}
 						targetGroupId={targetGroupId}
+						chatActions={chatActions}
 						onDismiss={() => setOpen(false)}
 						{...(onRenameChat ? { onRenameChat } : {})}
 					/>
@@ -92,12 +96,14 @@ function ClosedChatRow({
 	chat,
 	workspaceId,
 	targetGroupId,
+	chatActions,
 	onDismiss,
 	onRenameChat,
 }: {
 	chat: ClosedChat;
 	workspaceId: string;
 	targetGroupId: string;
+	chatActions: readonly ChatAction[];
 	onDismiss: () => void;
 	onRenameChat?: (sessionId: string, titleInput: string, currentTitle: string) => void;
 }) {
@@ -110,6 +116,7 @@ function ClosedChatRow({
 	const projectless = useAppStore(
 		(state) => selectWorkspaceById(state, workspaceId)?.kind === "chat",
 	);
+	const persisted = useAppStore((state) => selectChatPersisted(state, workspaceId, chat.sessionId));
 	const inputRef = useRef<HTMLInputElement>(null);
 	const reopenButtonRef = useRef<HTMLButtonElement>(null);
 	const editStartTitleRef = useRef(chat.title);
@@ -195,7 +202,11 @@ function ClosedChatRow({
 					}}
 					className={cn(menuItemClass, "min-w-0 flex-1")}
 				>
-					<span className="flex-1 truncate" data-title-source={label.source} title={label.tooltip}>
+					<span
+						className="flex-1 truncate text-left"
+						data-title-source={label.source}
+						title={label.tooltip}
+					>
 						{label.text}
 					</span>
 					<span className="shrink-0 tr-text-metadata text-text-muted">
@@ -204,6 +215,28 @@ function ClosedChatRow({
 					<RotateCcw className="size-14 shrink-0 text-text-muted" />
 				</button>
 			)}
+			{persisted && !editing
+				? chatActions.map((action) => (
+						<IconButton
+							key={action.id}
+							variant="ghost"
+							size="m"
+							icon={action.icon}
+							label={t("shell.chatHistory.actionNamed", {
+								action: action.menuLabel,
+								title: label.text,
+							})}
+							tooltip={action.menuLabel}
+							data-testid="closed-chat-action"
+							data-action={action.id}
+							onClick={() => {
+								onDismiss();
+								action.run({ workspaceId, sessionId: chat.sessionId });
+							}}
+							className="shrink-0"
+						/>
+					))
+				: null}
 			{onRenameChat ? (
 				editing ? (
 					<span aria-hidden className="w-24 shrink-0" />

@@ -1,7 +1,13 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { IMAGES_ROUTE, SPEECH_SOCKET_ROUTE, USER_FONTS_ROUTE } from "@thinkrail/contracts";
+import {
+	CHAT_ATTACHMENTS_ROUTE,
+	EXTENSION_ASSETS_ROUTE,
+	IMAGES_ROUTE,
+	SPEECH_SOCKET_ROUTE,
+	USER_FONTS_ROUTE,
+} from "@thinkrail/contracts";
 import { BLOB_ROUTE, FILES_ROUTE } from "./panels/resourcePane";
 
 test("every host route the app composes is proxied by the Vite dev server", () => {
@@ -12,7 +18,9 @@ test("every host route the app composes is proxied by the Vite dev server", () =
 		FILES_ROUTE,
 		BLOB_ROUTE,
 		USER_FONTS_ROUTE.replace(/\/$/, ""),
+		EXTENSION_ASSETS_ROUTE.replace(/\/$/, ""),
 		IMAGES_ROUTE.replace(/\/$/, ""),
+		CHAT_ATTACHMENTS_ROUTE.replace(/\/$/, ""),
 	]) {
 		expect(config).toContain(`"${route}"`);
 	}

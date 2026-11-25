@@ -22,6 +22,7 @@ export {
 	type SettingsScope,
 	SettingsSubheading,
 } from "./SettingsGroup";
+export { SettingsLine } from "./SettingsLine";
 export {
 	SETTINGS_LIST_PRIMARY,
 	SETTINGS_LIST_ROW,
@@ -47,5 +48,11 @@ export {
 	walkKey,
 } from "./settingsKeys";
 export { SETTING_ATTR, SETTINGS_KEY_SCOPE } from "./settingsMarkup";
-export { focusSettingRow, rowIdOf } from "./settingsWalk";
+export {
+	SETTINGS_ROW_FOCUS,
+	SETTINGS_ROW_INSET,
+	SettingsRowCursorContext,
+	useSettingsRowStop,
+} from "./settingsRowCursor";
+export { focusSettingRow, focusUnitStop, rowIdOf } from "./settingsWalk";
 export { useSettingsKeyboard } from "./useSettingsKeyboard";

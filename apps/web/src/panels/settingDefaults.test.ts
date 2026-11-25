@@ -53,7 +53,6 @@ describe("config defaults", () => {
 });
 
 test("client preferences compare with their owners' defaults", () => {
-	expect(isClientPreferenceDefault("artifactsSmart", true)).toBe(true);
 	expect(isClientPreferenceDefault("doubleShiftSearch", false)).toBe(false);
 	expect(isClientPreferenceDefault("markdownOutlineSide", "right")).toBe(true);
 	expect(isClientPreferenceDefault("chatMessageOrder", "newest-first")).toBe(false);

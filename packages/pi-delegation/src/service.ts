@@ -816,6 +816,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		const childFactories = [
 			...(bindings.childBaseExtensionFactories ?? []),
 			...(options.extensions === true ? factories : []),
+			...(options.extensions === true ? (bindings.childInstalledExtensionFactories ?? []) : []),
 			dropCancelledPrompt,
 		];
 		const resourceLoader = new DefaultResourceLoader({

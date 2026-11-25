@@ -29,6 +29,7 @@ import type {
 	RefreshedModels,
 	RemovedQueuedMessage,
 	ReviewFixDetails,
+	SessionCompletion,
 	SessionCreatedPayload,
 	SessionDeletedPayload,
 	SessionEventPayload,
@@ -415,6 +416,10 @@ function persistedCompletion(sessionId: string) {
 		: undefined;
 }
 
+export function sessionCompletionOf(sessionId: string): SessionCompletion | null {
+	return persistedCompletion(sessionId)?.completion ?? null;
+}
+
 function backgroundWorkActive(entry: Entry): boolean {
 	return (
 		entry.commands
@@ -735,6 +740,19 @@ export function setSubagentsEnabledResolver(
 	subagentsEnabledResolver = resolver ?? enabledByDefault;
 }
 
+let subagentEnabledResolver: (name: string) => boolean = enabledByDefault;
+export function setSubagentEnabledResolver(resolver: ((name: string) => boolean) | null): void {
+	subagentEnabledResolver = resolver ?? enabledByDefault;
+}
+
+function subagentEnabled(name: string): boolean {
+	try {
+		return subagentEnabledResolver(name);
+	} catch {
+		return false;
+	}
+}
+
 function subagentsEnabled(workspaceId: string): boolean {
 	try {
 		return subagentsEnabledResolver(workspaceId);
@@ -876,7 +894,7 @@ function enabledExtensionMissing(session: AgentSession, disabled: ReadonlySet<st
 			(path) => registryExtensionName(path),
 		),
 	);
-	return serverExtensions.some(
+	return serverExtensions().some(
 		({ extension }) =>
 			(extension.extensions.length > 0 || extension.sessionExtensions !== undefined) &&
 			!disabled.has(extension.name) &&
@@ -1555,6 +1573,7 @@ async function createParentSessionInternal(
 		workspaceId,
 		() => subagentsEnabled(workspaceId),
 		() => sessions.get(sessionId)?.subagents === subagents && canDeliverCompletion(),
+		subagentEnabled,
 	);
 	const commands = createBackgroundCommands({
 		sessionId,

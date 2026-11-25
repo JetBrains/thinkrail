@@ -6,7 +6,7 @@ import { chatDisplayName, copyText } from "../lib";
 import { canStartProjectlessChat, startProjectlessChat } from "../panels/chatActions";
 import { enterDefaultWorkspace } from "../panels/defaultWorkspace";
 import { startChatInTab } from "../panels/openChat";
-import { openFileInTab } from "../panels/openTabs";
+import { KEYBOARD_OPEN, openFileInTab } from "../panels/openTabs";
 import { availableSettings, useSettingsCatalogContext } from "../panels/settingsCatalog";
 import { settingsNavGroups } from "../panels/settingsNav";
 import {
@@ -64,10 +64,16 @@ import {
 	focusTerminal,
 	openChatHistory,
 	showFiles,
+	toggleAllPanels,
 	toggleBottomPanel,
 	toggleLeftSide,
 	toggleRightSide,
 } from "./chordActions";
+import {
+	openExtensionPanel,
+	openExtensionPanelInProject,
+	useOpenableExtensionPanels,
+} from "./extensionPanelHost";
 import { useResolvedKeybindings } from "./keybindingState";
 import { collectCenterGroups } from "./layout";
 import { readNativePageZoomBridge } from "./nativePageZoom";
@@ -102,7 +108,8 @@ function useWorkspaceBackfill(): void {
 const hostHitTargets: HostHitTargets = {
 	navigateToWorkspace: paletteNavigator.navigateToWorkspace,
 	loadWorkspaceRow: paletteNavigator.loadWorkspaceRow,
-	openFile: (workspaceId, path) => openFileInTab(workspaceId, path, "keep"),
+	openFile: (workspaceId, path) =>
+		openFileInTab(workspaceId, path, "keep", undefined, KEYBOARD_OPEN),
 	openSpec: (workspaceId, path, line) =>
 		useAppStore.getState().requestSpecView(workspaceId, path, line),
 	openChatLocation: (location) => useAppStore.getState().requestChatLocation(location),
@@ -176,6 +183,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	const keybindings = useResolvedKeybindings();
 	const [pageZoom] = useState(readNativePageZoomBridge);
 	const [tabActions] = useState(activeTabActions);
+	const openablePanels = useOpenableExtensionPanels();
 
 	const online = useAppStore(selectHostReachable);
 	const hostSearch = useAppStore(selectHostSearchAvailable);
@@ -274,6 +282,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			settingsGroups,
 			settingEntries,
 			tabActions,
+			extensionPanels: openablePanels,
 			actions: {
 				newWorkspace: options.openNewWorkspace,
 				newProjectlessChat: () => void startProjectlessChat(),
@@ -287,7 +296,11 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				toggleLeft: () => toggleLeftSide(options.toggleProjectsHome),
 				toggleRight: toggleRightSide,
 				toggleBottom: toggleBottomPanel,
+				toggleAllPanels,
 				showTool: (workspaceId, tool) => store().requestToolView(workspaceId, tool),
+				openExtensionPanel,
+				openExtensionPanelInProject: (projectId, panel) =>
+					void openExtensionPanelInProject(projectId, panel),
 				showFiles,
 				focusRegion: focusAdjacentRegion,
 				focusComposer: focusChatComposer,
@@ -357,6 +370,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		keybindings,
 		pageZoom,
 		tabActions,
+		openablePanels,
 		options,
 		contextProject,
 		contextRepoProject,

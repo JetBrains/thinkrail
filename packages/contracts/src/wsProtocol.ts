@@ -1,3 +1,4 @@
+import type { ChatAttachmentResult } from "./attachments";
 import type {
 	AppConfig,
 	AppConfigUpdate,
@@ -13,7 +14,9 @@ import type {
 	DiffStats,
 	EditorInfo,
 	ExistingWorktreeCandidate,
+	ExtensionBrowseResult,
 	ExtensionCatalogEntry,
+	ExtensionQueryParams,
 	FileNode,
 	GitCommit,
 	GitDiffScope,
@@ -42,9 +45,9 @@ import type {
 	MergePrResult,
 	OpenBranchReview,
 	OpenPrResult,
+	PackageInstallResult,
 	PiPackageResourceType,
 	PiPackageScope,
-	PiPackageSummary,
 	PiPackagesCatalog,
 	PrBodySource,
 	Project,
@@ -72,6 +75,7 @@ import type {
 	SessionResources,
 	SessionStateRecord,
 	SpecGraphSnapshot,
+	SubagentCatalogEntry,
 	SubagentCompletionDetails,
 	SubagentOverride,
 	SurveyInvitationResponse,
@@ -143,7 +147,13 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 126;
+export const PROTOCOL_VERSION = 132;
+export const EXTENSION_BROWSE_PROTOCOL_VERSION = 132;
+export const INSTALLED_EXTENSIONS_PROTOCOL_VERSION = 131;
+export const EXTENSION_QUERY_PROTOCOL_VERSION = 130;
+export const CHAT_ATTACHMENTS_PROTOCOL_VERSION = 129;
+export const ARTIFACT_OUTPUTS_PROTOCOL_VERSION = 128;
+export const SUBAGENT_CATALOG_PROTOCOL_VERSION = 127;
 export const SERVER_FALLBACK_PROTOCOL_VERSION = 126;
 export const MCP_USER_SERVERS_PROTOCOL_VERSION = 125;
 export const ARTIFACT_ROLES_PROTOCOL_VERSION = 124;
@@ -493,6 +503,7 @@ export const WS_METHODS = {
 	skillList: "skill.list",
 	skillsState: "skills.state",
 	extensionList: "extension.list",
+	extensionQuery: "extension.query",
 	packagesList: "packages.list",
 	packagesInstall: "packages.install",
 	packagesRemove: "packages.remove",
@@ -500,11 +511,16 @@ export const WS_METHODS = {
 	packagesCheckUpdates: "packages.checkUpdates",
 	packagesSetResourceEnabled: "packages.setResourceEnabled",
 	packagesReveal: "packages.reveal",
+	extensionsRemove: "extensions.remove",
+	extensionsUpdate: "extensions.update",
+	extensionsCheckUpdates: "extensions.checkUpdates",
+	extensionsBrowse: "extensions.browse",
 	localesList: "locales.list",
 	localesReveal: "locales.reveal",
 	themesList: "themes.list",
 	themesReveal: "themes.reveal",
 	fontsList: "fonts.list",
+	attachmentsCopyLocal: "attachments.copyLocal",
 	fontsInstalled: "fonts.installed",
 	fontsReveal: "fonts.reveal",
 	speechInstall: "speech.install",
@@ -536,6 +552,8 @@ export const WS_METHODS = {
 	sessionNudge: "session.nudge",
 	sessionActivityList: "session.activityList",
 	sessionGetMessages: "session.getMessages",
+	subagentList: "subagent.list",
+	subagentSetEnabled: "subagent.setEnabled",
 	subagentGetTranscript: "subagent.getTranscript",
 	sessionResources: "session.resources",
 	sessionResourceHistory: "session.resourceHistory",
@@ -645,6 +663,7 @@ export const WS_CHANNELS = {
 	localesChanged: "locales.changed",
 	themesChanged: "themes.changed",
 	packagesChanged: "packages.changed",
+	extensionsChanged: "extensions.changed",
 	fontsChanged: "fonts.changed",
 	speechChanged: "speech.changed",
 } as const;
@@ -1267,10 +1286,11 @@ export interface WsMethodMap {
 	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };
 	"skills.state": { params: { workspaceId: string }; result: SkillCatalogEntry[] };
 	"extension.list": { params: Record<string, never>; result: ExtensionCatalogEntry[] };
+	"extension.query": { params: ExtensionQueryParams; result: unknown };
 	"packages.list": { params: { workspaceId?: string; force?: boolean }; result: PiPackagesCatalog };
 	"packages.install": {
 		params: { source: string; scope: PiPackageScope; workspaceId?: string };
-		result: PiPackageSummary;
+		result: PackageInstallResult;
 	};
 	"packages.remove": {
 		params: { source: string; scope: PiPackageScope; workspaceId?: string };
@@ -1295,11 +1315,19 @@ export interface WsMethodMap {
 		result: Ack;
 	};
 	"packages.reveal": { params: { path: string; workspaceId?: string }; result: Ack };
+	"extensions.remove": { params: { source: string }; result: Ack };
+	"extensions.update": { params: { source: string }; result: Ack };
+	"extensions.checkUpdates": { params: { force?: boolean }; result: { source: string }[] };
+	"extensions.browse": { params: { force?: boolean }; result: ExtensionBrowseResult };
 	"locales.list": { params: Record<string, never>; result: LocalLocalesSnapshot };
 	"locales.reveal": { params: Record<string, never>; result: Ack };
 	"themes.list": { params: Record<string, never>; result: UserThemesSnapshot };
 	"themes.reveal": { params: Record<string, never>; result: Ack };
 	"fonts.list": { params: Record<string, never>; result: UserFontsSnapshot };
+	"attachments.copyLocal": {
+		params: { workspaceId?: string; path: string };
+		result: ChatAttachmentResult;
+	};
 	"fonts.installed": { params: Record<string, never>; result: InstalledFontsResult };
 	"fonts.reveal": { params: Record<string, never>; result: Ack };
 	"speech.install": { params: { model: SpeechModel }; result: Ack };
@@ -1399,6 +1427,14 @@ export interface WsMethodMap {
 	"subagent.stopAll": {
 		params: { workspaceId: string; parentSessionId: string };
 		result: Ack & { targeted: number };
+	};
+	"subagent.setEnabled": {
+		params: { name: string; enabled: boolean };
+		result: Ack;
+	};
+	"subagent.list": {
+		params: { workspaceId?: string };
+		result: SubagentCatalogEntry[];
 	};
 	"subagent.getTranscript": {
 		params: { workspaceId: string; parentSessionId: string; childSessionId: string };
@@ -1658,6 +1694,12 @@ export type WsErrorCode =
 	| "PACKAGE_REMOVE_FAILED"
 	| "PACKAGE_UPDATE_FAILED"
 	| "PACKAGE_SETTINGS_WRITE_FAILED"
+	| "EXTENSION_SCOPE_UNSUPPORTED"
+	| "EXTENSION_UNKNOWN"
+	| "EXTENSIONS_FILE_INVALID"
+	| "EXTENSION_CATALOG_OFFLINE"
+	| "EXTENSION_CATALOG_UNREACHABLE"
+	| "EXTENSION_CATALOG_INVALID"
 	| "CACHE_WARMING_WRITE_FAILED"
 	| "REQUEST_REPLAY_OVERFLOW"
 	| "INSTALLED_FONTS_UNAVAILABLE"
@@ -1687,6 +1729,8 @@ export type WsErrorCode =
 	| "KEYBINDINGS_INVALID"
 	| "SERVER_FALLBACK_NOT_USED"
 	| "SERVER_FALLBACK_STILL_ON"
+	| "EXTENSION_DISABLED"
+	| "UNKNOWN_EXTENSION_QUERY"
 	| SpeechErrorCode;
 
 export interface WsResponse {

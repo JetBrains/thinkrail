@@ -13,6 +13,7 @@ import {
 import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	ARTIFACT_OUTPUTS_PROTOCOL_VERSION,
 	ARTIFACT_ROLES_PROTOCOL_VERSION,
 	ARTIFACTS_PROTOCOL_VERSION,
 	ASK_DISCUSS_PROTOCOL_VERSION,
@@ -21,6 +22,7 @@ import {
 	CACHE_WARMING_MODES,
 	CACHE_WARMING_SETTINGS_PROTOCOL_VERSION,
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
+	CHAT_ATTACHMENTS_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	CHATS_PROTOCOL_VERSION,
 	CLIENT_ERROR_REPORT_PROTOCOL_VERSION,
@@ -34,8 +36,10 @@ import {
 	customMessageText,
 	DEFAULT_CACHE_WARMING_MODE,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
+	EXTENSION_BROWSE_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
 	EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION,
+	EXTENSION_QUERY_PROTOCOL_VERSION,
 	EXTENSION_SETTINGS_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
@@ -43,6 +47,7 @@ import {
 	GITHUB_STAR_PROTOCOL_VERSION,
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
+	INSTALLED_EXTENSIONS_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
 	isCacheWarmingMode,
 	isCustomEndpointId,
@@ -84,6 +89,7 @@ import {
 	SESSION_TITLE_MAX_LENGTH,
 	SPEC_SECTIONS_PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
+	SUBAGENT_CATALOG_PROTOCOL_VERSION,
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
@@ -101,6 +107,7 @@ import {
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	WS_CHANNELS,
 	WS_METHODS,
+	type WsErrorCode,
 } from "./wsProtocol";
 
 test("retired workspace activity keeps only its empty snapshot compatibility method", () => {
@@ -310,6 +317,17 @@ test("Files tree copy and delete are pinned to v118", () => {
 	expect(WS_METHODS.fsDelete).toBe("fs.delete");
 });
 
+test("chat file attachments are pinned to v129", () => {
+	expect(CHAT_ATTACHMENTS_PROTOCOL_VERSION).toBe(129);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CHAT_ATTACHMENTS_PROTOCOL_VERSION);
+	expect(WS_METHODS.attachmentsCopyLocal).toBe("attachments.copyLocal");
+});
+
+test("published artifact outputs are pinned to v128", () => {
+	expect(ARTIFACT_OUTPUTS_PROTOCOL_VERSION).toBe(128);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ARTIFACT_OUTPUTS_PROTOCOL_VERSION);
+});
+
 test("artifact roles and round markers are pinned to v124", () => {
 	expect(ARTIFACT_ROLES_PROTOCOL_VERSION).toBe(124);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ARTIFACT_ROLES_PROTOCOL_VERSION);
@@ -371,6 +389,21 @@ test("host search and its previews are pinned to v106", () => {
 	expect(WS_METHODS.searchPreview).toBe("search.preview");
 });
 
+test("the community catalog is pinned to v132", () => {
+	expect(PROTOCOL_VERSION).toBe(132);
+	expect(EXTENSION_BROWSE_PROTOCOL_VERSION).toBe(132);
+	expect(WS_METHODS.extensionsBrowse).toBe("extensions.browse");
+});
+
+test("installed extensions are pinned to v131", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(INSTALLED_EXTENSIONS_PROTOCOL_VERSION);
+	expect(INSTALLED_EXTENSIONS_PROTOCOL_VERSION).toBe(131);
+	expect(WS_METHODS.extensionsRemove).toBe("extensions.remove");
+	expect(WS_METHODS.extensionsUpdate).toBe("extensions.update");
+	expect(WS_METHODS.extensionsCheckUpdates).toBe("extensions.checkUpdates");
+	expect(WS_CHANNELS.extensionsChanged).toBe("extensions.changed");
+});
+
 test("spec sections in search are pinned to v113", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SPEC_SECTIONS_PROTOCOL_VERSION);
 	expect(SPEC_SECTIONS_PROTOCOL_VERSION).toBe(113);
@@ -408,7 +441,7 @@ test("extension editor text is pinned to v115", () => {
 });
 
 test("turning off server-side fallback is pinned to v126", () => {
-	expect(PROTOCOL_VERSION).toBe(126);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SERVER_FALLBACK_PROTOCOL_VERSION);
 	expect(SERVER_FALLBACK_PROTOCOL_VERSION).toBe(126);
 	expect(WS_METHODS.sessionDisableServerFallback).toBe("session.disableServerFallback");
 });
@@ -768,8 +801,24 @@ test("extension settings are pinned to v105", () => {
 	expect(DEFAULT_CONFIG.extensionSettings).toEqual({});
 });
 
+test("extension queries are pinned to v130 with their two refusal codes", () => {
+	expect(EXTENSION_QUERY_PROTOCOL_VERSION).toBe(130);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(EXTENSION_QUERY_PROTOCOL_VERSION);
+	expect(WS_METHODS.extensionQuery).toBe("extension.query");
+	const refusals: WsErrorCode[] = ["EXTENSION_DISABLED", "UNKNOWN_EXTENSION_QUERY"];
+	expect(refusals).toHaveLength(2);
+});
+
 test("ask_user_question discuss answers are pinned to v105, after background workspace creation", () => {
 	expect(ASK_DISCUSS_PROTOCOL_VERSION).toBe(105);
 	expect(ASK_DISCUSS_PROTOCOL_VERSION).toBeGreaterThan(WORKSPACE_CREATION_PROTOCOL_VERSION);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ASK_DISCUSS_PROTOCOL_VERSION);
+});
+
+test("subagent catalog and per-name preference start at protocol 127", () => {
+	expect(WS_METHODS.subagentList).toBe("subagent.list");
+	expect(WS_METHODS.subagentSetEnabled).toBe("subagent.setEnabled");
+	expect(SUBAGENT_CATALOG_PROTOCOL_VERSION).toBe(127);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SUBAGENT_CATALOG_PROTOCOL_VERSION);
+	expect(DEFAULT_CONFIG.disabledSubagents).toEqual([]);
 });

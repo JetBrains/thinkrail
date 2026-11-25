@@ -3,6 +3,7 @@ export {
 	AuxiliaryRail,
 	AuxiliaryRailActionButton,
 	type AuxiliaryRailControlProps,
+	type AuxiliaryRailFooterItem,
 	AuxiliaryRailToolButton,
 } from "./AuxiliaryRail";
 export * from "./auxiliaryPresentation";
@@ -10,6 +11,8 @@ export * from "./model";
 export * from "./normalized";
 export * from "./presets";
 export {
+	type ChatTabAction,
+	type ChatTabActions,
 	type TabAction,
 	type TabActionEffect,
 	type TabActionSection,

@@ -38,6 +38,7 @@ export interface AnalyticsOptions {
 	posthogHost?: string;
 	appRoot?: string;
 	remapBase?: string;
+	foreignFrameRoots?: () => readonly string[];
 	mute?: boolean;
 	additionalEnabled: boolean;
 	env?: AnalyticsEnv;
@@ -123,6 +124,7 @@ export function initializeAnalyticsWithSinkFactoryForTests(
 				frames: {
 					...(options.appRoot ? { appRoot: options.appRoot } : {}),
 					...(options.remapBase ? { remapBase: options.remapBase } : {}),
+					...(options.foreignFrameRoots ? { foreignRoots: options.foreignFrameRoots } : {}),
 				},
 				...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
 			});

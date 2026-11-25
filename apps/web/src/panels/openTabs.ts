@@ -20,6 +20,7 @@ import {
 	selectWorkspaceNavTick,
 	selectWorkspaceTick,
 	type TabIntent,
+	type TabOpenFocus,
 	useAppStore,
 } from "../store";
 import { getTransport } from "../transport";
@@ -32,9 +33,24 @@ function baseName(path: string): string {
 interface ReadFlight {
 	intent: TabIntent;
 	claimPreview: boolean;
+	focus: TabOpenFocus | undefined;
 	navigation: CenterNavigationStamp | null;
 	requestedAt: number;
 	done: Promise<void>;
+}
+
+export interface OpenTabOptions {
+	focus?: TabOpenFocus;
+}
+
+export const KEYBOARD_OPEN: OpenTabOptions = { focus: "content" };
+
+export function treeOpenFocus(event: { detail: number }): OpenTabOptions {
+	return { focus: event.detail === 0 ? "content" : "none" };
+}
+
+function withFocus<T extends object>(options: T, focus: TabOpenFocus | undefined): T {
+	return focus ? { ...options, focus } : options;
 }
 
 const inFlight = new Map<string, ReadFlight>();
@@ -52,6 +68,7 @@ async function openReadTab<T>(
 	build: (payload: T, loadedTick: number) => EditorTab,
 	requestedNavigation?: CenterNavigationStamp | null,
 	claimPreview = false,
+	focus?: TabOpenFocus,
 ): Promise<void> {
 	const navigation =
 		requestedNavigation === undefined
@@ -64,6 +81,7 @@ async function openReadTab<T>(
 	if (pending) {
 		if (intent === "preview" || claimPreview) pending.claimPreview = true;
 		if (intent === "keep") pending.intent = "keep";
+		pending.focus = focus;
 		pending.navigation = navigation;
 		pending.requestedAt = navTick(workspaceId);
 		return pending.done;
@@ -78,7 +96,10 @@ async function openReadTab<T>(
 			intent === "keep" &&
 			claimPreview &&
 			(!navigation || isCenterNavigationCurrent(store, workspaceId, navigation));
-		const options = layoutOpenOptionsForNavigation(store, workspaceId, navigation);
+		const options = withFocus(
+			layoutOpenOptionsForNavigation(store, workspaceId, navigation),
+			focus,
+		);
 		store.openTab(cached, intent, true, claim ? { ...options, claimPreview: true } : options);
 		return;
 	}
@@ -86,6 +107,7 @@ async function openReadTab<T>(
 	const flight: ReadFlight = {
 		intent,
 		claimPreview: intent === "preview" || claimPreview,
+		focus,
 		navigation,
 		requestedAt: navTick(workspaceId),
 		done: Promise.resolve(),
@@ -117,7 +139,10 @@ async function installRead<T>(
 				layoutResourceIdentity(tab) === resourceIdentity,
 		);
 		const tab = installedCache ?? build(payload, loadedTick);
-		const options = layoutOpenOptionsForNavigation(currentState, workspaceId, flight.navigation);
+		const options = withFocus(
+			layoutOpenOptionsForNavigation(currentState, workspaceId, flight.navigation),
+			flight.focus,
+		);
 		useAppStore
 			.getState()
 			.openTab(
@@ -139,6 +164,7 @@ export function openFileInTab(
 	reported: string,
 	intent: TabIntent,
 	requestedNavigation?: CenterNavigationStamp | null,
+	{ focus }: OpenTabOptions = {},
 ): Promise<void> {
 	const path = projectRelativePath(
 		reported,
@@ -162,6 +188,8 @@ export function openFileInTab(
 			loadedTick,
 		}),
 		requestedNavigation,
+		false,
+		focus,
 	);
 }
 

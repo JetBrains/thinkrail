@@ -1,0 +1,14 @@
+{
+	"name": "e2e-ext-broken",
+	"version": "1.0.0",
+	"description": "An extension whose server half throws while it loads.",
+	"keywords": [
+		"thinkrail-extension"
+	],
+	"type": "module",
+	"thinkrail": {
+		"api": "1.0",
+		"title": "Broken server",
+		"server": "./server.ts"
+	}
+}

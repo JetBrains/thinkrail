@@ -1,8 +1,10 @@
 import { describe, expect, it, mock } from "bun:test";
 import { isAbsolute } from "node:path";
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
+import * as server from "@thinkrail/extension-api/server";
 import {
 	defineServerExtension,
+	type ExtensionHostServices,
 	type ExtensionSessionServices,
 	type ServerExtension,
 } from "@thinkrail/extension-api/server";
@@ -38,8 +40,11 @@ describe("defineServerExtension", () => {
 		expect(extension).not.toHaveProperty("childExtensions");
 		expect(extension).not.toHaveProperty("sessionExtensions");
 		expect(extension).not.toHaveProperty("skillPackages");
+		expect(extension).not.toHaveProperty("supersedesPackages");
 		expect(extension).not.toHaveProperty("title");
 		expect(extension).not.toHaveProperty("description");
+		expect(extension).not.toHaveProperty("apiVersion");
+		expect(extension).not.toHaveProperty("queries");
 	});
 
 	it("keeps per-session factories as an uncalled function of the session's services", () => {
@@ -55,6 +60,7 @@ describe("defineServerExtension", () => {
 			setting: () => false,
 			workspaceFiles: {
 				check: async () => {},
+				checkArtifacts: async (paths) => paths.map((path) => ({ path })),
 				ensureArtifactsDir: async () => {},
 				scratchDir: "",
 				artifactsDir: "",
@@ -62,6 +68,38 @@ describe("defineServerExtension", () => {
 		};
 		expect(extension.sessionExtensions?.(session)).toEqual([sessionFactory]);
 		expect(sessionFactory).not.toHaveBeenCalled();
+	});
+
+	it("keeps queries as an uncalled function of the host's services, beside their apiVersion", () => {
+		const list = mock((_params: unknown) => ({ rows: [] }));
+		const queries = mock((_host: ExtensionHostServices) => ({ "rows.list": list }));
+		const extension = defineServerExtension({
+			name: "queried",
+			extensions: [],
+			apiVersion: 2,
+			queries,
+		});
+
+		expect(extension.apiVersion).toBe(2);
+		expect(extension.queries).toBe(queries);
+		expect(queries).not.toHaveBeenCalled();
+		const host: ExtensionHostServices = {
+			dataDir: "/data/extensions/queried",
+			log: { info: () => {}, warn: () => {} },
+			signal: new AbortController().signal,
+			sessionsRoot: () => "/agent/sessions",
+			sessionScope: () => ({ projects: [], locate: () => null }),
+			childTranscriptDirs: async () => [],
+			sessionStatus: () => ({ live: false, completion: null }),
+			messageAnchor: async () => null,
+			contextWindow: async () => null,
+			turnReceipts: async () => [],
+			turnTree: async () => null,
+			ensureArtifactsDir: async () => null,
+		};
+		expect(extension.queries?.(host)).toEqual({ "rows.list": list });
+		expect(queries).toHaveBeenCalledWith(host);
+		expect(list).not.toHaveBeenCalled();
 	});
 
 	it("keeps display copy beside the identity", () => {
@@ -99,5 +137,9 @@ describe("defineServerExtension", () => {
 		expect(build.success).toBe(true);
 		expect(imports).toEqual([]);
 		expect(await build.outputs[0]?.text()).toContain("defineServerExtension");
+	});
+
+	it("leaves the installed-extension contract to its own entry", () => {
+		expect(Object.keys(server).sort()).toEqual(["defineServerExtension"]);
 	});
 });

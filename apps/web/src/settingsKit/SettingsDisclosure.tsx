@@ -2,9 +2,11 @@ import {
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
 } from "@remixicon/react";
+import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useEffect, useId, useState } from "react";
 import { useSettingsJump } from "./jumpToSetting";
 import { SETTINGS_ROWS } from "./SettingsGroup";
+import { SETTINGS_ROW_FOCUS, SETTINGS_ROW_INSET, useSettingsRowRoving } from "./settingsRowCursor";
 
 export interface SettingsDisclosureProps {
 	rowId: string;
@@ -28,6 +30,7 @@ export function SettingsDisclosure({
 	const panelId = useId();
 	const [expanded, setExpanded] = useState(defaultExpanded);
 	const jump = useSettingsJump();
+	const { tabIndex, ref } = useSettingsRowRoving(rowId);
 	const reveal = jump !== null && settingIds.includes(jump.id) ? jump.seq : null;
 	useEffect(() => {
 		if (reveal !== null) setExpanded(true);
@@ -36,14 +39,18 @@ export function SettingsDisclosure({
 	return (
 		<div className="flex flex-col border-border-muted border-b">
 			<button
+				ref={ref}
 				type="button"
-				tabIndex={0}
+				tabIndex={tabIndex}
 				aria-expanded={expanded}
 				aria-controls={expanded ? panelId : undefined}
 				data-setting-row={rowId}
-				data-setting-stop=""
 				data-testid={testId}
-				className="flex w-full items-center gap-8 py-12 text-left transition-colors focus-visible:focus-ring-inset"
+				className={cn(
+					"flex items-center gap-8 py-12 text-left transition-colors",
+					SETTINGS_ROW_INSET,
+					SETTINGS_ROW_FOCUS,
+				)}
 				onClick={() => setExpanded((value) => !value)}
 			>
 				<span className="flex-1 tr-text-ui text-text-default">{label}</span>
