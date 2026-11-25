@@ -191,7 +191,9 @@ is always measured, and a disconnected anchor fails as a remount instead of repo
 rect.
 Pierre surfaces paint plain text first and replace their rows when the worker's highlight lands, which
 is late on slower hosts such as the compiled-binary and packaged-desktop artifacts; pointer probes wait
-for highlighted tokens (`pierreHighlightedTokens`) before measuring or dragging rows.
+for highlighted tokens (`pierreHighlightedTokens`) before measuring or dragging rows. The plain pass
+already colours every token with `--code-foreground`, so a highlighted token is one coloured by any
+other `--code-` role: matching the plain pass let a probe measure a row the highlight then replaced.
 A following probe that lets actionability scroll an off-screen transcript control into view first
 waits for the chat to settle (`waitForScrollStability`: `data-scroll-moving="false"` and unchanged scroll
 geometry across frames; `clickTranscriptControl` settles, then clicks). That scroll is not reader input,
@@ -203,6 +205,11 @@ control's own content (a preview's frames or notice), and a click after a dialog
 fixed-height preview is taller than the transcript beside the default bottom terminal, so its toolbar
 sits above the fold at the latest edge, and each tool-step expansion moves the edge a following chat then
 animates to.
+An anchored extension prompt reveals itself from wherever the chat stands on its first frame. Asked while
+the chat-open placement still holds the latest edge, its growth is pinned first and a prompt taller than
+the transcript beside the default bottom terminal (an approval with a 40vh argument list) shows its
+bottom; asked once the chat has settled, it shows its question. `extension-dialogs.spec.ts` settles the
+chat before asking and again before measuring, then scrolls the list into view before reading its end.
 Entering a workspace auto-opens its latest chat, and a pending questionnaire there claims focus and reveal
 at once. Workbench shortcuts pressed afterwards are user input, and the card yields to them. Questionnaire
 attention coverage therefore closes and reopens the chat after arranging the workbench.
@@ -215,6 +222,11 @@ the new socket (a replayed read keeps its id): the pass sends the read while it 
 Showing a side or the bottom focuses its selected tab (its edge-rail control when no tab renders) one
 animation frame after the region renders; a probe that then focuses inside the shown region first waits
 for that endpoint, or a late frame moves focus away from the probe's target.
+A keybinding override set over the host wire (`fixtures/keybindings.ts`) reaches the page as the
+`settings.changed` push on the page's own socket, and the wire's reply does not wait for the page to
+handle it, so a key pressed right after the reply can still meet the old binding. A probe sets the override
+before it opens the surface that reads it, since every later reply on the page's socket comes after the
+push, or waits for the rebound chord to show (`aria-keyshortcuts`, a key cap) before its first press.
 Monaco wheel probes reach the editor through an actionability-checked `hover()`, never a measured box:
 a box read before the editor's layout settles can be a stale one whose centre lies under the left panel's
 resize separator. Each CDP wheel event scrolls Monaco 50 px whatever its delta (one synthetic tick), so a
@@ -596,7 +608,9 @@ sign out every stored credential, and fail unless at most ambient env providers 
 teardown attempts every cleanup step even when one fails. Before any fixture reset
 deletes transcript storage, it lists and disposes every live session through the public wire; disposal aborts
 and settles an unfinished provider turn first, so a test ending mid-turn cannot recreate a headerless JSONL
-behind the next scenario. Consent tests reset the choice over the real settings wire and cover on-by-default preference priming,
+behind the next scenario. The reset finds the host's port in the project's `baseURL`, not with an HTTP
+request: Playwright keeps one keep-alive socket pool per worker, and the host closes a socket idle for 8–12 s
+on its 4 s sweep, so the first request of the next test could land on a socket being closed (`read ECONNRESET`). Consent tests reset the choice over the real settings wire and cover on-by-default preference priming,
 Done/ordinary-close acceptance, immediate off refusal, persistence failures and retries, confirmed reloads,
 cross-client convergence, prompt priority, and pre-v65 fallback.
 
@@ -793,7 +807,9 @@ word-boundary cut, found by words past the cut), an inline rename that starts fr
 from the optimistic first send; it cannot persist a sent prompt without a provider, so the live path's
 durability is the server unit test's. Palette name coverage (`search-palette.spec.ts`) seeds a named chat in
 a workspace the page never opened, finds it by a word only its title holds, renames it from a second wire
-client while the palette stays open, and pins that the page sent no `session.list` for either. Find in Files coverage (`find-in-files.spec.ts`) writes its probe
+client while the palette stays open, and pins that the page sent no `session.list` for either. Its preview-cap scenario grows `notes.txt` only once
+the palette's host search has settled (no group indexing or refreshing): a re-ask stats the grown file and
+switches the pane to too large without reading it, so the refused refresh would never be asked. Find in Files coverage (`find-in-files.spec.ts`) writes its probe
 files into the fixture repository as an untracked folder removed after every test — a binary with NUL
 bytes so `git grep -I` skips it, and a file past the host's line limit — and pins the chord, grouping
 and counts, the Monaco preview and the open-at-line selection overlay, the restored window, smart-case
@@ -886,7 +902,9 @@ preview on the plan page and its live slot taking Esc and a click answer. `ask-k
 card's keyboard pass: F6 and Mod+1 landing on the current option while Mod+L keeps the composer, Shift+Tab
 from the composer, Esc back with the question docked, a click answer parking on the receipt without a ring
 and a keyboard one in the composer, a question arriving (its seeded session reported idle, then waiting,
-through a routed wire) that takes focus from a walked transcript item, a Tab-focused button, an empty
+through a routed wire, idle from before the workspace is entered: its auto-open would otherwise show the
+question waiting and spend that chat mount's one claim) that takes focus from a walked transcript item,
+a Tab-focused button, an empty
 composer (also after Mod+L, and after a Mod+L that won over an earlier waiting call the wire names) or a
 button the mouse focused (Chromium only: WebKit never focuses a clicked button, and every WebKit
 `openRound` covers its History-button case), and that announces "F6 to answer" over a typed draft, whose
