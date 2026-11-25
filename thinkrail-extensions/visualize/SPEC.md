@@ -97,10 +97,12 @@ alone, so zoom never grows the viewport or shifts the prose below it. A compact 
 owns zoom/reset and the fullscreen action without covering diagram labels. Mouse drag pans the clipped
 viewport within the rendered SVG's bounds, clamping the current pan after zoom or a viewport/drawing
 resize so zooming out cannot leave a blank canvas. CSS owns the viewport height; measurement only bounds
-pan. Ordinary wheel and touch scrolling continue on the surrounding page. Modifier-wheel zoom and
-WebKit pinch belong to the diagram, as in fullscreen. The fullscreen canvas retains its own scrollable
-pan/zoom state and available width. All callers (Markdown fences, diagram and comparison cards) use this
-same inline behavior, without an app-level setting. It derives
+pan. SVG links and their descendants keep native activation in both inline and fullscreen views;
+pressing them never starts a pan or captures the pointer. Ordinary wheel and touch scrolling continue
+on the surrounding page. Modifier-wheel zoom and WebKit pinch belong to the diagram, as in fullscreen.
+The fullscreen canvas retains its own scrollable pan/zoom state and available width. All callers
+(Markdown fences, diagram and comparison cards) use this same inline behavior, without an app-level
+setting. It derives
 mermaid's strict-mode theme from the host's CSS variables and re-renders after a
 completed `data-theme` swap, or after a font settings change that moves the code family (resolved from
 `.tr-code-block` through `@thinkrail/ui/fonts`' `watchFont`, re-rendered once that face has loaded) or a

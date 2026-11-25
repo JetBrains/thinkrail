@@ -101,7 +101,7 @@ function event(type: string, fields: Record<string, unknown> = {}): Event {
 	return value;
 }
 
-async function mount(inline: boolean) {
+async function mount(inline: boolean, svg = SVG) {
 	const container = dom.document.createElement("div");
 	dom.document.body.append(container);
 	root = createRoot(container);
@@ -110,7 +110,7 @@ async function mount(inline: boolean) {
 		root?.render(
 			<TooltipProvider>
 				<PanZoomView
-					svg={SVG}
+					svg={svg}
 					inline={inline}
 					actions={
 						inline ? (
@@ -267,6 +267,64 @@ test("inline mouse drag pans until capture ends and leaves touch/right-button ge
 		expect([view.viewport.scrollLeft, view.viewport.scrollTop]).toEqual([80, 80]);
 	}
 });
+
+test.each([
+	["inline", "href", true],
+	["inline", "xlink:href", true],
+	["fullscreen", "href", false],
+	["fullscreen", "xlink:href", false],
+] as const)(
+	"%s %s links and their descendants do not start a mouse pan",
+	async (_mode, href, inline) => {
+		const view = await mount(
+			inline,
+			`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><a ${href}="https://example.com" target="_blank"><g><text id="label">Docs</text></g></a><text id="background">Diagram</text></svg>`,
+		);
+		geometry(view.viewport, 500, 600);
+		view.viewport.scrollLeft = 40;
+		view.viewport.scrollTop = 50;
+		const captures: number[] = [];
+		let captured: number | undefined;
+		view.viewport.setPointerCapture = (id) => {
+			captures.push(id);
+			captured = id;
+		};
+		view.viewport.hasPointerCapture = (id) => captured === id;
+		view.viewport.releasePointerCapture = () => {
+			captured = undefined;
+		};
+		const send = async (target: Element, type: string, x: number, y: number) => {
+			const value = event(type, {
+				pointerId: 1,
+				pointerType: "mouse",
+				button: 0,
+				clientX: x,
+				clientY: y,
+			});
+			await act(async () => {
+				target.dispatchEvent(value);
+			});
+			return value;
+		};
+		for (const selector of ["a", "#label"]) {
+			const target = view.viewport.querySelector(selector);
+			if (!target) throw new Error(`Missing ${selector}`);
+			const down = await send(target, "pointerdown", 200, 180);
+			await send(view.viewport, "pointermove", 120, 100);
+			await send(view.viewport, "pointerup", 120, 100);
+			expect(captures).toEqual([]);
+			expect(down.defaultPrevented).toBe(false);
+			expect([view.viewport.scrollLeft, view.viewport.scrollTop]).toEqual([40, 50]);
+		}
+		const background = view.viewport.querySelector("#background");
+		if (!background) throw new Error("Missing non-link drawing");
+		await send(background, "pointerdown", 200, 180);
+		await send(view.viewport, "pointermove", 120, 100);
+		await send(view.viewport, "pointerup", 120, 100);
+		expect(captures).toEqual([1]);
+		expect([view.viewport.scrollLeft, view.viewport.scrollTop]).toEqual([120, 130]);
+	},
+);
 
 test("inline pan is clamped to the rendered drawing after zoom and resize", async () => {
 	const view = await mount(true);

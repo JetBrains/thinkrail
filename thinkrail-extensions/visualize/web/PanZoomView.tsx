@@ -111,6 +111,7 @@ export function PanZoomView({
 
 	const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
 		if (e.pointerType !== "mouse" || e.button !== 0) return;
+		if (e.target instanceof Element && e.target.closest("a")) return;
 		const el = scrollRef.current;
 		if (!el) return;
 		drag.current = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop };
