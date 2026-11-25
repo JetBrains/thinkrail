@@ -97,6 +97,7 @@ test("Changes tab shows the active worktree's diff and swaps per workspace", asy
 	writeFileSync(join(worktree, "script.ts"), "export const edited = true;\n");
 	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).dblclick();
 	await expect(diffText(page, "edited = true")).toBeVisible();
+	await page.getByTestId("diff-toggle-split").click();
 	await expect(page.getByTestId("diff-toggle-split")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("view-toggle-markdown")).toHaveCount(0);
 	await page.getByTestId("diff-toggle-inline").click();
@@ -1126,7 +1127,14 @@ test("large diffs render virtualized and wide rewrites wait behind a notice", as
 	);
 	await page.getByTestId("diff-show-anyway").click();
 	await expect(page.getByTestId("diff-too-large")).toHaveCount(0);
-	await expect(pierreLines(diffView, "after line 1").first()).toBeVisible();
+	await page.getByTestId("diff-toggle-inline").click();
+	await expect(diffView.locator("[data-unified]")).toHaveCount(1);
+	await expect(pierreLines(diffView).filter({ hasText: /^before line 1$/ })).toBeInViewport();
+	await diffView.evaluate((node) =>
+		node.scrollTo({ top: (node.scrollHeight - node.clientHeight) / 2 }),
+	);
+	await expect(pierreLines(diffView).filter({ hasText: /^after line 1$/ })).toBeInViewport();
+	expect(await pierreLines(diffView).count()).toBeLessThan(1_000);
 
 	const reordered = lines(1_500, "same");
 	commitFile(workspace.worktreePath, "REORDER.txt", reordered, "add reorder");

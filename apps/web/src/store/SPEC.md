@@ -800,7 +800,9 @@ the reveal (only while it still carries that tick, so a newer reveal survives), 
 tab's saved `viewState` instead of jumping back to the hit. Like `rendererId` and `viewState`, the reveal
 lives only in this client's tab cache, never in the persisted layout document. Diff-only presentation keeps
 `view` split|inline via
-`setDiffTabView` (split by default) and `ignoreWhitespace` via `setDiffTabIgnoreWhitespace`. Legacy persisted
+`setDiffTabView` (an explicit user choice; absent means the pane adapts to its width) and
+`ignoreWhitespace` via `setDiffTabIgnoreWhitespace`. Automatic layout never writes this field, so a
+manual choice remains with that tab across resizing and remounts. Legacy persisted
 `view` on file documents and `rendered` on diff documents are outside the accepted cache shape and are
 ignored on read; no migration state exists. Opened by `ChangesPanel` at the `keep` intent (double click /
 *Open as tab*); a single click opens the **`ChangesTab`** instead. **`ChangesTab`** (`kind: "changes"`, id

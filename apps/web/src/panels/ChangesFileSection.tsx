@@ -61,7 +61,7 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 	workspaceId,
 	tabId,
 	scope,
-	tabView,
+	view,
 	ignoreWhitespace,
 	section,
 	keptList,
@@ -77,7 +77,7 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 	workspaceId: string;
 	tabId: string;
 	scope: GitDiffScope;
-	tabView: DiffTabView | undefined;
+	view: DiffTabView;
 	ignoreWhitespace: boolean;
 	section: ChangesTabSection | undefined;
 	keptList: readonly string[] | undefined;
@@ -184,7 +184,7 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 		reload,
 		triage,
 	});
-	const { renderer, candidates, implementationKey, mobile, hunkActions } = surface;
+	const { renderer, candidates, implementationKey, hunkActions } = surface;
 	const reviewDrafts = useMemo<ReviewDraftPersistence>(
 		() => ({
 			rendererId: renderer.id,
@@ -197,7 +197,6 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 		}),
 		[path, renderer.id, tabId, updateReviewDraft, workspaceId],
 	);
-	const view = mobile ? "inline" : (tabView ?? "split");
 	const { dir, base } = splitPath(path);
 	const openAsTab = () => void openDiffInTab(workspaceId, scope, path, "keep");
 	const selectRenderer = (rendererId: string) =>

@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
+import { DEFAULT_CONFIG } from "@thinkrail/contracts";
 import {
 	createWorkspaceViaDialog,
 	openFixtureProject,
@@ -11,6 +12,7 @@ import { commitFile, gitAs } from "./fixtures/git";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 import { holdPierreWorkers, pierreDeletionsSide, selectPierreLine } from "./fixtures/pierre";
 import { seedWorkspaceSession } from "./fixtures/sessions";
+import { E2eWire } from "./fixtures/wire";
 
 const reviewTab = (page: Page) => page.locator('[data-testid="editor-tab"][data-kind="changes"]');
 const diffTab = (page: Page) => page.locator('[data-testid="editor-tab"][data-kind="diff"]');
@@ -126,6 +128,7 @@ test("the Split/Inline and whitespace toggles appear when a code file is in the 
 	await seedThreeChanges(page);
 	await row(page, "notes.txt").click();
 	await expect(reviewTab(page)).toHaveCount(1);
+	await page.getByTestId("changes-review-toggle-split").click();
 	await expect(page.getByTestId("changes-review-toggle-split")).toHaveAttribute(
 		"data-active",
 		"true",
@@ -140,6 +143,72 @@ test("the Split/Inline and whitespace toggles appear when a code file is in the 
 		"true",
 	);
 	await expect(codeDiff.locator("[data-unified]")).toHaveCount(1);
+});
+
+test("diff tabs adapt to pane width and font size until each tab chooses a layout", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1800, height: 1000 });
+	await seedThreeChanges(page);
+	await row(page, "notes.txt").click();
+	const reviewInline = page.getByTestId("changes-review-toggle-inline");
+	const reviewSplit = page.getByTestId("changes-review-toggle-split");
+	const reviewDiff = section(page, "notes.txt").getByTestId("diff-view");
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	try {
+		await expect(reviewSplit).toHaveAttribute("data-active", "true");
+		await expect(pierreDeletionsSide(reviewDiff)).toHaveCount(1);
+		await page.setViewportSize({ width: 1000, height: 1000 });
+		await expect(reviewInline).toHaveAttribute("data-active", "true");
+		await expect(reviewDiff.locator("[data-unified]")).toHaveCount(1);
+		await expect(
+			section(page, "script.ts").getByTestId("diff-view").locator("[data-unified]"),
+		).toHaveCount(1);
+		await page.getByTestId("changes-review-layout-single").click();
+		await expect(page.getByTestId("changes-review-walk")).toBeVisible();
+		await expect(reviewInline).toHaveAttribute("data-active", "true");
+		await expect(reviewDiff.locator("[data-unified]")).toHaveCount(1);
+		await page.setViewportSize({ width: 1800, height: 1000 });
+		await expect(reviewSplit).toHaveAttribute("data-active", "true");
+		await expect(pierreDeletionsSide(reviewDiff)).toHaveCount(1);
+		await page.getByTestId("changes-review-layout-stacked").click();
+		await expect(page.getByTestId("changes-review-walk")).toHaveCount(0);
+
+		await page.setViewportSize({ width: 1440, height: 1000 });
+		await expect(reviewSplit).toHaveAttribute("data-active", "true");
+		await wire.request("settings.update", { config: { codeFontSize: 24 } });
+		await expect(reviewInline).toHaveAttribute("data-active", "true");
+		await expect(reviewDiff.locator("[data-unified]")).toHaveCount(1);
+		await wire.request("settings.update", {
+			config: { codeFontSize: DEFAULT_CONFIG.codeFontSize },
+		});
+		await expect(reviewSplit).toHaveAttribute("data-active", "true");
+		await reviewInline.click();
+		await page.setViewportSize({ width: 1800, height: 1000 });
+		await expect(reviewInline).toHaveAttribute("data-active", "true");
+		await expect(reviewDiff.locator("[data-unified]")).toHaveCount(1);
+
+		await reviewTab(page).dblclick();
+		await row(page, "notes.txt").dblclick();
+		const single = page.getByTestId("diff-pane");
+		await expect(single.getByTestId("diff-toggle-split")).toHaveAttribute("data-active", "true");
+		await page.setViewportSize({ width: 1000, height: 1000 });
+		await expect(single.getByTestId("diff-toggle-inline")).toHaveAttribute("data-active", "true");
+		await expect(single.getByTestId("diff-view").locator("[data-unified]")).toHaveCount(1);
+		await single.getByTestId("diff-toggle-split").click();
+		await expect(pierreDeletionsSide(single.getByTestId("diff-view"))).toHaveCount(1);
+		await reviewTab(page).click();
+		await expect(reviewInline).toHaveAttribute("data-active", "true");
+		await diffTab(page).click();
+		await expect(single.getByTestId("diff-toggle-split")).toHaveAttribute("data-active", "true");
+		await expect(pierreDeletionsSide(single.getByTestId("diff-view"))).toHaveCount(1);
+		await page.screenshot({ path: test.info().outputPath("narrow-explicit-split.png") });
+	} finally {
+		await wire.request("settings.update", {
+			config: { codeFontSize: DEFAULT_CONFIG.codeFontSize },
+		});
+		wire.close();
+	}
 });
 
 test("a code diff colors tokens through the shared code variables", async ({ page }) => {

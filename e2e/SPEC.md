@@ -866,6 +866,14 @@ and clears the data folder before each test; every test opens the panel through 
 `openInsightsPanel(page, { rows })`, which refreshes (`fresh: true`) until the index is ready and the list
 holds exactly that test's sessions, since the host's index may still list the previous test's. Its shots
 under `e2e/screenshots/session-insights*/` are review evidence only.
+The adaptive-layout cases in `changes-review.spec.ts` and `visualize.spec.ts` keep the displayed
+source diff and its Split/Inline control aligned across narrow and wide panes, a code-size change,
+Stacked/One-file review switches, and remounts of individual git and two-file comparison tabs. A manual
+choice remains local to its tab; another tab continues adapting. Their screenshots are review evidence.
+Cases that assert split-side anchors, cursor rows or both long-line columns explicitly choose Split
+before interacting with those columns. The large-rewrite case chooses Inline and scrolls across its
+equal-sized deletion and addition blocks to verify the first added line enters the viewport while
+the diff stays virtualized; it retains the expensive-diff notice and explicit Show anyway step.
 `environment-settings.spec.ts` drives Settings →
 Environment through rejected and accepted saves and a reload; the host was launched with
 `PI_CODING_AGENT_DIR`, so it also proves the launch value stays in use and is reported as set at launch. It

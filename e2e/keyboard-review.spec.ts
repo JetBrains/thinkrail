@@ -133,18 +133,19 @@ async function expectHonestSurface(surface: Locator): Promise<void> {
 
 async function openCursorDiff(
 	page: Page,
-	keybindings?: KeybindingOverrides,
+	options: { keybindings?: KeybindingOverrides; view?: "split" } = {},
 ): Promise<{
 	diff: Locator;
 	cursor: Locator;
 	workspaceId: string;
 }> {
 	await openFixtureProject(page);
-	if (keybindings) await setKeybindings(page, keybindings);
+	if (options.keybindings) await setKeybindings(page, options.keybindings);
 	const workspace = await createWorkspaceViaDialog(page);
 	await commitAndModify(page, workspace.id, "cursor.ts", CURSOR_ORIGINAL, CURSOR_MODIFIED);
 	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "cursor.ts" }).dblclick();
+	if (options.view === "split") await page.getByTestId("diff-toggle-split").click();
 	const diff = page.getByTestId("diff-view");
 	await expect(diff.getByText("l5b = 51", { exact: false }).last()).toBeVisible();
 	await page.locator('[data-testid="editor-tab"][data-active="true"]').click();
@@ -184,7 +185,7 @@ const cursorSide = (diff: Locator) => diff.locator("diffs-container");
 test("a Pierre diff is one Tab stop with a line cursor: lines, sides, a range, a draft and back", async ({
 	page,
 }) => {
-	const { diff, cursor } = await openCursorDiff(page);
+	const { diff, cursor } = await openCursorDiff(page, { view: "split" });
 	await expectHonestSurface(diff);
 	await expect(cursorRow(diff, "additions", 5)).toHaveCount(1);
 	await expect(cursorSide(diff)).toHaveClass(/review-cursor-additions/);
@@ -268,6 +269,7 @@ test("a virtualized diff scrolls the cursor's line into view as it jumps between
 	);
 	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "FAR.txt" }).dblclick();
+	await page.getByTestId("diff-toggle-split").click();
 	const diff = page.getByTestId("diff-view");
 	await expect(diff.getByText("far line 5 edited").last()).toBeVisible();
 	await page.locator('[data-testid="editor-tab"][data-active="true"]').click();
@@ -306,7 +308,7 @@ test("Delete and Send keep focus on the card's line, and Shift+Mod+Enter sends a
 		});
 		server.onMessage((message) => ws.send(message));
 	});
-	const { diff, cursor } = await openCursorDiff(page);
+	const { diff, cursor } = await openCursorDiff(page, { view: "split" });
 	const cards = diff.getByTestId("review-thread-card");
 
 	await page.keyboard.press("j");
@@ -414,6 +416,7 @@ test("in Changes review the cursor owns J while V still marks the file viewed", 
 	await revealWorkbenchTool(page, "changes");
 	const row = page.getByTestId("change-item").filter({ hasText: "cursor.ts" });
 	await row.click();
+	await page.getByTestId("changes-review-toggle-split").click();
 	const section = page.locator('[data-testid="changes-section"][data-path="cursor.ts"]');
 	const diff = section.getByTestId("diff-view");
 	await expect(diff.getByText("l5b = 51", { exact: false }).last()).toBeVisible();
@@ -474,7 +477,10 @@ test.describe("rebound review keys", () => {
 	test("an arrow twin rebound onto Mod+J extends the cursor's range with Shift+Mod+J instead of toggling the bottom panel", async ({
 		page,
 	}) => {
-		const { diff, cursor } = await openCursorDiff(page, { "arrows.down": ["Mod+KeyJ"] });
+		const { diff, cursor } = await openCursorDiff(page, {
+			keybindings: { "arrows.down": ["Mod+KeyJ"] },
+			view: "split",
+		});
 		const bottom = page.getByTestId("bottom-panel");
 		const bottomShown = await bottom.count();
 		await expect(cursorRow(diff, "additions", 5)).toHaveCount(1);
