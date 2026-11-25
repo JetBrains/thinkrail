@@ -1020,7 +1020,12 @@ enabled/confirmed choice before entering analytics attribution.
   `workspaces` writers: the normalized session-state publisher stamps `recordWorkspaceActivity(record.workspaceId)`
   whenever a record reports `execution: "running"` (a user prompt flips it, so both user and agent turns
   count — and the writer's one-per-minute coalescing makes a streaming agent cheap), an accepted
-  `terminal.write` stamps the owning workspace (a displaced/no-op write does not), and the repo-metadata
+  `terminal.write` stamps the owning workspace only when the accepted chunk contains input other than
+  complete terminal focus reports (`ESC[I` / `ESC[O`); an empty chunk or a displaced/no-op write does not.
+  `stampTerminalActivity` leaves all bytes for the PTY and skips the activity writer entirely for pure
+  focus reports, including its coalesced high-water mark. Mixed input, other escape sequences and partial
+  focus sequences still count; xterm emits each focus report as one data event, so there is no cross-write
+  parser or buffering that could swallow an Escape key. The repo-metadata
   callback calls `recordWorkspaceHead`, with `watch`'s watch-started nudge wired to `seedWorkspaceHead` so
   first admission seeds and watcher recreation detects a HEAD move made while unwatched. Reading a result, selecting a workspace, or opening
   files never stamps — "looking is not working" is the user-visible rule. `workspace.settle` /

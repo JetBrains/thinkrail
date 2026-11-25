@@ -350,7 +350,11 @@ import { withChangeLock, withReviewLock } from "./reviewLock";
 import { runObservation } from "./runAnalytics";
 import { hostSearch, publishSearchText } from "./search";
 import { trailingSingleFlight } from "./sessionStateList";
-import { findWorkspaceReviewOutcome, scheduleLifecyclePass } from "./settledLifecycle";
+import {
+	findWorkspaceReviewOutcome,
+	scheduleLifecyclePass,
+	stampTerminalActivity,
+} from "./settledLifecycle";
 import { taskObservation } from "./taskAnalytics";
 import {
 	claimItemFix,
@@ -1206,7 +1210,7 @@ const handlers: WsHandlers = {
 	}),
 	"terminal.write": (p, ctx) => {
 		const workspaceId = writeTerminal(p.id, p.data, ctx.clientKey);
-		if (workspaceId) recordWorkspaceActivity(workspaceId);
+		stampTerminalActivity(workspaceId, p.data);
 		return { ok: true } as const;
 	},
 	"terminal.resize": (p, ctx) => {
