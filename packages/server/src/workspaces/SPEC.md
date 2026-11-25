@@ -196,10 +196,16 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   the move is owed to that chat only, and
   the call returns `branchKept`: `"detached"` when `HEAD` is detached or unreadable (mid-rebase `-m` would
   corrupt the rebase's head-name), `"not-own"` when the worktree has a branch checked out outside ThinkRail.
-  An own branch with a configured upstream or an exact same-name remote-tracking ref on any configured
-  remote is kept as `"published"`; this uses local Git metadata only, never a fetch or remote probe. An
-  upstream whose ref has been pruned still protects the branch. Remote names containing `/` are supported;
-  a remote branch with a different path but the same basename does not count. A failed metadata read
+  An own branch with a configured upstream is kept as `"published"`, including when a narrow fetch
+  refspec or pruning leaves no tracking ref: the branch's `remote` and `merge` config still protect it.
+  Otherwise an exact same-name remote-tracking ref on a configured remote counts only when its tip is
+  the current branch tip or an ancestor of it. A fetched teammate branch or old squash branch with commits
+  outside that history does not prevent naming. This is conservative local evidence, not proof of who
+  pushed: a same-name ref at the shared base also counts, preserving a branch pushed before any own
+  commit; a branch pushed without an upstream and later rewritten or advanced remotely cannot be
+  identified reliably. No fetch or remote probe runs; the ancestry read disables lazy fetching, and an
+  unsupported or failed read is unverified. Remote names containing `/` are supported; a remote branch
+  with a different path but the same basename does not count. A failed metadata read
   keeps the branch as `"unverified"` while still setting the display name. Publication is final for naming:
   it clears `branchNamePending` instead of leaving an automatic move owed after a later unpublish/prune.
   An unverified read remains retryable by the same chat, like a detached or adopted branch.

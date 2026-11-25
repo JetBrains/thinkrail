@@ -12,6 +12,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, delimiter, join, relative, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { Workspace } from "@thinkrail/contracts";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import { setSyncGitTimeoutForTests } from "../git";
@@ -635,7 +636,177 @@ test("a remote branch with only the same basename does not prevent workspace nam
 	expect(gitOut(ws.worktreePath, "symbolic-ref", "--short", "HEAD")).toBe("local-task");
 });
 
-test.skipIf(process.platform === "win32").each(["for-each-ref", "remote"])(
+test.each(["teammate", "squashed workspace"])(
+	"a fetched same-name branch from a %s does not prevent workspace naming",
+	async (source) => {
+		const remoteRepo = join(dataDir, "origin.git");
+		git(repo, "init", "--bare", "-b", "main", remoteRepo);
+		git(repo, "remote", "add", "origin", remoteRepo);
+		git(repo, "push", "origin", "main");
+		const other = join(dataDir, "other");
+		git(dataDir, "clone", remoteRepo, other);
+		git(other, "config", "user.name", "other");
+		git(other, "config", "user.email", "other@thinkrail.test");
+		git(other, "config", "commit.gpgsign", "false");
+		git(other, "switch", "-c", "workspace-1");
+		writeFileSync(join(other, "other.txt"), "other workspace\n");
+		git(other, "add", "other.txt");
+		git(other, "commit", "-m", "other workspace");
+		git(other, "push", "origin", "workspace-1");
+		git(repo, "fetch", "origin", "--", "workspace-1");
+		if (source === "squashed workspace") {
+			git(repo, "merge", "--squash", "origin/workspace-1");
+			git(repo, "commit", "-m", "squash the previous workspace");
+		}
+		const ws = await createWorkspace("p1");
+		git(ws.worktreePath, "fetch", "origin", "--", ws.branch);
+		const previousRemote = gitOut(remoteRepo, "rev-parse", `refs/heads/${ws.branch}`);
+
+		const { workspace, branchKept } = renameWorkspace(ws.id, "Fix login", {
+			branch: "fix-login",
+			by: "s1",
+		});
+
+		expect(ws.branch).toBe("workspace-1");
+		expect(branchKept).toBeUndefined();
+		expect(workspace.branch).toBe("fix-login");
+		expect(workspace.branchNamePending).toBeUndefined();
+		git(ws.worktreePath, "commit", "--allow-empty", "-m", "my work");
+		git(ws.worktreePath, "push", "--set-upstream", "origin", workspace.branch);
+		expect(gitOut(remoteRepo, "rev-parse", `refs/heads/${ws.branch}`)).toBe(previousRemote);
+		expect(gitOut(remoteRepo, "rev-parse", "refs/heads/fix-login")).toBe(
+			gitOut(ws.worktreePath, "rev-parse", "HEAD"),
+		);
+	},
+);
+
+test.each(["--depth=1", "--single-branch"])(
+	"an upstream pushed from a %s clone keeps the workspace branch without a tracking ref",
+	async (cloneOption) => {
+		const remoteRepo = join(dataDir, "origin.git");
+		git(repo, "init", "--bare", "-b", "main", remoteRepo);
+		git(repo, "push", remoteRepo, "main");
+		const clone = join(dataDir, "clone");
+		git(dataDir, "clone", cloneOption, pathToFileURL(remoteRepo).href, clone);
+		git(clone, "config", "user.name", "test");
+		git(clone, "config", "user.email", "t@thinkrail.test");
+		git(clone, "config", "commit.gpgsign", "false");
+		git(clone, "config", "push.default", "simple");
+		writeFileSync(
+			join(dataDir, "projects.json"),
+			JSON.stringify([{ id: "p1", name: "repo", path: clone, slug: "repo", lastOpened: 1 }]),
+		);
+		const ws = await createWorkspace("p1");
+		git(ws.worktreePath, "push", "--set-upstream", "origin", ws.branch);
+		expect(gitOut(clone, "for-each-ref", "--format=%(upstream)", `refs/heads/${ws.branch}`)).toBe(
+			"",
+		);
+		expect(gitOut(clone, "show-ref", "--verify", `refs/remotes/origin/${ws.branch}`)).toBe("");
+
+		const { workspace, branchKept } = renameWorkspace(ws.id, "Fix login", {
+			branch: "fix-login",
+			by: "s1",
+		});
+
+		expect(branchKept).toBe("published");
+		expect(workspace.branch).toBe(ws.branch);
+		expect(workspace.branchNamePending).toBeUndefined();
+		expect(gitOut(clone, "config", `branch.${ws.branch}.remote`)).toBe("origin");
+		expect(gitOut(clone, "config", `branch.${ws.branch}.merge`)).toBe(`refs/heads/${ws.branch}`);
+		git(ws.worktreePath, "commit", "--allow-empty", "-m", "after naming");
+		git(ws.worktreePath, "push");
+		expect(gitOut(remoteRepo, "rev-parse", `refs/heads/${ws.branch}`)).toBe(
+			gitOut(ws.worktreePath, "rev-parse", "HEAD"),
+		);
+	},
+);
+
+test.each([
+	["base", false],
+	["own commit", true],
+])(
+	"a branch pushed without an upstream at its %s keeps its name after local commits",
+	async (_case, ownCommit) => {
+		const ws = await createWorkspace("p1");
+		const remoteRepo = join(dataDir, "published.git");
+		git(repo, "init", "--bare", remoteRepo);
+		git(repo, "remote", "add", "origin", remoteRepo);
+		if (ownCommit) git(ws.worktreePath, "commit", "--allow-empty", "-m", "published work");
+		git(ws.worktreePath, "push", "origin", ws.branch);
+		git(ws.worktreePath, "commit", "--allow-empty", "-m", "local work");
+
+		const { workspace, branchKept } = renameWorkspace(ws.id, "Keep publication", {
+			branch: "keep-publication",
+			by: "s1",
+		});
+
+		expect(branchKept).toBe("published");
+		expect(workspace.branch).toBe(ws.branch);
+		expect(workspace.branchNamePending).toBeUndefined();
+		expect(gitOut(repo, "config", "--get", `branch.${ws.branch}.remote`)).toBe("");
+		git(ws.worktreePath, "push", "origin", ws.branch);
+	},
+);
+
+test.each(["remote", "merge"])(
+	"a branch with only upstream %s configured is still unpublished",
+	async (key) => {
+		const ws = await createWorkspace("p1");
+		git(
+			repo,
+			"config",
+			`branch.${ws.branch}.${key}`,
+			key === "remote" ? "origin" : "refs/heads/main",
+		);
+
+		const { workspace, branchKept } = renameWorkspace(ws.id, "Local task", {
+			branch: "local-task",
+		});
+
+		expect(branchKept).toBeUndefined();
+		expect(workspace.branch).toBe("local-task");
+	},
+);
+
+test("missing promised history keeps the branch unverified without fetching it", async () => {
+	const ws = await createWorkspace("p1");
+	const remoteRepo = join(dataDir, "published.git");
+	git(repo, "init", "--bare", remoteRepo);
+	git(repo, "remote", "add", "origin", remoteRepo);
+	git(ws.worktreePath, "commit", "--allow-empty", "-m", "published work");
+	git(ws.worktreePath, "push", "origin", ws.branch);
+	const published = gitOut(ws.worktreePath, "rev-parse", "HEAD");
+	git(ws.worktreePath, "commit", "--allow-empty", "-m", "local work");
+	git(repo, "config", "core.repositoryformatversion", "1");
+	git(repo, "config", "extensions.partialClone", "origin");
+	git(repo, "config", "remote.origin.promisor", "true");
+	rmSync(join(repo, ".git", "objects", published.slice(0, 2), published.slice(2)));
+
+	const { workspace, branchKept } = renameWorkspace(ws.id, "Named safely", {
+		branch: "named-safely",
+		by: "s1",
+	});
+
+	expect(branchKept).toBe("unverified");
+	expect(workspace).toMatchObject({
+		name: "Named safely",
+		branch: ws.branch,
+		renamed: true,
+		branchNamePending: "s1",
+	});
+	const missing = Bun.spawnSync(
+		["git", "-C", ws.worktreePath, "--no-lazy-fetch", "cat-file", "-e", published],
+		{ stdout: "ignore", stderr: "ignore" },
+	);
+	expect(missing.success).toBe(false);
+	git(ws.worktreePath, "cat-file", "-e", published);
+	const retried = renameWorkspace(ws.id, workspace.name, { branch: "named-safely", by: "s1" });
+	expect(retried.branchKept).toBe("published");
+	expect(retried.workspace.branch).toBe(ws.branch);
+	expect(retried.workspace.branchNamePending).toBeUndefined();
+});
+
+test.skipIf(process.platform === "win32").each(["for-each-ref", "remote", "config"])(
 	"an unreadable publication check (%s) keeps the branch and allows a later retry",
 	async (command) => {
 		const ws = await createWorkspace("p1");
@@ -658,6 +829,31 @@ test.skipIf(process.platform === "win32").each(["for-each-ref", "remote"])(
 		expect(retried.workspace.branchNamePending).toBeUndefined();
 	},
 );
+
+posix("an unreadable publication ancestry keeps the branch and allows a later retry", async () => {
+	const ws = await createWorkspace("p1");
+	const remoteRepo = join(dataDir, "published.git");
+	git(repo, "init", "--bare", remoteRepo);
+	git(repo, "remote", "add", "origin", remoteRepo);
+	git(ws.worktreePath, "push", "origin", ws.branch);
+	git(ws.worktreePath, "commit", "--allow-empty", "-m", "local work");
+	const { workspace, branchKept } = await withGitWrapper(
+		'if [ "$3" = --no-lazy-fetch ] && [ "$4" = rev-list ]; then exit 1; fi',
+		() => renameWorkspace(ws.id, "Named safely", { branch: "named-safely", by: "s1" }),
+	);
+
+	expect(branchKept).toBe("unverified");
+	expect(workspace).toMatchObject({
+		name: "Named safely",
+		branch: ws.branch,
+		renamed: true,
+		branchNamePending: "s1",
+	});
+	const retried = renameWorkspace(ws.id, workspace.name, { branch: "named-safely", by: "s1" });
+	expect(retried.branchKept).toBe("published");
+	expect(retried.workspace.branch).toBe(ws.branch);
+	expect(retried.workspace.branchNamePending).toBeUndefined();
+});
 
 posix(
 	"a publication read timeout still names the workspace without moving its branch",
