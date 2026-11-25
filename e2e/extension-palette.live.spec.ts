@@ -27,7 +27,7 @@ test("the agent calls an installed extension's tool and its card renders in chat
 	const [entry] = await declareExtensions(page, [PALETTE_DIR]);
 	expect(entry).toMatchObject({ name: PALETTE_NAME, state: "loaded", tools: ["color_palette"] });
 	await createWorkspaceViaDialog(page);
-	await worktreeRows(page).first().getByRole("button").first().click();
+	await expect(worktreeRows(page).first()).toHaveAttribute("data-active", "true");
 	await expect(activeWorktreeRow(page)).toHaveCount(1);
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 	await page
