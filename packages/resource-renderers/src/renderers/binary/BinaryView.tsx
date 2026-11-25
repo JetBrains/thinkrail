@@ -1,4 +1,6 @@
 import { localeOf, type Translator, useT } from "@thinkrail/locales/react";
+import { Button, buttonVariants } from "@thinkrail/ui/button";
+import { useOptionalResourceHost } from "../../host";
 import type { ResourceViewProps } from "../../registry";
 
 function fileName(path: string): string {
@@ -15,6 +17,7 @@ function byteSize(t: Translator, bytes: number | undefined): string {
 
 export default function BinaryView({ resource, content }: ResourceViewProps) {
 	const t = useT();
+	const host = useOptionalResourceHost();
 	const bytes = content.kind === "bytes" ? content : null;
 	return (
 		<div className="flex h-full items-center justify-center bg-container-workspace-bg p-24">
@@ -32,13 +35,31 @@ export default function BinaryView({ resource, content }: ResourceViewProps) {
 					</dd>
 				</dl>
 				{bytes ? (
-					<a
-						href={bytes.url}
-						download={fileName(resource.path)}
-						className="mt-16 inline-flex rounded-sm bg-control-primary-bg px-12 py-4 tr-text-action text-control-primary-text hover:bg-control-primary-bg-hovered focus-visible:focus-ring"
-					>
-						{t("viewer.binary.openExternally")}
-					</a>
+					<div className="mt-16 flex flex-wrap gap-8">
+						{host ? (
+							<Button
+								variant="primary"
+								onClick={() => host.openPathExternally(resource.workspaceId, resource.path)}
+							>
+								{t("viewer.binary.openExternally")}
+							</Button>
+						) : null}
+						{host ? (
+							<Button
+								variant="outline"
+								onClick={() => host.revealInFileManager(resource.workspaceId, resource.path)}
+							>
+								{t("viewer.binary.revealInFileManager")}
+							</Button>
+						) : null}
+						<a
+							href={bytes.url}
+							download={fileName(resource.path)}
+							className={buttonVariants({ variant: "outline", size: "l" })}
+						>
+							{t("viewer.binary.downloadCopy")}
+						</a>
+					</div>
 				) : null}
 			</section>
 		</div>

@@ -39,6 +39,7 @@ export {
 	supportsExtensionQuery,
 	supportsExtensionSettings,
 	supportsFonts,
+	supportsFsExternalActions,
 	supportsHostUpdateRun,
 	supportsKeybindings,
 	supportsPiPackages,

@@ -141,6 +141,21 @@ export async function openEditor(
 	spawn([bin, worktreePath]);
 }
 
+export function openWithDefaultApp(
+	filePath: string,
+	spawn: SpawnFn = defaultSpawn,
+	platform: NodeJS.Platform = process.platform,
+): void {
+	if (!existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
+	const cmd = platform === "win32" ? ["explorer", win32.normalize(filePath)] : ["open", filePath];
+	if (platform !== "darwin" && platform !== "win32") cmd[0] = "xdg-open";
+	try {
+		spawn(cmd, { windowsHide: false });
+	} catch {
+		throw new Error(`No default application launcher available on this host (${platform}).`);
+	}
+}
+
 export function revealInFileManager(
 	worktreePath: string,
 	spawn: SpawnFn = defaultSpawn,

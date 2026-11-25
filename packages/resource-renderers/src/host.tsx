@@ -66,6 +66,8 @@ export interface ResourceHost {
 	code: ResourceCodeHost;
 	bytesUrl(workspaceId: string, path: string, oid?: string | null): string;
 	openFile(workspaceId: string, path: string, options?: { keep?: boolean }): void;
+	openPathExternally(workspaceId: string, path: string): void;
+	revealInFileManager(workspaceId: string, path: string): void;
 	openComparison(workspaceId: string, before: string, path: string): void;
 	readFile(
 		workspaceId: string,

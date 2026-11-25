@@ -147,7 +147,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 132;
+export const PROTOCOL_VERSION = 133;
+export const FS_EXTERNAL_ACTIONS_PROTOCOL_VERSION = 133;
 export const EXTENSION_BROWSE_PROTOCOL_VERSION = 132;
 export const INSTALLED_EXTENSIONS_PROTOCOL_VERSION = 131;
 export const EXTENSION_QUERY_PROTOCOL_VERSION = 130;
@@ -470,6 +471,8 @@ export const WS_METHODS = {
 	prReopen: "pr.reopen",
 	fsReadDir: "fs.readDir",
 	fsReadFile: "fs.readFile",
+	fsOpenExternally: "fs.openExternally",
+	fsReveal: "fs.reveal",
 	fsCopy: "fs.copy",
 	fsDelete: "fs.delete",
 	fsRename: "fs.rename",
@@ -1168,6 +1171,8 @@ export interface WsMethodMap {
 		params: { workspaceId: string; path: string; maxBytes?: number };
 		result: { content: string; meta: ResourceMeta };
 	};
+	"fs.openExternally": { params: { workspaceId: string; path: string }; result: Ack };
+	"fs.reveal": { params: { workspaceId: string; path: string }; result: Ack };
 	"fs.copy": {
 		params: {
 			sourceWorkspaceId: string;
