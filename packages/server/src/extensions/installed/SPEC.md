@@ -142,8 +142,9 @@ A folder source is never copied: it loads from where it is, and nothing under it
   extension is then `stage`d: a folder is read in place; an npm/git source is installed into a fresh,
   pending `installs/<id>` (its second fetch) and its `package.json` read again. A `thinkrail` key gives a
   `StagedExtension`; otherwise the folder is removed and `undefined` returned. `adopt` records the
-  install, appends the source to `extensions.json` if absent and reconciles; `discard` drops a staged
-  folder.
+  install, appends the source to `extensions.json` if absent and reconciles, refusing with
+  `PACKAGE_INSTALLED_UNLISTED` when the source then has no row (it is declared, so something was added);
+  `discard` drops a staged folder.
 - **The status file is how an agent learns the outcome** (the `making-thinkrail-extensions` host skill
   reads it): a load failure, an incompatible `api` or a refused `extensions.json` is otherwise visible
   only in Settings and the host log, and an agent has files, not the wire. After every reconcile pass —

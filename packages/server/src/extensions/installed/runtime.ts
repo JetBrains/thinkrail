@@ -722,7 +722,9 @@ export class InstalledExtensions {
 			this.#updates = undefined;
 			await this.#reconcileNow();
 			const record = this.#records.find((entry) => entry.source === staged.source);
-			if (!record) throw new CodedError("PACKAGE_INSTALL_FAILED", `${staged.source} did not load.`);
+			if (!record) {
+				throw new CodedError("PACKAGE_INSTALLED_UNLISTED", `${staged.source} did not load.`);
+			}
 			return record;
 		});
 	}

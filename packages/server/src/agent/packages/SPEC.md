@@ -163,7 +163,9 @@ install unless pi's root already held that package before (it may serve a declar
 result is `undefined`. The caller then refuses a repository-scope request with
 `EXTENSION_SCOPE_UNSUPPORTED` (nothing is declared anywhere), or `stage`s the source into ThinkRail's own
 install root — the extension's second fetch, the only one the kind rule costs — and `adopt`s it into
-`extensions.json`: `{ installed: "extension", record }`. A folder source is fetched by nobody: the
+`extensions.json`: `{ installed: "extension", record }`. A fetched source whose staged copy turns
+out not to be an extension after all is refused as `PACKAGE_SOURCE_INVALID` ("no longer a ThinkRail
+extension"), so the dialog shows that sentence rather than a generic install failure. A folder source is fetched by nobody: the
 runtime reads it in place first, and a folder that is not an extension continues as the pi package
 install (`{ installed: "package", identity, summary }`). Its pi resources reach sessions only through its
 server half. Nothing here spawns npm or git: both installs are pi's `DefaultPackageManager`.
