@@ -546,7 +546,11 @@ current desktop-first hierarchy rather than freezing obsolete CLI-only instructi
     `manifestCases.json`'s shape and holds under the site's validator;
   - the reserved package names (the `thinkrail-extensions/` folders, each checked against its
     descriptor's `name`, plus the host's `HOST_BUILTIN_EXTENSION_NAMES`) on both pages, the host-owned
-    tool names the guide quotes, the load timeout and its message, the `~<API>.0` SDK range, the tool,
+    tool names the guide quotes, which card draws a call (the app's tool registry and web loader), the
+    descriptor fields an installed server half may not declare and the loader's descriptor messages, the
+    order in which subagents load `childExtensions`, the install details (`PI_OFFLINE`, the npm command,
+    relative folders, pinned updates), the SDK as a dev dependency with a type-only server import, the
+    load timeout and its message, the `~<API>.0` SDK range, the tool,
     setting and utility classes it quotes, the SDK's Node floor and the API version are read from their
     sources; a manifest `image` may be mentioned only where the manifest fields are described; and every
     `#fragment` link resolves to a heading.

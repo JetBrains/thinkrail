@@ -17,7 +17,7 @@ The manifest is the `thinkrail` object in the package's `package.json`. Together
 | Field | Value |
 | --- | --- |
 | `api` | Required. The extension API version the extension was built for, `major.minor`, for example `"1.0"`. |
-| `server` | The server half's entry: a `.ts`, `.mts`, `.cts`, `.js`, `.mjs` or `.cjs` file. |
+| `server` | The server half's entry: a `.ts`, `.mts`, `.cts`, `.js`, `.mjs` or `.cjs` file. Write it as an ES module: a CommonJS entry cannot use ThinkRail's pi and typebox. |
 | `web` | The built web half: one ESM file ending in `.js` or `.mjs`. |
 | `styles` | The built stylesheet of the web half, ending in `.css`. Only together with `web`. |
 | `title` | The display name. Without it, the package name is shown. |
@@ -129,13 +129,21 @@ import of it needs the SDK in `dependencies`.
 | `interactiveTools` | An object keyed by the names of tools whose call waits for the person. |
 | `artifactTools` | An object keyed by tool name: `presented(args, details)` and `picked(args, details)` return the paths of the files a successful call showed the person and the ones they chose, for the app's artifacts view. |
 | `settings` | Boolean settings, one `{ type: "boolean", default, title?, description? }` per key. |
-| `childExtensions` | Factories added to the subagents ThinkRail starts. |
+| `childExtensions` | Factories added to each subagent that loads extensions (its definition has `extensions: true`), after ThinkRail's own child factories, so a tool name they share stays ThinkRail's. |
 | `skillPackages` | Package names whose pi `skills` become this extension's skills. |
 
 The on/off switch covers everything the descriptor contributes: its factories, its tools in open chats
 and the skills of its `skillPackages`. `skillPackages` are resolved from the server entry, so list them
 in `dependencies`. A `sessionExtensions` that throws or does not return a list becomes this extension's
 load error in each chat; other extensions are not affected.
+
+<!-- guard: built-in-only-fields -->
+`queries`, `apiVersion` and `supersedesPackages` are fields only ThinkRail's built-in extensions
+declare; they are not part of extension API 1.0, and `satisfies ServerExtension` rejects them. A server
+half that declares one does not load, and its row names the field, as in "\"queries\" is not part of
+extension API 1.0: only a built-in extension declares it". A default export that is not an object with
+a text `name` and an `extensions` list fails with an error that starts "its default export is not a
+defineServerExtension descriptor".
 
 The services a chat passes to `sessionExtensions`:
 
@@ -268,7 +276,7 @@ another API major.
 
 ## Installing and loading
 
-**Sources.** Install package… and `~/.thinkrail/extensions.json` accept the same sources:
+**Sources.** `~/.thinkrail/extensions.json` accepts these sources, and so does Install package…:
 
 - `npm:<name>`, optionally with a version, as `npm:<name>@<version>`;
 - a git repository, as `git:<host>/<path>` or an `https://`, `ssh://` or `git://` URL;
@@ -288,10 +296,13 @@ another API major.
 another. ThinkRail keeps other top-level fields when it writes the file. While the file does not parse,
 ThinkRail ignores it, keeps the extensions it had loaded and refuses to rewrite it.
 
-**Installing.** An npm or git source is installed with npm, so `npm` must be on the `PATH` (ThinkRail
-uses the npm command configured for pi). Each installed version gets its own folder under
+Install package… also accepts a folder relative to the open project (or to pi's folder without one),
+which it saves as an absolute path, and pi's own forms, such as a `pi install` command.
+
+**Installing.** An npm or git source is installed with the npm command configured for pi (`npm` on the
+`PATH` unless pi's settings name another). Each installed version gets its own folder under
 `~/.thinkrail/extensions/installs/`; ThinkRail removes `typebox` and `@earendil-works/*` from its
-`node_modules`. With `PI_OFFLINE` set, npm and git sources are not installed; folders still load. A
+`node_modules`. With `PI_OFFLINE` set to `1`, `true` or `yes`, npm and git sources are not installed; folders still load. A
 failed install is retried when you update the extension or restart ThinkRail.
 
 Install package… decides the kind from the fetched `package.json`: a package with a `thinkrail`
@@ -304,10 +315,11 @@ package listed there is a failed row.
 - **loaded**: the server half's tools and skills reach chats, and the web half's cards are registered;
 - **incompatible**: the manifest's `api` is not supported by this ThinkRail, decided before any of the
   extension's code runs; the row says which API it was built for;
-- **failed**: nothing of the extension runs, and the row shows why: the install failed, the package has
+- **failed**: nothing of the extension is added to chats or the app, and the row shows why: the install failed, the package has
   no or an invalid manifest or a reserved name, a file the manifest names is missing or resolves outside
   the package, the server half threw while loading or did not finish loading within 10 seconds, its
-  descriptor is malformed or named differently from the package, a `skillPackages` entry cannot be
+  descriptor is malformed, declares a field only a built-in extension declares or is named differently
+  from the package, a `skillPackages` entry cannot be
   resolved, or an extension with the same name is already installed from a source listed earlier.
 
 A web half that fails to load registers no cards; its tool calls show as default rows, and the server
@@ -332,7 +344,13 @@ search) is still listed. pi loads a user's own pi packages before every extensio
 ThinkRail adds, so a pi package keeps a tool name it shares with an installed extension; between two
 installed extensions, the one listed first in `extensions.json` keeps it.
 
-Cards follow a different rule, because a card may be meant for a tool from elsewhere: a card ThinkRail
-registers for a tool by its exact name wins over an installed one, while MCP tools, which ThinkRail
-draws by their `mcp__` prefix, show an installed extension's card when one is registered for their
-exact name. Between installed extensions, the one listed first wins.
+<!-- guard: card-precedence -->
+Cards follow a different rule, because a card may be meant for a tool from elsewhere. A call is drawn
+with the first of: a card ThinkRail registers for the tool's exact name; an installed extension's card
+for that exact name, the extension listed first in `extensions.json` winning; ThinkRail's card for MCP
+tools, which it draws by their `mcp__` prefix; the default row. So a web half may draw a tool it does not
+run, such as an MCP tool or `set_title`, while ThinkRail runs it. Two exceptions keep an installed card
+off a result ThinkRail produced in place of the extension's own server half: the extension's card is not
+registered for a name `status.json` lists under the extension's `shadowed`, and an `mcp__` name that
+its own server half registers keeps ThinkRail's MCP card, because ThinkRail's MCP tools win on the
+server.

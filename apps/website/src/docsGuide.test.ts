@@ -285,7 +285,7 @@ describe("the docs' code blocks", () => {
 					expect(Object.keys(sample.scripts)).toContain(words[2] as string);
 				} else if (words[0] === "npm" && words[1] === "install") {
 					const dev = words.includes("--save-dev");
-					const declared = dev ? sample.devDependencies : sample.dependencies;
+					const declared = (dev ? sample.devDependencies : sample.dependencies) ?? {};
 					for (const name of words.slice(2).filter((word) => !word.startsWith("-"))) {
 						expect(Object.keys(declared)).toContain(name);
 					}
@@ -484,6 +484,122 @@ describe("the guide's facts about the sample and the SDK", () => {
 			const declared = sources.some((source) => new RegExp(`= \\[?"${tool}"`).test(source));
 			expect([tool, declared]).toEqual([tool, true]);
 		}
+	});
+
+	test("states which card draws a call, as the app's tool registry decides", () => {
+		const registry = read("apps/web/src/chat/toolRegistry.tsx");
+		expect(registry).toContain(
+			"if (exact.has(name) || (served?.has(name) && prefixed(name))) continue;",
+		);
+		expect(registry).toContain(
+			"for (const [name, registration] of state.builtIn) exact.set(name, registration);",
+		);
+		expect(read("apps/web/src/extensions/loader.ts")).toContain(
+			"([tool]) => !descriptor.shadowed?.includes(tool),",
+		);
+		expect(read("apps/web/src/chat/tools/mcp/mcpResult.ts")).toContain(
+			'export const MCP_TOOL_PREFIX = "mcp__";',
+		);
+		expect(read("apps/web/src/chat/tools/mcp/register.ts")).toContain(
+			"registerToolRendererPrefix(MCP_TOOL_PREFIX,",
+		);
+		expect(read("packages/server/src/agent/titleTool.ts")).toContain(
+			'export const SET_TITLE_TOOL_NAME = "set_title";',
+		);
+		const cardSources = [
+			...readdirSync(new URL("apps/web/src/chat/tools/", repo), { recursive: true })
+				.map(String)
+				.filter((file) => file.endsWith("register.ts"))
+				.map((file) => `apps/web/src/chat/tools/${file}`),
+			...readdirSync(new URL("thinkrail-extensions/", repo), { withFileTypes: true })
+				.filter((entry) => entry.isDirectory())
+				.flatMap((entry) =>
+					["web/index.ts", "web/index.tsx"].map(
+						(file) => `thinkrail-extensions/${entry.name}/${file}`,
+					),
+				)
+				.filter((path) => existsSync(new URL(path, repo))),
+		].map(read);
+		expect(cardSources.length).toBeGreaterThan(2);
+		for (const source of cardSources) {
+			expect(source).not.toMatch(
+				/registerToolRenderer\("set_title"|\bset_title: \{|SET_TITLE_TOOL_NAME/,
+			);
+		}
+		for (const page of pages) {
+			const text = guardedLines(page, "card-precedence").join(" ");
+			for (const span of ["set_title", "mcp__"]) {
+				expect([page.name, text.includes(`\`${span}`)]).toEqual([page.name, true]);
+			}
+		}
+		expect(flat(reference.text)).toContain("lists under the extension's `shadowed`");
+	});
+
+	test("names the descriptor fields an installed server half may not declare, and the loader's messages", () => {
+		const loader = read("packages/server/src/extensions/installed/loader.ts");
+		const fields = /const BUILT_IN_ONLY_FIELDS = \[([^\]]+)\]/.exec(loader)?.[1];
+		const names = [...(fields ?? "").matchAll(/"(\w+)"/g)].map((match) => match[1] as string);
+		expect(names.length).toBeGreaterThan(0);
+		const listed = codeSpans(guardedLines(reference, "built-in-only-fields").join(" "));
+		for (const name of names) {
+			expect(listed).toContain(name);
+			expect(declaredKeys("ServerExtension")).not.toContain(name);
+		}
+		expect(loader).toMatch(
+			/return `"\$\{key\}" is not part of extension API 1\.0: only a built-in extension declares it`;/,
+		);
+		expect(flat(reference.text)).toContain(
+			`"\\"${names[0]}\\" is not part of extension API 1.0: only a built-in extension declares it"`,
+		);
+		const notADescriptor = /const notADescriptor = "([^"]+)";/.exec(loader)?.[1];
+		expect(notADescriptor).toBe("its default export is not a defineServerExtension descriptor");
+		for (const page of pages) expect(flat(page.text)).toContain(`"${notADescriptor}"`);
+		expect(flat(guardedLines(guide, "load-failures").join(" "))).toContain(
+			"a descriptor field only ThinkRail's built-in extensions declare",
+		);
+	});
+
+	test("loads childExtensions after ThinkRail's own child factories, in subagents that load extensions", () => {
+		expect(read("packages/pi-delegation/src/service.ts")).toContain(
+			"...(options.extensions === true ? factories : []),\n\t\t\t...(options.extensions === true ? (bindings.childInstalledExtensionFactories ?? []) : []),",
+		);
+		expect(read("packages/server/src/agent/delegation.ts")).toContain(
+			"childInstalledExtensionFactories: childInstalledExtensionFactories(),",
+		);
+		expect(read("packages/pi-subagents/src/definitions.ts")).toContain("extensions?: boolean;");
+		const row = tableRows(reference, "server-descriptor").find((cells) =>
+			(cells[0] as string).includes("`childExtensions`"),
+		);
+		expect(row?.[1]).toContain("`extensions: true`");
+		expect(row?.[1]).toContain("after ThinkRail's own child factories");
+	});
+
+	test("states how sources install, update and go offline as the host has it", () => {
+		const runtime = read("packages/server/src/extensions/installed/runtime.ts");
+		expect(runtime).toContain(
+			'const value = process.env.PI_OFFLINE?.toLowerCase();\n\treturn value === "1" || value === "true" || value === "yes";',
+		);
+		expect(flat(reference.text)).toContain("With `PI_OFFLINE` set to `1`, `true` or `yes`");
+		expect(read("packages/server/src/extensions/installed/installer.ts")).toContain(
+			"...(command && command.length > 0 ? { npmCommand: command } : {}),",
+		);
+		expect(flat(reference.text)).toContain("installed with the npm command configured for pi");
+		const mutations = read("packages/server/src/agent/packages/mutations.ts");
+		expect(mutations).toContain("const base = ctx.cwd ?? ctx.agentDir;");
+		expect(mutations).toContain(
+			'const source = kind === "local" ? resolveLocalSource(raw, base) : raw;',
+		);
+		expect(flat(reference.text)).toContain(
+			"a folder relative to the open project (or to pi's folder without one), which it saves as an absolute path",
+		);
+		expect(mutations).toContain("pinned npm versions are never reported");
+		expect(flat(guide.text)).toContain(
+			"an npm source pinned to a version (`npm:<name>@<version>`) is not checked",
+		);
+		expect(read("packages/server/src/extensions/installed/SPEC.md")).toContain(
+			"**A CommonJS entry cannot use the host's pi or typebox.**",
+		);
+		expect(reference.text).toContain("a CommonJS entry cannot use ThinkRail's pi and typebox");
 	});
 
 	test("states the server load timeout and its message as the host has them", () => {

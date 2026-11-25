@@ -175,7 +175,7 @@ It must be a valid npm name and cannot be one of the names ThinkRail reserves: t
 built-in extensions, `ask-user-question`, `hint-mode`, `next-steps`, `outputs`, `session-insights`,
 `visualize` and `web-access`, and of its own `mcp` and `tool-search` slots.
 
-`files` publishes the server source and `dist/`, nothing else. `prepack` runs the build, so every
+`files` publishes the server source, `dist/`, the README and the license, nothing else. `prepack` runs the build, so every
 `npm publish` and `npm pack` ships a fresh `dist/`.
 
 ## The server half
@@ -294,7 +294,8 @@ import) in `peerDependencies` with `"*"`, never in `dependencies`; the build fai
 dependencies, also for an extension without a server half. Your own imports of them always resolve to the one copy inside ThinkRail. A second copy in
 your package's `node_modules` is what a plain-JavaScript dependency of yours would bind to instead, with
 different classes and registries from the ones the agent uses. When ThinkRail installs an npm or git
-source it removes any copy from the extension's `node_modules`. List them in `devDependencies` as well
+source it removes any copy from the extension's `node_modules`; a folder source is loaded with its
+`node_modules` as it is, dev copies included, which matters only if such a dependency imports pi. List them in `devDependencies` as well
 for type checking: npm does not install a published package's dev dependencies.
 
 ## The web half
@@ -331,9 +332,17 @@ export default defineWebExtension({
 Set `name` to the package name, as on the server half; ThinkRail registers the cards under the package
 name. `name` and `toolRenderers` are the whole descriptor: another field is a type error in
 `defineWebExtension`, and since the build does not type-check, ThinkRail ignores it at runtime without
-a warning. A card can be registered for any tool name, also one that comes from a pi package or an MCP
-server, but a card ThinkRail registers for a tool by name keeps winning
-([Names ThinkRail keeps](/docs/extension-reference/#names-thinkrail-keeps)). The registration `options`
+a warning.
+
+<!-- guard: card-precedence -->
+A card can be registered for any tool name: also a tool from a pi package or an MCP server
+(`mcp__<server>__<tool>`), or one of ThinkRail's own tools that has no card of its own, such as
+`set_title`. ThinkRail still runs the tool, and a card built into ThinkRail is never replaced. Your card
+is not used for a name ThinkRail keeps from your own server half, so ThinkRail's result never wears it:
+a name Settings leaves out of your tools, and an `mcp__` name your server half registers
+([Names ThinkRail keeps](/docs/extension-reference/#names-thinkrail-keeps)).
+
+The registration `options`
 (the [reference](/docs/extension-reference/#web-descriptor) lists all eight):
 
 - `summary` is the text of the call's collapsed row. It receives the render props and the app's own
@@ -535,10 +544,13 @@ file the entry imports, your own or a dependency's, keeps its first version unti
 restart after changing one or after changing the extension's dependencies. An npm or git source does
 not have this limit: every update installs into a fresh folder.
 
+<!-- guard: load-failures -->
 If the server half fails to load (a syntax error, a throw at the top level, a missing dependency, a
-descriptor `name` other than the package name, or a top level still running after 10 seconds, which the
+default export that is not a descriptor, which the row reports starting with "its default export is
+not a defineServerExtension descriptor", a descriptor `name` other than the package name, a descriptor field
+only ThinkRail's built-in extensions declare, or a top level still running after 10 seconds, which the
 row reports as "the server entry did not finish loading within 10 s"), the row says **Failed to load**
-with the error, and nothing of the extension runs. The rest of the app is unaffected.
+with the error, and nothing of the extension is added to chats or the app. The rest of the app is unaffected.
 
 ## Publish to npm
 
@@ -573,7 +585,7 @@ listed.
 Users find a listed extension in two places. On the extensions page, each card's Copy button gives the
 `npm:<name>` source to paste into **Install package…**. In the app, **Settings → Extensions & skills → Browse**
 lists the same catalog with a search, marks the extensions already installed, and has an **Install**
-button that opens the install dialog for that package. A listing built for a newer extension API than
+button that opens the install dialog at a confirmation step for that package. A listing built for a newer extension API than
 the user's ThinkRail is marked **Needs a newer ThinkRail** and has no Install button until they update
 ThinkRail; one built for an older major is marked **Built for an older ThinkRail** and has none either
 ([Versions](#versions)).
@@ -608,7 +620,8 @@ needs a new release built with the matching SDK. ThinkRail decides this from the
 the extension's code runs, and the built web half checks the API major again when it loads.
 
 Your package's own `version` is independent of the API version. Publish fixes as ordinary releases:
-ThinkRail checks npm and git sources for a newer version and shows **Update available**. Updating
+ThinkRail checks npm and git sources for a newer version and shows **Update available**; an npm
+source pinned to a version (`npm:<name>@<version>`) is not checked. Updating
 installs the new version beside the old one and switches only once the new one loads; if it fails or is
 incompatible, the old version stays. A folder source has no updates to check.
 
@@ -642,7 +655,8 @@ code you install; to share it, publish the folder as described above.
 - **Text is not translated.** Titles, descriptions, setting labels, summaries and card text are shown
   as you wrote them, in every app language. Translations for extensions are tracked in
   [issue #1423](https://github.com/JetBrains/thinkrail/issues/1423).
-- **Contributions are agent tools, skills, boolean settings, interactive tools and chat cards.** Panels,
+- **Contributions are agent tools, skills, boolean settings, interactive tools, artifact tools and chat
+  cards.** Panels,
   palette commands, keyboard shortcuts, overlays and settings other than on/off switches are not
   available.
 - **The shared UI is small.** A card gets the app's buttons, `cn`, the theme-swap hook and the resource

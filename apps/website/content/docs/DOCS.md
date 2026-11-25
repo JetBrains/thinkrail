@@ -68,9 +68,14 @@ on the line before the table, list or paragraph, which ends at the next blank li
 | `exit-codes` | the exit codes in `src/cli.ts` and the usage errors the builder raises |
 | `reserved-names` | the folders under `thinkrail-extensions/` (each its descriptor's `name`) and the host's `HOST_BUILTIN_EXTENSION_NAMES` |
 | `host-tools` | the tool-name constants of the host, its subagents and its built-in extensions |
+| `card-precedence` | the app's tool registry and web loader: built-in cards first, the `shadowed` filter, the `mcp__` prefix rule; it must name `set_title` (a host tool with no card) and `mcp__` |
+| `built-in-only-fields` | the loader's `BUILT_IN_ONLY_FIELDS`, none of which the snapshot's `ServerExtension` declares |
+| `load-failures` | the loader's descriptor errors |
 
 The test also checks the load timeout and its message against the host's loader, the `~<API>.0` SDK
-range, the Node floor, that a manifest `image` is mentioned only where the manifest fields are
+range, the SDK as a dev dependency with a type-only server import, the loader's descriptor messages,
+how `childExtensions` load in subagents, `PI_OFFLINE`, the npm command, relative folders and pinned
+updates, the Node floor, that a manifest `image` is mentioned only where the manifest fields are
 described, and that every `#fragment` link resolves. To change a sample file shown in a doc, change the
 sample and paste the new text into the block; `bun test src/docsGuide.test.ts` says where they differ.
 
