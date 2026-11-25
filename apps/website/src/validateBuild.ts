@@ -1,3 +1,5 @@
+import { catalogErrors, type ExtensionCatalog } from "./extensionCatalog";
+
 const forbiddenOutput = [
 	"/__l5e/",
 	"lovable",
@@ -10,6 +12,10 @@ const requiredSitemapUrls = [
 	"https://thinkrail.ai/",
 	"https://thinkrail.ai/blog/",
 	"https://thinkrail.ai/vibecoding/",
+	"https://thinkrail.ai/docs/",
+	"https://thinkrail.ai/docs/build-an-extension/",
+	"https://thinkrail.ai/docs/extension-reference/",
+	"https://thinkrail.ai/extensions/",
 ] as const;
 
 const desktopDownloadUrls = [
@@ -21,6 +27,131 @@ const desktopDownloadUrls = [
 ] as const;
 
 const analyticsFreePages = new Set(["404.html", "attribution/claim/index.html"]);
+
+const showcasePage = "extensions/index.html";
+const catalogFile = "extensions/catalog.json";
+const catalogRegionStart = '<div class="ext-grid" data-catalog-entries>';
+const markupToken = /<(\/?)([a-z][a-z\d-]*)((?:\s+[a-z][a-z\d-]*(?:="[^"]*")?)*)\s*>|[^<]+/y;
+const catalogRegionAttributes = new Map<string, readonly string[]>([
+	["article", ["class", "data-extension-search"]],
+	["div", ["class"]],
+	["h2", ["class"]],
+	["p", ["class"]],
+	["code", ["class"]],
+	["span", []],
+	["ul", ["class", "aria-label"]],
+	["li", ["class"]],
+	["button", ["type", "class", "data-copy", "aria-label"]],
+	["svg", ["class", "aria-hidden"]],
+	["use", ["href"]],
+	["a", ["href", "rel"]],
+]);
+const voidElements = new Set([
+	"area",
+	"base",
+	"br",
+	"col",
+	"embed",
+	"hr",
+	"img",
+	"input",
+	"link",
+	"meta",
+	"source",
+	"track",
+	"wbr",
+]);
+const entities: Record<string, string> = {
+	"&quot;": '"',
+	"&amp;": "&",
+	"&lt;": "<",
+	"&gt;": ">",
+	"&#39;": "'",
+};
+
+interface RegionTag {
+	name: string;
+	attributes: [string, string][];
+}
+
+type CatalogRegion = { owned: string; tags: RegionTag[] } | { error: string };
+
+function regionAttributes(source: string): [string, string][] {
+	return [...source.matchAll(/\s+([a-z][a-z\d-]*)(?:="([^"]*)")?/g)].map((match) => [
+		match[1] ?? "",
+		(match[2] ?? "").replace(/&(?:quot|amp|lt|gt|#39);/g, (entity) => entities[entity] ?? entity),
+	]);
+}
+
+function catalogRegion(html: string): CatalogRegion {
+	const start = html.indexOf(catalogRegionStart);
+	if (start < 0) return { owned: html, tags: [] };
+	if (html.includes(catalogRegionStart, start + 1)) {
+		return { error: "more than one catalog region" };
+	}
+	const malformed = { error: "the catalog region is not well-formed markup" };
+	const token = new RegExp(markupToken);
+	token.lastIndex = start + catalogRegionStart.length;
+	const open = ["div"];
+	const tags: RegionTag[] = [];
+	while (open.length > 0) {
+		const match = token.exec(html);
+		if (match === null) return malformed;
+		const [, closing, name, attributes = ""] = match;
+		if (name === undefined) continue;
+		if (closing === "/") {
+			if (attributes !== "" || open.pop() !== name) return malformed;
+			continue;
+		}
+		if (!voidElements.has(name)) open.push(name);
+		tags.push({ name, attributes: regionAttributes(attributes) });
+	}
+	return { owned: html.slice(0, start) + html.slice(token.lastIndex), tags };
+}
+
+function catalogRegionErrors(tags: readonly RegionTag[], catalog: ExtensionCatalog): string[] {
+	const links = new Set(
+		catalog.extensions.flatMap(({ npm, repository }) =>
+			repository === undefined ? [npm] : [npm, repository],
+		),
+	);
+	const installs = new Set(catalog.extensions.map((entry) => entry.install));
+	const failures = new Set<string>();
+	for (const { name, attributes } of tags) {
+		const allowed = catalogRegionAttributes.get(name);
+		if (allowed === undefined) {
+			failures.add(`extensions: the catalog region contains <${name}>`);
+			continue;
+		}
+		for (const [attribute, value] of attributes) {
+			if (!allowed.includes(attribute)) {
+				failures.add(`extensions: <${name} ${attribute}> in the catalog region`);
+			} else if (
+				attribute === "href" &&
+				!(name === "use" ? /^#i-[a-z-]+$/.test(value) : links.has(value))
+			) {
+				failures.add(`extensions: the catalog region links to ${value}`);
+			} else if (attribute === "data-copy" && !installs.has(value)) {
+				failures.add(`extensions: the catalog region copies ${value}`);
+			}
+		}
+	}
+	return [...failures];
+}
+
+export function ownedOutput(path: string, content: string): string {
+	if (path === catalogFile) return "";
+	if (path !== showcasePage) return content;
+	const region = catalogRegion(content);
+	return "error" in region ? content : region.owned;
+}
+
+export function forbiddenOutputFailures(path: string, content: string): string[] {
+	const owned = ownedOutput(path, content).toLowerCase();
+	return forbiddenOutput
+		.filter((forbidden) => owned.includes(forbidden))
+		.map((forbidden) => `${path}: ${forbidden}`);
+}
 
 function occurrences(content: string, value: string): number {
 	return content.split(value).length - 1;
@@ -93,6 +224,16 @@ export function relativeLinkTargets(pagePath: string, html: string): string[] {
 	];
 }
 
+export function localOutputUrls(html: string): string[] {
+	return [
+		...new Set(
+			attributeValues(html, ["src", "href", "component-url", "renderer-url"]).filter((value) =>
+				value.startsWith("/"),
+			),
+		),
+	];
+}
+
 function stylesheetUrls(content: string): Set<string> {
 	return new Set(
 		[...content.matchAll(/<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"/g)].map(
@@ -132,6 +273,43 @@ async function outputPathExists(distDirectory: string, url: string): Promise<boo
 	return (await Promise.all(candidates.map((path) => Bun.file(path).exists()))).some(Boolean);
 }
 
+export function validateExtensionsPage(html: string, catalogText: string): string[] {
+	let catalog: unknown;
+	try {
+		catalog = JSON.parse(catalogText);
+	} catch {
+		return ["extensions/catalog.json: not JSON"];
+	}
+	const failures = catalogErrors(catalog).map((error) => `${catalogFile}: ${error}`);
+	if (failures.length > 0) return failures;
+	const valid = catalog as ExtensionCatalog;
+	const listed = valid.extensions.length;
+	const region = catalogRegion(html);
+	const owned = "error" in region ? html : region.owned;
+	if ("error" in region) failures.push(`extensions: ${region.error}`);
+	else failures.push(...catalogRegionErrors(region.tags, valid));
+	const cards = occurrences(html, 'class="ext-card"');
+	if (cards !== listed) {
+		failures.push(`extensions: renders ${cards} cards for ${listed} catalog entries`);
+	}
+	if (!("error" in region) && occurrences(owned, 'class="ext-card"') > 0) {
+		failures.push("extensions: a card outside the catalog region");
+	}
+	if (listed === 0 && !owned.includes('class="ext-empty"')) {
+		failures.push("extensions: empty catalog without the empty state");
+	}
+	if (!/data-catalog-source="(?:npm|sample)"/.test(owned)) {
+		failures.push("extensions: missing data-catalog-source");
+	}
+	if (!owned.includes('href="/docs/build-an-extension/"')) {
+		failures.push("extensions: missing the link to the authoring guide");
+	}
+	if (/<img\b[^>]*\ssrc="(?:https?:)?\/\//i.test(owned)) {
+		failures.push("extensions: loads an image from another origin");
+	}
+	return failures;
+}
+
 export function validateAnalyticsPages(
 	pages: readonly { path: string; runtimeContent: string }[],
 ): string[] {
@@ -158,16 +336,15 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	const failures: string[] = [];
 	const glob = new Bun.Glob("**/*.{html,css,js,svg,txt,xml}");
 	for await (const path of glob.scan({ cwd: distDirectory, onlyFiles: true })) {
-		const content = await Bun.file(`${distDirectory}/${path}`).text();
-		for (const forbidden of forbiddenOutput) {
-			if (content.toLowerCase().includes(forbidden)) failures.push(`${path}: ${forbidden}`);
-		}
+		failures.push(
+			...forbiddenOutputFailures(path, await Bun.file(`${distDirectory}/${path}`).text()),
+		);
 	}
 
 	const htmlPages = new Map<string, string>();
 	const htmlGlob = new Bun.Glob("**/*.html");
 	for await (const path of htmlGlob.scan({ cwd: distDirectory, onlyFiles: true })) {
-		htmlPages.set(path, await Bun.file(`${distDirectory}/${path}`).text());
+		htmlPages.set(path, ownedOutput(path, await Bun.file(`${distDirectory}/${path}`).text()));
 	}
 	const requiredPage = (path: string): string => {
 		const html = htmlPages.get(path);
@@ -183,9 +360,22 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		agenticDevelopment: requiredPage("agentic-development/index.html"),
 		agenticIde: requiredPage("agentic-ide/index.html"),
 		claim: requiredPage("attribution/claim/index.html"),
+		docs: requiredPage("docs/index.html"),
+		buildAnExtension: requiredPage("docs/build-an-extension/index.html"),
+		extensionReference: requiredPage("docs/extension-reference/index.html"),
+		extensions: requiredPage("extensions/index.html"),
 	};
 	const islandPages = ["vibecoding", "agenticDevelopment", "agenticIde"] as const;
-	const staticPages = ["landing", "blog", "introducingThinkRail", "claim"] as const;
+	const staticPages = [
+		"landing",
+		"blog",
+		"introducingThinkRail",
+		"claim",
+		"docs",
+		"buildAnExtension",
+		"extensionReference",
+		"extensions",
+	] as const;
 	const installPages = [
 		{ name: "landing", html: splitSiteHeader(pages.landing).body, expectedDownloads: 1 },
 		{
@@ -290,13 +480,41 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	for (const [path, html] of htmlPages) {
 		if (!analyticsFreePages.has(path)) failures.push(...validateHeaderInstall(path, html));
 		for (const id of duplicateIds(html)) failures.push(`${path} duplicate id: ${id}`);
-		if (!/^blog\/[^/]+\/index\.html$/.test(path)) continue;
-		failures.push(...validatePostInstall(path, html));
+		if (!/^(?:blog|docs)\/[^/]+\/index\.html$/.test(path)) continue;
+		if (path.startsWith("blog/")) failures.push(...validatePostInstall(path, html));
+		if (
+			path.startsWith("docs/") &&
+			!html.includes('<a class="tree-row page selected" href="/docs/"')
+		) {
+			failures.push(`${path}: the Docs rail row is not selected`);
+		}
 		for (const url of relativeLinkTargets(path, html)) {
 			if (!(await outputPathExists(distDirectory, url))) {
 				failures.push(`${path}: missing local output for ${url}`);
 			}
 		}
+	}
+	for (const [name, href] of [
+		["docs", "/docs/"],
+		["extensions", "/extensions/"],
+	] as const) {
+		if (!pages.landing.includes(`<a class="tree-row page" href="${href}"`)) {
+			failures.push(`landing: rail row missing: ${href}`);
+		}
+		if (!pages[name].includes(`<a class="tree-row page selected" href="${href}"`)) {
+			failures.push(`${name}: its rail row is not selected`);
+		}
+	}
+	const catalogPath = `${distDirectory}/${catalogFile}`;
+	if (await Bun.file(catalogPath).exists()) {
+		failures.push(
+			...validateExtensionsPage(
+				await Bun.file(`${distDirectory}/${showcasePage}`).text(),
+				await Bun.file(catalogPath).text(),
+			),
+		);
+	} else {
+		failures.push(`${catalogFile}: missing`);
 	}
 	if (!pages.landing.includes("Browser UI via command line")) {
 		failures.push("landing: browser UI command-line option is missing");
@@ -337,11 +555,7 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	failures.push(...validateAnalyticsPages(analyticsPages));
 
 	for (const [name, html] of Object.entries(pages)) {
-		for (const url of new Set(
-			attributeValues(html, ["src", "href", "component-url", "renderer-url"]).filter((value) =>
-				value.startsWith("/"),
-			),
-		)) {
+		for (const url of localOutputUrls(html)) {
 			if (!(await outputPathExists(distDirectory, url))) {
 				failures.push(`${name}: missing local output for ${url}`);
 			}
@@ -403,6 +617,13 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		"X-Frame-Options: DENY",
 	]) {
 		if (!headers.includes(required)) failures.push(`headers: missing ${required}`);
+	}
+	if (
+		!/^\/extensions\/catalog\.json\n(?:[ \t]+.*\n)*?[ \t]+Access-Control-Allow-Origin: \*$/m.test(
+			headers,
+		)
+	) {
+		failures.push("headers: catalog.json is not CORS-open");
 	}
 
 	const redirects = await Bun.file(`${distDirectory}/_redirects`).text();
