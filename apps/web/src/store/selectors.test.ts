@@ -57,6 +57,7 @@ import {
 	selectProjectIsRunning,
 	selectProjectNeedsAttention,
 	selectReadyCompletionAck,
+	selectSessionNeedsAttention,
 	selectSkillsStale,
 	selectSupportsModelPicker,
 	selectUnnamedChatFirstPrompts,
@@ -152,6 +153,13 @@ test("normalized rail flags keep attention binary and working orthogonal", () =>
 		},
 	};
 	expect(selectWorkspaceNeedsAttention(state, "w1")).toBe(true);
+	expect(selectSessionNeedsAttention(state, "w1", "a")).toBe(false);
+	expect(selectSessionNeedsAttention(state, "w1", "b")).toBe(true);
+	expect(selectSessionNeedsAttention(state, "w2", "c")).toBe(true);
+	expect(selectSessionNeedsAttention(state, "w3", "d")).toBe(false);
+	expect(selectSessionNeedsAttention(state, "w4", "e")).toBe(false);
+	expect(selectSessionNeedsAttention(state, "w1", "c")).toBe(false);
+	expect(selectSessionNeedsAttention(state, "missing", "b")).toBe(false);
 	expect(selectWorkspaceIsRunning(state, "w1")).toBe(true);
 	expect(selectWorkspaceNeedsAttention(state, "w2")).toBe(true);
 	expect(selectWorkspaceIsRunning(state, "w2")).toBe(true);
