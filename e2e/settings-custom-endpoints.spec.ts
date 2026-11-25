@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
+import { CUSTOM_ENDPOINT_API_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import {
 	closeSettings,
 	expandModelGroup,
@@ -22,6 +23,7 @@ const REPLY = "CUSTOM_ENDPOINT_REPLY_SENTINEL";
 let server: Server;
 let origin: string;
 const chatRequests: Record<string, unknown>[] = [];
+const responseRequests: Record<string, unknown>[] = [];
 
 function sse(chunks: unknown[]): string {
 	return `${chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("")}data: [DONE]\n\n`;
@@ -70,6 +72,36 @@ test.beforeAll(async () => {
 			});
 			return;
 		}
+		if (request.method === "POST" && request.url === "/v1/responses") {
+			let body = "";
+			request.on("data", (chunk) => {
+				body += chunk;
+			});
+			request.on("end", () => {
+				responseRequests.push(JSON.parse(body));
+				const item = {
+					id: "msg_1",
+					type: "message",
+					role: "assistant",
+					status: "completed",
+					content: [{ type: "output_text", text: REPLY, annotations: [] }],
+				};
+				response.setHeader("content-type", "text/event-stream");
+				response.end(
+					sse([
+						{ type: "response.created", response: { id: "resp_1" } },
+						{ type: "response.output_item.added", output_index: 0, item: { ...item, content: [] } },
+						{ type: "response.output_text.delta", output_index: 0, delta: REPLY },
+						{ type: "response.output_item.done", output_index: 0, item },
+						{
+							type: "response.completed",
+							response: { id: "resp_1", status: "completed", output: [item] },
+						},
+					]),
+				);
+			});
+			return;
+		}
 		response.statusCode = 404;
 		response.end();
 	});
@@ -78,6 +110,153 @@ test.beforeAll(async () => {
 	if (address === null || typeof address === "string")
 		throw new Error("The fake server has no port.");
 	origin = `http://127.0.0.1:${address.port}`;
+});
+
+test("a Responses gateway keeps its API through editing and sends declared image input", async ({
+	page,
+}) => {
+	writeFileSync(modelsPath, JSON.stringify({ providers: {} }));
+	await openWorkspaceChat(page);
+	await openProviders(page);
+	const group = page.getByTestId("settings-custom-endpoints");
+	await group.getByTestId("custom-endpoints-add").click();
+	const dialog = page.getByTestId("custom-endpoints-dialog");
+	const responses = dialog.getByTestId("custom-endpoints-api-responses");
+	await expect(dialog.getByTestId("custom-endpoints-api-completions")).toHaveAttribute(
+		"aria-pressed",
+		"true",
+	);
+	await responses.click();
+	await dialog.getByTestId("custom-endpoints-name").fill("Responses gateway");
+	await dialog.getByTestId("custom-endpoints-url").fill(`${origin}/v1/responses`);
+	await dialog.getByTestId("custom-endpoints-key").fill(KEY);
+	await dialog.getByTestId("custom-endpoints-detect").click();
+	await expect(dialog.getByTestId("custom-endpoints-status")).toHaveAttribute("data-tone", "ok");
+	await expect(dialog.getByTestId("custom-endpoints-url")).toHaveValue(`${origin}/v1`);
+	await expect(responses).toHaveAttribute("aria-pressed", "true");
+	await shot(dialog, "providers-settings", "custom-endpoint-responses");
+	await dialog.getByTestId("custom-endpoints-save").click();
+	await expect(dialog).toHaveCount(0);
+	const endpoint = group.locator(
+		'[data-testid="custom-endpoints-endpoint"][data-endpoint^="custom-responses-gateway-"]',
+	);
+	await expect(endpoint).toBeVisible();
+	const providerId = (await endpoint.getAttribute("data-endpoint")) ?? "";
+	const saved = JSON.parse(readFileSync(modelsPath, "utf8"));
+	expect(saved.providers[providerId]).toMatchObject({ api: "openai-responses" });
+	saved.providers[providerId].name = "Vision Responses gateway";
+	saved.providers[providerId].models[0].input = ["text", "image"];
+	writeFileSync(modelsPath, JSON.stringify(saved));
+	await page.getByTestId("providers-refresh").click();
+	await expect(endpoint).toContainText("Vision Responses gateway");
+	await endpoint.getByTestId("custom-endpoints-edit").click();
+	await expect(responses).toHaveAttribute("aria-pressed", "true");
+	await expect(
+		dialog.locator(`[data-testid="custom-endpoints-row"][data-model="${MODEL}"]`),
+	).toContainText("Images");
+	await dialog.getByTestId("custom-endpoints-name").fill("Renamed Responses gateway");
+	await dialog.getByTestId("custom-endpoints-save").click();
+	await expect(dialog).toHaveCount(0);
+	expect(JSON.parse(readFileSync(modelsPath, "utf8")).providers[providerId]).toMatchObject({
+		api: "openai-responses",
+	});
+	await closeSettings(page);
+	await page.getByTestId("model-selector").last().click();
+	await revealModelGroups(page);
+	await expandModelGroup(page, providerId);
+	await page
+		.locator(
+			`[data-testid="model-option"][data-provider="${providerId}"][data-model-id="${MODEL}"]`,
+		)
+		.click();
+	const png = Buffer.from(
+		"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+		"base64",
+	);
+	await page
+		.getByTestId("composer-attach-input")
+		.setInputFiles({ name: "pixel.png", mimeType: "image/png", buffer: png });
+	await page.getByTestId("chat-input").fill("Describe this image");
+	await page.getByTestId("chat-send").click();
+	await waitForAgentSettled(page);
+	await expect(
+		page.locator('[data-testid="chat-message"][data-role="assistant"]').last(),
+	).toContainText(REPLY);
+	expect(responseRequests.at(-1)).toMatchObject({
+		model: MODEL,
+		stream: true,
+		max_output_tokens: 16_384,
+	});
+	expect(responseRequests.at(-1)?.input).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({
+				role: "user",
+				content: expect.arrayContaining([
+					expect.objectContaining({
+						type: "input_image",
+						image_url: `data:image/png;base64,${png.toString("base64")}`,
+					}),
+				]),
+			}),
+		]),
+	);
+	expect(responseRequests.at(-1)).not.toHaveProperty("messages");
+	await openProviders(page);
+	await endpoint.getByTestId("custom-endpoints-remove").click();
+	await page.getByTestId("custom-endpoints-remove-confirm").click();
+	await expect(endpoint).toHaveCount(0);
+});
+
+test("older hosts hide the API choice and receive a legacy Chat Completions save", async ({
+	page,
+}) => {
+	writeFileSync(modelsPath, JSON.stringify({ providers: {} }));
+	const saves: Record<string, unknown>[] = [];
+	await page.routeWebSocket(/\/ws(\?|$)/, (browser) => {
+		const server = browser.connectToServer();
+		browser.onMessage((message) => {
+			const frame = JSON.parse(message.toString()) as {
+				method?: string;
+				params?: Record<string, unknown>;
+			};
+			if (frame.method === "customEndpoints.save" && frame.params) saves.push(frame.params);
+			server.send(message);
+		});
+		server.onMessage((message) => {
+			const frame = JSON.parse(message.toString()) as {
+				channel?: string;
+				data?: Record<string, unknown>;
+			};
+			browser.send(
+				frame.channel === "server.welcome"
+					? JSON.stringify({
+							...frame,
+							data: { ...frame.data, protocolVersion: CUSTOM_ENDPOINT_API_PROTOCOL_VERSION - 1 },
+						})
+					: message,
+			);
+		});
+	});
+	await page.reload();
+	await openWorkspaceChat(page);
+	await openProviders(page);
+	const group = page.getByTestId("settings-custom-endpoints");
+	await group.getByTestId("custom-endpoints-add").click();
+	const dialog = page.getByTestId("custom-endpoints-dialog");
+	await expect(dialog.getByTestId("custom-endpoints-api")).toHaveCount(0);
+	await dialog.getByTestId("custom-endpoints-name").fill("Legacy gateway");
+	await dialog.getByTestId("custom-endpoints-url").fill(`${origin}/v1`);
+	await dialog.getByTestId("custom-endpoints-manual").fill(MODEL);
+	await dialog.getByTestId("custom-endpoints-manual-add").click();
+	await dialog.getByTestId("custom-endpoints-save").click();
+	await expect(dialog).toHaveCount(0);
+	expect(saves).toHaveLength(1);
+	expect(saves[0]).not.toHaveProperty("api");
+	const endpoint = group.getByTestId("custom-endpoints-endpoint");
+	const providerId = (await endpoint.getAttribute("data-endpoint")) ?? "";
+	expect(JSON.parse(readFileSync(modelsPath, "utf8")).providers[providerId]).toMatchObject({
+		api: "openai-completions",
+	});
 });
 
 test.afterAll(async () => {

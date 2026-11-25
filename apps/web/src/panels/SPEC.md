@@ -1052,7 +1052,9 @@ a project picker, the prompt hero, and the reused
   a host without the group, stays a generic row); hand-written `models.json` providers stay in Signed in
   with the outside-the-app note, not repeated here. The dialog is one form for a company gateway and a local server: name,
   address with local preset chips (Ollama, LM Studio, vLLM, llama.cpp — they only fill the address and an
-  empty or preset name; there is no server-kind choice), a password key field (blank keeps a saved key on
+  empty or preset name; there is no server-kind choice), an **API** choice between **Chat Completions**
+  (the default) and **Responses** from v133 (`CUSTOM_ENDPOINT_API_PROTOCOL_VERSION`), and a password key
+  field (blank keeps a saved key on
   edit; an edit that changes the address's origin shows a warning and disables Save, since a different
   server is added as a new one; **Remove key** sends `apiKey: ""` and keeps Detect from reusing it), **Find models**
   (`customEndpoints.probe`, only on click — never on open, since gateways can list thousands), a manual
@@ -1079,7 +1081,10 @@ a project picker, the prompt hero, and the reused
   existing rows first with newly found ones appended; an unchanged saved address stays as written.
   Re-detecting drops a saved max output only when a context was saved and the server now reports a
   different one: that value may be derived from the old context, and the draft can't tell a derived
-  value from a hand-set one. The pure draft rules live in `customEndpointDraft`; probe failures render
+  value from a hand-set one. Re-detecting and presets keep the API choice. Older hosts hide the choice
+  and receive no `api` field; a Responses draft held across a host downgrade cannot save and asks for
+  a host update. An older host's missing listed API means Chat Completions. The pure draft rules live in
+  `customEndpointDraft`; probe failures render
   as localized inline status and host save errors render inline; and
   the **`JetBrainsAiCard`** — route Central-supported models through the user's JetBrains subscription while
   keeping ThinkRail's embedded PI — a state machine over the typed `JbcentralStatus` +

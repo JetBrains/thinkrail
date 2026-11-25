@@ -5,6 +5,7 @@ import {
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import {
+	CUSTOM_ENDPOINT_API_PROTOCOL_VERSION,
 	CUSTOM_ENDPOINTS_PROTOCOL_VERSION,
 	CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION,
 	CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS,
@@ -24,6 +25,7 @@ import {
 } from "@thinkrail/ui/dialog";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { Switch } from "@thinkrail/ui/switch";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { formatContext } from "@/chat/modelPicker";
@@ -267,6 +269,9 @@ function EndpointDialog({
 	const [probing, setProbing] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [status, setStatus] = useState<Status>(null);
+	const apiSupported = useAppStore(
+		(state) => (state.protocolVersion ?? 0) >= CUSTOM_ENDPOINT_API_PROTOCOL_VERSION,
+	);
 	const modelContext = useModelContextSettings(CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION);
 	const busy = probing || saving;
 	const needle = filter.trim().toLowerCase();
@@ -298,11 +303,11 @@ function EndpointDialog({
 	);
 
 	const save = () => {
-		if (!canSave(draft)) return;
+		if (!canSave(draft, apiSupported)) return;
 		setSaving(true);
 		setStatus(null);
 		void getTransport()
-			.request("customEndpoints.save", draftParams(draft))
+			.request("customEndpoints.save", draftParams(draft, apiSupported))
 			.then((endpoints) => {
 				onSaved(endpoints);
 				onClose();
@@ -381,6 +386,33 @@ function EndpointDialog({
 							))}
 						</div>
 					</Field>
+					{apiSupported ? (
+						<fieldset className="min-w-0" disabled={busy} data-testid="custom-endpoints-api">
+							<legend className="mb-4 tr-title-compact text-text-default">
+								{t("settings.customEndpoints.api")}
+							</legend>
+							<div className="flex flex-wrap items-center gap-2">
+								<ToggleSegment
+									testid="custom-endpoints-api-completions"
+									label={t("settings.customEndpoints.apiCompletions")}
+									active={draft.api === "openai-completions"}
+									disabled={busy}
+									onClick={() => setDraft({ ...draft, api: "openai-completions" })}
+								/>
+								<ToggleSegment
+									testid="custom-endpoints-api-responses"
+									label={t("settings.customEndpoints.apiResponses")}
+									active={draft.api === "openai-responses"}
+									disabled={busy}
+									onClick={() => setDraft({ ...draft, api: "openai-responses" })}
+								/>
+							</div>
+						</fieldset>
+					) : draft.api === "openai-responses" ? (
+						<p role="status" className="tr-text-metadata text-feedback-warning">
+							{t("settings.customEndpoints.apiUnavailable")}
+						</p>
+					) : null}
 					<Field label={t("settings.customEndpoints.apiKey")} htmlFor={`${id}-key`}>
 						<div className="flex items-center gap-8">
 							<input
@@ -533,7 +565,7 @@ function EndpointDialog({
 					<Button
 						data-testid="custom-endpoints-save"
 						loading={saving}
-						disabled={busy || !canSave(draft)}
+						disabled={busy || !canSave(draft, apiSupported)}
 						onClick={save}
 					>
 						{t("common.save")}

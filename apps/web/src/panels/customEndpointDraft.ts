@@ -1,5 +1,6 @@
 import type {
 	CustomEndpoint,
+	CustomEndpointApi,
 	CustomEndpointDraft,
 	CustomEndpointModel,
 	CustomEndpointProbe,
@@ -14,6 +15,7 @@ export interface EndpointDraft {
 	id?: string;
 	name: string;
 	baseUrl: string;
+	api: CustomEndpointApi;
 	apiKey: string;
 	hasSavedKey: boolean;
 	removeKey: boolean;
@@ -32,6 +34,7 @@ export function newEndpointDraft(): EndpointDraft {
 	return {
 		name: "",
 		baseUrl: "",
+		api: "openai-completions",
 		apiKey: "",
 		hasSavedKey: false,
 		removeKey: false,
@@ -45,6 +48,7 @@ export function editEndpointDraft(endpoint: CustomEndpoint): EndpointDraft {
 		id: endpoint.id,
 		name: endpoint.name,
 		baseUrl: endpoint.baseUrl,
+		api: endpoint.api ?? "openai-completions",
 		apiKey: "",
 		hasSavedKey: endpoint.hasApiKey,
 		removeKey: false,
@@ -120,12 +124,13 @@ export function probeTarget(draft: EndpointDraft): { apiKey?: string; endpointId
 	return { endpointId: draft.id };
 }
 
-export function draftParams(draft: EndpointDraft): CustomEndpointDraft {
+export function draftParams(draft: EndpointDraft, apiSupported = true): CustomEndpointDraft {
 	const key = draft.removeKey ? "" : draft.apiKey.trim() || (draft.id ? undefined : "");
 	return {
 		...(draft.id ? { id: draft.id } : {}),
 		name: draft.name.trim(),
 		baseUrl: draft.baseUrl.trim(),
+		...(apiSupported ? { api: draft.api } : {}),
 		...(key === undefined ? {} : { apiKey: key }),
 		models: draft.models
 			.filter((model) => model.selected)
@@ -145,8 +150,9 @@ export function addressMoved(draft: EndpointDraft): boolean {
 	return draft.savedBaseUrl !== null && originOf(draft.baseUrl) !== originOf(draft.savedBaseUrl);
 }
 
-export function canSave(draft: EndpointDraft): boolean {
+export function canSave(draft: EndpointDraft, apiSupported = true): boolean {
 	return (
+		(apiSupported || draft.api === "openai-completions") &&
 		!addressMoved(draft) &&
 		draft.name.trim() !== "" &&
 		draft.baseUrl.trim() !== "" &&

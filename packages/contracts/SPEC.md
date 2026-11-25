@@ -929,8 +929,13 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   `baseUrl` with the models, or a closed `CustomEndpointProbeFailure` (`invalid-url`, `unauthorized`,
   `timeout`, `unreachable`, `not-openai` with an optional HTTP `status`, `no-models`) so the client
   localizes it. Saves take a `CustomEndpointDraft` (absent `id` = add; absent `apiKey` = keep, `""` =
-  clear). Every list/save/remove returns `CustomEndpoint[]` (`id`, `name`, `baseUrl`, `hasApiKey` rather
-  than the key, models); a save or removal that changes `models.json` emits `provider.changed`) /
+  clear). From v133 (`CUSTOM_ENDPOINT_API_PROTOCOL_VERSION`), `CustomEndpointApi` is the closed choice
+  `openai-completions` / `openai-responses`: a draft's optional `api` selects the provider API; omission
+  preserves an existing API or defaults a new server to Chat Completions. Every list/save/remove returns
+  `CustomEndpoint[]` (`id`, `name`, `baseUrl`, `api`, `hasApiKey` rather than the key, models); `api` is
+  optional only because older hosts omit it, meaning Chat Completions. Clients connected to an older
+  host omit the field and cannot select Responses. A save or removal that changes `models.json` emits
+  `provider.changed`) /
   **`model.clampThinking`** (pi's
   `clampThinkingLevel` for a `{model, level}` pair — the pre-session picker's effort adjustment, so no
   client re-derives pi's policy) / **`provider.status`**

@@ -117,6 +117,15 @@ compaction to keep the request small and deterministic, restoring the settings b
 It neither changes the provider/effort selection nor proves removal of a fixed output cap; the focused
 SDK reserve-independence canary owns that assertion.
 
+## Custom model servers
+
+`settings-custom-endpoints.spec.ts` uses a disposable loopback OpenAI-compatible server, including
+Chat Completions and Responses streams. It covers detection, saved API selection, a real pi request
+through each API, editing and removal. The Responses case also checks that re-opening the dialog keeps
+the selected API, preserves a handwritten `input: ["text", "image"]` declaration, and sends a real
+attachment as Responses `input_image` content; no external provider tokens are spent. An older
+advertised host version hides the choice and receives the legacy save payload.
+
 ## Repository cloning
 
 `clone-project.spec.ts` clones disposable local `file:` repositories through the Welcome and rail menus,

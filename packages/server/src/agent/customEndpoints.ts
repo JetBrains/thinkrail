@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import {
 	CUSTOM_ENDPOINT_ID_PREFIX,
 	type CustomEndpoint,
+	type CustomEndpointApi,
 	type CustomEndpointDraft,
 	type CustomEndpointModel,
 	type CustomEndpointProbe,
@@ -25,7 +26,7 @@ import {
 
 const log = logger("agent");
 
-const API = "openai-completions";
+const DEFAULT_API: CustomEndpointApi = "openai-completions";
 const NO_KEY = "thinkrail-no-key";
 const LIST_TIMEOUT_MS = 5_000;
 const DETAIL_TIMEOUT_MS = 3_000;
@@ -46,6 +47,10 @@ type Json = Record<string, unknown>;
 
 function isObject(value: unknown): value is Json {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isApi(value: unknown): value is CustomEndpointApi {
+	return value === "openai-completions" || value === "openai-responses";
 }
 
 function positiveInt(value: unknown): number | null {
@@ -69,8 +74,9 @@ export function parseBaseUrl(raw: string): string | null {
 	if (url.username || url.password || url.search) return null;
 	url.hash = "";
 	url.pathname =
-		url.pathname.replace(/\/+$/, "").replace(/\/(chat\/completions|completions|models)$/, "") ||
-		"/";
+		url.pathname
+			.replace(/\/+$/, "")
+			.replace(/\/(chat\/completions|completions|responses|models)$/, "") || "/";
 	return url.toString().replace(/\/+$/, "");
 }
 
@@ -351,7 +357,7 @@ function providersOf(config: Node | undefined): Json {
 function readEndpoints(config: Node | undefined): CustomEndpoint[] {
 	return Object.entries(providersOf(config)).flatMap(([id, provider]) => {
 		if (!isCustomEndpointId(id) || !isObject(provider)) return [];
-		if (provider.api !== API || typeof provider.baseUrl !== "string") return [];
+		if (!isApi(provider.api) || typeof provider.baseUrl !== "string") return [];
 		if (!parseBaseUrl(provider.baseUrl) || !Array.isArray(provider.models)) return [];
 		const overrides = isObject(provider.modelOverrides) ? provider.modelOverrides : {};
 		const apiKey = typeof provider.apiKey === "string" ? provider.apiKey : undefined;
@@ -360,6 +366,7 @@ function readEndpoints(config: Node | undefined): CustomEndpoint[] {
 				id,
 				name: typeof provider.name === "string" && provider.name ? provider.name : id,
 				baseUrl: provider.baseUrl,
+				api: provider.api,
 				hasApiKey: apiKey !== undefined && apiKey !== NO_KEY,
 				models: provider.models.flatMap((model) => readModel(model, overrides) ?? []),
 			},
@@ -406,6 +413,8 @@ function validateDraft(draft: CustomEndpointDraft): void {
 		throw new Error("That server is no longer in models.json. Reload and retry.");
 	if (draft.apiKey !== undefined && typeof draft.apiKey !== "string")
 		throw new Error("The API key must be text.");
+	if (draft.api !== undefined && !isApi(draft.api))
+		throw new Error("Choose the Chat Completions or Responses API.");
 	if (!draft.name.trim()) throw new Error("Name the server.");
 	if (!parseBaseUrl(draft.baseUrl))
 		throw new Error("Enter a full http:// or https:// address without credentials or a query.");
@@ -529,13 +538,29 @@ function providerConfig(draft: CustomEndpointDraft, previous: Json | undefined):
 	const previousModels = new Map<string, Json>();
 	for (const model of Array.isArray(previous?.models) ? previous.models : [])
 		if (isObject(model) && typeof model.id === "string") previousModels.set(model.id, model);
+	const api = draft.api ?? (isApi(previous?.api) ? previous.api : DEFAULT_API);
+	if (
+		previous !== undefined &&
+		api !== previous.api &&
+		draft.models.some((model) => {
+			const pinned = previousModels.get(model.id)?.api;
+			return typeof pinned === "string" && pinned !== api;
+		})
+	)
+		throw new Error(
+			"Some selected models have a different API in models.json. Update their api fields there before switching this server's API.",
+		);
+	const compat =
+		api === DEFAULT_API && previous?.api !== api
+			? { ...COMPAT, ...(isObject(previous?.compat) ? previous.compat : {}) }
+			: previous?.compat;
 	const next: Json = {
 		...(previous ?? {}),
 		name: draft.name.trim(),
 		baseUrl,
-		api: API,
+		api,
 		apiKey: draft.apiKey === undefined ? (previousKey ?? NO_KEY) : draft.apiKey.trim() || NO_KEY,
-		compat: previous === undefined ? { ...COMPAT } : previous.compat,
+		compat,
 		models: draft.models.map((model) =>
 			modelConfig(
 				model,

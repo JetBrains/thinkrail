@@ -143,11 +143,33 @@ test("save sends selected models, keeps a saved key unless replaced or removed",
 		id: "custom-gw",
 		name: "Gateway",
 		baseUrl: "https://gw.example/v1",
+		api: "openai-completions",
 		models: [model("a", { contextWindow: 8_000, maxTokens: 2_000 })],
 	});
 	expect(draftParams({ ...draft, apiKey: " sk-new " }).apiKey).toBe("sk-new");
 	expect(draftParams({ ...draft, removeKey: true }).apiKey).toBe("");
 	expect(draftParams(newEndpointDraft()).apiKey).toBe("");
+});
+
+test("new and older-host drafts default to Chat Completions while Responses survives editing and detection", () => {
+	expect(newEndpointDraft().api).toBe("openai-completions");
+	expect(editEndpointDraft(saved).api).toBe("openai-completions");
+	const draft = editEndpointDraft({ ...saved, api: "openai-responses" });
+	expect(draftParams(draft).api).toBe("openai-responses");
+	expect(mergeProbe(draft, { ok: true, baseUrl: saved.baseUrl, models: [model("a")] }).api).toBe(
+		"openai-responses",
+	);
+	expect(applyPreset(draft, LOCAL_SERVER_PRESETS[0]).api).toBe("openai-responses");
+});
+
+test("older hosts receive the legacy payload and cannot save a Responses draft", () => {
+	const legacy = editEndpointDraft(saved);
+	expect(canSave(legacy, false)).toBe(true);
+	expect(draftParams(legacy, false)).not.toHaveProperty("api");
+	const responses = editEndpointDraft({ ...saved, api: "openai-responses" });
+	expect(canSave(responses, false)).toBe(false);
+	expect(canSave(responses, true)).toBe(true);
+	expect(draftParams(responses, true).api).toBe("openai-responses");
 });
 
 test("manual ids are trimmed, deduplicated and selected; saving needs a name, address and a model", () => {
