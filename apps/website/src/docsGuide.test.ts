@@ -15,7 +15,7 @@ interface SamplePackage {
 	name: string;
 	keywords: string[];
 	scripts: Record<string, string>;
-	dependencies: Record<string, string>;
+	dependencies?: Record<string, string>;
 	devDependencies: Record<string, string>;
 	peerDependencies: Record<string, string>;
 	publishConfig: { access: string; provenance?: boolean };
@@ -226,7 +226,8 @@ describe("the docs' code blocks", () => {
 			),
 		);
 		const sdk = readJson<{ name: string; version: string }>(`${roots.sdk}package.json`);
-		const portable = (ranges: Record<string, string>) =>
+		const portable = (ranges: Record<string, string> | undefined) =>
+			ranges &&
 			Object.fromEntries(
 				Object.entries(ranges).map(([name, range]) => {
 					if (range === "catalog:") return [name, catalog[name]];
@@ -570,6 +571,37 @@ describe("the guide's facts about the sample and the SDK", () => {
 		expect(web).toContain("color_palette: {");
 		expect(server).toContain('title: "Rate contrast"');
 		expect(guide.text).toContain("**Rate contrast**");
+	});
+
+	test("keeps the SDK a dev dependency with a type-only server import, as the sample does", () => {
+		const sdkName = readJson<{ name: string }>(`${roots.sdk}package.json`).name;
+		expect(Object.keys(sample.devDependencies)).toContain(sdkName);
+		expect(Object.keys(sample.dependencies ?? {})).not.toContain(sdkName);
+		const server = read(`${roots.palette}server/index.ts`);
+		expect(server).toContain(
+			`import type { ExtensionSessionServices, ServerExtension } from "${sdkName}/server";`,
+		);
+		expect(server).toMatch(/^\} satisfies ServerExtension;$/m);
+		expect(server).not.toMatch(new RegExp(`^import \\{[^}]*\\} from "${sdkName}`, "m"));
+		expect(read(`${roots.sdk}src/server.ts`)).toContain(
+			"export function defineServerExtension<T extends ServerExtension>(extension: T): T {\n\treturn extension;\n}",
+		);
+		const manifest = read(`${roots.sdk}src/builder/manifest.ts`);
+		expect(manifest).not.toContain("pkg.dependencies?.[SDK_PACKAGE]");
+		expect(manifest).toContain('warnings.push(\'"image" is not used');
+		expect(flat(guide.text)).toContain("satisfies ServerExtension");
+		expect(flat(guide.text)).toContain(
+			"about a missing `thinkrail-extension` keyword and an unknown manifest field",
+		);
+		expect(flat(reference.text)).toContain(
+			"It does not ask for the SDK in `dependencies`: an extension keeps it in `devDependencies`.",
+		);
+		for (const page of pages) {
+			expect([page.name, /extension-sdk` is an ordinary dependency/.test(page.text)]).toEqual([
+				page.name,
+				false,
+			]);
+		}
 	});
 
 	test("states the SDK's Node floor", () => {

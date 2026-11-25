@@ -43,8 +43,8 @@ ThinkRail does not load, and the catalog does not list, a package whose `package
 
 <!-- guard: reserved-names -->
 ThinkRail also refuses a package with a name it reserves; the catalog does not check this. The reserved
-names are those of its built-in extensions, `ask-user-question`, `hint-mode`, `next-steps`, `visualize`
-and `web-access`, and of its own `mcp` and `tool-search` slots.
+names are those of its built-in extensions, `ask-user-question`, `hint-mode`, `next-steps`, `outputs`,
+`session-insights`, `visualize` and `web-access`, and of its own `mcp` and `tool-search` slots.
 
 Fields the manifest does not define are ignored. Paths are compared after removing `.` segments
 and repeated slashes, so `./dist/web.js` and `dist/web.js` are the same file.
@@ -107,14 +107,16 @@ The same rules as cases, in the format of ThinkRail's own test table of manifest
 - `typebox` or an `@earendil-works/*` package is in `dependencies` instead of `peerDependencies`, with
   or without a server half.
 
-It warns, and builds anyway, when `keywords` lacks `thinkrail-extension`, when a server half is declared
-but `@thinkrail/extension-sdk` is not in `dependencies`, and when the manifest has a field it does not
-define.
+It warns, and builds anyway, when `keywords` lacks `thinkrail-extension` and when the manifest has a
+field it does not define. It does not ask for the SDK in `dependencies`: an extension keeps it in
+`devDependencies`.
 
 ## Server descriptor
 
-The default export of the `server` file, made with `defineServerExtension` from
-`@thinkrail/extension-sdk/server`.
+The default export of the `server` file: an object that `satisfies ServerExtension`, with the type
+imported by `import type` from `@thinkrail/extension-sdk/server`, so the SDK is not needed when
+ThinkRail loads it. `defineServerExtension` from the same module returns its argument unchanged; a value
+import of it needs the SDK in `dependencies`.
 
 <!-- guard: server-descriptor -->
 | Field | Meaning |

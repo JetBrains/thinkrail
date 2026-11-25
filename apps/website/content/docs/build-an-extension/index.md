@@ -69,13 +69,14 @@ it, and install:
 npm install
 ```
 
-`@thinkrail/extension-sdk` is an ordinary dependency, because the server half imports it when it runs.
-In SDK 1.0 its own dependencies are the build tools (rolldown and Tailwind, with native binaries), so
-they are installed with every copy of your extension too; moving them out is tracked in
-[issue #1447](https://github.com/JetBrains/thinkrail/issues/1447). Everything else is needed only to
-type-check, build and test: React's types, pi and typebox for the server half's types,
-`@remixicon/react`, an icon set the build bundles into the card, and React with `@types/bun` for the
-sample's tests (`bun test`). The card itself does not use the installed React: it runs on the app's.
+Apart from pi and typebox, which ThinkRail provides ([below](#pi-and-typebox-are-peer-dependencies)),
+everything the package lists is a dev dependency, needed only to type-check, build and test. npm does not
+install a published package's dev dependencies, so installing your extension installs none of them.
+`@thinkrail/extension-sdk` is one too: the server half imports only its types, and its build tools
+(rolldown and Tailwind, with native binaries) run before you publish. The others are React's types, pi
+and typebox for the server half's types, `@remixicon/react`, an icon set the build bundles into the card,
+and React with `@types/bun` for the sample's tests (`bun test`). The card itself does not use the
+installed React: it runs on the app's.
 
 ## package.json and the manifest
 
@@ -132,16 +133,14 @@ and `bugs` with your own.
 		"test": "bun test",
 		"typecheck": "tsc --noEmit"
 	},
-	"dependencies": {
-		"@thinkrail/extension-sdk": "~1.0.0"
-	},
 	"peerDependencies": {
 		"@earendil-works/pi-coding-agent": "*",
 		"typebox": "*"
 	},
 	"devDependencies": {
-		"@earendil-works/pi-coding-agent": "1.5.2",
+		"@earendil-works/pi-coding-agent": "1.6.0",
 		"@remixicon/react": "4.9.0",
+		"@thinkrail/extension-sdk": "~1.0.0",
 		"@types/bun": "1.4.4",
 		"@types/react": "19.3.0",
 		"@types/react-dom": "19.3.0",
@@ -163,7 +162,7 @@ The `thinkrail` manifest:
   only with `web`. Each path is relative to the package root and must stay inside the package.
 - `title` is the display name; without it, the package name is shown.
 - `image` is still accepted, but nothing uses it: neither the extensions page nor the app shows preview
-  images, so leave it out (the build still warns when it is not an `https:` URL).
+  images, so leave it out (the build warns that it is not used).
 
 The description, author and version ThinkRail shows are the package's own `description`, `author` and
 `version`.
@@ -173,24 +172,24 @@ settings by it, so renaming the package makes it a different extension.
 
 <!-- guard: reserved-names -->
 It must be a valid npm name and cannot be one of the names ThinkRail reserves: the names of its
-built-in extensions, `ask-user-question`, `hint-mode`, `next-steps`, `visualize` and `web-access`, and
-of its own `mcp` and `tool-search` slots.
+built-in extensions, `ask-user-question`, `hint-mode`, `next-steps`, `outputs`, `session-insights`,
+`visualize` and `web-access`, and of its own `mcp` and `tool-search` slots.
 
 `files` publishes the server source and `dist/`, nothing else. `prepack` runs the build, so every
 `npm publish` and `npm pack` ships a fresh `dist/`.
 
 ## The server half
 
-The server half's default export is a descriptor made with `defineServerExtension`. Palette's whole
-`server/index.ts`:
+The server half's default export is a plain descriptor object checked with
+`satisfies ServerExtension`. Its SDK import is `import type`, which disappears when ThinkRail loads the
+file, so nothing of the SDK runs in ThinkRail and the SDK can stay a dev dependency. The SDK also exports
+`defineServerExtension`, which returns the descriptor it is given; importing it as a value would put the
+SDK, build tools included, in your `dependencies`. Palette's whole `server/index.ts`:
 
 <!-- guard: file palette/server/index.ts -->
 ```ts
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import {
-	defineServerExtension,
-	type ExtensionSessionServices,
-} from "@thinkrail/extension-sdk/server";
+import type { ExtensionSessionServices, ServerExtension } from "@thinkrail/extension-sdk/server";
 import { Type } from "typebox";
 import { buildPalette, HARMONIES, type Harmony, paletteText } from "./palette";
 
@@ -227,7 +226,7 @@ function paletteTool(session: ExtensionSessionServices) {
 	};
 }
 
-export default defineServerExtension({
+export default {
 	name: "@thinkrail/example-extension-palette",
 	title: "Palette",
 	description:
@@ -243,7 +242,7 @@ export default defineServerExtension({
 				"Rate every colour's WCAG contrast against white and black text, for the agent and on the card.",
 		},
 	},
-});
+} satisfies ServerExtension;
 ```
 
 What it does:
@@ -488,9 +487,8 @@ under Bun, and prints each file it wrote with its size.
 
 Before building, it checks the manifest with the rules ThinkRail applies, plus three of its own: `api`
 must equal the SDK's API version, the `server` file must exist, and pi packages and typebox must not be
-dependencies. It warns, without failing, about a missing `thinkrail-extension` keyword, a server half
-without `@thinkrail/extension-sdk` in `dependencies` and an unknown manifest field. An extension without
-a web half has nothing to build.
+dependencies. It warns, without failing, about a missing `thinkrail-extension` keyword and an unknown
+manifest field. An extension without a web half has nothing to build.
 
 The build never overwrites its own inputs: a `web` or `styles` path that is the web entry, the
 `server` file, `package.json`, a file the entry imports or the other output, or that lies outside the
