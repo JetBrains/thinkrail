@@ -7,7 +7,7 @@ export type TreeWatcher = { ready: Promise<void>; close: () => void; recheck: ()
 export type TreeWatchOptions = {
 	onEvent: (relPath: string | null) => void;
 	onMissed: (relPath: string) => void;
-	onError: () => void;
+	onError: (error: unknown) => void;
 	skipDir: (relPath: string) => boolean;
 	ignoredDirs: (relPaths: string[]) => Promise<ReadonlySet<string>>;
 };
@@ -140,10 +140,10 @@ export function watchTree(root: string, options: TreeWatchOptions): TreeWatcher 
 		queueClosing();
 	}
 
-	function fail(): void {
+	function fail(error: unknown): void {
 		if (closed) return;
 		close();
-		options.onError();
+		options.onError(error);
 	}
 
 	const guard = (work: Promise<void>): Promise<void> => work.catch(fail);
@@ -200,7 +200,7 @@ export function watchTree(root: string, options: TreeWatchOptions): TreeWatcher 
 			relist.add(rel);
 			schedule();
 		} catch (error) {
-			if (!isVanished(error)) fail();
+			if (!isVanished(error)) fail(error);
 		}
 	}
 

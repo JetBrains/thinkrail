@@ -18,6 +18,11 @@ web contracts, type declarations for the modules the app shares with extension w
 published face of the private `extension-api`, `ui` and `resource-renderers` packages, which stay
 private and unchanged. It imports no pi value at runtime.
 
+An extension installs the SDK as a **dev dependency**. Its server descriptor uses a type-only
+`ServerExtension` import and `satisfies ServerExtension`, so the installed extension does not load the
+SDK or its build toolchain. The existing `defineServerExtension` export remains compatible, but an
+extension that value-imports it must still provide the SDK at runtime.
+
 ## Public surface (what API v1 promises)
 
 - `./server` — `defineServerExtension` (identity) and `ServerExtension`, `ExtensionSessionServices`,
@@ -94,7 +99,7 @@ private and unchanged. It imports no pi value at runtime.
   **equal** the SDK's API (a bundle can only promise the names the SDK knew). Beyond the manifest it
   checks the package: the `server` file present and pi packages / `typebox` never in `dependencies`
   (they must be peers), with or without a server half — a web-only package would install a second pi
-  for nothing. Warnings: a missing keyword, a missing SDK dependency for a server half, unknown
+  for nothing. Warnings: a missing keyword, unknown
   manifest keys and any `image` — still valid, but neither the showcase nor ThinkRail shows preview images
   ([[module-thinkrail-extensions]] § Catalog). A
   server-only extension has nothing to build.
@@ -226,10 +231,11 @@ reprint-only toolchain diff; `--print` shows the current surface. The snapshot i
 
 Released with the portable pi packages ([[module-pi-extensions]] § Release): `scripts/pi-packages.ts`
 lists this package and every public `extension-examples/*` package as publishable (dependencies first, so
-the SDK precedes a sample). Until their first release changeset lands, the SDK and the palette sample are
-`private`, so `release:publish` skips them while `check:extension-packages` (`extensionPackages()`, which
-counts private ones too) still packs and verifies them; the changeset that publishes them also drops
-`private`. `.github/workflows/release-pi-packages.yml` runs the gate below and builds
+the SDK precedes a sample). A sample stays `private` until its first release changeset, so no version PR
+publishes it at `0.0.0`, while `check:extension-packages` (`extensionPackages()`, which counts private
+ones too) still packs and verifies it; the changeset that publishes it drops `private` in the same PR, as
+the SDK's and the palette sample's first-release changeset did. `release:pack` lists only public
+packages, so the bootstrap publish below also needs `private` gone. `.github/workflows/release-pi-packages.yml` runs the gate below and builds
 the SDK before `release:publish`, since a sample's `prepack` builds with the SDK's `dist/`. Each package
 needs the manual bootstrap publish (`bun run release:pack extension-sdk`, `… palette`) before Trusted
 Publishing can take over. `bun pm pack` runs `prepack` without `node_modules/.bin` on `PATH`, so a sample's
@@ -245,10 +251,14 @@ Gates:
   the SDK and the samples with `bun pm pack`, checks the version coupling (§ Public surface,
   Versioning), checks each tarball (no tests or repository sources, no
   `workspace:` / `catalog:` versions, no Bun-only API in shipped JavaScript, every `bin` / `exports` /
-  manifest path present, a sample pinned to this SDK version without pi or typebox as dependencies), then
+  manifest path present, a sample pinned to this SDK version as a dev dependency without pi or typebox
+  as dependencies), then
   writes a tiny extension into a temp folder **outside the repository** that uses every shared module,
   installs the tarballs and the catalog's React, types, pi and typebox there with npm, type-checks it
   with the catalog TypeScript and TypeScript 5.9, builds it under Node and under Bun (identical output),
   asserts each bundle — the sample's packed one too — has no React or UI-kit code, loads inside a fake
   1.0 host and refuses a missing host and another major, that each stylesheet holds only its prefix's
-  utilities, and that each server half imports to a descriptor under Bun.
+  utilities, and that each server half imports to a descriptor under Bun. A separate production
+  installation of the packed samples provides only the host's typebox peer: no SDK, rolldown or
+  Tailwind package may enter its dependency graph, and the server descriptors and web bundles must
+  still load there. The generated fixture's type-only server descriptor is checked there too.

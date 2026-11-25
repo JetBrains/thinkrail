@@ -21,14 +21,7 @@ function exampleFiles(): Record<string, string> {
 	return files;
 }
 
-const SDK_STUB = {
-	"node_modules/@thinkrail/extension-sdk/package.json": JSON.stringify({
-		name: "@thinkrail/extension-sdk",
-		type: "module",
-		exports: { "./server": "./server.js" },
-	}),
-	"node_modules/@thinkrail/extension-sdk/server.js":
-		"export function defineServerExtension(extension) { return extension; }\n",
+const BUILT_WEB_HALF = {
 	"dist/web.js": "export default { name: 'x', toolRenderers: {} };\n",
 	"dist/web.css": "",
 };
@@ -43,7 +36,7 @@ function writeExample(): { root: string; folder: string; dataDir: string } {
 	const root = tempDir("thinkrail-skill-");
 	roots.push(root);
 	const folder = join(root, "thinkrail-extensions", "word-count");
-	for (const [file, body] of Object.entries({ ...exampleFiles(), ...SDK_STUB })) {
+	for (const [file, body] of Object.entries({ ...exampleFiles(), ...BUILT_WEB_HALF })) {
 		mkdirSync(dirname(join(folder, file)), { recursive: true });
 		writeFileSync(join(folder, file), body);
 	}

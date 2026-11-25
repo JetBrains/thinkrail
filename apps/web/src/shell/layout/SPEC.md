@@ -62,7 +62,11 @@ promotes that same placement in place. A keep that arrives while the read is sti
 into one final keep that carries the leading preview-slot claim. Only two open paths wait the shared
 250 ms settle window: a single click (or keyboard activation) on the active preview tab, so a double click
 is not read as two keeps, and the Changes review-tab preview, which waits even when code rather than a
-click opens it. Outside the open paths, the legacy-selection Review reveal waits out what is left of a
+click opens it. The tab click's settled keep commits without a focus request: the click already placed
+focus, and within the window the reader may have moved it. A focus request there ran a frame later and
+took focus back to the tab from wherever it had gone, even from `body` in the frame after a review
+composer's save disabled its field and before focus recovery ran, so the composer no longer returned
+focus to its block cursor. Outside the open paths, the legacy-selection Review reveal waits out what is left of a
 browse row's window. `isToolShowing` and `showingAuxiliaryKey` read which auxiliary tools are selected in
 an expanded pane, so the shell can tell whether Review shows and whether the user changed tools since.
 Pointer/resize drafts and viewport compression remain runtime-only.

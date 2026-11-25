@@ -1,7 +1,6 @@
 {
 	"name": "@thinkrail/extension-sdk",
 	"version": "0.0.0",
-	"private": true,
 	"description": "Build ThinkRail extensions: the server and web contracts, type declarations for the UI the app shares with extensions, and the `thinkrail-extension build` command.",
 	"license": "Apache-2.0",
 	"type": "module",

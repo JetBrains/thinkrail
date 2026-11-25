@@ -150,7 +150,11 @@ nudges `fsChanged`. Nothing cleans the folder: sent messages keep naming its fil
   handler settled, and a result settling after a reconnect went to the dead socket and sat until the next
   `resume`, so enough slow requests filled the namespace and refused every later request from that window.
   Abandoned work is still running work, so it stays bounded (the tracked ceiling below). Each `ack`/`resume`
-  that abandons running work logs one `warn` with the per-method counts; `RequestAbandonedError`
+  that abandons running work logs its per-method counts at `debug`. A host-wide summary logs the accumulated
+  counts at `warn` every 60 seconds when nonempty, and flushes the final partial interval on stop. Counts
+  clear after each summary; reconnects and new client keys share the same interval. This keeps routine
+  polling cancellation from flooding normal support logs (#1448), without losing the affected methods or
+  their frequency. The summary retains counts, never request ids or payloads. `RequestAbandonedError`
   (`code: "REQUEST_ABANDONED"`, tagged with the method) is reported once per method per launch and for at most
   10 methods, because it shares the `request` source's fixed per-launch report budget with genuine handler
   failures and the overflow report, and a reload's new client key must not renew it. Requests that settle
@@ -1016,7 +1020,12 @@ enabled/confirmed choice before entering analytics attribution.
   `workspaces` writers: the normalized session-state publisher stamps `recordWorkspaceActivity(record.workspaceId)`
   whenever a record reports `execution: "running"` (a user prompt flips it, so both user and agent turns
   count — and the writer's one-per-minute coalescing makes a streaming agent cheap), an accepted
-  `terminal.write` stamps the owning workspace (a displaced/no-op write does not), and the repo-metadata
+  `terminal.write` stamps the owning workspace only when the accepted chunk contains input other than
+  complete terminal focus reports (`ESC[I` / `ESC[O`); an empty chunk or a displaced/no-op write does not.
+  `stampTerminalActivity` leaves all bytes for the PTY and skips the activity writer entirely for pure
+  focus reports, including its coalesced high-water mark. Mixed input, other escape sequences and partial
+  focus sequences still count; xterm emits each focus report as one data event, so there is no cross-write
+  parser or buffering that could swallow an Escape key. The repo-metadata
   callback calls `recordWorkspaceHead`, with `watch`'s watch-started nudge wired to `seedWorkspaceHead` so
   first admission seeds and watcher recreation detects a HEAD move made while unwatched. Reading a result, selecting a workspace, or opening
   files never stamps — "looking is not working" is the user-visible rule. `workspace.settle` /

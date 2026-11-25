@@ -587,6 +587,109 @@ async function routeDroppableSocket(
 	};
 }
 
+async function routeHeldCatalog(page: Page) {
+	let holding = false;
+	let socket: WebSocketRoute | undefined;
+	let replies = 0;
+	const held: { socket: WebSocketRoute; message: string | Buffer }[] = [];
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		socket = ws;
+		const server = ws.connectToServer();
+		const catalogs = new Set<string>();
+		ws.onMessage((message) => {
+			const frame = frameOf(message);
+			if (frame?.method === "session.list" && frame.id) catalogs.add(frame.id);
+			server.send(message);
+		});
+		server.onMessage((message) => {
+			const id = frameOf(message)?.id;
+			if (id && catalogs.delete(id)) {
+				if (holding) {
+					held.push({ socket: ws, message });
+					return;
+				}
+				replies += 1;
+			}
+			ws.send(message);
+		});
+	});
+	return {
+		hold() {
+			holding = true;
+			replies = 0;
+		},
+		get held() {
+			return held.length;
+		},
+		async resume(mode: "reply" | "reconnect") {
+			holding = false;
+			if (mode === "reconnect") {
+				held.length = 0;
+				await socket?.close();
+			} else {
+				for (const pending of held.splice(0)) {
+					pending.socket.send(pending.message);
+					replies += 1;
+				}
+			}
+			await expect.poll(() => replies).toBeGreaterThan(0);
+		},
+	};
+}
+
+for (const mode of ["reply", "reconnect"] as const) {
+	test(`a chat closed before the first catalog stays closed and keeps focus after ${mode}`, async ({
+		page,
+	}) => {
+		const catalog = await routeHeldCatalog(page);
+		await openFixtureProject(page);
+		await enterDefaultWorkspace(page);
+		const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+		try {
+			await page.getByTestId("new-chat").first().click();
+			const closed = await currentChat(page);
+			await wire.request("session.rename", { ...closed, title: "closed before catalog" });
+			await expect(openChatTabs(page)).toContainText("closed before catalog");
+			await page.getByTestId("new-chat").first().click();
+			await expect(openChatTabs(page)).toHaveCount(2);
+			await expect.poll(async () => (await currentChat(page)).sessionId).not.toBe(closed.sessionId);
+			const current = await currentChat(page);
+			await wire.request("session.rename", { ...current, title: "kept during catalog" });
+			await expect(activeTab(page)).toContainText("kept during catalog");
+		} finally {
+			wire.close();
+		}
+		const todo = seedWorkspaceSession(repoCwd(), {
+			name: "background entry work",
+			messages: [{ role: "user", text: "unfinished entry work", timestamp: BASE_TS }],
+		});
+		setMtime(todo.path, BASE_TS);
+		seedOpenTodo(todo.id, "finish entry work");
+
+		catalog.hold();
+		await page.evaluate(() => {
+			window.history.replaceState(null, "", window.location.hash.replace(/\/chats\/[^/]+$/, ""));
+		});
+		await page.reload();
+		await expect(openChatTabs(page)).toHaveCount(2);
+		await expect.poll(() => catalog.held).toBeGreaterThan(0);
+		await openChatTabs(page)
+			.filter({ hasText: "closed before catalog" })
+			.getByTestId("editor-tab-close")
+			.click();
+		await expect(openChatTabs(page)).toHaveCount(1);
+		await catalog.resume(mode);
+
+		await expect(openChatTabs(page).filter({ hasText: "background entry work" })).toBeVisible();
+		await expect(openChatTabs(page)).toHaveCount(2);
+		await expect(activeTab(page)).toContainText("kept during catalog");
+		await page.getByTestId("chat-history").first().click();
+		await expect(
+			page.getByTestId("closed-chat-item").filter({ hasText: "closed before catalog" }),
+		).toBeVisible();
+	});
+}
+
 test("a chat closed to history stays there after a reconnect", async ({ page }) => {
 	const socket = await routeDroppableSocket(page);
 	await openFixtureProject(page);

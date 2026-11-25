@@ -227,14 +227,13 @@ function resolveSkillInputs(
 	skillsOverride: ReturnType<typeof skillsGate>;
 	refreshSkillPaths: (disabled: ReadonlySet<string>) => void;
 } {
-	const roots = compatibilityRoots(cwd);
 	const additionalSkillPaths: string[] = [];
 	const refreshSkillPaths = (current: ReadonlySet<string>): void => {
 		additionalSkillPaths.splice(
 			0,
 			additionalSkillPaths.length,
 			...bundledSkillPaths(current),
-			...admittedRoots(roots, getCtx()).map((source) => source.path),
+			...admittedRoots(compatibilityRoots(cwd), getCtx()).map((source) => source.path),
 		);
 	};
 	refreshSkillPaths(disabled);

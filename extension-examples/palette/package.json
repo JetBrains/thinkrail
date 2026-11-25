@@ -1,7 +1,6 @@
 {
 	"name": "@thinkrail/example-extension-palette",
 	"version": "0.0.0",
-	"private": true,
 	"description": "A sample ThinkRail extension: the agent builds colour palettes from a base colour, and chat shows them as swatches with WCAG contrast ratings.",
 	"license": "Apache-2.0",
 	"type": "module",
@@ -44,9 +43,6 @@
 		"test": "bun test",
 		"typecheck": "tsc --noEmit"
 	},
-	"dependencies": {
-		"@thinkrail/extension-sdk": "workspace:*"
-	},
 	"peerDependencies": {
 		"@earendil-works/pi-coding-agent": "*",
 		"typebox": "*"
@@ -54,6 +50,7 @@
 	"devDependencies": {
 		"@earendil-works/pi-coding-agent": "catalog:",
 		"@remixicon/react": "catalog:",
+		"@thinkrail/extension-sdk": "workspace:*",
 		"@types/bun": "catalog:",
 		"@types/react": "catalog:",
 		"@types/react-dom": "catalog:",
