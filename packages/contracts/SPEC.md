@@ -1506,8 +1506,8 @@ and what it loaded, never pi's own types.
   `PACKAGE_SETTINGS_WRITE_FAILED`, and `PACKAGE_INSTALLED_UNLISTED` — the declaration was persisted but
   the host could not produce the row; of the install codes only `PACKAGE_SOURCE_INVALID`,
   `PACKAGE_OFFLINE`, `PACKAGE_UNTRUSTED`, the three install-failure codes and `PACKAGE_SETTINGS_WRITE_FAILED`
-  are raised before anything is written. A client that does not know a newer code shows the message and
-  makes no "nothing was added" claim, and a client may claim "nothing was added" only for those.
+  are raised before anything is written, and a client may claim "nothing was added" only for those. A
+  client that does not know a newer code shows the message and makes no such claim.
 
 ## Installed extensions
 
