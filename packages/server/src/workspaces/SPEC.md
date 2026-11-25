@@ -202,9 +202,11 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   the current branch tip or an ancestor of it. A fetched teammate branch or old squash branch with commits
   outside that history does not prevent naming. This is conservative local evidence, not proof of who
   pushed: a same-name ref at the shared base also counts, preserving a branch pushed before any own
-  commit; a branch pushed without an upstream and later rewritten or advanced remotely cannot be
-  identified reliably. No fetch or remote probe runs; the ancestry read disables lazy fetching, and an
-  unsupported or failed read is unverified. Remote names containing `/` are supported; a remote branch
+  commit. The same rule keeps a reused name when an old same-name remote branch was merged with a
+  merge commit and its tip remains in the new branch's history; if that remote branch has not been
+  deleted, the next push continues it. A branch pushed without an upstream and later rewritten or
+  advanced remotely cannot be identified reliably. No fetch or remote probe runs; the ancestry read
+  disables lazy fetching, and an unsupported or failed read is unverified. Remote names containing `/` are supported; a remote branch
   with a different path but the same basename does not count. A failed metadata read
   keeps the branch as `"unverified"` while still setting the display name. Publication is final for naming:
   it clears `branchNamePending` instead of leaving an automatic move owed after a later unpublish/prune.
