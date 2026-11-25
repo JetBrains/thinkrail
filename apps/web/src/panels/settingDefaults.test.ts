@@ -17,6 +17,9 @@ describe("config defaults", () => {
 		});
 		expect(isConfigDefault("composerGrowthLimit", "compact")).toBe(false);
 		expect(configResetPatch("voiceInputEnabled")).toEqual({ voiceInputEnabled: true });
+		expect(isConfigDefault("terminalCopyOnSelect", false)).toBe(true);
+		expect(isConfigDefault("terminalCopyOnSelect", true)).toBe(false);
+		expect(configResetPatch("terminalCopyOnSelect")).toEqual({ terminalCopyOnSelect: false });
 	});
 
 	test("structured values compare by content", () => {

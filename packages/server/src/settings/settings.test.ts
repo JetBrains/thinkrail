@@ -691,6 +691,42 @@ test("Windows shell updates reject unknown values before persistence or broadcas
 	);
 });
 
+test("copy on select defaults off, persists on this host and broadcasts only valid boolean updates", () => {
+	expect(DEFAULT_CONFIG.terminalCopyOnSelect).toBe(false);
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "light" }));
+	expect(getConfig().terminalCopyOnSelect).toBe(false);
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	const before = getConfig();
+	const storedBefore = readFileSync(join(dataDir, "config.json"), "utf8");
+	for (const terminalCopyOnSelect of ["true", 1, null, [], {}]) {
+		expect(() =>
+			updateConfig({ terminalCopyOnSelect, terminalReplayKb: 0 } as unknown as AppConfigUpdate),
+		).toThrow("terminalCopyOnSelect must be a boolean");
+	}
+	expect(getConfig()).toEqual(before);
+	expect(published).toEqual([]);
+	expect(readFileSync(join(dataDir, "config.json"), "utf8")).toBe(storedBefore);
+	for (const terminalCopyOnSelect of [true, false]) {
+		const updated = updateConfig({ terminalCopyOnSelect });
+		expect(updated.terminalCopyOnSelect).toBe(terminalCopyOnSelect);
+		expect(published.at(-1)).toBe(updated);
+		resetConfigCache();
+		expect(getConfig().terminalCopyOnSelect).toBe(terminalCopyOnSelect);
+	}
+});
+
+test("malformed stored copy-on-select values fall back to off without discarding other settings", () => {
+	for (const terminalCopyOnSelect of ["true", 1, null, [], {}]) {
+		writeFileSync(
+			join(dataDir, "config.json"),
+			JSON.stringify({ terminalCopyOnSelect, terminalReplayKb: 256 }),
+		);
+		resetConfigCache();
+		expect(getConfig()).toMatchObject({ terminalCopyOnSelect: false, terminalReplayKb: 256 });
+	}
+});
+
 test("replay budget and composer growth updates reject malformed values before persistence or broadcast", () => {
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));

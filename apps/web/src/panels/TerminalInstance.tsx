@@ -22,6 +22,7 @@ import { SettingsSection, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { createPtySizeSync, runAfterTerminalRelayout } from "./ptySizeSync";
 import { stripAnsiDim, terminalContrastFloor } from "./terminalContrast";
+import { createTerminalCopyOnSelect } from "./terminalCopyOnSelect";
 import { createTerminalImeBridge } from "./terminalImeBridge";
 import { terminalKeyDecision } from "./terminalKeys";
 import { createTerminalPrebindBuffer } from "./terminalPrebindBuffer";
@@ -151,6 +152,22 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		tryLoad(() => term.loadAddon(webFonts));
 		termRef.current = term;
 		term.open(host);
+		const selectionCopy = createTerminalCopyOnSelect({
+			getSelection: () => term.getSelection(),
+			getConfig: useAppStore.getState,
+			copy: copyText,
+		});
+		const onSelectionChange = term.onSelectionChange(selectionCopy.selectionChanged);
+		const onSelectionStart = (event: MouseEvent) => {
+			if (event.button === 0) selectionCopy.startSelection();
+		};
+		const onSelectionEnd = (event: MouseEvent) => {
+			if (event.button === 0) selectionCopy.endSelection();
+		};
+		host.addEventListener("mousedown", onSelectionStart, true);
+		document.addEventListener("mouseup", onSelectionEnd, true);
+		window.addEventListener("blur", selectionCopy.cancel);
+		const stopSelectionSettingsWatch = useAppStore.subscribe(selectionCopy.settingsChanged);
 		// WebKit feeds the macOS Korean IME to xterm as insertText + insertReplacementText (upstream #5704) — see panels/SPEC.md.
 		const imeBridge = createTerminalImeBridge((data) => term.input(data, true));
 		const onImeInput = (event: Event): void => {
@@ -390,6 +407,12 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			resizeObserver.disconnect();
 			stopThemeWatch();
 			stopFontsWatch();
+			stopSelectionSettingsWatch();
+			selectionCopy.dispose();
+			onSelectionChange.dispose();
+			host.removeEventListener("mousedown", onSelectionStart, true);
+			document.removeEventListener("mouseup", onSelectionEnd, true);
+			window.removeEventListener("blur", selectionCopy.cancel);
 			onData.dispose();
 			onViewportScroll.dispose();
 			onBufferWrite.dispose();

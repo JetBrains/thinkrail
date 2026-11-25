@@ -11,7 +11,7 @@ depends-on: [module-contracts]
 
 The server-synchronized app config: opaque fixed-theme selection, fixed/system mode and optional light/dark
 pair, additional-analytics preference and first-run dialog completion marker, host-owned new-chat model and
-effort defaults, terminal replay budget and Windows shell preference, chat composer growth preset, chat/file
+effort defaults, terminal replay budget, copy-on-select and Windows shell preferences, chat composer growth preset, chat/file
 visual line widths plus independent pane bounds, bounded custom layout-preset catalog, JetBrains quota
 display/cadence, the host-wide subagent default, plan-review policy, the host-registry extensions the
 user turned off, the UI language preference (`locale`), and the user's keyboard bindings (`keybindings`). `defaultModel` / `defaultEffort`
@@ -53,6 +53,9 @@ interval (`1–3600`, default 30), because those values govern host process cade
   `isTerminalWindowsShell` guard, while a wire mutation outside the closed shell union rejects the complete
   update before cache, persistence, or broadcast changes. Settings owns validation and synchronization;
   `terminal` owns executable resolution and spawning.
+- `terminalCopyOnSelect` is a device preference in the host's config, default `false`, broadcast to
+  connected frontends by the same settings path. A supplied non-boolean rejects the whole update before
+  cache, persistence or broadcast changes; selection and clipboard behavior remain frontend-owned.
 - `questionPanelHeight` defaults to 70 and accepts only whole percents from 40 through 100 (`isQuestionPanelHeight`); a malformed stored value falls back to the default and an invalid update rejects the complete mutation. The default was 60 until 2026-11-17, and since every save writes the whole config most users had 60 stored, so a stored 60 in a config saved before then (no `configVersion`, see [[submodule-server-persistence]]) loads as 70 once; any other stored value is kept, and a 60 chosen afterwards stays 60. A 60 deliberately chosen before the change is indistinguishable and also becomes 70 (accepted by the user).
 - `chatLineWidth` defaults to 80 and `fileLineWidth` to 120 (`LINE_WIDTH_COLUMNS.default`); both accept only finite integers from 40 through 240. Every settings write persists the whole config, so a stored width keeps its value across a default change — there is no migration; their `Bounded` switches independently default to `true`. A malformed stored field falls back without discarding valid siblings; any invalid supplied field rejects the complete mutation before cache, persistence, or broadcast changes.
 - `subagentsEnabled` defaults to `true` when absent so old config preserves current behavior; a present non-boolean update is rejected before cache, persistence, or broadcast changes. Settings owns only that global default; workspace override and effective-value resolution stay outside this module.

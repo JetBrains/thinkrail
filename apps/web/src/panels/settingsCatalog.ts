@@ -16,6 +16,7 @@ import {
 	QUESTION_PANEL_PROTOCOL_VERSION,
 	SUBAGENT_CATALOG_PROTOCOL_VERSION,
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
+	TERMINAL_COPY_ON_SELECT_PROTOCOL_VERSION,
 	USER_THEMES_PROTOCOL_VERSION,
 	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
@@ -566,6 +567,14 @@ export const SETTING = {
 		label: "settings.terminal.scrollback.title",
 		description: "settings.terminal.scrollback.description",
 		keywords: ["buffer", "replay"],
+	},
+	terminalCopyOnSelect: {
+		id: "terminal-copy-on-select",
+		section: SettingsSection.Terminal,
+		label: "settings.terminal.copyOnSelect.label",
+		description: "settings.terminal.copyOnSelect.description",
+		keywords: ["clipboard", "copy", "selection"],
+		requiresProtocolVersion: TERMINAL_COPY_ON_SELECT_PROTOCOL_VERSION,
 	},
 	windowsShell: {
 		id: "windows-shell",

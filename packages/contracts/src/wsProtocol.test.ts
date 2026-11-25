@@ -93,6 +93,7 @@ import {
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
+	TERMINAL_COPY_ON_SELECT_PROTOCOL_VERSION,
 	TEXT_SEARCH_PROTOCOL_VERSION,
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
@@ -389,8 +390,14 @@ test("host search and its previews are pinned to v106", () => {
 	expect(WS_METHODS.searchPreview).toBe("search.preview");
 });
 
+test("copy on select advances the protocol and defaults off", () => {
+	expect(TERMINAL_COPY_ON_SELECT_PROTOCOL_VERSION).toBe(133);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(TERMINAL_COPY_ON_SELECT_PROTOCOL_VERSION);
+	expect(DEFAULT_CONFIG.terminalCopyOnSelect).toBe(false);
+});
+
 test("the community catalog is pinned to v132", () => {
-	expect(PROTOCOL_VERSION).toBe(132);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(EXTENSION_BROWSE_PROTOCOL_VERSION);
 	expect(EXTENSION_BROWSE_PROTOCOL_VERSION).toBe(132);
 	expect(WS_METHODS.extensionsBrowse).toBe("extensions.browse");
 });

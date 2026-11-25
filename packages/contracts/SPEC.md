@@ -614,7 +614,7 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   since the review has no chat to carry it. An older client reads the dropped fields as absent, so the pin
   is what lets a client tell "this host has no reviewer chat" from "this host is older" rather than inferring it;
   **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, analyticsConsentConfirmed, terminalReplayKb,
-  terminalWindowsShell, composerGrowthLimit, questionPanelHeight, chatLineWidth, fileLineWidth, chatLineWidthBounded,
+  terminalWindowsShell, terminalCopyOnSelect, composerGrowthLimit, questionPanelHeight, chatLineWidth, fileLineWidth, chatLineWidthBounded,
   fileLineWidthBounded, voiceInputEnabled, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
   favoriteModels, recentModels, reviewAutoFix, agentReviewEnabled, subagentsEnabled, subagentMaxConcurrent,
   jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, disabledExtensions, extensionSettings, otherAgentSkills,
@@ -644,6 +644,11 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   (`"auto" | "pwsh" | "powershell" | "cmd"`, default `"auto"`) is read only by `server/terminal` on
   Windows and ignored elsewhere — see
   `submodule-server-terminal`'s shell-selection decision for what each value spawns.
+  `terminalCopyOnSelect` (boolean, default `false`) opts terminal selections into clipboard writes;
+  **`TERMINAL_COPY_ON_SELECT_PROTOCOL_VERSION`** (v133) gates the setting and its client behavior.
+  Like the Windows shell preference, it lives in this host device's config and synchronizes its
+  connected frontends, without traveling to a different host's config. An older host's missing field
+  reads as off; an invalid stored value falls back to off and an invalid wire update rejects atomically.
   **`PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION`** pins v63's additive project-located `template.list` /
   `template.get` reads, allowing Create Workspace to preview global plus current-checkout project templates
   without sending host paths; older hosts retain a global-only fallback. `themeMode` defaults to `"fixed"`

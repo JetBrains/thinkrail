@@ -713,6 +713,12 @@ Playwright starts the host (`webServer`) before `globalSetup`, so global setup c
 while a live host writes its logs there; it removes the dir with `removeTree`, which retries the resulting
 `ENOTEMPTY` instead of failing the lane.
 
+`terminals.spec.ts` selects real shell output with the mouse and reads Chromium's clipboard after
+mouseup. Copy-on-select stays off by default; enabling it through Settings applies to the already-open
+terminal without remounting it. A held drag outlasts the 150 ms settling interval without changing the
+clipboard, then writes exactly the selected text on release; the off case keeps the prior clipboard.
+These probes preserve the existing explicit copy/paste chord and SIGINT coverage and make no agent calls.
+
 Every concurrent lane derives a distinct data dir, HOME, pi-agent dir, fixture repository, binary cache,
 desktop cache/state plus ready/control files, Playwright transform cache, restart artifacts,
 picker/editor/provider control files, host/restart/binary/desktop ports, and Central fixture artifacts. The

@@ -2,8 +2,10 @@ import { expect, test, type WebSocketRoute } from "@playwright/test";
 import { INITIAL_TERMINAL_TAB_KEY } from "@thinkrail/contracts";
 import {
 	activeWorktreeRow,
+	closeSettings,
 	createWorkspaceViaDialog,
 	openFixtureProject,
+	openSettingsSection,
 	openTerminal,
 	pseudoBackgroundColor,
 	revealFirstProjectWorkspaces,
@@ -512,6 +514,73 @@ test("Ctrl+C still interrupts while an input method is active", async ({ page })
 	await runInTerminal(page, "echo TR_INTERRUPTED_$((21 + 21))");
 	await expect(term).toContainText("TR_INTERRUPTED_42");
 });
+
+for (const enabled of [false, true]) {
+	test(`copy on select ${enabled ? "copies after mouseup in an already-open terminal" : "leaves the clipboard untouched by default"}`, async ({
+		page,
+	}) => {
+		await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+		await openFixtureProject(page);
+		await createWorkspaceViaDialog(page);
+		await waitTerminalReady(page);
+		const mountedTerminal = await visibleTerminal(page).locator(".xterm").elementHandle();
+		if (!mountedTerminal) throw new Error("terminal is not mounted");
+
+		await page.getByTestId("open-settings").click();
+		await page.getByTestId("settings-nav-terminal").click();
+		const toggle = page.getByTestId("terminal-copy-on-select");
+		await expect(toggle).toHaveAttribute("aria-checked", "false");
+		try {
+			if (enabled) {
+				await toggle.click();
+				await expect(toggle).toHaveAttribute("aria-checked", "true");
+			}
+			await closeSettings(page);
+			expect(await mountedTerminal.evaluate((element) => element.isConnected)).toBe(true);
+
+			const marker = "TR_SELECT_42";
+			await runInTerminal(page, "echo TR_SELECT_$((21 + 21))");
+			const output = visibleTerminalScreen(page)
+				.locator(":scope > div")
+				.filter({ hasText: /^TR_SELECT_42\s*$/ });
+			await expect(output).toHaveCount(1);
+			const cell = await output.evaluate((row) => {
+				const firstText = document.createTreeWalker(row, NodeFilter.SHOW_TEXT).nextNode();
+				if (!firstText) throw new Error("terminal output has no text");
+				const range = document.createRange();
+				range.setStart(firstText, 0);
+				range.setEnd(firstText, 1);
+				const box = range.getBoundingClientRect();
+				return { x: box.x, y: box.y + box.height / 2, width: box.width };
+			});
+			const clipboard = () => page.evaluate(() => navigator.clipboard.readText());
+			await page.evaluate(() => navigator.clipboard.writeText("TR_KEEP_CLIPBOARD"));
+			await page.mouse.move(cell.x + cell.width * 0.1, cell.y);
+			await page.mouse.down();
+			await page.mouse.move(cell.x + cell.width * marker.length, cell.y, { steps: 12 });
+			// Pausing longer than the settling interval must not copy a still-held drag.
+			await page.waitForTimeout(250);
+			expect(await clipboard()).toBe("TR_KEEP_CLIPBOARD");
+			await page.mouse.up();
+			if (enabled) {
+				await expect.poll(clipboard).toBe(marker);
+			} else {
+				await page.waitForTimeout(250);
+				expect(await clipboard()).toBe("TR_KEEP_CLIPBOARD");
+			}
+		} finally {
+			await page.mouse.up();
+			if (enabled) {
+				await openSettingsSection(page, "terminal");
+				if ((await toggle.getAttribute("aria-checked")) === "true") {
+					await page.getByTestId("settings-reset-terminal-copy-on-select").click();
+					await expect(toggle).toHaveAttribute("aria-checked", "false");
+				}
+				await closeSettings(page);
+			}
+		}
+	});
+}
 
 test("Ctrl+Shift+C copies the selection off macOS, Ctrl+Shift+V pastes it, neither sends ^C", async ({
 	page,

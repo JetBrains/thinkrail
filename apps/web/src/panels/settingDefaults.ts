@@ -22,6 +22,7 @@ export type ValueConfigKey = Extract<
 	| "analyticsEnabled"
 	| "notificationsEnabled"
 	| "terminalReplayKb"
+	| "terminalCopyOnSelect"
 	| "terminalWindowsShell"
 	| "composerGrowthLimit"
 	| "questionPanelHeight"

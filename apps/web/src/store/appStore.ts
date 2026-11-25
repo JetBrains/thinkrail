@@ -1285,6 +1285,7 @@ interface AppState {
 	jbcentralQuotaEnabled: boolean;
 	jbcentralQuotaRefreshSeconds: number;
 	terminalReplayKb: number;
+	terminalCopyOnSelect: boolean;
 	terminalWindowsShell: TerminalWindowsShell;
 	composerGrowthLimit: ComposerGrowthLimit;
 	questionPanelHeight: number;
@@ -1753,6 +1754,10 @@ function configPatch(config: AppConfig) {
 		jbcentralQuotaRefreshSeconds:
 			config.jbcentralQuotaRefreshSeconds ?? DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
 		terminalReplayKb: config.terminalReplayKb,
+		terminalCopyOnSelect:
+			typeof config.terminalCopyOnSelect === "boolean"
+				? config.terminalCopyOnSelect
+				: DEFAULT_CONFIG.terminalCopyOnSelect,
 		terminalWindowsShell: isTerminalWindowsShell(config.terminalWindowsShell)
 			? config.terminalWindowsShell
 			: DEFAULT_CONFIG.terminalWindowsShell,
@@ -2776,6 +2781,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	jbcentralQuotaEnabled: DEFAULT_CONFIG.jbcentralQuotaEnabled,
 	jbcentralQuotaRefreshSeconds: DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
+	terminalCopyOnSelect: DEFAULT_CONFIG.terminalCopyOnSelect,
 	terminalWindowsShell: DEFAULT_CONFIG.terminalWindowsShell,
 	composerGrowthLimit: DEFAULT_CONFIG.composerGrowthLimit,
 	questionPanelHeight: DEFAULT_CONFIG.questionPanelHeight,

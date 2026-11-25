@@ -1556,6 +1556,8 @@ export interface AppConfig extends ThemePreference {
 	/** When true, the client may raise out-of-app attention notifications (still gated by browser permission). */
 	notificationsEnabled: boolean;
 	terminalReplayKb: number;
+	/** Copy a non-empty terminal selection to the clipboard after the selection gesture settles. */
+	terminalCopyOnSelect: boolean;
 	composerGrowthLimit: ComposerGrowthLimit;
 	/** The chat's docked question panel caps at this percent of the chat height. */
 	questionPanelHeight: number;
@@ -2012,6 +2014,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	analyticsConsentConfirmed: false,
 	notificationsEnabled: true,
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
+	terminalCopyOnSelect: false,
 	terminalWindowsShell: "auto",
 	composerGrowthLimit: "half-chat",
 	questionPanelHeight: QUESTION_PANEL_HEIGHT_PERCENT.default,
