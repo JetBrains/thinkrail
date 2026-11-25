@@ -800,6 +800,7 @@ test("the diff's ORIGINAL (left) side is its own anchor space — base, never re
 	await expect(page.getByTestId("rendered-diff")).toContainText("renamed");
 	await page.getByTestId("view-toggle-code").click();
 	await expect(page.getByTestId("view-toggle-code")).toHaveAttribute("data-active", "true");
+	await page.getByTestId("diff-toggle-split").click();
 
 	const diff = page.getByTestId("diff-view");
 	await expect(diff.getByText("renamed", { exact: false }).last()).toBeVisible();
@@ -1070,6 +1071,7 @@ test("opening a far-off base-side comment scrolls its card into view in the virt
 	writeFileSync(join(worktree(), "FAR.txt"), `${lines.slice(0, 5).join("\n")}\n`);
 	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "FAR.txt" }).dblclick();
+	await page.getByTestId("diff-toggle-split").click();
 	const diff = page.getByTestId("diff-view");
 	const deletions = pierreDeletionsSide(diff);
 	await expect(deletions.getByText("far line 6", { exact: false }).first()).toBeVisible();

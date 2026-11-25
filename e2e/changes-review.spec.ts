@@ -128,6 +128,7 @@ test("the Split/Inline and whitespace toggles appear when a code file is in the 
 	await seedThreeChanges(page);
 	await row(page, "notes.txt").click();
 	await expect(reviewTab(page)).toHaveCount(1);
+	await page.getByTestId("changes-review-toggle-split").click();
 	await expect(page.getByTestId("changes-review-toggle-split")).toHaveAttribute(
 		"data-active",
 		"true",
