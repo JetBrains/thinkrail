@@ -685,8 +685,17 @@ belong to [[module-ci-release]].
 Linux uses native WebKitGTK without CEF and declares Ubuntu 24.04+/glibc 2.38 plus `libgtk-3-0`,
 `libwebkit2gtk-4.1-0`, `libayatana-appindicator3-1`, and `librsvg2-2`. Desktop notifications also need
 `libnotify-bin`: Electrobun shows them by running the `notify-send` it provides, and without it they are
-dropped.
-Xvfb software-rendering flags are CI-only and are never shipped as user configuration.
+dropped. On NVIDIA Wayland, WebKitGTK's DMA-BUF renderer fails to create GBM buffers (`Failed to create
+GBM buffer … Invalid argument`, `X11 Error: GLXBadWindow`) as Electrobun loads and again when the main
+window is created, so the window stays blank (white, or solid gray). `entry.ts` imports
+`linuxWebKitRenderer.ts` before `deepLinkBootstrap.ts` (which loads `electrobun/main/events`) and before
+`index.ts` constructs the splash and main `BrowserWindow`. On import the module calls
+`applyLinuxWebKitRendererWorkaround(process.env, process.platform)`, which sets
+`WEBKIT_DISABLE_DMABUF_RENDERER` to `"1"` on Linux when that variable is absent. A value the user already
+exported is preserved, including `"0"` as an explicit opt-out. macOS and Windows environments stay
+unchanged. `LIBGL_ALWAYS_SOFTWARE` and `WEBKIT_DISABLE_COMPOSITING_MODE` stay CI-only Xvfb flags and are
+never shipped as user configuration. Drop the workaround once a packaged Linux desktop on NVIDIA Wayland
+creates its GBM buffers and paints the UI with the variable unset ([[electrobun-compatibility]]).
 
 ## Auto-update policy
 
