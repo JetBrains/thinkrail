@@ -49,6 +49,10 @@ for (const lineCount of [3, 1_500]) {
 		await expectWrapped(surface);
 		expect(await scrollOwner?.evaluate((node) => node.isConnected)).toBe(true);
 		if (lineCount === 3) await page.screenshot({ path: test.info().outputPath("diff-wrap.png") });
+		await selectPierreLine(surface, LONG_LINE);
+		await expect(page.getByTestId("review-composer")).toContainText("Line 2");
+		await page.getByTestId("review-composer-cancel").click();
+		await expect(page.getByTestId("review-composer")).toHaveCount(0);
 		await page.getByTestId("diff-toggle-inline").click();
 		await expectWrapped(surface);
 		await selectPierreLine(surface, LONG_LINE);
