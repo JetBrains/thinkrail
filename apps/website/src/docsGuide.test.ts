@@ -592,9 +592,17 @@ describe("the guide's facts about the sample and the SDK", () => {
 		expect(flat(reference.text)).toContain(
 			"a folder relative to the open project (or to pi's folder without one), which it saves as an absolute path",
 		);
-		expect(mutations).toContain("pinned npm versions are never reported");
+		expect(read("packages/server/src/extensions/installed/installer.ts")).toContain(
+			"return (await manager.checkForAvailableUpdates()).length > 0;",
+		);
+		const pi = "node_modules/@earendil-works/pi-coding-agent/dist/";
+		expect(read(`${pi}core/package-manager.js`)).toContain(
+			'if (parsed.type === "local" || parsed.pinned) {',
+		);
+		expect(read(`${pi}core/package-manager.js`)).toContain("pinned: isExactNpmVersion(version),");
+		expect(read(`${pi}utils/git.js`)).toContain("pinned: Boolean(args.ref),");
 		expect(flat(guide.text)).toContain(
-			"an npm source pinned to a version (`npm:<name>@<version>`) is not checked",
+			"an npm source pinned to a version (`npm:<name>@<version>`) and a git source pinned to a ref (`…@<ref>`) are not checked",
 		);
 		expect(read("packages/server/src/extensions/installed/SPEC.md")).toContain(
 			"**A CommonJS entry cannot use the host's pi or typebox.**",

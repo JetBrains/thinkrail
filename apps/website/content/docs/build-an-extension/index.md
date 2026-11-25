@@ -621,7 +621,8 @@ the extension's code runs, and the built web half checks the API major again whe
 
 Your package's own `version` is independent of the API version. Publish fixes as ordinary releases:
 ThinkRail checks npm and git sources for a newer version and shows **Update available**; an npm
-source pinned to a version (`npm:<name>@<version>`) is not checked. Updating
+source pinned to a version (`npm:<name>@<version>`) and a git source pinned to a ref (`…@<ref>`) are
+not checked. Updating
 installs the new version beside the old one and switches only once the new one loads; if it fails or is
 incompatible, the old version stays. A folder source has no updates to check.
 
