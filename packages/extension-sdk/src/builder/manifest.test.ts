@@ -31,7 +31,7 @@ describe("the thinkrail manifest", () => {
 		const pkg = read({
 			name: "thinkrail-ext-weather",
 			keywords: ["thinkrail-extension"],
-			dependencies: { "@thinkrail/extension-sdk": "1.0.0" },
+			devDependencies: { "@thinkrail/extension-sdk": "1.0.0" },
 			peerDependencies: { typebox: "*" },
 			thinkrail: {
 				api: "1.0",
@@ -100,14 +100,13 @@ describe("the thinkrail manifest", () => {
 		},
 	);
 
-	it("warns about a missing keyword, a missing SDK dependency and unknown fields", () => {
+	it("warns about a missing keyword and unknown fields without requiring a runtime SDK", () => {
 		const pkg = read({
 			name: "thinkrail-ext-x",
 			thinkrail: { api: "1.0", server: "./server/index.ts", tools: ["x"] },
 		});
-		expect(pkg.warnings).toHaveLength(3);
+		expect(pkg.warnings).toHaveLength(2);
 		expect(pkg.warnings.join("\n")).toContain('"thinkrail.tools" is not a manifest field');
-		expect(pkg.warnings.join("\n")).toContain('list @thinkrail/extension-sdk under "dependencies"');
 		expect(pkg.warnings.join("\n")).toContain('add "thinkrail-extension" to "keywords"');
 	});
 });

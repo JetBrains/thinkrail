@@ -92,19 +92,20 @@ The `thinkrail` manifest — the host rejects the extension unless:
   `.js`/`.mjs`/`.cjs`, `web` in `.js`/`.mjs`, `styles` in `.css`;
 - `title` / `image`, if present, are non-empty strings;
 - `@earendil-works/*` and `typebox` are `peerDependencies`, never `dependencies` (ThinkRail provides
-  its own; the build fails otherwise). `@thinkrail/extension-sdk` is a `dependency`.
+  its own; the build fails otherwise). Put `@thinkrail/extension-sdk` in `devDependencies` and use
+  type-only SDK imports in the server half (`export default { … } satisfies ServerExtension`).
 
 ### 5. Build and check
 
 ```sh
 cd <folder>
-npm install --omit=peer            # SDK from a checkout: npm install --omit=peer <tarball>
+npm install --omit=peer            # SDK from a checkout: npm install --save-dev --omit=peer <tarball>
 npm run build                      # = thinkrail-extension build --prefix <prefix>
 ```
 
 `--omit=peer` keeps ThinkRail's own pi and typebox out of the folder (it provides them). A server-only
-extension needs only the install. Then check before installing: the build exited 0 and `dist/web.js`
-and `dist/web.css` exist. Build errors — an import of a package you forgot to install among them —
+extension has no web build; its SDK types are only needed during development. For a web half, check
+before installing that the build exited 0 and `dist/web.js` and `dist/web.css` exist. Build errors — an import of a package you forgot to install among them —
 name the file and the rule (`reference/web-half.md` § Build errors). The build does not type-check,
 and the host loads the server half by stripping types: type errors do not stop it, runtime errors do —
 step 7 shows them.

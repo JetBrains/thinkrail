@@ -98,7 +98,8 @@ describe("the palette extension as built by the SDK", () => {
 			"@earendil-works/pi-coding-agent",
 			"typebox",
 		]);
-		expect(Object.keys(packageJson.dependencies)).toEqual(["@thinkrail/extension-sdk"]);
+		expect(packageJson.devDependencies["@thinkrail/extension-sdk"]).toBe("workspace:*");
+		expect("dependencies" in packageJson).toBe(false);
 	});
 
 	it("bundles no React, UI kit or SDK code — only lookups on the host", () => {
