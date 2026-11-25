@@ -691,7 +691,8 @@ window is created, so the window stays blank (white, or solid gray). `entry.ts` 
 `linuxWebKitRenderer.ts` before `deepLinkBootstrap.ts` (which loads `electrobun/main/events`) and before
 `index.ts` constructs the splash and main `BrowserWindow`. On import the module calls
 `applyLinuxWebKitRendererWorkaround(process.env, process.platform)`, which sets
-`WEBKIT_DISABLE_DMABUF_RENDERER` to `"1"` on Linux when that variable is absent. A value the user already
+`WEBKIT_DISABLE_DMABUF_RENDERER` to `"1"` on Linux when that variable is absent, in `process.env` and through
+libc `setenv`, because Bun keeps `process.env` writes out of the native environment WebKitGTK reads. A value the user already
 exported is preserved, including `"0"` as an explicit opt-out. macOS and Windows environments stay
 unchanged. `LIBGL_ALWAYS_SOFTWARE` and `WEBKIT_DISABLE_COMPOSITING_MODE` stay CI-only Xvfb flags and are
 never shipped as user configuration. Drop the workaround once a packaged Linux desktop on NVIDIA Wayland

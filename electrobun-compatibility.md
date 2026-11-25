@@ -72,7 +72,8 @@ stays the list of what it re-checks.
   buffer … Invalid argument`, `X11 Error: GLXBadWindow`) as Electrobun loads and again when the main
   window is created, so the window stays blank (white, or solid gray). `entry.ts` imports this module
   before `deepLinkBootstrap.ts`, which loads `electrobun/main/events`. On import the module sets
-  `WEBKIT_DISABLE_DMABUF_RENDERER=1` when the variable is absent. A value the user already exported,
+  `WEBKIT_DISABLE_DMABUF_RENDERER=1` when the variable is absent, in `process.env` and through libc
+  `setenv` (Bun does not forward `process.env` writes to the native environment). A value the user already exported,
   including `0`, is preserved. `LIBGL_ALWAYS_SOFTWARE` and `WEBKIT_DISABLE_COMPOSITING_MODE` stay
   CI-only Xvfb flags. **Removal gate:** drop it once a packaged Linux desktop on NVIDIA Wayland creates
   its GBM buffers and paints the UI with the variable unset. Verify `linuxWebKitRenderer.test.ts` and
