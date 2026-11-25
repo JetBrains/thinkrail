@@ -154,8 +154,8 @@ dependency. This keeps test process drivers outside both launchers and the serve
    rebuilds the same projects, workspaces, sessions, and transcripts. `session.list` unions in-memory sessions
    with pi's on-disk sessions; on that authoritative read a surface hydrates its locally placed chats, then
    passively auto-opens a bounded number of the newest unplaced sessions that are still live or carry open
-   todos (a single most-recent eligible session opens as a fallback when nothing qualifies and nothing is
-   placed yet), and lists everything else in history for
+   todos (a single most-recent session opens as a fallback when the workspace arrives empty: nothing
+   qualifies and the page has placed none of its chats), and lists everything else in history for
    explicit reopen. This one auto-open attempt fires once per surface and workspace for the page's life, not
    on every catalog re-read or reconnect, and a surface resolving an exact-chat route target defers it
    entirely to that target. Chats already placed by that page are ineligible for passive opening even if

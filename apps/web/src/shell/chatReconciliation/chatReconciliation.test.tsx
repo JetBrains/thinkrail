@@ -195,12 +195,12 @@ test("closing the last restored chat does not reopen it as the empty-workspace f
 	expect(opens()).toEqual([]);
 });
 
-test("an empty workspace can fall back to a never-placed chat after a newer one was closed", async () => {
+test("closing the only restored chat during entry opens no other chat in its place", async () => {
 	commit(documentFor(["closed"]));
 	await mount();
 	await close("closed", []);
 	await reply([summary("closed", false), summary("todo", false)]);
-	expect(opens()).toEqual([{ sessionId: "todo", activate: true }]);
+	expect(opens()).toEqual([]);
 });
 
 test("navigation during the first catalog wait still wins after reconnect", async () => {
