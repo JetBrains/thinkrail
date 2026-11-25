@@ -110,7 +110,6 @@ const INSTALL_FAILURE_KEYS: Partial<Record<WsErrorCode, MessageKey>> = {
 	PACKAGE_INSTALL_FAILED: "settings.packages.installDialog.failedOther",
 };
 
-/** A failed install in plain words, with the host's raw text kept as details for the codes that carry npm's output. */
 export function installFailureText(
 	t: Translator,
 	error: unknown,
