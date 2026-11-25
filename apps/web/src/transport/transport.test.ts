@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { PROTOCOL_VERSION, WS_CHANNELS, WS_MAX_FRAME_BYTES } from "@thinkrail/contracts";
-import { wsErrorCode } from "./requestError";
+import { RequestTimeoutError, wsErrorCode } from "./requestError";
 import { reconnectDelay, WsTransport } from "./transport";
 
 class TestWebSocket {
@@ -425,6 +425,97 @@ function trackHostOccupancy(socket: TestWebSocket): () => number {
 }
 
 describe("WsTransport admission", () => {
+	test.each(["ordinary", "control"] as const)(
+		"late timers cannot admit an expired queued %s request",
+		async (lane) => {
+			const callbacks: (() => void)[] = [];
+			const setTimer = globalThis.setTimeout;
+			const timers = spyOn(globalThis, "setTimeout").mockImplementation(
+				Object.assign((...args: Parameters<typeof setTimeout>) => {
+					const timer = setTimer(...args);
+					const [callback, , ...callbackArgs] = args;
+					callbacks.push(() => {
+						clearTimeout(timer);
+						callback(...callbackArgs);
+					});
+					return timer;
+				}, setTimer),
+			);
+			const clock = spyOn(performance, "now").mockReturnValue(1_000);
+			try {
+				const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+				transport.connect();
+				const socket = testSocket();
+				socket.open();
+				const count = lane === "ordinary" ? 256 : 32;
+				const held = Array.from({ length: count }, () =>
+					lane === "ordinary"
+						? transport.request("project.list", {}, { timeoutMs: 10 })
+						: transport.request("terminal.write", { id: "term", data: "held" }, { timeoutMs: 10 }),
+				);
+				const request = (timeoutMs: number) =>
+					lane === "ordinary"
+						? transport.request(
+								"session.followUp",
+								{ sessionId: "session", text: "continue" },
+								{ timeoutMs },
+							)
+						: transport.request("terminal.write", { id: "term", data: "queued" }, { timeoutMs });
+				const expired = request(20);
+				const current = request(60_000);
+				const results = Promise.allSettled([...held, expired, current]);
+				clock.mockReturnValue(1_030);
+				callbacks[0]?.();
+				const admitted = requestsIn(socket.sent);
+				for (const callback of callbacks) callback();
+				const outcomes = await results;
+				expect(outcomes[count]).toMatchObject({
+					status: "rejected",
+					reason: expect.any(RequestTimeoutError),
+				});
+				expect(admitted.some((frame) => frame.id === `trpi_${count + 1}`)).toBe(false);
+				expect(admitted.at(-1)?.id).toBe(`trpi_${count + 2}`);
+				expect(acksIn(socket.sent)).not.toContain(`trpi_${count + 1}`);
+			} finally {
+				for (const callback of callbacks) callback();
+				timers.mockRestore();
+				clock.mockRestore();
+			}
+		},
+	);
+
+	test("reconnect discards overdue unsent work before reconciliation and admission", async () => {
+		const clock = spyOn(performance, "now").mockReturnValue(1_000);
+		try {
+			const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+			transport.connect();
+			const first = testSocket();
+			first.open();
+			first.close();
+			const expired = transport.request(
+				"session.followUp",
+				{ sessionId: "session", text: "expired" },
+				{ timeoutMs: 60_000 },
+			);
+			const expiredResult = expired.catch((error: unknown) => error);
+			const current = transport.request("project.list", {}, { timeoutMs: 120_000 });
+			await tick(520);
+			clock.mockReturnValue(61_000);
+			const replacement = testSocket(1);
+			replacement.open();
+			const reconciled = resumesIn(replacement.sent);
+			const admitted = requestsIn(replacement.sent);
+			await answerQueuedRequests(replacement);
+			expect(await current).toEqual([]);
+			expect(await expiredResult).toBeInstanceOf(RequestTimeoutError);
+			expect(reconciled).toEqual([["trpi_2"]]);
+			expect(admitted.map((frame) => frame.id)).toEqual(["trpi_2"]);
+			expect(acksIn(replacement.sent)).toEqual(["trpi_2"]);
+		} finally {
+			clock.mockRestore();
+		}
+	});
+
 	test("a burst stays below the host replay ceiling and every caller receives its result", async () => {
 		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
 		transport.connect();

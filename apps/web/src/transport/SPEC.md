@@ -279,9 +279,11 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   A full control window also preserves that ordering for later ordinary requests.
   A reply or deadline releases the local slot, and its
   receipt is sent before replacement work. The original caller deadline includes queue time: an
-  unsent request that expires is removed without execution or a receipt. Reconnect reconciles the
-  complete unresolved set, replays admitted frames under their original IDs, then admits queued work
-  within the same windows. Receipts and reconciliation themselves never need an admission slot.
+  unsent request that expires is removed without execution or a receipt. Admission checks the original
+  monotonic deadline even when its timer callback is delayed. Reconnect first removes expired unsent
+  work, reconciles the remaining unresolved set, replays admitted frames under their original IDs,
+  then admits queued work within the same windows. Receipts and reconciliation themselves never need
+  an admission slot.
   The host's retention, deduplication, and 2048 tracked-entry ceiling remain authoritative: repeatedly
   abandoned handlers can still reach that ceiling, and admission is not a cancellation mechanism.
 - **`DEFAULT_TIMEOUT_MS` is the ceiling a host-side budget has to fit under, and nothing enforces it.**

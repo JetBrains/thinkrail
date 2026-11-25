@@ -110,6 +110,8 @@ export class WsTransport {
 		string,
 		{
 			frame: string;
+			method: WsMethodName;
+			deadline: number;
 			lane: RequestLane;
 			canBeOvertaken: boolean;
 			sent: boolean;
@@ -149,6 +151,9 @@ export class WsTransport {
 			}
 			openedAt = Date.now();
 			this.ackQueue = [];
+			for (const [id, entry] of this.pending) {
+				if (!entry.sent && performance.now() >= entry.deadline) this.expirePending(id);
+			}
 			this.sendFrame(JSON.stringify({ resume: [...this.pending.keys()] }));
 			for (const entry of this.pending.values()) {
 				if (entry.sent) this.sendFrame(entry.frame);
@@ -187,14 +192,14 @@ export class WsTransport {
 		}
 		return new Promise<WsResult<M>>((resolve, reject) => {
 			const lane = CONTROL_METHODS.has(method) ? "control" : "ordinary";
+			const deadline = performance.now() + timeoutMs;
 			const timer = setTimeout(() => {
-				const entry = this.takePending(id);
-				if (entry?.sent && this.ws?.readyState === WebSocket.OPEN) this.queueAck(id);
-				reject(new RequestTimeoutError(t("app.transport.timedOut", { method })));
-				if (entry) this.drainRequests();
+				if (this.expirePending(id)) this.drainRequests();
 			}, timeoutMs);
 			this.pending.set(id, {
 				frame,
+				method,
+				deadline,
 				lane,
 				canBeOvertaken: OVERTAKABLE_READS.has(method),
 				sent: false,
@@ -215,10 +220,22 @@ export class WsTransport {
 		return entry;
 	}
 
+	private expirePending(id: string): boolean {
+		const entry = this.takePending(id);
+		if (!entry) return false;
+		if (entry.sent && this.ws?.readyState === WebSocket.OPEN) this.queueAck(id);
+		entry.reject(new RequestTimeoutError(t("app.transport.timedOut", { method: entry.method })));
+		return true;
+	}
+
 	private drainRequests(): void {
 		if (this.ws?.readyState !== WebSocket.OPEN) return;
-		for (const entry of this.pending.values()) {
+		for (const [id, entry] of this.pending) {
 			if (entry.sent) continue;
+			if (performance.now() >= entry.deadline) {
+				this.expirePending(id);
+				continue;
+			}
 			if (this.active[entry.lane] >= REQUEST_WINDOWS[entry.lane]) {
 				if (!entry.canBeOvertaken) return;
 				continue;
