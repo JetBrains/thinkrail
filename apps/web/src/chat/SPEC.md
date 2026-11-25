@@ -1323,6 +1323,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   shortlist reveals the provider groups. Following the host default instead highlights the Default row.
   This is cmdk's initial value, not controlled highlight state: subsequent keyboard navigation, search
   and catalog refreshes stay owned by cmdk, and reopening resolves the current selection again.
+  When popover fitting changes the list's dimensions after its initial scroll, the list reveals cmdk's
+  highlighted row again by adjusting only its own scroll position, without moving the surrounding dialog.
   Each provider group is collapsible: its
   header is itself a cmdk row (`model-group-toggle`, `aria-expanded`, Enter toggles) carrying the match
   count, and a picker opens with every group collapsed except the current model's (none when that model

@@ -42,6 +42,7 @@ import {
 	type CSSProperties,
 	forwardRef,
 	type KeyboardEvent,
+	useEffect,
 	useImperativeHandle,
 	useMemo,
 	useRef,
@@ -350,6 +351,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 	) {
 		const t = useT();
 		const triggerRef = useRef<HTMLButtonElement>(null);
+		const [list, setList] = useState<HTMLDivElement | null>(null);
 		const [open, setOpen] = useState(false);
 		const [query, setQuery] = useState("");
 		const [showAll, setShowAll] = useState(false);
@@ -369,6 +371,20 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 			: current && currentSection
 				? rowValue(currentSection, current)
 				: "";
+		useEffect(() => {
+			if (!list) return;
+			const observer = new ResizeObserver(() => {
+				const item = list.querySelector<HTMLElement>('[cmdk-item][aria-selected="true"]');
+				if (!item) return;
+				const viewport = list.getBoundingClientRect();
+				if (viewport.height === 0) return;
+				const bounds = item.getBoundingClientRect();
+				if (bounds.top < viewport.top) list.scrollTop -= viewport.top - bounds.top;
+				else if (bounds.bottom > viewport.bottom) list.scrollTop += bounds.bottom - viewport.bottom;
+			});
+			observer.observe(list);
+			return () => observer.disconnect();
+		}, [list]);
 
 		const openWith = (next: string) => {
 			setQuery(next);
@@ -581,7 +597,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 							value={query}
 							onValueChange={setQuery}
 						/>
-						<CommandList className="max-h-340 min-h-0 flex-1">
+						<CommandList ref={setList} className="max-h-340 min-h-0 flex-1">
 							{emptyState === "no-match" ? (
 								<CommandEmpty>{t("chat.modelPicker.noMatch")}</CommandEmpty>
 							) : null}

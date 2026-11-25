@@ -69,10 +69,24 @@ if (process.env.THINKRAIL_MODEL_PICKER_DOM_CHILD !== "1") {
 		});
 	const requestAnimationFrame = (callback: FrameRequestCallback) =>
 		Number(setTimeout(() => callback(performance.now()), 0));
+	const resizeObservers = new Set<ResizeObserverFixture>();
 	class ResizeObserverFixture {
-		observe() {}
-		unobserve() {}
-		disconnect() {}
+		readonly targets = new Set<Element>();
+		readonly callback: ResizeObserverCallback;
+		constructor(callback: ResizeObserverCallback) {
+			this.callback = callback;
+			resizeObservers.add(this);
+		}
+		observe(target: Element) {
+			this.targets.add(target);
+		}
+		unobserve(target: Element) {
+			this.targets.delete(target);
+		}
+		disconnect() {
+			this.targets.clear();
+			resizeObservers.delete(this);
+		}
 	}
 	Object.assign(globalThis, {
 		window: dom,
@@ -143,6 +157,35 @@ if (process.env.THINKRAIL_MODEL_PICKER_DOM_CHILD !== "1") {
 	function selected(): HTMLElement {
 		return element('[cmdk-item][aria-selected="true"]');
 	}
+	function rect(top: number, height: number): DOMRect {
+		return {
+			x: 0,
+			y: top,
+			width: 240,
+			height,
+			top,
+			bottom: top + height,
+			left: 0,
+			right: 240,
+			toJSON: () => ({ top, height }),
+		};
+	}
+	async function resize(target: Element) {
+		const contentRect = target.getBoundingClientRect();
+		const box = { inlineSize: contentRect.width, blockSize: contentRect.height };
+		const entry = {
+			target,
+			contentRect,
+			borderBoxSize: [box],
+			contentBoxSize: [box],
+			devicePixelContentBoxSize: [box],
+		};
+		await act(() => {
+			for (const observer of resizeObservers) {
+				if (observer.targets.has(target)) observer.callback([entry], observer);
+			}
+		});
+	}
 	async function event(target: HTMLElement, type: string, key?: string): Promise<Event> {
 		const dispatched = new dom.Event(type, { bubbles: true, cancelable: true });
 		if (key) Object.defineProperty(dispatched, "key", { value: key });
@@ -211,6 +254,39 @@ if (process.env.THINKRAIL_MODEL_PICKER_DOM_CHILD !== "1") {
 		expect(rows[39]?.getAttribute("data-model-id")).toBe(current.id);
 		expect(selected().getAttribute("data-model-id")).toBe(current.id);
 		expect(scrolled.includes(row(current))).toBe(true);
+	});
+
+	test("fitting the list after its initial scroll keeps the selected row visible", async () => {
+		await mount();
+		const list = element("[cmdk-list]");
+		const currentRow = row(current);
+		let height = 340;
+		list.scrollTop = 1420;
+		list.getBoundingClientRect = () => rect(100, height);
+		currentRow.getBoundingClientRect = () => rect(100 + 1720 - list.scrollTop, 40);
+		expect(currentRow.getBoundingClientRect().bottom).toBe(list.getBoundingClientRect().bottom);
+		dom.document.body.scrollTop = 75;
+		height = 120;
+		await resize(list);
+		expect(currentRow.getBoundingClientRect().top).toBeGreaterThanOrEqual(100);
+		expect(currentRow.getBoundingClientRect().bottom).toBeLessThanOrEqual(220);
+		expect(dom.document.body.scrollTop).toBe(75);
+		expect(selected()).toBe(currentRow);
+	});
+
+	test("a list resize reveals the keyboard highlight without resetting the selected model", async () => {
+		const picker = await mount();
+		await event(element("[cmdk-input]"), "keydown", "ArrowUp");
+		const previous = row(catalog[38] as WireModel);
+		const list = element("[cmdk-list]");
+		list.scrollTop = 1720;
+		list.getBoundingClientRect = () => rect(100, 120);
+		previous.getBoundingClientRect = () => rect(100 + 1680 - list.scrollTop, 40);
+		await resize(list);
+		expect(previous.getBoundingClientRect().top).toBeGreaterThanOrEqual(100);
+		expect(previous.getBoundingClientRect().bottom).toBeLessThanOrEqual(220);
+		expect(selected()).toBe(previous);
+		expect(picker.selections).toEqual([]);
 	});
 
 	test("the current model is revealed even when it is outside the pinned and recent shortlist", async () => {
