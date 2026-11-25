@@ -1700,11 +1700,12 @@ a project picker, the prompt hero, and the reused
   never reads a listing's `image` and no catalog entry makes the app request another origin (pinned by
   `e2e/extension-browse.spec.ts`). A row shows, as plain text: title, version, **Agent tools** /
   **Chat cards** from `halves`, package name · author, description, and an **Installed** mark or an
-  incompatible mark (`extensionApiFit`) with its reason. Its buttons are the npm and repository links and
-  **Install**, which is the row's primary (Enter on the row) and opens the install dialog's confirm step
-  with the listing's `npm:<name>`; a listing that cannot be installed has no Install and no primary.
-  Rejected: a content-wide primary that also opened the dialog — a second tab stop and click target for
-  the same action as Install. An empty catalog is a row linking to the
+  incompatible mark (`extensionApiFit`) with its reason. It has no primary; its buttons, in the row's →
+  walk, are the npm and repository links and **Install**, which opens the install dialog's confirm step
+  with the listing's `npm:<name>` (absent when the listing cannot be installed). Rejected: a content-wide
+  primary that also opened the dialog (a second tab stop and click target for the same action as
+  Install), and Install as the primary (the walk keeps a primary out of → / ←, so the button would be
+  unreachable by arrows). An empty catalog is a row linking to the
   authoring guide (`https://thinkrail.ai/docs/build-an-extension/`); an unreachable, offline or invalid
   catalog — or a host that does not answer — is a notice row saying it cannot reach the catalog, that
   installed extensions keep working, with Retry as its button, while the rest of the page is unaffected.

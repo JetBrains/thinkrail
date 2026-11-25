@@ -84,7 +84,7 @@ export function ExtensionBrowseCard({
 	onInstall: (entry: ExtensionBrowseEntry) => void;
 }) {
 	const t = useT();
-	const { rowProps, primaryProps, sideProps } = useSettingsListRow(entry.name);
+	const { rowProps, sideProps } = useSettingsListRow(entry.name);
 	const title = entry.title ?? entry.name;
 	const fit = extensionApiFit(entry.api);
 	const installable = !entry.installed && fit === "compatible";
@@ -171,7 +171,7 @@ export function ExtensionBrowseCard({
 					<Button
 						variant="outline"
 						size="m"
-						{...primaryProps}
+						{...sideProps}
 						aria-haspopup="dialog"
 						data-testid="extension-browse-install"
 						onClick={() => onInstall(entry)}
