@@ -4295,7 +4295,7 @@
 	"settings.extensions.group.bundled": "Встроено в ThinkRail",
 	"settings.extensions.group.installed": "Установленные",
 	"settings.extensions.group.installedDescription": "Расширения ThinkRail и пакеты pi, установленные на этом компьютере. Выключение пакета pi здесь действует только на чаты ThinkRail; pi CLI по-прежнему его загружает.",
-	"settings.extensions.group.packages": "Пакеты",
+	"settings.extensions.group.packages": "Установка",
 	"settings.extensions.group.skills": "Навыки",
 	"settings.extensions.install": "Установить пакет…",
 	"settings.extensions.loadFailed": "Не удалось загрузить расширения с этого хоста.",

@@ -3865,7 +3865,7 @@
 	"settings.extensions.group.bundled": "Built into ThinkRail",
 	"settings.extensions.group.installed": "Installed",
 	"settings.extensions.group.installedDescription": "ThinkRail extensions and pi packages installed on this machine. Switching a pi package off here affects ThinkRail chats only; the pi CLI still loads it.",
-	"settings.extensions.group.packages": "Packages",
+	"settings.extensions.group.packages": "Install",
 	"settings.extensions.group.skills": "Skills",
 	"settings.extensions.install": "Install package…",
 	"settings.extensions.loadFailed": "Couldn't load the extensions from this host.",

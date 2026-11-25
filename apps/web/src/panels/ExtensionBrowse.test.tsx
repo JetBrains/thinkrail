@@ -92,10 +92,13 @@ test("listings are one keyboard list after the search field, said in visible tex
 	expect(markup).toContain('data-focus-list="extension-browse"');
 	expect(markup).toContain(`data-focus-row="${WEATHER.name}"`);
 	expect(markup).toMatch(/<li[^>]*data-setting-row="extension-browse\/[^"]+"[^>]*tabindex="-1"/);
-	expect(markup).toMatch(/data-setting-primary=""[^>]*aria-haspopup="dialog"/);
 	expect(markup).toMatch(
-		/aria-disabled="true"[^>]*data-setting-primary=""|data-setting-primary=""[^>]*aria-disabled="true"/,
+		/data-setting-primary=""[^>]*aria-haspopup="dialog"[^>]*data-testid="extension-browse-install"/,
 	);
+	expect(markup.match(/data-setting-primary=""/g)).toHaveLength(
+		(markup.match(/data-testid="extension-browse-install"/g) ?? []).length,
+	);
+	expect(markup).not.toContain("aria-disabled");
 	expect(markup).toMatch(/tabindex="(0|-1)"[^>]*data-testid="extension-browse-install"/);
 	expect(markup).toMatch(/tabindex="(0|-1)"[^>]*data-testid="extension-browse-npm"/);
 	expect(markup).not.toContain("truncate");
