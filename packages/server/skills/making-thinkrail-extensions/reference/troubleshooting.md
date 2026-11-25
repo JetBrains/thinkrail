@@ -16,7 +16,7 @@ Read the entry with `node <skill dir>/scripts/extensions.mjs status <folder>` (o
 | `Failed to load extension: <your message>` | the server file threw while loading (top-level code) — fix it |
 | `ParseError` / `SyntaxError` | a syntax error in a server file |
 | `must be the package name` | the descriptor's `name` differs from `package.json` `name` — make them equal |
-| `does not default-export` | `server/index.ts` needs `export default { … } satisfies ServerExtension` with a type-only SDK import |
+| `not a defineServerExtension descriptor` / `does not default-export` | `server/index.ts` needs `export default { … } satisfies ServerExtension` with a type-only SDK import |
 | `is already installed from <source>` | another declared folder or package has the same name: rename this one, or remove the other declaration |
 | `skill package … declares no pi.skills directories` / cannot resolve | fix `skillPackages` and `"pi": { "skills": [...] }` (server-half.md § Skills) |
 | `not a ThinkRail extension` | `package.json` has no `thinkrail` key |
