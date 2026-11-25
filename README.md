@@ -76,7 +76,7 @@ For latest version, see the [Releases page](https://github.com/JetBrains/thinkra
 
   - The **Find models** button lists the models available on the server, together with their capabilities. The server is saved to `pi`'s `models.json`. The models models appear in the chat model picker, and in the `pi` CLI alike.
 
-- **Desktop app or browser.** A native desktop app, or the `thinkrail` CLI that opens the same app in your browser. Both embed the same engine host. App state lives under `~/.thinkrail`.
+- **Desktop app or browser.** A native desktop app, or the `thinkrail` CLI that opens the same app in your browser. Both embed the same engine host. App state lives under `~/.thinkrail`; set `THINKRAIL_DATA_DIR` to keep it elsewhere (for example `~/.local/state/thinkrail`).
 
 - **Your language.** ThinkRail uses your system language or a language you pick in Settings → Language: English, Japanese, Korean, Polish, Russian, Simplified Chinese, Spanish, or Traditional Chinese (Taiwan). You can add a language ThinkRail doesn't ship yet by putting a translated locale file, for example `de.json`, in `~/.thinkrail/locales`. (Tell your AI agent to do it for you!)
 
@@ -152,7 +152,7 @@ set "THINKRAIL_CHANNEL=stable" && set "THINKRAIL_VERSION=0.3.1" && powershell -c
 
 If you keep ThinkRail running, it periodically checks for updates and, when it finds one, shows an "Update available" button in the GUI.
 
-`thinkrail uninstall` removes the executable, the PATH entry the installer added, and the install metadata; it then asks whether to delete your `~/.thinkrail` app state (kept by default; `--remove-data` deletes it, and `-y` skips the questions).
+`thinkrail uninstall` removes the executable, the PATH entry the installer added, and the install metadata; it then asks whether to delete your app state (`~/.thinkrail`, or `THINKRAIL_DATA_DIR` when set) (kept by default; `--remove-data` deletes it, and `-y` skips the questions).
 
 If you prefer a manual install, download a binary and the `SHA256SUMS` from the releases page, and verify the checksum. For self-update to work, rename it to `thinkrail` (`thinkrail.exe` on Windows) and place it at `<prefix>/bin/thinkrail[.exe]`; a binary kept under its release filename or elsewhere must be replaced manually or reinstalled with the script.
 
