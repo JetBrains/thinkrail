@@ -267,7 +267,9 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   Esc ladder from another panel and Shift+Tab from the composer, never Skip ([[submodule-web-chat]],
   [[submodule-web-shell]]). A **coarse pointer never gives up focus** at all: focusing a row (the Other input
   especially) raises the soft keyboard over someone who was reading. A **page change** follows a tap, so
-  it may focus — except into a text field on a coarse pointer (`shouldFocusPageTarget`). The transcript is
+  it may focus — except into a text field on a coarse pointer (`shouldFocusPageTarget`). It focuses a frame
+  later and only if focus is not on the new page yet, so a tap into its Other field before that frame keeps
+  the caret. The transcript is
   never scrolled for attention: the dock is always visible. The card used to reveal itself in the
   virtualized transcript through a bounded settling window that yielded to the user's first input; docking
   removed the reveal, the settling window and the `revealElement` / `cancelAutomaticReveal` members of the

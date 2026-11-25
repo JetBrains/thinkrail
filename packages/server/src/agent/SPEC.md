@@ -1034,10 +1034,11 @@ re-opened transcripts provider-valid.
     factories see a view of `pi` that silently refuses any tool, command or flag the host's slots
     registered earlier in the same load (recorded per reload), so an installed `tool_search` or `/mcp`
     never replaces the host's (registered in [[pi-compatibility]] § Registry tool precedence). The child
-    set keeps the same rule: `childExtensionFactories` ends with the registry's child factories, built-ins
-    before installed ones; `pi-delegation` appends its own (`dropCancelledPrompt`, a DAG resource's worker
-    factories) after that list, so an installed child factory can still shadow a DAG worker tool until
-    `pi-delegation` places resource factories ahead of the installed child set. `piPackagesInstall` applies the kind rule ([[submodule-server-agent-packages]]
+    set keeps the same rule: `childExtensionFactories` ends with the built-in registry child factories, and
+    the installed ones go to `pi-delegation` apart, as `childInstalledExtensionFactories()`, which it loads
+    after a DAG resource's worker factories (and before its tool-less `dropCancelledPrompt`, which stays last),
+    so an installed child factory never shadows a host or DAG worker tool. A child loads no `builtin:` slot, so pi's first-registration
+    rule is the whole guard there. `piPackagesInstall` applies the kind rule ([[submodule-server-agent-packages]]
     § Kind detection) and returns `{ installed: "package" | "extension", … }`. The pi runtime build forces
     jiti's transform through the shared `withForcedJitiTransform`, serialized with installed-extension
     loads because the env is process-wide.
@@ -1046,7 +1047,8 @@ re-opened transcripts provider-valid.
     settings edge; a throwing resolver means nothing disabled) is read by `buildResourceLoader` at **every
     loader reload** (snapshotted beside project trust), so the gated registry factories skip a disabled
     extension and `extensionsOverride` omits its `<inline:…>` entry — new parents never load it — and by
-    `childExtensionFactories(workspaceId)` when a hidden child's loader runs. `refreshExtensionTools()`
+    `childExtensionFactories(workspaceId)` / `childInstalledExtensionFactories()` when a hidden child's
+    loader runs. `refreshExtensionTools()`
     updates live sessions: tools whose `sourceInfo.path` belongs to a disabled registry extension leave
     the active set (remembered per entry so re-enabling restores exactly the withheld tools, never ones
     that were inactive by default) idle-sync / streaming-deferred to `agent_settled`, latest policy wins, and
@@ -1203,8 +1205,9 @@ re-opened transcripts provider-valid.
     Children opting into extensions
     (`extensions: true` in their definition) get the **curated child set**
     (`childExtensionFactories` in `extensions`, pi `InlineExtension`s): the headless-search policy +
-    `pi-spec-graph` + every registry extension's `childExtensions` (named inline, from
-    [[submodule-server-extensions]]; today `web-access`'s `pi-web-access`) — deliberately not the parent's
+    `pi-spec-graph` + every built-in registry extension's `childExtensions` (named inline, from
+    [[submodule-server-extensions]]; today `web-access`'s `pi-web-access`; installed extensions' child halves
+    come from `childInstalledExtensionFactories()`, loaded after a resource's factories) — deliberately not the parent's
     full set
     (rationale + the listed-children carve-out: core decision #25). **Every** child, opted in or not,
     also loads the core's base set (`childBaseExtensionFactories`, same decision): `oversizedImageGuard`,
@@ -1279,8 +1282,10 @@ re-opened transcripts provider-valid.
     `.agents/skills`, so capped filesystem batches carry truthful skill-change evidence without making
     `watch` depend on `agent`. The fixed project/personal alias roots are registered as candidate skill paths
     **whether or not they exist yet**, so a `loader.reload()` picks up one a branch switch / pull / clone
-    creates mid-session (plugin dirs are the set installed at construction — a plugin added later
-    needs a fresh session); classification still only counts dirs that actually exist. Still never arbitrary
+    creates mid-session. Every reload also re-reads the installed Claude plugin manifest before refreshing
+    the existing loader's skill paths, so newly installed plugins appear, upgraded install paths replace old
+    ones, and removed plugins disappear even when their cache folders remain on disk. Current admission
+    applies before these paths reach pi; classification still only counts dirs that actually exist. Still never arbitrary
     dot-directory scanning, plugin caches, commands, or nested downward discovery. Pi remains the parser:
     vendor-only macros/hooks/models/subagents/metadata are not emulated. First-name-wins precedence is
     Pi native/configured/shared → ThinkRail-bundled → personal aliases → project aliases, so a repo can
@@ -1315,8 +1320,8 @@ re-opened transcripts provider-valid.
     The host resolves the context via the **`setSkillAdmissionResolver`** seam (keyed by `workspaceId`, fails
     closed); `buildResourceLoader` takes the resolver as a thunk and `skillsGate` re-resolves **both** the admission
     context (`getCtx`) **and** the live compatibility source set (fresh discovery) on every `loader.reload()`, so
-    `session.reloadResources` picks up a mid-session trust grant, skill/group toggle, **or a newly-appeared alias
-    dir** — and a late-appearing project alias is still classified + trust-gated, never slipping through as an
+    `session.reloadResources` picks up a mid-session trust grant, skill/group toggle, **a newly-appeared alias
+    dir or a changed plugin installation** — and a late-appearing project alias is still classified + trust-gated, never slipping through as an
     unclassified load. Personal and bundled resources are never trust-gated (only the enable/disable layer), and
     this gate is scoped to the compatibility aliases. pi-native project resources (`.pi/` settings, extensions,
     skills, prompts and themes, `SYSTEM.md`, ancestor `.agents/skills`) follow pi-level trust instead: pi gates
@@ -1525,7 +1530,7 @@ context-budget limitations and their upgrade checks live in [[pi-compatibility]]
 
 Pi owns provider retry; the host never adds one. Pi retries only errors that match its retryable
 patterns: "Anthropic stream ended before message_stop" does, "Could not parse Anthropic SSE event" does
-not. `patches/@earendil-works%2Fpi-ai@1.5.2.patch` (root `patchedDependencies`, upstream
+not. `patches/@earendil-works%2Fpi-ai@1.6.0.patch` (root `patchedDependencies`, upstream
 earendil-works/pi#10390, #564) fixes two defects in pi-ai's `anthropic-messages` SSE parser that end a
 turn with that parse error. The two fixes have different outcomes:
 

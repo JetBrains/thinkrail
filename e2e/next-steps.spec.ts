@@ -43,8 +43,15 @@ function promptTexts(frames: ClientFrame[]): string[] {
 	);
 }
 
-function seedSuggestedTurn(name: string, offset: number): void {
+type SeedMessage = Parameters<typeof seedWorkspaceSession>[1]["messages"][number];
+const ANSWER = "Fixed: the debounce window now outlasts the poll interval.";
+
+function seedSuggestedTurn(name: string, offset: number, answerBeforeCall = false): void {
 	const ts = BASE_TS + offset;
+	const answer = { type: "text" as const, text: ANSWER };
+	const finalMessage: SeedMessage[] = answerBeforeCall
+		? []
+		: [{ role: "assistant", content: [answer], stopReason: "stop", timestamp: ts + 3_000 }];
 	seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
 		name,
 		messages: [
@@ -52,7 +59,7 @@ function seedSuggestedTurn(name: string, offset: number): void {
 			{
 				role: "assistant",
 				content: [
-					{ type: "text", text: "Fixed: the debounce window now outlasts the poll interval." },
+					...(answerBeforeCall ? [answer] : []),
 					{
 						type: "toolCall",
 						id: `suggest-${offset}`,
@@ -67,17 +74,15 @@ function seedSuggestedTurn(name: string, offset: number): void {
 				role: "toolResult",
 				toolCallId: `suggest-${offset}`,
 				toolName: "suggest_next_steps",
-				content: [{ type: "text", text: "Shown to the user as one-click next messages." }],
+				content: [{ type: "text", text: "Saved. Now write your final message to the user." }],
 				details: { suggestions: SUGGESTIONS },
 				isError: false,
 				timestamp: ts + 2_000,
 			},
+			...finalMessage,
 		],
 	});
 }
-
-type SeedMessage = Parameters<typeof seedWorkspaceSession>[1]["messages"][number];
-const ANSWER = "Fixed: the debounce window now outlasts the poll interval.";
 
 function seedRefusedTurn(name: string, offset: number, retried: boolean): void {
 	const ts = BASE_TS + offset;
@@ -129,9 +134,14 @@ function seedRefusedTurn(name: string, offset: number, retried: boolean): void {
 	});
 }
 
-async function openSeededChat(page: Page, title: string, offset: number): Promise<void> {
+async function openSeededChat(
+	page: Page,
+	title: string,
+	offset: number,
+	answerBeforeCall = false,
+): Promise<void> {
 	await openFixtureProject(page);
-	seedSuggestedTurn(title, offset);
+	seedSuggestedTurn(title, offset, answerBeforeCall);
 	await enterDefaultWorkspace(page);
 	await openPersistedChat(page, title);
 }
@@ -174,6 +184,20 @@ test("a finished turn's suggestions show above the composer, survive a reload an
 	await expect(input).toHaveValue("half-written draft");
 	await expect(page.getByTestId("composer-suggestions")).toHaveCount(0);
 	await expect(input).toBeFocused();
+});
+
+test("a turn recorded when the call came after the answer still shows its chips and the answer's copy action", async ({
+	page,
+}) => {
+	await openSeededChat(page, "Answer before the call", 5_000, true);
+	await expect(
+		page.getByTestId("composer-suggestion").getByTestId("composer-suggestion-text"),
+	).toHaveText(SUGGESTIONS);
+	await expect(page.getByTestId("turn-divider-status")).toHaveAttribute("data-outcome", "done");
+	const answer = page
+		.locator('[data-testid="chat-message"][data-role="assistant"]')
+		.filter({ hasText: "Fixed: the debounce window" });
+	await expect(answer.getByTestId("chat-copy")).toHaveCount(1);
 });
 
 test("Alt+N sends chip N from the input", async ({ page }) => {

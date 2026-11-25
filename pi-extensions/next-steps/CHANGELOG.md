@@ -1,5 +1,18 @@
 # @thinkrail/pi-next-steps
 
+## 0.1.1
+
+### Patch Changes
+
+- The agent now calls `suggest_next_steps` first and writes its final message after it, as the last thing
+  in the turn. The tool no longer ends the turn (`terminate: false`), and its result asks for that message,
+  unless the calling message already holds a text answer: then the turn ends, so the answer isn't repeated.
+  Newer Claude models (Opus 5.5, Sonnet 5.5, Fable 5.x) return text written right before a tool call as a
+  short server-side summary in a thinking block, so an answer written before the call could reach the user
+  as a one-line summary or not at all. 0.1.0's one-time refusal of a textless call is gone: the retried
+  answer was summarized again. The suggestion row now also shows when the session ends with the final
+  message after the call. A turn whose answer comes after the call costs one more model request.
+
 ## 0.1.0
 
 ### Minor Changes

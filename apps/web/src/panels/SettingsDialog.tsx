@@ -354,7 +354,7 @@ function SettingsFrame({
 	return (
 		<>
 			<div className="flex shrink-0 flex-col border-border-default border-b md:min-h-0 md:w-220 md:border-r md:border-b-0">
-				<div className="flex shrink-0 items-center px-16 pt-12 pb-8">
+				<div className="flex h-38 shrink-0 items-center px-16 pt-12 pb-8">
 					<DialogTitle>{t("settings.dialog.title")}</DialogTitle>
 				</div>
 				<SettingsSearchField

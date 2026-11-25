@@ -227,14 +227,13 @@ function resolveSkillInputs(
 	skillsOverride: ReturnType<typeof skillsGate>;
 	refreshSkillPaths: (disabled: ReadonlySet<string>) => void;
 } {
-	const roots = compatibilityRoots(cwd);
 	const additionalSkillPaths: string[] = [];
 	const refreshSkillPaths = (current: ReadonlySet<string>): void => {
 		additionalSkillPaths.splice(
 			0,
 			additionalSkillPaths.length,
 			...bundledSkillPaths(current),
-			...admittedRoots(roots, getCtx()).map((source) => source.path),
+			...admittedRoots(compatibilityRoots(cwd), getCtx()).map((source) => source.path),
 		);
 	};
 	refreshSkillPaths(disabled);
@@ -442,8 +441,21 @@ export function childExtensionFactories(workspaceId: string): InlineExtension[] 
 		headlessSearchPolicy,
 		...(specsEnabledFor(workspaceId) ? [specGraphExtension] : []),
 		skillCatalog,
-		...registryInlineExtensions("childExtensions", isExtensionDisabled),
+		...childRegistryFactories(false),
 	];
+}
+
+/** Installed extensions' child halves: `pi-delegation` loads them after every host-owned child factory. */
+export function childInstalledExtensionFactories(): InlineExtension[] {
+	return childRegistryFactories(true);
+}
+
+function childRegistryFactories(installed: boolean): InlineExtension[] {
+	return registryInlineExtensions(
+		"childExtensions",
+		isExtensionDisabled,
+		serverExtensions().filter((entry) => (entry.installed !== undefined) === installed),
+	);
 }
 
 interface LoaderInputs {

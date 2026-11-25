@@ -213,7 +213,8 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   `markdown`/`tool`/`activity` row precedes the next round opener (see `divider`) (`finalAnswerRowIds`, supplied by every
   transcript integration as `isFinalAnswer`); a non-final markdown row renders plain, without the action.
   A later `tool`/`activity` row holding only suggestions calls (`carriesComposerSuggestions`) does not
-  count: by contract that call comes after the final answer (*Composer suggestions*).
+  count. Rounds recorded before the call moved ahead of the final answer end with that row
+  (*Composer suggestions*).
   Both go through **one shared layout**, `MessageWithCopy` (in `turns.tsx`): a `relative` wrapper that
   overlays the action **inside the role's bottom corner on the same line as content** — bottom-left for
   an assistant answer (`left-0 bottom-0`), bottom-right for a user bubble (`right-0 bottom-8`, aligned
@@ -336,7 +337,8 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   `failure`) counts; a failed rename or an extension notice never relabels a round. A round cut short
   by a steer (last reply `toolUse`) has no outcome and keeps the plain time — except a reply ending in a
   qualifying suggestions call (`endingSuggestionsCall`, the predicate the chips use, *Composer
-  suggestions*): that call ended the run by contract, so a reloaded round reads done like the live one. A
+  suggestions*). In rounds recorded before the call moved ahead of the final answer, that call ended
+  the run, so a reloaded round reads done like the live one. A
   generic "`toolUse` with every result in" rule was rejected: pi persists no `terminate`, and a crash
   after an ordinary tool batch looks the same. Times under 1s are dropped;
   an instant error with nothing else to report is the bare rule. The written files show as **two chips
@@ -769,16 +771,19 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   Subagent transcripts never mount `ChatView`. `deriveComposerSuggestions` (`composerSuggestions.ts`)
   reads them from the transcript alone, so nothing new is stored. Chips show only when all of these hold:
   - the session is idle with nothing queued;
-  - skipping the round-closer `system` turns, the last turn is a finished assistant message whose
+  - walking back over `system` turns and finished text-only replies (`stop`, no tool calls: the final
+    message written after the call), the first other turn is a finished assistant message whose
     **last** tool call has a `composerSuggestions` reader ([[module-extension-api]]);
   - that call's result is `done`;
   - the message holds no interactive call;
   - the owning extension is switched on (registrations carry their extension's name).
 
-  Any later turn (an error, a retry, the next user message) clears the row, and a reload restores it.
+  Any other later turn (an error, a retry, an unfinished or failed reply, more tool work, the next user
+  message) clears the row, and a reload restores it. The final message comes after the call because
+  text before a tool call can reach the user only as a server summary ([[module-pi-next-steps]],
+  *Decisions*). Rounds recorded when the call came last qualify the same way.
   The row shows at most one chip per send key — nine — whatever a reader returns.
-  A call that wasn't last never qualifies: pi only ends the turn when every result in the batch
-  terminates. A click, or the chip's key, goes through `performSend(text, [], "send")`, the same
+  A call that wasn't last in its message never qualifies: the work went on beside it. A click, or the chip's key, goes through `performSend(text, [], "send")`, the same
   draft-free path as Try again, so the composer draft survives. Shift+click, or the chip's edit key,
   instead puts the text into the input (`ComposerHandle.insertAtCaret`: the whole text into an empty
   input, else at the remembered caret with a separating space) and focuses it, sending nothing. A chip

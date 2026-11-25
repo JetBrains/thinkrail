@@ -140,11 +140,6 @@ export function readExtensionPackage(root: string): ExtensionPackage {
 		if (!existsSync(join(root, paths.server))) {
 			problems.push(`"server" points at ${manifest.server}, which does not exist.`);
 		}
-		if (pkg.dependencies?.[SDK_PACKAGE] === undefined) {
-			warnings.push(
-				`the server half imports ${SDK_PACKAGE}/server at runtime: list ${SDK_PACKAGE} under "dependencies", or the installed extension will not find it.`,
-			);
-		}
 	}
 	const bundled = Object.keys(pkg.dependencies ?? {})
 		.filter((name) => HOST_SINGLETONS.test(name))

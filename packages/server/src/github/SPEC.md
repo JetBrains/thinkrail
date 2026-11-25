@@ -20,8 +20,8 @@ Read-only local GitHub CLI (`gh`) auth status for the New-Workspace dialog's "Co
   Degrades gracefully — a missing / un-authed / non-responding `gh` all resolve to `{ connected: false }`
   so the dialog works fully offline. `THINKRAIL_GH_OFFLINE=1` forces the disconnected result without
   shelling (e2e drives the offline path). Also `ghSetupProblem()` → `Promise<GhSetupProblem | null>` — the
-  *named* reason the direct gh path is unavailable (`missing` when `Bun.which("gh")` finds no binary or the
-  probe never launched, `unauthenticated` when the probe exits non-zero, `null` when gh is usable or the
+  *named* reason the direct gh path is unavailable (`missing` when the probe cannot launch `gh`,
+  `unauthenticated` when the probe exits non-zero, `null` when gh is usable or the
   offline seam is on). Both probes run the same `gh auth status` under `subprocess`' `runBounded` at an 8s
   budget (`GH_PROBE_TIMEOUT_MS`): `gh auth status` does a network round-trip, and the host is one event
   loop — a `spawnSync` here would freeze every session for the probe's duration, which is exactly the
@@ -31,5 +31,12 @@ Read-only local GitHub CLI (`gh`) auth status for the New-Workspace dialog's "Co
   show setup guidance instead of silently degrading to the compare page.
 - **Public surface (barrel):** `githubAuthStatus`, `githubRefresh`, `ghSetupProblem`.
 - **Allowed deps:** `contracts` (`GithubAuthStatus`); `subprocess` (`runBounded`, the bounded child both
-  probes spawn under); Bun (`which`). No `git`/`projects` reach — it's a pure `gh` probe.
+  probes spawn under). No `git`/`projects` reach — it's a pure `gh` probe.
 - **Forbidden:** `host`; sibling features; being bundled into the browser (`gh` is shelled, never bundled).
+
+## Get right
+
+- **`missing` means the probe could not launch `gh`; there is no `Bun.which("gh")` pre-check.** A bare
+  `Bun.which` reads the PATH from process start (the trap in `editors/SPEC.md`), and a Dock or Finder
+  launch gets the login PATH only later, from `resolveShellEnv()`. So the pre-check said `missing` for a
+  `gh` that the callers could run (#1283). The probe resolves `gh` on the same live PATH as they do.

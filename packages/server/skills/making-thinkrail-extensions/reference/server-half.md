@@ -2,13 +2,16 @@
 
 `server/index.ts` is TypeScript source; ThinkRail loads it in place through pi's extension loader (no
 compile step), with **ThinkRail's own** `@earendil-works/pi-coding-agent` and `typebox` — whatever is or
-is not in the folder's `node_modules`. Every other import (the SDK, any npm library you add) resolves
-from the folder's `node_modules`, so `npm install --omit=peer <pkg>` it. Relative imports of other `.ts` files work.
+is not in the folder's `node_modules`. Import SDK types with `import type`; they disappear when the
+host loads the source. Other runtime libraries resolve from the folder's `node_modules`, so add them
+to `dependencies` with `npm install --omit=peer <pkg>`. Relative imports of other `.ts` files work.
 
 ## The descriptor
 
 ```ts
-export default defineServerExtension({
+import type { ServerExtension } from "@thinkrail/extension-sdk/server";
+
+export default {
 	name: "thinkrail-ext-<slug>",        // exactly the package.json name, else the extension fails
 	title: "…",                          // Settings copy (the manifest `title` wins when both exist)
 	description: "…",
@@ -17,12 +20,13 @@ export default defineServerExtension({
 	settings: { key: { type: "boolean", default: true, title: "…", description: "…" } },
 	interactiveTools: { tool_name: { describeResponse: (args, response) => "…" } },
 	skillPackages: [".."],
-});
+} satisfies ServerExtension;
 ```
 
-Only `name` and `extensions` are required. Import `defineServerExtension` (and the
-`ExtensionSessionServices` type) from `@thinkrail/extension-sdk/server`; import `ExtensionAPI` as a type
-from `@earendil-works/pi-coding-agent`.
+Only `name` and `extensions` are required. Import `ServerExtension` and
+`ExtensionSessionServices` as types from `@thinkrail/extension-sdk/server`; import `ExtensionAPI` as a
+type from `@earendil-works/pi-coding-agent`. Keep the SDK in `devDependencies` so installed extensions
+do not carry its build toolchain.
 
 ## Tools
 

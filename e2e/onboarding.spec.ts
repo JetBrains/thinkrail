@@ -51,7 +51,7 @@ async function signOutEveryProvider(wire: E2eWire): Promise<void> {
 }
 
 async function openColdStart(page: Page, baseURL: string | undefined): Promise<void> {
-	await resetApp(page);
+	await resetApp();
 	const report = await withWire(baseURL, async (wire) => {
 		await expect
 			.poll(async () => (await wire.request("provider.status", {})).jbcentral.state, {

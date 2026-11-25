@@ -24,7 +24,7 @@ rename `word-count` / `wordcount` / `word_count` everywhere and replace the logi
 	"scripts": {
 		"build": "thinkrail-extension build --prefix wordcount"
 	},
-	"dependencies": {
+	"devDependencies": {
 		"@thinkrail/extension-sdk": "~1.0.0"
 	},
 	"peerDependencies": {
@@ -51,9 +51,9 @@ omit=peer
 
 ```ts
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import {
-	defineServerExtension,
-	type ExtensionSessionServices,
+import type {
+	ExtensionSessionServices,
+	ServerExtension,
 } from "@thinkrail/extension-sdk/server";
 import { Type } from "typebox";
 
@@ -106,7 +106,7 @@ function wordCountTool(session: ExtensionSessionServices) {
 	};
 }
 
-export default defineServerExtension({
+export default {
 	name: "thinkrail-ext-word-count",
 	title: "Word count",
 	description: "Lets the agent count words, lines and characters, shown as a card.",
@@ -120,7 +120,7 @@ export default defineServerExtension({
 			description: "Also estimate how long the text takes to read.",
 		},
 	},
-});
+} satisfies ServerExtension;
 ```
 
 ### `web/index.tsx`

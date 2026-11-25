@@ -32,17 +32,58 @@ import { commitWorkspaceLayout } from "../layoutState";
 const sessionHydration = new Map<string, Promise<boolean>>();
 const AUTO_OPEN_CHAT_LIMIT = 4;
 
-let autoOpenAttemptGeneration = 0;
-const autoOpenAttemptedWorkspaceIds = new Set<string>();
+interface AutoOpenAttempt {
+	connectionGeneration: number;
+	spent: boolean;
+}
 
-function claimAutoOpenAttempt(workspaceId: string, connectionGeneration: number): boolean {
-	if (connectionGeneration !== autoOpenAttemptGeneration) {
-		autoOpenAttemptGeneration = connectionGeneration;
-		autoOpenAttemptedWorkspaceIds.clear();
+interface AutoOpenEntry {
+	attempt: AutoOpenAttempt | null;
+	navigation: CenterNavigationStamp | null;
+	previouslyPlaced: Set<string>;
+}
+
+const autoOpenEntries = new Map<string, AutoOpenEntry>();
+
+function placedChatSessionIds(document: WorkspaceLayoutDocument | undefined): Set<string> {
+	return new Set(
+		document
+			? collectAllGroups(document)
+					.flatMap((group) => group.tabs)
+					.filter((tab) => tab.kind === "chat")
+					.map((tab) => tab.sessionId)
+			: [],
+	);
+}
+
+function rememberPlacedChats(
+	workspaceId: string,
+	document: WorkspaceLayoutDocument,
+): AutoOpenEntry {
+	let entry = autoOpenEntries.get(workspaceId);
+	if (!entry) {
+		entry = {
+			attempt: null,
+			navigation: captureCenterNavigation(useAppStore.getState(), workspaceId),
+			previouslyPlaced: new Set(),
+		};
+		autoOpenEntries.set(workspaceId, entry);
 	}
-	if (autoOpenAttemptedWorkspaceIds.has(workspaceId)) return false;
-	autoOpenAttemptedWorkspaceIds.add(workspaceId);
-	return true;
+	for (const sessionId of placedChatSessionIds(document)) entry.previouslyPlaced.add(sessionId);
+	return entry;
+}
+
+function claimAutoOpenAttempt(
+	entry: AutoOpenEntry,
+	connectionGeneration: number,
+): AutoOpenAttempt | null {
+	const previous = entry.attempt;
+	if (previous && (previous.spent || previous.connectionGeneration === connectionGeneration)) {
+		return null;
+	}
+	const attempt = { connectionGeneration, spent: false };
+	entry.attempt = attempt;
+	return attempt;
 }
 
 export function hydrateChatResource(workspaceId: string, sessionId: string): Promise<boolean> {
@@ -212,10 +253,16 @@ export function useWorkspaceChatCatalogReconciliation(
 	}, [routeTargetResolved]);
 
 	useEffect(() => {
+		if (document) rememberPlacedChats(workspaceId, document);
+	}, [document, workspaceId]);
+
+	useEffect(() => {
 		if (!layoutReady || status !== "connected" || connectionGeneration === 0) return;
 		const stateAtRequest = useAppStore.getState();
 		const startedRouteTargetGeneration = routeChatTargetGeneration;
 		const baselineDocument = stateAtRequest.layoutDocumentsByWorkspace[workspaceId];
+		if (!baselineDocument) return;
+		const entry = rememberPlacedChats(workspaceId, baselineDocument);
 		const baselinePlacedSessionIds = baselineDocument
 			? collectAllGroups(baselineDocument)
 					.flatMap((group) => group.tabs)
@@ -248,6 +295,7 @@ export function useWorkspaceChatCatalogReconciliation(
 				if (live()) toast.error(errorText(error), t("workbench.chat.loadFailed"));
 				return null;
 			});
+		let autoOpen: AutoOpenAttempt | null = null;
 		void getTransport()
 			.request("session.list", { workspaceId })
 			.then(async (summaries) => {
@@ -272,14 +320,8 @@ export function useWorkspaceChatCatalogReconciliation(
 						commit(pruned);
 					}
 				}
-				const placed = new Set(
-					latestDocument
-						? collectAllGroups(latestDocument)
-								.flatMap((group) => group.tabs)
-								.filter((tab) => tab.kind === "chat")
-								.map((tab) => tab.sessionId)
-						: [],
-				);
+				const placed = placedChatSessionIds(latestDocument);
+				if (latestDocument) rememberPlacedChats(workspaceId, latestDocument);
 				let handledRouteSessionId: string | null = null;
 				const target = selectCurrentRouteChatTarget(useAppStore.getState());
 				if (target?.workspaceId === workspaceId) {
@@ -331,7 +373,8 @@ export function useWorkspaceChatCatalogReconciliation(
 						}
 					}
 				}
-				const autoOpenAlreadyAttempted = !claimAutoOpenAttempt(workspaceId, connectionGeneration);
+				autoOpen = claimAutoOpenAttempt(entry, connectionGeneration);
+				const autoOpenAlreadyAttempted = autoOpen === null;
 				const toOpen: typeof summaries = [];
 				const toHistory: typeof summaries = [];
 				for (const summary of [...summaries].sort((a, b) => b.updatedAt - a.updatedAt)) {
@@ -340,6 +383,7 @@ export function useWorkspaceChatCatalogReconciliation(
 					if (
 						handledRouteSessionId === null &&
 						!autoOpenAlreadyAttempted &&
+						!entry.previouslyPlaced.has(summary.sessionId) &&
 						(summary.live || (summary.openTodos ?? 0) > 0) &&
 						toOpen.length < AUTO_OPEN_CHAT_LIMIT
 					) {
@@ -352,13 +396,13 @@ export function useWorkspaceChatCatalogReconciliation(
 					handledRouteSessionId === null &&
 					!autoOpenAlreadyAttempted &&
 					placed.size === 0 &&
-					toOpen.length === 0
+					toOpen.length === 0 &&
+					![...entry.previouslyPlaced].some((id) => authoritativeSessionIds.has(id))
 				) {
 					const fallback = toHistory.shift();
 					if (fallback) toOpen.push(fallback);
 				}
-				const navigation =
-					toOpen.length > 0 ? captureCenterNavigation(useAppStore.getState(), workspaceId) : null;
+				const navigation = entry.navigation;
 				const loads = toOpen.map((summary) => ({
 					summary,
 					result: useAppStore.getState().sessions[summary.sessionId]
@@ -411,8 +455,21 @@ export function useWorkspaceChatCatalogReconciliation(
 						if (!state.sessions[summary.sessionId] || !cache) continue;
 					}
 					const state = useAppStore.getState();
-					const activate = handledRouteSessionId === null && openedCount === 0;
+					const currentDocument = state.layoutDocumentsByWorkspace[workspaceId];
+					if (currentDocument) rememberPlacedChats(workspaceId, currentDocument);
+					if (entry.previouslyPlaced.has(load.summary.sessionId)) continue;
+					const currentPlaced = placedChatSessionIds(currentDocument);
+					const closedDuringEntry = summaries.some(
+						(summary) =>
+							entry.previouslyPlaced.has(summary.sessionId) &&
+							!currentPlaced.has(summary.sessionId),
+					);
+					const activate =
+						handledRouteSessionId === null &&
+						openedCount === 0 &&
+						(!closedDuringEntry || currentPlaced.size === 0);
 					openedCount += 1;
+					if (autoOpen) autoOpen.spent = true;
 					const routed = layoutOpenOptionsForNavigation(state, workspaceId, navigation);
 					state.enqueueLayoutIntent({
 						kind: "open",
@@ -438,6 +495,11 @@ export function useWorkspaceChatCatalogReconciliation(
 			})
 			.catch((error: unknown) => {
 				if (live()) toast.error(errorText(error), t("workbench.chat.loadWorkspaceFailed"));
+			})
+			.finally(() => {
+				if (autoOpen && isConnectedGeneration(useAppStore.getState(), connectionGeneration)) {
+					autoOpen.spent = true;
+				}
 			});
 		return () => {
 			current = false;

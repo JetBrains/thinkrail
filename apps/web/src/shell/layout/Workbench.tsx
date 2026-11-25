@@ -73,6 +73,7 @@ import type {
 	LayoutTabFocusRequest,
 	RegisterChatRename,
 	SharedGroupProps,
+	TabSelectOptions,
 	WorkbenchProps,
 } from "./workbenchShared";
 import {
@@ -168,7 +169,7 @@ export function Workbench({
 	}, [document, draggingTab, onGestureCanceled, gestureContext]);
 
 	const apply = useCallback(
-		(result: LayoutMutationResult) => {
+		(result: LayoutMutationResult, moveFocus = true) => {
 			let next = reconcileAttention(result.document, attentionRef.current, documentRef.current);
 			if (result.focusGroupId && result.focusTabId) {
 				const location = findTabLocation(result.document, result.focusTabId);
@@ -176,7 +177,7 @@ export function Workbench({
 			}
 			onCommit(result.document, next);
 			const focusGroupId = result.focusGroupId;
-			if (focusGroupId) {
+			if (moveFocus && focusGroupId) {
 				const location = result.focusTabId
 					? findTabLocation(result.document, result.focusTabId)
 					: findCenterGroup(result.document.center, focusGroupId)
@@ -206,7 +207,7 @@ export function Workbench({
 		(
 			location: LayoutGroupLocation,
 			tabId: string,
-			options?: { center?: boolean; keep?: boolean },
+			options?: TabSelectOptions & { center?: boolean },
 		) => {
 			const document = documentRef.current;
 			const attention = attentionRef.current;
@@ -221,7 +222,7 @@ export function Workbench({
 			) {
 				const result = keepPreview(document, location.groupId, tabId);
 				if (!isLayoutUnavailable(result)) {
-					apply(result);
+					apply(result, options.moveFocus !== false);
 					return;
 				}
 			}

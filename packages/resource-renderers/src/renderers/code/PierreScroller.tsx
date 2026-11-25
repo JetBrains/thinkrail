@@ -1,6 +1,7 @@
 import { cn } from "@thinkrail/ui/utils";
-import { type ReactNode, type RefCallback, useCallback, useRef } from "react";
+import { type ReactNode, useCallback, useRef } from "react";
 import { CURSOR_PROXY_HOST, CursorProxy, type CursorProxyProps } from "../../support/CursorProxy";
+import type { AttachPierreScroller } from "./pierreVirtualizer";
 
 const SCROLL_TOP = Object.getOwnPropertyDescriptor(Element.prototype, "scrollTop");
 
@@ -61,7 +62,7 @@ export function PierreScroller({
 	cursor,
 	children,
 }: {
-	attach: RefCallback<HTMLDivElement>;
+	attach: AttachPierreScroller<HTMLDivElement>;
 	testId: string;
 	focusList?: string;
 	className: string;
@@ -78,7 +79,7 @@ export function PierreScroller({
 			const content = contentRef.current;
 			if (!node || !sizer || !viewport || !content) return;
 			const release = mirrorScroll(node, sizer, viewport, content);
-			attach(node);
+			attach(node, content);
 			return () => {
 				attach(null);
 				release();

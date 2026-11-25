@@ -524,7 +524,7 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   by `requestComposerFocus` once it is. The chat's own history overlay does not count as covering it: the
   chord's request carries `dismissHistory`, and `ChatView` closes that overlay before focusing the input
   (waiting for an unobscured chat would never end — the overlay stays open until something closes it).
-  With no chat it does nothing but still swallows the browser's address-bar chord. `Mod+0` reveals the Projects tool (`requestToolView`) and focuses inside it; on
+  With no chat it does nothing but still swallows the browser's address-bar chord. `Mod+0` reveals the Projects tool and focuses inside it; on
   Project Home it expands a collapsed projects pane and lands there. `` Ctrl+` `` from inside a terminal
   returns to the region active before it (else the first center group); elsewhere it focuses the visible
   terminal (the workspace's active one first), else reveals that terminal wherever it is placed — its side
@@ -535,8 +535,11 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   Changes is not bound in a chat without a project. A tool body still showing a loading skeleton
   (`aria-busy="true"`) is waited out for a shorter bounded budget before landing, so a chord that first
   mounts Files lands on its tree's current row rather than the toolbar above the skeleton. Every focus move waits, a bounded number of animation frames, for no modal layer
-  and a rendered target, then gives up silently; a newer focus chord cancels an older wait. That wait is
-  what lets the same moves run as palette rows (Focus next / previous region, Focus chat input,
+  and a rendered target, then gives up silently; a newer focus chord cancels an older wait. A chord that
+  focuses inside a tool (`Mod+0`, `Mod+Shift+E` / `Mod+Shift+G`, Esc in a file) reveals it with `focus: false`, so
+  that wait is its only focus move and a newer chord cancels it: the reveal's tab focus request used to run a frame
+  later, outside the wait, and on a slow frame it landed after a quick `Mod+1` and took focus to the rail's Files
+  button. That wait is what lets the same moves run as palette rows (Focus next / previous region, Focus chat input,
   Focus Projects, Focus terminal, one Focus center group N per existing group, Show Changes, and Show
   Files with `Mod+Shift+E`), after the palette has closed. These chords are app-owned in xterm and
   Monaco too, except that `Ctrl+L` inside a terminal on Windows/Linux stays the shell's clear-screen, like

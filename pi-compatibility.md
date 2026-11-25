@@ -17,64 +17,66 @@ The installed version comes only from the root dependency catalog, not a second 
 
 ## Last re-check
 
-Pi 1.5.2 was checked against the installed dist (1.5.0 → 1.5.1 → 1.5.2; every private symbol re-grepped,
-`agent-session.js`, `sdk.js`, `settings-defaults.js`, the extension loader/runner, `mcp-servers.js`, the
-MCP extension, `package-manager.js`, `model-resolver.js` and pi-ai's providers diffed). **One gate is
-met**: pi now clears a delivered image-only queued message itself (#8612), so the host's
-`stuckEmptyDeliveries` override is gone; the text-only queue API still needs the queued-image copy, whose
-entry below now stands alone. **Two adaptations were added**: the
-cache-warming default and the shutdown wait for credential writes (both below). Everything else stays,
-with this evidence:
+Pi 1.6.0 was checked against the installed dist (1.5.2 → 1.6.0, a single release; every private symbol
+re-grepped, `agent-session.js`, the extension loader/runner, `package-manager.js`, `resource-loader.js`,
+`session-manager.js`, `model-resolver.js`, the MCP extension, pi-mcp, pi-agent-core's `agent-loop.js` and
+pi-ai's providers diffed). **No gate is met and no adaptation was added**; one mirror followed pi. Byte-identical
+in 1.6.0: `sdk.js`, `settings-defaults.js`, `mcp-servers.js`, `extensions/mcp/config.js`,
+`agent-session-services.js`, `skills.js`, `source-info.js`, `utils/paths.js`, compaction, the edit/bash
+tools, `tools/path-utils.js` and the package root `index.d.ts` (no new public export). The evidence:
 
-- The Anthropic SSE framing defect is unchanged upstream (`consumeLine` is byte-identical; #10390 still
-  open): the unpatched 1.5.1 dist fails all three "defects the patch fixes" cases. The message-threads
-  code moved the hunks by ~175 lines, so the patch was regenerated from a clean dist, not renamed.
-- MCP: pi moved the *entry* validator into `@earendil-works/pi-mcp` as public `validateMcpServerConfig`
-  (with `isMcpServerOverride`, `mcpNamespace`, `createMcpToolName`, `limitMcpContent`,
-  `normalizeMcpInputSchema`), but pi's own fields (`exposure`, `toolExposure`, `auth`), the file loader
-  and the writers remain private in `core/mcp-servers.js` / `extensions/mcp/config.js`; the loader parity
-  fixture passes unchanged. `/mcp` status and sign-in wording did not change; sign-in moved onto pi-mcp's
-  `startMcpSignIn` / `completeMcpSignIn` behind the same `openUrl` seam. `AgentSession.dispose()` still
-  emits no shutdown; `AgentSession.reload()` now throws while streaming or compacting, which the host's
-  reload gate already refuses earlier. Codemode is still unpackaged; raw `structuredContent` is still
-  ephemeral.
+- The Anthropic SSE framing defect is unchanged upstream (`consumeLine` / `iterateSseMessages` untouched;
+  #10390 still open): the unpatched 1.6.0 dist fails all three "defects the patch fixes" cases. 1.6.0
+  removed one line above them (message threads now default on for any baseUrl on api.anthropic.com, not only
+  the `anthropic` provider), so the patch was regenerated from a clean dist with identical `+`/`-` lines.
+- `defaultModelPerProvider` moved `openai`, `azure` and `openai-codex` to `gpt-6.2-sol` (`github-copilot`
+  stays on `gpt-6.1-sol`); the mirror and its fixtures follow. `restoreModelFromSession` and
+  `resolveModelScope` were removed from `model-resolver.js`; the host imported neither.
 - `_isActivatedOnRegistration`, the provider-registration queues with `extensionPath`,
-  `getAllRegisteredTools`, the `sk-ant-oat` predicate, `getPackageIdentity`, `clearExtensionCache`,
-  `defaultModelPerProvider`, `"pi-virtual"`, `formatSkillsForPrompt`, `findCutPoint` / `generateSummary`
-  and the single-`appendFileSync` session append are all still private and unchanged in shape.
-  `isOfflineModeEnabled` is now exported from `core/package-manager.js` but not from the package root, so
-  the port stays. `defaultModelPerProvider` moved 17 providers (Anthropic/Bedrock → Claude Opus 5.5,
-  Azure → GPT-6.1 Sol, Google/Vertex → Gemini 4 Argon, …) and added `qwen-token-plan-individual-cn`; the
-  mirror follows. The Jiti loader now imports extensions by `realpath`; the bundled seams are unaffected,
-  only `check:seams`' allowlist text changed with pi's rewritten opaque imports.
-- `PackageManager` progress gains a `result` event the host does not consume; `GrepOperations.readFile`
-  is deprecated and `ReadOperations.createReadStream` added — the host has no custom operations.
-  OpenAI-compatible requests omit `tools: []` (vLLM/LiteLLM 400s); `compat.requiresToolsWithToolHistory`
-  is the opt-back-in for old LiteLLM→Anthropic proxies. Anthropic message threads are on by default for
-  `anthropic` on api.anthropic.com, keyed by pi's session id and cleaned in `dispose()`; host `context` /
-  `before_agent_start` handlers only cause pi's full-request fallback.
-- 1.5.2 on top of 1.5.1 touches no SDK surface the host uses: pi-ai bumps the Claude Code version it
-  reports for Anthropic OAuth, the interactive mode offers Continue / Fork / Cancel for a session whose cwd
-  is gone, and `/import` of such a session no longer leaves a stray copy. The SSE patch applies at the same
-  offsets. 1.5.2 adds four catalogue entries (`radius/claude-fable-5-2`, `meta/muse-ember-1.0`,
-  `opencode/minimax-m3.1-flash-free`, `openrouter/nex-agi/nex-n2.6`) on top of the 1.5.1 delta below.
-- The two installed-extension entries (written against 1.5.0) were re-checked on 1.5.2 when that branch
-  merged: `discoverAndLoadExtensions` is still public and still calls the uncached `loadExtensions`;
-  `loadExtensionModule` still builds a `moduleCache: false` jiti with the same three resolution branches
-  (alias map for the `.js` dist in a source run, virtual modules in embedded builds) and calls the default
-  export during load; the only change is that it imports `canonicalizePath(extensionPath)` (the realpath),
-  which the shim, loaded by an absolute path and keyed per load, does not depend on. No public module
-  loader or `VIRTUAL_MODULES` export exists, so the shim's gate is not met. `DefaultPackageManager`'s
-  `install` / `getInstalledPath` / `checkForAvailableUpdates` and the `--legacy-peer-deps` arguments are
-  unchanged (updates now also emit a `result` progress event, unused), `DefaultResourceLoader` still copies
-  `extensionFactories` at construction, and `parseGitUrl` reads the same prefixes.
-- The bundled chat catalogue changes from 1,592 to 1,639 provider/model pairs in 1.5.1: 66 added (Claude Fable 5.2
-  on Anthropic, Bedrock, OpenRouter, Vercel and OpenCode; Kimi K3.1 Pro; Gemini 4 Argon, GPT-6.1 Terra and
-  Mistral Large 4 on Radius; the `qwen-token-plan-individual-cn` provider) and 19 removed (older
-  OpenRouter MiniMax/Mercury/Llama aliases, Fireworks `gpt-oss-120b`, Vercel Gemini batch aliases). The
-  default `anthropic` model is now `claude-opus-5-5`. Release notes must say both and advise users to
-  check their default and restored-chat model; unavailable models follow the existing selection rules in
-  [[submodule-server-agent]], and the host still does not surface Pi's `modelFallbackMessage`.
+  `getAllRegisteredTools`, the `sk-ant-oat` predicate and the interactive warning, `getPackageIdentity`,
+  `isOfflineModeEnabled`, `clearExtensionCache`, `getResourcePathKey`, `"pi-virtual"`,
+  `getBranchSelection`, `projectContextEntry`, `formatSkillsForPrompt`, `findCutPoint` / `generateSummary`,
+  the single-`appendFileSync` session append and the leaf rule are all still private and unchanged in
+  shape; the parity fixtures (MCP loader, package identity, restored selection, subagent and insights
+  totals, display transcript) pass unchanged. pi-mcp only exports `mcpServerSummary` (the `mcp_servers`
+  section's one-liner) in addition.
+- `AgentSession.reload()` now emits `session_start` whenever `bindExtensions` ran (`_extensionsBound`), not
+  only when a UI context, command actions, shutdown handler or error listener was bound. Chats bind a UI
+  context, so nothing changes for them; delegated children bind `{ mode: "print" }` but never call
+  `AgentSession.reload()`. `setActiveToolsByName` now drops the restored loadout's pending tools only when it
+  deactivates one of *that* loadout (#11996: an extension deactivating its own tool at `session_start` kept
+  MCP tools loaded by `tool_search` dropped), which is orthogonal to the registry-tool reconcile below.
+  `AgentSession.dispose()` still emits no shutdown. `AgentSessionRuntime.takeUnreportedDiagnostics()` and the
+  all-mode "Could not restore model" report are runtime-only; the host does not use `AgentSessionRuntime`
+  and still does not surface `modelFallbackMessage`.
+- Errors thrown by an extension's `pi.events` handler now reach the runner's `emitError` (the host's
+  `onError`) instead of `console.error`. On Esc, every tool call of the batch that had not started gets an
+  "Operation aborted" result (#9986), as the host's restart repair already does for dangling calls.
+  `PackageManager` gains a `commandOutput: "inherit" | "capture"` option (default `inherit`, unchanged) and
+  reports resolve-time installs as progress; the host sets no progress callback.
+- The installed-extension entries ([[submodule-server-extensions-installed]]) hold on 1.6.0: the loader only
+  gains `reportError` and the `pi.events` error wrapper, so `discoverAndLoadExtensions` still calls the
+  uncached `loadExtensions` and `loadExtensionModule` builds the same `moduleCache: false` jiti; no module
+  loader or `VIRTUAL_MODULES` is exported, so the shim stays. `DefaultPackageManager`'s `install`,
+  `getInstalledPath`, `checkForAvailableUpdates` and `--legacy-peer-deps` are untouched (the new
+  `commandOutput` defaults to `inherit`), `DefaultResourceLoader` still copies `extensionFactories` at
+  construction, `parseGitUrl` is byte-identical, and `omitReplacedExtensions` (registry tool precedence's
+  fourth fact) is unchanged.
+- pi-tui's `render()` now returns `readonly string[]` and built-ins return a cached array (#9549); the
+  ThinkRail TUI components already build a new array per render, so only two test helpers' types changed.
+- pi-ai 1.6.0 discovers four new credential variables (`QWEN_TOKEN_PLAN_{TEAM,TEAM_CN,INDIVIDUAL,INDIVIDUAL_CN}_API_KEY`),
+  which the e2e ambient-credential denylist now strips. Retry patterns widen ("Connection closed.", bare
+  `ECONNRESET`/`EPIPE`/`ETIMEDOUT` codes, the Codex WebSocket connection limit); OpenAI-compatible providers
+  other than OpenAI get system messages with the `system` role; Mistral tools are non-strict unless
+  `compat.supportsStrictMode`. The models declaring `allowedFallbackModels` are unchanged.
+- The bundled chat catalogue changes from 1,643 to 1,698 provider/model pairs: 103 added (GPT-6.2 Astra and
+  Sol on OpenAI, Azure, Codex, Bedrock, Copilot, OpenRouter, Vercel, Radius, Cloudflare and OpenCode; Gemini
+  4 Carbon/Hydrogen/Neon; `qwen4-max-preview` and `deepseek-v4.1-flash` on the Qwen Token Plan providers;
+  `gpt-6-cyber`) and 48 removed (older NVIDIA, OpenCode GLM/Gemini 3, OpenRouter and Vercel aliases;
+  `deepseek-v3.2` / `deepseek-v4-flash` on the Qwen Token Plan Team providers). The default `openai`,
+  `azure` and `openai-codex` model is now `gpt-6.2-sol`, at the same price. Release notes must say both and
+  advise users to check their default and restored-chat model; unavailable models follow the existing
+  selection rules in [[submodule-server-agent]].
 
 ## Upgrade contract
 
@@ -225,7 +227,7 @@ restart and toggle-reload regressions on upgrades.
   carries no target version; pi skips pinned npm versions in update checks; pi classifies `git@host:…`
   and `github:…` sources as local paths.
 - **Anthropic SSE framing patch** — [[submodule-server-agent]] (Provider stream framing),
-  `patches/@earendil-works%2Fpi-ai@1.5.2.patch` on `dist/api/anthropic-messages.js`. Unpatched, two
+  `patches/@earendil-works%2Fpi-ai@1.6.0.patch` on `dist/api/anthropic-messages.js`. Unpatched, two
   streams fail with the non-retryable "Could not parse Anthropic SSE event": a valid CRLF stream whose
   `\r\n` is split across network chunks, and a stream cut off mid-event. Patched, the first succeeds and
   the second ends with a retryable truncation error such as "stream ended before message_stop".
@@ -362,6 +364,14 @@ restart and toggle-reload regressions on upgrades.
     loader…").
   - pi's `parseGitUrl` reads only `git:` and `https?|ssh|git://` as git; everything else, `file://`
     included, is a path. `extensions.json` follows the same rule (`extensionSourceKind`).
+- **Portable skill roots on reload** — [[submodule-server-agent]], `resolveSkillInputs` in `extensions.ts`.
+  Pi 1.6.0's `DefaultResourceLoader` retains the supplied `additionalSkillPaths` array by reference and
+  reads it on every reload, but exposes no path setter or pre-reload resolver. The host retains its existing
+  in-place refresh and re-discovers explicit alias roots and current Claude manifest install paths before
+  applying admission; it does not scan the plugin cache or swap the session's loader. **Removal gate:**
+  a public path setter/resolver that preserves reload admission and first-name-wins precedence can replace
+  the shared-array contract. Re-check the constructor and reload in installed `resource-loader.js` and
+  run `agent/extensions.test.ts`'s installed-Claude-plugin lifecycle and admission cases.
 - **Account-scoped model availability** — [[submodule-server-agent]], `modelAvailability.ts`. Pi's
   `openai` provider lists its whole API catalog under Sign in with ChatGPT (its `filterAllModels` drops
   only classifiers), so the host keeps the ids in pi's `openai-codex` catalog; Central proxies advertise
@@ -429,7 +439,7 @@ restart and toggle-reload regressions on upgrades.
 - **Trace timings and the active branch** — [[module-pi-session-insights]], `src/trace.ts`. The trace
   explorer draws a model call from `AssistantMessage.timestamp` (typed in pi-ai as "when the request
   started") to `+ durationMs`, and a tool call ending at `ToolResultMessage.timestamp` and starting
-  `durationMs` before it; both `durationMs` fields are typed in pi-ai 1.5.2 but absent from
+  `durationMs` before it; both `durationMs` fields are typed in pi-ai 1.6.0 but absent from
   `docs/session-format.md`, and older entries lack them (then the span is approximated from entry
   timestamps and labelled so). It also mirrors pi's load rule that the file's last entry is the current
   leaf, following `parentId` to pick the shown branch, because `buildSessionContext` drops the entries a
