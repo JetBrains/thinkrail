@@ -31,7 +31,7 @@ function completion(over: Partial<PullRequestCompletion> = {}): PullRequestCompl
 		lookup: null,
 		filter: DEFAULT_PULL_REQUEST_FILTER,
 		setFilter: noop,
-		authors: { names: [], loading: false, hasMore: false, request: noop },
+		authors: { names: [], loading: false, hasMore: false, request: noop, restart: noop },
 		hasMore: false,
 		optionCount: 0,
 		pick: () => null,

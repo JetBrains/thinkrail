@@ -185,8 +185,10 @@ function graphql(
 			.filter((pr) => pr.state === "OPEN")
 			.filter((pr) => !has("review-requested:@me") || pr.reviewRequested === true)
 			.filter((pr) => !has("draft:false") || pr.isDraft !== true)
-			.filter((pr) =>
-				authors.every((author) => (pr.author ?? "octo") === (author === "@me" ? viewer : author)),
+			.filter(
+				(pr) =>
+					authors.length === 0 ||
+					authors.some((author) => (pr.author ?? "octo") === (author === "@me" ? viewer : author)),
 			)
 			.filter((pr) => {
 				const title = String(shape(pr).title).toLowerCase();

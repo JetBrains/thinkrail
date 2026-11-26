@@ -97,7 +97,10 @@ test("the search names the repository and turns every filter into a GitHub quali
 		"repo:acme/app is:pr is:open sort:updated-desc review-requested:@me draft:false fix login in:title",
 	);
 	expect(pullRequestSearch("acme/app", { scope: "mine", drafts: true, author: "ada" }, "")).toBe(
-		"repo:acme/app is:pr is:open sort:updated-desc author:@me author:ada",
+		"repo:acme/app is:pr is:open sort:updated-desc author:@me",
+	);
+	expect(pullRequestSearch("acme/app", { scope: "all", drafts: true, author: "ada" }, "")).toBe(
+		"repo:acme/app is:pr is:open sort:updated-desc author:ada",
 	);
 	expect(pullRequestSearch("acme/app", { ...ALL, author: "x y:z" }, "")).not.toContain("x y");
 });

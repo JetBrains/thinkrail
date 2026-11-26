@@ -745,7 +745,7 @@ a project picker, the prompt hero, and the reused
   (`chat/PullRequestCompletionMenu` over `chat/pullRequestCompletion`, [[submodule-web-chat]]) above the
   prompt instead of the slash menu, with the dialog as the author dropdown's container. Picking one
   inserts its link after the command, sets **From** to the PR's `baseRef` (prefetched as a picked remote
-  base is) and says so next to the picker ("base of #N") until another base is chosen; the command and
+  base is; a branch list that arrives later never replaces a base chosen for the same project) and says so next to the picker ("base of #N") until another base is chosen; the command and
   the link are tinted through a backdrop behind the transparent textarea. The palette's **Review a pull
   request…** row opens the dialog with the command seeded, so the list is already open. The workspace
   is created like any other prompt — `workspace.startCreate` from the chosen base with the prompt as the

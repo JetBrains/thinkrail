@@ -175,7 +175,9 @@ export function pullRequestSearch(
 	if (filter.scope === "review-requested") parts.push("review-requested:@me");
 	if (filter.scope === "mine") parts.push("author:@me");
 	if (!filter.drafts) parts.push("draft:false");
-	if (filter.author && LOGIN.test(filter.author)) parts.push(`author:${filter.author}`);
+	if (filter.scope !== "mine" && filter.author && LOGIN.test(filter.author)) {
+		parts.push(`author:${filter.author}`);
+	}
 	const words = searchWords(query);
 	if (words.length > 0) parts.push(...words, "in:title");
 	return parts.join(" ");

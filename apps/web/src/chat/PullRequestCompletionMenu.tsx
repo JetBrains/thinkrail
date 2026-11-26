@@ -5,7 +5,7 @@ import { Button } from "@thinkrail/ui/button";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { cn } from "@thinkrail/ui/utils";
-import { type KeyboardEvent, type Ref, type RefObject, useEffect, useState } from "react";
+import { type KeyboardEvent, type Ref, type RefObject, useEffect, useRef, useState } from "react";
 import { ArgumentCompletionFrame, ArgumentCompletionMenu } from "../prompt";
 import { filterAuthors } from "./pullRequestArguments";
 import type { PullRequestCompletion } from "./pullRequestCompletion";
@@ -72,8 +72,13 @@ function Row({
 	onHover: () => void;
 }) {
 	const t = useT();
+	const ref = useRef<HTMLButtonElement>(null);
+	useEffect(() => {
+		if (active) ref.current?.scrollIntoView({ block: "nearest" });
+	}, [active]);
 	return (
 		<button
+			ref={ref}
 			type="button"
 			tabIndex={-1}
 			data-testid="pull-request-option"
@@ -93,6 +98,40 @@ function Row({
 			<span className="min-w-0 flex-1 truncate">{pr.title}</span>
 			<StateTag pr={pr} />
 			<span className="shrink-0 text-text-muted tr-text-metadata">{meta(t, pr)}</span>
+		</button>
+	);
+}
+
+function MoreRow({
+	active,
+	loading,
+	onLoad,
+}: {
+	active: boolean;
+	loading: boolean;
+	onLoad: () => void;
+}) {
+	const t = useT();
+	const ref = useRef<HTMLButtonElement>(null);
+	useEffect(() => {
+		if (active) ref.current?.scrollIntoView({ block: "nearest" });
+	}, [active]);
+	return (
+		<button
+			ref={ref}
+			type="button"
+			tabIndex={-1}
+			data-testid="pull-request-more"
+			data-active={active ? true : undefined}
+			disabled={loading}
+			onMouseDown={(event) => event.preventDefault()}
+			onClick={onLoad}
+			className={cn(
+				"flex w-full rounded-sm px-8 py-4 text-left text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default",
+				active && "bg-control-bg-selected text-text-default",
+			)}
+		>
+			{loading ? t("chat.prCompletion.loadingMore") : t("chat.prCompletion.more")}
 		</button>
 	);
 }
@@ -155,7 +194,10 @@ function Filters({
 					data-on={filter.scope === scope}
 					aria-pressed={filter.scope === scope}
 					onMouseDown={(event) => event.preventDefault()}
-					onClick={() => setFilter({ ...filter, scope })}
+					onClick={() => {
+						const { author: _drop, ...rest } = filter;
+						setFilter(scope === "mine" ? { ...rest, scope } : { ...filter, scope });
+					}}
 					className={cn(CHIP, CHIP_OFF)}
 				>
 					{scopeLabel(t, scope)}
@@ -208,7 +250,11 @@ function Filters({
 						current={filter.author}
 						onPick={(author) => {
 							const { author: _drop, ...rest } = filter;
-							setFilter(author ? { ...rest, author } : rest);
+							setFilter(
+								author
+									? { ...rest, author, ...(rest.scope === "mine" ? { scope: "all" as const } : {}) }
+									: rest,
+							);
 							setAuthorsOpen(false);
 							onLeave();
 						}}
@@ -233,9 +279,14 @@ function AuthorPicker({
 	const t = useT();
 	const [query, setQuery] = useState("");
 	const shown = filterAuthors(authors.names, query);
-	const { hasMore, loading, request } = authors;
+	const { hasMore, loading, request, restart } = authors;
+	const [started, setStarted] = useState(false);
+	useEffect(() => {
+		restart();
+		setStarted(true);
+	}, [restart]);
 	const wantsMore =
-		hasMore && !loading && (authors.names.length === 0 || shown.length < AUTHOR_FILL);
+		started && hasMore && !loading && (authors.names.length === 0 || shown.length < AUTHOR_FILL);
 	useEffect(() => {
 		if (wantsMore) request();
 	}, [wantsMore, request]);
@@ -428,23 +479,11 @@ function Body({
 				</>
 			) : null}
 			{completion.hasMore ? (
-				<button
-					type="button"
-					tabIndex={-1}
-					data-testid="pull-request-more"
-					data-active={activeIndex === items.length ? true : undefined}
-					disabled={completion.loadingMore}
-					onMouseDown={(event) => event.preventDefault()}
-					onClick={completion.loadMore}
-					className={cn(
-						"flex w-full rounded-sm px-8 py-4 text-left text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default",
-						activeIndex === items.length && "bg-control-bg-selected text-text-default",
-					)}
-				>
-					{completion.loadingMore
-						? t("chat.prCompletion.loadingMore")
-						: t("chat.prCompletion.more")}
-				</button>
+				<MoreRow
+					active={activeIndex === items.length}
+					loading={completion.loadingMore}
+					onLoad={completion.loadMore}
+				/>
 			) : null}
 		</>
 	);

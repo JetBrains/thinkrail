@@ -32,6 +32,8 @@ export interface PullRequestAuthors {
 	hasMore: boolean;
 	/** Load the first page if none is loaded yet, else the next one. */
 	request: () => void;
+	/** Forget what was loaded; the Author list calls it each time it opens. */
+	restart: () => void;
 }
 
 export interface PullRequestCompletion {
@@ -272,7 +274,8 @@ function usePullRequestAuthors(
 	current: string | undefined,
 	attempt: number,
 ): PullRequestAuthors {
-	const key = projectId ? `${projectId}\u0000${attempt}` : null;
+	const [opening, setOpening] = useState(0);
+	const key = projectId ? `${projectId}\u0000${attempt}\u0000${opening}` : null;
 	const [state, setState] = useState<AuthorState>({ key, pages: [], next: undefined });
 	if (state.key !== key) setState({ key, pages: [], next: undefined });
 	const own: AuthorState = state.key === key ? state : { key, pages: [], next: undefined };
@@ -308,5 +311,6 @@ function usePullRequestAuthors(
 	}, [projectId, key, own.next]);
 
 	const names = useMemo(() => mergeAuthors(own.pages, current), [own.pages, current]);
-	return { names, loading, hasMore: own.next !== null, request };
+	const restart = useCallback(() => setOpening((count) => count + 1), []);
+	return { names, loading, hasMore: own.next !== null, request, restart };
 }

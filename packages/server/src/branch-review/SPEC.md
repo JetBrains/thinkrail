@@ -39,7 +39,7 @@ one pull request by number in any state, as `PullRequestSummary` rows. Not keyed
   repository's base. No GitHub remote → `not-github` without running `gh`.
 - **A page is one GitHub search** (`gh api graphql`, `search(type: ISSUE, first: 20, after)`):
   `repo:<slug> is:pr is:open sort:updated-desc` plus the filter's qualifiers — `review-requested:@me` or
-  `author:@me` for the scope, `draft:false` without drafts, `author:<login>` (a login-shaped value only),
+  `author:@me` for the scope, `draft:false` without drafts, `author:<login>` (a login-shaped value only, and never with `author:@me`, which GitHub would OR with it),
   and the typed words with `in:title`. Typed words are words only: any token with a `:`, the `AND` /
   `OR` / `NOT` operators, quotes and leading `-`/`+` are dropped, because GitHub ORs `repo:` qualifiers
   and a typed one would widen the search to another repository; a row whose URL is not under

@@ -243,6 +243,7 @@ export function NewWorkspaceDialog({
 	const prChipRef = useRef<HTMLButtonElement>(null);
 	const backdropRef = useRef<HTMLDivElement>(null);
 	const [prBase, setPrBase] = useState<{ number: number; baseRef: string } | null>(null);
+	const baseChosenFor = useRef<string | null>(null);
 	const pickPullRequest = (index: number) => {
 		const pr = pullRequests?.pick(index);
 		const argument = slashArgument(prompt, skillCommands);
@@ -250,6 +251,7 @@ export function NewWorkspaceDialog({
 		const next = replaceSlashArgument(prompt, argument, pr.url);
 		updatePromptDraft(next, null);
 		focusPromptSelection(next.length);
+		baseChosenFor.current = selectedProjectId;
 		setBaseRef(pr.baseRef);
 		prefetchBase(pr.baseRef);
 		setPrBase({ number: pr.number, baseRef: pr.baseRef });
@@ -292,6 +294,7 @@ export function NewWorkspaceDialog({
 		updatePromptDraft(retryDraft?.kickoff?.text ?? initialPrompt ?? "", null);
 		setTarget(initialTarget);
 		setCreating(false);
+		baseChosenFor.current = null;
 		attachedImages.reset();
 		const retryImages = retryDraft?.kickoff?.images ?? [];
 		attachedImages.restore(
@@ -461,6 +464,7 @@ export function NewWorkspaceDialog({
 	};
 
 	const selectBaseRef = (ref: string) => {
+		baseChosenFor.current = selectedProjectId;
 		setBaseRef(ref);
 		if (branches?.remote.includes(ref)) prefetchBase(ref);
 	};
@@ -471,6 +475,7 @@ export function NewWorkspaceDialog({
 		refreshing,
 		refresh: refreshBranches,
 	} = useBranchList(open && !chat ? selectedProjectId : null, (list) => {
+		if (baseChosenFor.current === selectedProjectId) return;
 		const initial = retryDraft?.baseRef ?? list.defaultBranch;
 		setBaseRef(initial);
 		prefetchBase(initial);

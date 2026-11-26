@@ -236,6 +236,7 @@ test("the keyboard reaches the next page and every author", async ({ page, baseU
 		expect((menu?.y ?? 0) + (menu?.height ?? 0)).toBeLessThanOrEqual((prompt?.y ?? 0) + 1);
 		await page.keyboard.press("ArrowUp");
 		await expect(list.getByTestId("pull-request-more")).toHaveAttribute("data-active", "true");
+		await expect(list.getByTestId("pull-request-more")).toBeInViewport();
 		await page.keyboard.press("Enter");
 		await expect(list.getByTestId("pull-request-option")).toHaveCount(25);
 		await expect(list.getByTestId("pull-request-more")).toHaveCount(0);
@@ -303,6 +304,13 @@ test("the Author list holds everyone with an open pull request, loaded as needed
 		await expect(page.getByTestId("pull-request-author")).toContainText("Author: dev007");
 		await expect(completion(page).locator('[data-pr="7"]')).toBeVisible();
 		await expect(completion(page).getByTestId("pull-request-option")).toHaveCount(1);
+
+		await page.getByTestId("pull-request-scope-mine").click();
+		await expect(page.getByTestId("pull-request-author")).toHaveText("Author");
+		await page.getByTestId("pull-request-author").click();
+		await page.getByTestId("pull-request-author-search").fill("dev007");
+		await page.getByTestId("pull-request-author-option").first().click();
+		await expect(page.getByTestId("pull-request-scope-all")).toHaveAttribute("data-on", "true");
 	} finally {
 		await forgetPullRequestFilters(baseURL);
 		origin.dispose();

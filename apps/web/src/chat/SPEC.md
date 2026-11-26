@@ -1235,14 +1235,17 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   the moment the command is completed — the first page at once, a typed search after a 250 ms pause —
   as `pr.list` pages of 20 without sizes, then one `pr.sizes` for the page; **Show more** (also the last row ↑/↓ reach, so Enter pages) fetches the
   next cursor; a number, `#N` or link goes to `pr.get` instead and is accepted only for the same
-  repository. Rows: waiting for your review first, then the rest. The filter row (scope Waiting for me
+  repository. Rows: waiting for your review first, then the rest; the active row (and Show more) scrolls into view as
+  the keys move it. The filter row (scope Waiting for me
   / Mine / All open, Drafts, Author) is a toolbar: Tab from the prompt enters it,
   ←/→ move, Tab or Escape returns. The Author list holds everyone with an open pull request
   (`pr.authors`, 100 pull requests a page, most recently active first), not only the loaded rows' authors: it
   opens on a name search ranked like the slash menu, ↑/↓ walk the search and the names, scrolling to its
-  end loads the next page, and it keeps loading while a search shows fewer than 30 names; the loaded authors live only while the
-  completion is open — closing it or a Retry starts over, so an empty or failed listing never sticks —
-  and a rejected page stops further loading until then; a change is remembered per project on the host
+  end loads the next page, and it keeps loading while a search shows fewer than 30 names; the loaded authors start over each time the
+  Author list opens (the host's 60 s cache makes that cheap), and on Retry, so an empty or failed
+  listing never sticks, and a rejected page stops further loading until then. **Mine** and an explicit
+  author exclude each other — GitHub ORs two `author:` qualifiers — so picking an author leaves Mine for
+  All open and choosing Mine clears the author; a change is remembered per project on the host
   (`rememberPullRequestFilter`) and seeds the next opening. Enter inserts the PR's link and a space; the
   argument then counts as complete and the menu stays closed for a focus note. The chat's menu carries a
   one-line notice that a workspace with work of its own reviews elsewhere (the skill hands off). Shift+Enter
