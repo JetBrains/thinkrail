@@ -7,6 +7,7 @@ import {
 	readFileSync,
 	realpathSync,
 	rmSync,
+	utimesSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -104,16 +105,26 @@ test("the same commit reuses one preview and an unknown or unsafe ref yields non
 	expect(await previewRefPaths(project(), "--output=x", ROOTS)).toBeNull();
 });
 
-test("previews beyond the newest few for a project are pruned", async () => {
-	const dirs: string[] = [];
-	for (let i = 0; i < 6; i++) {
+test("previews beyond the newest few, and orphaned staging folders, are pruned once idle", async () => {
+	const previewOf = async (i: number) => {
 		write(join(repo, `file-${i}.txt`), `${i}\n`);
 		commitAll(`c${i}`);
-		const dir = await previewRefPaths(project(), "main", ROOTS);
-		if (dir) dirs.push(dir);
-	}
-	const newest = dirs.at(-1) ?? "";
-	const kept = readdirSync(dirname(newest));
+		return (await previewRefPaths(project(), "main", ROOTS)) ?? "";
+	};
+	const first = await previewOf(0);
+	const root = dirname(first);
+	for (let i = 1; i < 6; i++) await previewOf(i);
+	expect(readdirSync(root).length).toBe(6);
+
+	mkdirSync(join(root, "orphan.tmp-1"));
+	const idle = new Date(Date.now() - 60 * 60_000);
+	for (const name of readdirSync(root)) utimesSync(join(root, name), idle, idle);
+	await previewRefPaths(project(), first.slice(root.length + 1), ROOTS);
+	const newest = await previewOf(6);
+
+	const kept = readdirSync(root);
 	expect(kept.length).toBe(4);
 	expect(kept).toContain(basename(newest));
+	expect(kept).toContain(basename(first));
+	expect(kept).not.toContain("orphan.tmp-1");
 });
