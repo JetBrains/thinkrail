@@ -1233,11 +1233,11 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   Workspace) run `usePullRequestCompletion(repositoryProjectId, query)`: `null` for a chat without a
   project or a draft that is not such an argument, so nothing is requested otherwise. The list loads
   the moment the command is completed — the first page at once, a typed search after a 250 ms pause —
-  as `pr.list` pages of 20 without sizes, then one `pr.sizes` for the page; **Show more** fetches the
+  as `pr.list` pages of 20 without sizes, then one `pr.sizes` for the page; **Show more** (also the last row ↑/↓ reach, so Enter pages) fetches the
   next cursor; a number, `#N` or link goes to `pr.get` instead and is accepted only for the same
   repository. Rows: waiting for your review first, then the rest. The filter row (scope Waiting for me
   / Mine / All open, Drafts, Author from the loaded rows) is a toolbar: Tab from the prompt enters it,
-  ←/→ move, Tab or Escape returns; a change is remembered per project on the host
+  ←/→ move, the Author list takes ↑/↓, Tab or Escape returns; a change is remembered per project on the host
   (`rememberPullRequestFilter`) and seeds the next opening. Enter inserts the PR's link and a space; the
   argument then counts as complete and the menu stays closed for a focus note. The chat's menu carries a
   one-line notice that a workspace with work of its own reviews elsewhere (the skill hands off). Shift+Enter
