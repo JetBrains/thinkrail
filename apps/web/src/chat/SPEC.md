@@ -847,6 +847,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   it sits `WorkspaceName` — an injected component that renders a workspace's **live** store
   name, so a renderer can show an up-to-date name without importing the store. The `start_workspace`
   card uses both and hides the open action when there is no provider.
+  `openWorkspacesSettings()` (Settings › Workspaces) is supplied by `ChatTranscript` on every host for the
+  `open_project` card's projects-folder link.
   `openProviderSettings()` (Settings › Providers) is supplied by `ChatView` on every host — the MCP
   cards' provider-backed sign-in and the subscription-limit `ErrorTurn` use it. `disableServerFallback()` is supplied only
   from `SERVER_FALLBACK_PROTOCOL_VERSION` (v126) and only consumed by the rejected-fallbacks `ErrorTurn`. The optional MCP actions —
