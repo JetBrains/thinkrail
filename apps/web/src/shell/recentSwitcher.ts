@@ -129,10 +129,11 @@ export function createRecentSwitcher(deps: RecentSwitcherDeps) {
 	const listen = <K extends keyof WindowEventMap>(
 		type: K,
 		handler: (event: WindowEventMap[K]) => void,
+		capture = true,
 	) => {
 		const target = deps.target();
-		target.addEventListener(type, handler as EventListener, true);
-		teardown.push(() => target.removeEventListener(type, handler as EventListener, true));
+		target.addEventListener(type, handler, capture);
+		teardown.push(() => target.removeEventListener(type, handler, capture));
 	};
 
 	return {
@@ -153,6 +154,10 @@ export function createRecentSwitcher(deps: RecentSwitcherDeps) {
 			const elsewhere = recent.rows.filter((row) => row.id !== recent.currentId).length;
 			if (elsewhere === 0) return;
 			const index = firstIndex(recent, step);
+			if (!modifiers.ctrl && !modifiers.meta && !modifiers.alt) {
+				recent.rows[index]?.run?.();
+				return;
+			}
 			held = modifiers;
 			snapshot = {
 				open: true,
@@ -161,15 +166,11 @@ export function createRecentSwitcher(deps: RecentSwitcherDeps) {
 				currentId: recent.currentId,
 				index,
 			};
-			if (!modifiers.ctrl && !modifiers.meta && !modifiers.alt) {
-				commit(index);
-				return;
-			}
 			deps.claimKeyboard(true);
 			listen("keydown", onKeyDown);
 			listen("keyup", onKeyUp);
 			listen("pointerdown", onPointerDown);
-			listen("blur", close);
+			listen("blur", close, false);
 			teardown.push(deps.watch(refresh));
 			teardown.push(
 				deps.schedule(() => {
