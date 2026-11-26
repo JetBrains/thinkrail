@@ -25,6 +25,7 @@ import {
 	isLineWidth,
 	isLocalePreference,
 	isPullRequestFilter,
+	isProjectsFolder,
 	isQuestionPanelHeight,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
@@ -774,6 +775,10 @@ export function loadConfig(): AppConfig {
 		settleIdleDays: isSettleIdleDays(value.settleIdleDays)
 			? value.settleIdleDays
 			: DEFAULT_CONFIG.settleIdleDays,
+		projectsFolder: isProjectsFolder(value.projectsFolder)
+			? value.projectsFolder.trim()
+			: DEFAULT_CONFIG.projectsFolder,
+		projectsFolderNoticeShown: value.projectsFolderNoticeShown === true,
 		disabledSubagents: storedNameList(value.disabledSubagents),
 		disabledExtensions: storedNameList(value.disabledExtensions),
 		extensionSettings: storedExtensionSettings(value.extensionSettings),

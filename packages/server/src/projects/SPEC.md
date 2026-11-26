@@ -144,8 +144,10 @@ history depth. HTTP(S), SSH, Git, SCP-style SSH and local `file:` URLs are accep
 embedded passwords, HTTP userinfo, query strings, fragments and backslashes are rejected. Backslashes
 are ambiguous between the web URL parser and Git, so validation never accepts one spelling while Git
 executes another. Git uses the host's existing
-credential helpers and SSH configuration; no credentials are collected by ThinkRail. The parent must
-already be a directory. Every existing destination (including an empty directory or symlink) rejects.
+credential helpers and SSH configuration; no credentials are collected by ThinkRail. A missing parent is
+created by the clone (as `createProject` does), never by the preview: `inspectCloneDestination` answers the
+would-be path for it, so a default projects folder that does not exist yet previews cleanly; an existing
+parent that is not a directory rejects. Every existing destination (including an empty directory or symlink) rejects.
 An exclusive mkdir reserves the destination before Git starts. Failures and cancellation clean only that
 reservation, checking its filesystem identity before deletion; a replacement entry is never removed.
 Clone is asynchronous, has a 30-minute deadline, and cancellation waits for process teardown before

@@ -1669,6 +1669,10 @@ export interface AppConfig extends ThemePreference {
 	terminalWindowsShell: TerminalWindowsShell;
 	/** Idle days after which a quiet workspace settles onto its project's shelf; `null` = never. */
 	settleIdleDays: number | null;
+	/** Host folder new projects and clones go into by default; `~` is the host user's home. */
+	projectsFolder: string;
+	/** The first agent clone told the user about the projects folder; host-maintained, never client-written. */
+	projectsFolderNoticeShown: boolean;
 	/** Agent definition names switched off globally; unknown names are retained. */
 	disabledSubagents: string[];
 	disabledExtensions: string[];
@@ -1809,6 +1813,7 @@ export type AppConfigUpdate = Partial<
 		| "reviewEffort"
 		| "recentModels"
 		| "pullRequestFilters"
+		| "projectsFolderNoticeShown"
 	>
 > & {
 	/** Merged per project; `null` forgets a project's filter. */
@@ -1893,6 +1898,18 @@ export function isTerminalWindowsShell(value: unknown): value is TerminalWindows
 }
 
 export const SETTLE_IDLE_DAYS = { min: 1, max: 365, default: 7 } as const;
+
+export const DEFAULT_PROJECTS_FOLDER = "~/thinkrail";
+export const PROJECTS_FOLDER_MAX_LENGTH = 4096;
+
+export function isProjectsFolder(value: unknown): value is string {
+	return (
+		typeof value === "string" &&
+		value.trim().length > 0 &&
+		value.length <= PROJECTS_FOLDER_MAX_LENGTH &&
+		!value.includes("\0")
+	);
+}
 
 export function isSettleIdleDays(value: unknown): value is number | null {
 	return (
@@ -2117,6 +2134,8 @@ export const DEFAULT_CONFIG: AppConfig = {
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
 	settleIdleDays: SETTLE_IDLE_DAYS.default,
+	projectsFolder: DEFAULT_PROJECTS_FOLDER,
+	projectsFolderNoticeShown: false,
 	disabledSubagents: [],
 	disabledExtensions: [],
 	extensionSettings: {},

@@ -5,13 +5,22 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { configResetPatch, isConfigDefault } from "./settingDefaults";
 import { idleDescription, toChoice, WorkspacesSettingsView } from "./WorkspacesSettings";
 
-const view = (settleIdleDays: number | null, changed = false) =>
+const view = (
+	settleIdleDays: number | null,
+	changed = false,
+	projectsFolder: { value: string; changed: boolean } | null = null,
+) =>
 	renderToStaticMarkup(
 		createElement(WorkspacesSettingsView, {
 			settleIdleDays,
 			supported: true,
 			reset: { changed, onReset: () => {} },
 			onSelect: () => {},
+			projectsFolder: projectsFolder && {
+				value: projectsFolder.value,
+				reset: { changed: projectsFolder.changed, onReset: () => {} },
+				onCommit: () => Promise.resolve(true),
+			},
 		}),
 	);
 
@@ -51,4 +60,18 @@ test("Reset puts back 7 days, because null means Never", () => {
 	expect(isConfigDefault("settleIdleDays", null)).toBe(false);
 	expect(view(14, true)).toContain('data-testid="settings-reset-settle-idle"');
 	expect(view(7)).not.toContain("settings-reset-settle-idle");
+});
+
+test("the projects folder row shows only on a host that knows it, with its saved path and Reset", () => {
+	expect(view(7)).not.toContain('data-setting-id="projects-folder"');
+	const markup = view(7, false, { value: "~/code", changed: true });
+	expect(markup).toContain('data-setting-id="projects-folder"');
+	const input = markup.match(/<input[^>]*data-testid="projects-folder-input"[^>]*>/)?.[0] ?? "";
+	expect(input).toContain('value="~/code"');
+	expect(markup).toContain(text("settings.workspaces.projectsFolder.label"));
+	expect(markup).toContain('data-testid="settings-reset-projects-folder"');
+	expect(view(7, false, { value: "~/thinkrail", changed: false })).not.toContain(
+		"settings-reset-projects-folder",
+	);
+	expect(configResetPatch("projectsFolder")).toEqual({ projectsFolder: "~/thinkrail" });
 });

@@ -83,6 +83,20 @@ test("clones a complete repository and opens it exactly once without granting tr
 	expect(readFileSync(join(path, "README.md"), "utf8")).toBe("second\n");
 });
 
+test("creates a missing parent folder only when it clones, not when it previews", async () => {
+	const parent = join(root, "projects", "nested");
+	expect(inspectCloneDestination(parent, "copy")).toBe(join(parent, "copy"));
+	expect(existsSync(parent)).toBe(false);
+	const project = await cloneProject({ url, parentPath: parent, name: "copy" });
+	expect(project?.path).toBe(join(parent, "copy"));
+	expect(git(join(parent, "copy"), "rev-list", "--count", "HEAD")).toBe("2");
+});
+
+test("rejects a parent path that is a file", () => {
+	writeFileSync(join(root, "plain"), "keep");
+	expect(() => inspectCloneDestination(join(root, "plain"), "copy")).toThrow("not a folder");
+});
+
 test("honors shallow depth for file URLs", async () => {
 	const project = await cloneProject({ url, parentPath: root, name: "shallow", depth: 1 });
 	expect(project).not.toBeNull();
@@ -127,7 +141,6 @@ test("rejects invalid folder names and depths before creating anything", async (
 	}
 	expect(existsSync(join(root, "invalid"))).toBe(false);
 	expect(() => inspectCloneDestination("relative", "copy")).toThrow("absolute");
-	expect(() => inspectCloneDestination(join(root, "missing"), "copy")).toThrow();
 });
 
 test("rejects helpers, options and credential-bearing URLs before writing", async () => {

@@ -554,7 +554,8 @@ because a power user there may be adding a second provider.
 
 **Starting from nothing.** "Start a new project" opens **`CreateProjectDialog`** (driven by `useOpenProject`'s
 `startNewProject`, so the rail "+" and Welcome share it): a project name, its derived folder name, and a
-**Location** — the parent folder, default `~/thinkrail`, editable as a host path or picked with the native
+**Location** — the parent folder, prefilled from the store's `projectsFolder` (`AppConfig`, default
+`~/thinkrail`, which is also every older host's default here), editable as a host path or picked with the native
 directory picker — previewed as the final path, then `project.create` (folder + `git init` + initial commit
 + open; there is no "skip git" choice because a non-repo cannot be a project). A **Draft the
 specs with the agent** switch (default **on**) makes the caller (`startProjectSetupChat`) enter the new
@@ -567,8 +568,9 @@ failed list read toasts instead of rejecting. The "Set up project" card on an ex
 `NewWorkspaceDialog`. A failure stays inline in the dialog.
 
 **Cloning a repository.** `CloneProjectDialog`, opened by `useOpenProject` from either add-project menu,
-accepts a Git URL, an editable URL-derived folder name, a host parent path (default `~`, editable or chosen
-with Browse), and optional positive history depth (empty = full history). `project.cloneDestination`
+accepts a Git URL, an editable URL-derived folder name, a host parent path (prefilled by `defaultCloneParent`:
+the store's `projectsFolder` from `PROJECTS_FOLDER_PROTOCOL_VERSION`, else `~`, because an older host neither
+knows the setting nor creates a missing parent; editable or chosen with Browse), and optional positive history depth (empty = full history). `project.cloneDestination`
 provides the absolute path preview and rejects existing destinations; only a preview matching the current
 fields enables submission, and clone validates again before writing. The dialog uses host Git credentials,
 not GitHub login. During cloning fields are locked, status is announced, and Cancel requests
@@ -1316,7 +1318,11 @@ a project picker, the prompt hero, and the reused
   provided; `panels` neither discovers native nor host update capabilities. If a later welcome removes injected content while Updates is selected, Appearance
   is rendered and highlighted rather than leaving no active row);
   **`WorkspacesSettings`** (the **Workspaces** section, listed only at
-  `protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION`) — one row, **Settle idle workspaces after**, an
+  `protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION`) — **Projects folder** (from
+  `PROJECTS_FOLDER_PROTOCOL_VERSION`): a host-path text field (`useSettingsDraft`, committed on Enter/blur as
+  `settings.update { projectsFolder }`, a blank draft refused inline, Reset to `~/thinkrail`) naming where the
+  New project and Clone repository dialogs start and where an agent's `open_project` clones; and
+  **Settle idle workspaces after**, an
   **expensive** choice of 1 / 3 / 7 (default) / 14 days / Never (a stray arrow must not settle workspaces),
   written as `settings.update { settleIdleDays }` (`null` for Never) and converging through
   `settings.changed`, with Reset to 7; a valid host-configured non-preset value selects no option rather
