@@ -1,6 +1,7 @@
 import type { SlashArgumentCompletion } from "@thinkrail/contracts";
+import { Popover, PopoverAnchor, PopoverContent } from "@thinkrail/ui/popover";
 import { cn } from "@thinkrail/ui/utils";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, type RefObject, useState } from "react";
 import type { SlashCommandItem } from "./SlashCommandCompletion";
 
 export interface SlashArgument<T extends SlashCommandItem> {
@@ -153,29 +154,61 @@ export function useArgumentCompletion<T extends SlashCommandItem>({
 	};
 }
 
+/**
+ * Opens above `anchor` and never past the window's top edge: it shrinks to the space left above the
+ * prompt, and only its rows scroll, so the header (the caller's filters) always stays in view.
+ */
 export function ArgumentCompletionMenu({
-	header,
-	footer,
+	anchor,
+	container = null,
 	children,
 	className,
 }: {
-	header?: ReactNode;
-	footer?: ReactNode;
+	anchor: RefObject<HTMLElement | null>;
+	container?: HTMLElement | null;
 	children: ReactNode;
 	className?: string;
 }) {
 	return (
-		<div
-			data-testid="argument-menu"
-			className={cn(
-				"flex max-h-[50vh] w-[min(36rem,100%)] flex-col overflow-hidden rounded-md border border-border-default bg-container-elevated-bg shadow-[var(--shadow-md)]",
-				className,
-			)}
-		>
+		<Popover open>
+			<PopoverAnchor virtualRef={anchor as RefObject<HTMLElement>} />
+			<PopoverContent
+				side="top"
+				align="start"
+				sideOffset={4}
+				collisionPadding={8}
+				avoidCollisions={false}
+				container={container}
+				data-testid="argument-menu"
+				onOpenAutoFocus={(event) => event.preventDefault()}
+				onCloseAutoFocus={(event) => event.preventDefault()}
+				className={cn(
+					"flex max-h-[min(60vh,var(--radix-popover-content-available-height))] w-[var(--radix-popover-trigger-width)] flex-col p-0",
+					className,
+				)}
+			>
+				{children}
+			</PopoverContent>
+		</Popover>
+	);
+}
+
+/** The menu's three bands: a fixed header and footer around the rows, which alone scroll. */
+export function ArgumentCompletionFrame({
+	header,
+	footer,
+	children,
+}: {
+	header?: ReactNode;
+	footer?: ReactNode;
+	children: ReactNode;
+}) {
+	return (
+		<>
 			{header ? <div className="shrink-0 border-border-muted border-b">{header}</div> : null}
 			<div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
 			{footer ? <div className="shrink-0 border-border-muted border-t">{footer}</div> : null}
-		</div>
+		</>
 	);
 }
 

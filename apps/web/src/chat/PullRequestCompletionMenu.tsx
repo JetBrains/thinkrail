@@ -4,8 +4,8 @@ import { localeOf, type Translator, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { cn } from "@thinkrail/ui/utils";
-import { type KeyboardEvent, type Ref, useState } from "react";
-import { ArgumentCompletionMenu } from "../prompt";
+import { type KeyboardEvent, type Ref, type RefObject, useState } from "react";
+import { ArgumentCompletionFrame, ArgumentCompletionMenu } from "../prompt";
 import type { PullRequestCompletion } from "./pullRequestCompletion";
 
 const NOTICE = "px-8 py-8 text-text-muted tr-text-ui";
@@ -376,18 +376,7 @@ function Body({
 	);
 }
 
-/** The pull-request candidates of a `/<command> <argument>` prompt: filters, rows and states. */
-export function PullRequestCompletionMenu({
-	completion,
-	activeIndex,
-	onPick,
-	onHover,
-	firstChipRef,
-	onLeaveFilters,
-	notice,
-	container = null,
-	className,
-}: {
+type PullRequestCompletionProps = {
 	completion: PullRequestCompletion;
 	activeIndex: number;
 	onPick: (index: number) => void;
@@ -396,12 +385,22 @@ export function PullRequestCompletionMenu({
 	onLeaveFilters: () => void;
 	notice?: string;
 	container?: HTMLElement | null;
-	className?: string;
-}) {
+};
+
+/** The completion's filters, rows and states, without its positioning. */
+export function PullRequestCompletionContent({
+	completion,
+	activeIndex,
+	onPick,
+	onHover,
+	firstChipRef,
+	onLeaveFilters,
+	notice,
+	container = null,
+}: PullRequestCompletionProps) {
 	const t = useT();
 	return (
-		<ArgumentCompletionMenu
-			{...(className ? { className } : {})}
+		<ArgumentCompletionFrame
 			header={
 				<>
 					{notice ? (
@@ -431,6 +430,23 @@ export function PullRequestCompletionMenu({
 			<div data-testid="pull-request-completion">
 				<Body completion={completion} activeIndex={activeIndex} onPick={onPick} onHover={onHover} />
 			</div>
+		</ArgumentCompletionFrame>
+	);
+}
+
+/** The pull-request candidates of a `/<command> <argument>` prompt, opened above `anchor`. */
+export function PullRequestCompletionMenu({
+	anchor,
+	className,
+	...content
+}: PullRequestCompletionProps & { anchor: RefObject<HTMLElement | null>; className?: string }) {
+	return (
+		<ArgumentCompletionMenu
+			anchor={anchor}
+			container={content.container ?? null}
+			{...(className ? { className } : {})}
+		>
+			<PullRequestCompletionContent {...content} />
 		</ArgumentCompletionMenu>
 	);
 }

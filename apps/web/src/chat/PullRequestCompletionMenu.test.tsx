@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { DEFAULT_PULL_REQUEST_FILTER, type PullRequestSummary } from "@thinkrail/contracts";
 import { EN } from "@thinkrail/locales";
 import { renderToStaticMarkup } from "react-dom/server";
-import { PullRequestCompletionMenu } from "./PullRequestCompletionMenu";
+import { PullRequestCompletionContent } from "./PullRequestCompletionMenu";
 import type { PullRequestCompletion } from "./pullRequestCompletion";
 
 const pr = (number: number, over: Partial<PullRequestSummary> = {}): PullRequestSummary => ({
@@ -44,7 +44,7 @@ function completion(over: Partial<PullRequestCompletion> = {}): PullRequestCompl
 
 const view = (value: PullRequestCompletion, activeIndex = 0, notice?: string) =>
 	renderToStaticMarkup(
-		<PullRequestCompletionMenu
+		<PullRequestCompletionContent
 			completion={value}
 			activeIndex={activeIndex}
 			onPick={noop}

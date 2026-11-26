@@ -23,7 +23,7 @@ geometry, and submit actions; this module makes those inputs behave the same onc
   the template-pick controller that refuses to overwrite a draft changed after selection.
 - **Public surface:** `index.ts` is the only import path and re-exports the command-completion, argument-completion,
   template-text, template-pick, template-slot, and caret/selection-restoration (`usePendingSelection`) APIs.
-- **Allowed deps:** `contracts` types and its shared tiered matcher (`matchFields` / `parseMatchTerms`), React, `@thinkrail/locales` (UI strings), `@thinkrail/ui/utils` (`cn`), and `@thinkrail/ui/button` (`TemplateSlotHint` is a shared `Button`).
+- **Allowed deps:** `contracts` types and its shared tiered matcher (`matchFields` / `parseMatchTerms`), React, `@thinkrail/locales` (UI strings), `@thinkrail/ui/utils` (`cn`), `@thinkrail/ui/button` (`TemplateSlotHint` is a shared `Button`), and `@thinkrail/ui/popover` (the argument menu's anchored positioning).
 - **Forbidden:** store or transport access; workspace/session/project lookup; deciding which commands exist in a
   lifecycle; sending a prompt; importing `chat` or `panels`.
 
@@ -46,8 +46,12 @@ text after the command is the caller's query. The module decides the keys — �
 candidates, Enter picks (Shift+Enter and an empty list let Enter through, so the draft can still be sent
 as typed), Tab / Shift+Tab hand focus to the caller's filter row, Escape dismisses until the query
 changes — and the caller decides what the candidates are, when an argument is complete (the menu then
-closes for whatever follows it, such as a focus note), and renders rows, header and footer inside
-`ArgumentCompletionMenu`. A pick replaces the argument and adds one space. `slashArgumentTint` splits
+closes for whatever follows it, such as a focus note), and renders rows, header and footer through
+`ArgumentCompletionFrame` inside `ArgumentCompletionMenu`. The menu is a popover anchored above the
+caller's prompt that never flips below it and is capped to the space left above (and 60vh), so a
+prompt low in the window — the New Workspace dialog near its bottom — shrinks the rows, which alone
+scroll, and the header with the filters stays in view; positioned as a plain `bottom-full` box it grew
+past the window's top edge and hid them. A pick replaces the argument and adds one space. `slashArgumentTint` splits
 the draft into command / argument / plain spans for a prompt's highlight layer. The slash menu and the
 argument step never overlap: one needs a token without whitespace, the other a space after it.
 

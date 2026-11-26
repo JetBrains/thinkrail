@@ -736,7 +736,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					firstChipRef={prChipRef}
 					onLeaveFilters={() => ref.current?.focus()}
 					{...(pullRequestNotice ? { notice: pullRequestNotice } : {})}
-					className="absolute bottom-full left-12 z-50 mb-4"
+					anchor={shellRef}
+					className="w-[min(36rem,var(--radix-popover-trigger-width))]"
 				/>
 			) : mentionOpen ? (
 				<div

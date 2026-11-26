@@ -875,8 +875,8 @@ export function NewWorkspaceDialog({
 							onHover={prCompletion.setActiveIndex}
 							firstChipRef={prChipRef}
 							onLeaveFilters={() => promptRef.current?.focus()}
+							anchor={promptRef}
 							container={dialogEl}
-							className="absolute right-0 bottom-full left-0 z-50 mb-4"
 						/>
 					) : slashCompletion.open ? (
 						<SlashCommandMenu

@@ -223,11 +223,17 @@ test("the keyboard reaches the next page and every author", async ({ page, baseU
 				}),
 			),
 		});
+		await page.setViewportSize({ width: 1280, height: 640 });
 		const dialog = await openCreateDialog(page);
 		await page.mouse.move(0, 0);
 		await dialog.getByTestId("ws-prompt").fill(COMMAND);
 		const list = completion(page);
 		await expect(list.getByTestId("pull-request-option")).toHaveCount(20);
+		const filters = await page.getByTestId("pull-request-filters").boundingBox();
+		const prompt = await dialog.getByTestId("ws-prompt").boundingBox();
+		const menu = await page.getByTestId("argument-menu").boundingBox();
+		expect(filters?.y ?? -1).toBeGreaterThanOrEqual(0);
+		expect((menu?.y ?? 0) + (menu?.height ?? 0)).toBeLessThanOrEqual((prompt?.y ?? 0) + 1);
 		await page.keyboard.press("ArrowUp");
 		await expect(list.getByTestId("pull-request-more")).toHaveAttribute("data-active", "true");
 		await page.keyboard.press("Enter");
