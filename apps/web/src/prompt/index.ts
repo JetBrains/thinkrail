@@ -1,3 +1,4 @@
+export * from "./ArgumentCompletion";
 export * from "./pendingSelection";
 export * from "./SlashCommandCompletion";
 export * from "./slotSession";

@@ -1227,6 +1227,30 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   passive one lets Chromium apply the scroll before the wheel event reaches the hook, so the movement arrives
   without reader intent and neither detach nor exact-edge rearm fires. Scrolling stays responsive because a
   streaming delta re-renders only the rows whose content changed, keeping the main thread free.
+- **Pull-request argument** (`Composer` + `PullRequestCompletionMenu` + `usePullRequestCompletion`) —
+  when a completed command declares `argumentCompletion: "pull-request"` (the `reviewing-a-pr` skill), the
+  text after it is a search instead of a message, through `prompt`'s argument step. `ChatView` (and New
+  Workspace) run `usePullRequestCompletion(repositoryProjectId, query)`: `null` for a chat without a
+  project or a draft that is not such an argument, so nothing is requested otherwise. The list loads
+  the moment the command is completed — the first page at once, a typed search after a 250 ms pause —
+  as `pr.list` pages of 20 without sizes, then one `pr.sizes` for the page; **Show more** (also the last row ↑/↓ reach, so Enter pages) fetches the
+  next cursor; a number, `#N` or link goes to `pr.get` instead and is accepted only for the same
+  repository. Rows: waiting for your review first, then the rest; the active row (and Show more) scrolls into view as
+  the keys move it. The filter row (scope Waiting for me
+  / Mine / All open, Drafts, Author) is a toolbar: Tab from the prompt enters it,
+  ←/→ move, Tab or Escape returns. The Author list holds everyone with an open pull request
+  (`pr.authors`, 100 pull requests a page, most recently active first), not only the loaded rows' authors: it
+  opens on a name search ranked like the slash menu, ↑/↓ walk the search and the names, scrolling to its
+  end loads the next page, and it keeps loading while a search shows fewer than 30 names; the loaded authors start over each time the
+  Author list opens (the host's 60 s cache makes that cheap), and on Retry, so an empty or failed
+  listing never sticks, and a rejected page stops further loading until then. **Mine** and an explicit
+  author exclude each other — GitHub ORs two `author:` qualifiers — so picking an author leaves Mine for
+  All open and choosing Mine clears the author; a change is remembered per project on the host
+  (`rememberPullRequestFilter`) and seeds the next opening. Enter inserts the PR's link and a space; the
+  argument then counts as complete and the menu stays closed for a focus note. The chat's menu carries a
+  one-line notice that a workspace with work of its own reviews elsewhere (the skill hands off). Shift+Enter
+  or an empty list let Enter send the draft as typed. The command and a recognised link are tinted in
+  the composer's backdrop.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions (`mentionLookup` splits the typed
   query into the folder `fs.readDir` lists and the name prefix, reading a typed `\` as a separator), `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
@@ -2206,7 +2230,10 @@ Unknown custom messages retain their existing behavior.
   **`useTranscriptSync.ts`** (successful-compaction + connection-generation canonical transcript
   reconciliation), `SkillsDialog.tsx`, **`useProjectTrustSummary.ts`** (the trust-summary read the Skills
   dialog shares with `panels/ProjectTrustNotice` and New Workspace; its pure derivation and copy live in the
-  store-free `projectTrust.ts`), `TemplateEditorDialog.tsx`,
+  store-free `projectTrust.ts`), **`pullRequestCompletion.ts`** (`usePullRequestCompletion`: the pages,
+  sizes, lookups and remembered filter behind a `/<command> <argument>` that takes a pull request — used by
+  `ChatView` and `panels`' New Workspace prompt; its pure parsing lives in the store-free
+  `pullRequestArguments.ts`), `TemplateEditorDialog.tsx`,
   `SubagentTranscriptDialog.tsx`, **`useModelPreferences.ts`** (pinned / recents / default pair:
   the store read plus the `settings.update` writes every picker mount shares), and **`modelVisibility.ts`**
   (the hidden-models persistence seam `main.tsx` starts once: hydrates `store.hiddenModels` and writes it

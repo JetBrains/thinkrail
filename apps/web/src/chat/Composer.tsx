@@ -35,15 +35,20 @@ import {
 	finalizeTemplateSlotSession,
 	highlightSegments,
 	type ParsedTemplate,
+	promptTintClass,
+	replaceSlashArgument,
 	type SlashCommandItem,
 	SlashCommandMenu,
 	type SlotHighlightState,
 	type SlotSegment,
 	selectedSlashCommandValue,
+	slashArgument,
+	slashArgumentTint,
 	slashCommandQuery,
 	stepTemplateSlotSession,
 	TemplateSlotHint,
 	type TemplateSlotSessionState,
+	useArgumentCompletion,
 	usePendingSelection,
 	useSlashCommandCompletion,
 } from "@/prompt";
@@ -57,6 +62,7 @@ import {
 	type ModelSelection,
 } from "./ModelEffortPicker";
 import { isModelCommand, parseModelCommand } from "./nativeCommands";
+import { PullRequestCompletionMenu } from "./PullRequestCompletionMenu";
 import {
 	AttachFilesButton,
 	attachmentPasteDropHandlers,
@@ -65,6 +71,8 @@ import {
 	type PromptImagesOwner,
 	usePromptImages,
 } from "./promptImages";
+import { isPullRequestArgumentComplete, pullRequestReferenceOf } from "./pullRequestArguments";
+import type { PullRequestCompletion } from "./pullRequestCompletion";
 import { composerShiftTabOut, composerTranscriptStep } from "./transcriptNavigation";
 import type { ChatAttachment } from "./types";
 import type { ModelPreferences } from "./useModelPreferences";
@@ -219,6 +227,10 @@ interface ComposerProps {
 	onPickTemplate?: (name: string) => void;
 	onManageTemplates?: () => void;
 	templatesEmpty?: boolean;
+	/** The pull requests a `/<command> <argument>` draft offers, when its command declares a PR argument. */
+	pullRequests?: PullRequestCompletion | null;
+	/** One line above the pull-request filters (the chat says where a review would run). */
+	pullRequestNotice?: string;
 }
 
 export interface ComposerHandle {
@@ -267,6 +279,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		onPickTemplate,
 		onManageTemplates,
 		templatesEmpty,
+		pullRequests = null,
+		pullRequestNotice,
 	},
 	handleRef,
 ) {
@@ -463,8 +477,31 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		},
 	});
 
+	const prChipRef = useRef<HTMLButtonElement>(null);
+	const pickPullRequest = (index: number) => {
+		const pr = pullRequests?.pick(index);
+		const argument = slashArgument(value, commands);
+		if (pr && argument) replaceDraft(replaceSlashArgument(value, argument, pr.url));
+	};
+	const prCompletion = useArgumentCompletion({
+		value,
+		commands,
+		itemCount: pullRequests?.optionCount ?? 0,
+		isComplete: (argument) =>
+			argument.command.argumentCompletion !== "pull-request" ||
+			isPullRequestArgumentComplete(argument.query),
+		onPick: pickPullRequest,
+		onTab: () => prChipRef.current?.focus(),
+	});
+	const prMenuOpen = !uploading && prCompletion.argument !== null && pullRequests !== null;
+	const tintArgument = slots ? null : slashArgument(value, commands);
+	const tintLink = tintArgument?.query.split(/\s/)[0] ?? "";
+	const promptTint = tintArgument
+		? slashArgumentTint(value, tintArgument, pullRequestReferenceOf(tintLink) ? tintLink.length : 0)
+		: null;
+
 	const slashOpen = !uploading && slashCompletion.open;
-	const menuOpen = mentionOpen || slashOpen;
+	const menuOpen = mentionOpen || slashOpen || prMenuOpen;
 	const slotsActive = slots !== null && !uploading;
 
 	const openHistory = () => {
@@ -611,6 +648,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				return;
 			}
 		}
+		if (fixed && prMenuOpen && prCompletion.handleKeyDown(e)) return;
 		if (fixed && slashOpen && slashCompletion.handleKeyDown(e)) return;
 		const shiftTabOut = composerShiftTabOut(e, menuOpen || slotsActive);
 		if (shiftTabOut && (onShiftTabOut?.() || chipsRef.current?.focus())) {
@@ -689,7 +727,19 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			}}
 			className="relative m-0 flex min-w-0 shrink-0 flex-col border-0 border-border-muted border-t bg-container-workspace-bg p-0"
 		>
-			{mentionOpen ? (
+			{prMenuOpen && pullRequests ? (
+				<PullRequestCompletionMenu
+					completion={pullRequests}
+					activeIndex={prCompletion.activeIndex}
+					onPick={pickPullRequest}
+					onHover={prCompletion.setActiveIndex}
+					firstChipRef={prChipRef}
+					onLeaveFilters={() => ref.current?.focus()}
+					{...(pullRequestNotice ? { notice: pullRequestNotice } : {})}
+					anchor={shellRef}
+					className="w-[min(36rem,var(--radix-popover-trigger-width))]"
+				/>
+			) : mentionOpen ? (
 				<div
 					data-testid="mention-menu"
 					className="absolute bottom-full left-12 mb-4 max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-md border border-border-default bg-container-elevated-bg p-4 shadow-[var(--shadow-md)]"
@@ -805,6 +855,26 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						>
 							{`${value}\u200b`}
 						</div>
+						{promptTint ? (
+							<div
+								ref={attachBackdrop}
+								data-testid="prompt-tint"
+								aria-hidden
+								className="pointer-events-none absolute inset-0 overflow-hidden rounded-sm"
+							>
+								<div className="w-full whitespace-pre-wrap break-words px-12 py-8 tr-text-ui">
+									{promptTint.map((segment) => (
+										<span
+											key={segment.start}
+											data-tint={segment.tone === "plain" ? undefined : segment.tone}
+											className={`text-transparent ${promptTintClass(segment.tone)}`}
+										>
+											{segment.text}
+										</span>
+									))}
+								</div>
+							</div>
+						) : null}
 						{slots ? (
 							<div
 								ref={attachBackdrop}

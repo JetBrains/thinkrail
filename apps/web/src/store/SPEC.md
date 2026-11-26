@@ -631,7 +631,9 @@ roster's catalog reads ([[submodule-web-panels]]).
   **`notificationsEnabled: boolean`** (the attention-notification master toggle),
   **`subagentsEnabled: boolean`**, **`subagentMaxConcurrent: number`**, **`disabledExtensions: string[]`**
   (defaulting to `[]` so a pre-v82 host reads as "all on"), **`extensionSettings: ExtensionSettingValues`**
-  (defaulting to `{}` so a pre-v105 host reads as "every declared default"), **`keybindingOverrides:
+  (defaulting to `{}` so a pre-v105 host reads as "every declared default"),
+  **`pullRequestFilters: Record<string, PullRequestFilter>`** (valid entries only; written through
+  `transport`'s `rememberPullRequestFilter`, which sends one project's filter), **`keybindingOverrides:
   KeybindingOverrides`** (the host's `keybindings` map as sent, any non-object `{}`; the resolver in
   [[submodule-web-keybindings]] drops what it cannot use and `shell` ignores it below v123),
   **`jbcentralQuotaEnabled: boolean`**,

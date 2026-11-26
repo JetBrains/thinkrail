@@ -13,6 +13,7 @@ import {
 	isKeybindingOverrides,
 	isLineWidth,
 	isLocalePreference,
+	isPullRequestFilter,
 	isQuestionPanelHeight,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
@@ -21,6 +22,7 @@ import {
 	isThemeMode,
 	type KeybindingOverrides,
 	LINE_WIDTH_COLUMNS,
+	type PullRequestFilter,
 	QUESTION_PANEL_HEIGHT_PERCENT,
 	RECENT_MODELS_LIMIT,
 	sameModel,
@@ -79,6 +81,7 @@ const ACCEPTED_UPDATE_KEYS = {
 	codeLigatures: true,
 	fontWeightOffset: true,
 	keybindings: true,
+	pullRequestFilters: true,
 	chatMessageOrder: true,
 	layout: true,
 	recentModels: true,
@@ -140,6 +143,30 @@ function mergeExtensionSettings(
 	const next: ExtensionSettingValues = { ...current };
 	for (const [name, settings] of Object.entries(update)) {
 		next[name] = { ...(current[name] ?? {}), ...settings };
+	}
+	return next;
+}
+
+function validatePullRequestFilters(value: unknown): Record<string, PullRequestFilter | null> {
+	const invalid = () =>
+		new Error("pullRequestFilters must map project ids to pull-request filters or null");
+	if (!isPlainObject(value)) throw invalid();
+	for (const [projectId, filter] of Object.entries(value)) {
+		if (projectId.trim().length === 0 || (filter !== null && !isPullRequestFilter(filter))) {
+			throw invalid();
+		}
+	}
+	return value as Record<string, PullRequestFilter | null>;
+}
+
+function mergePullRequestFilters(
+	current: Record<string, PullRequestFilter>,
+	update: Record<string, PullRequestFilter | null>,
+): Record<string, PullRequestFilter> {
+	const next = { ...current };
+	for (const [projectId, filter] of Object.entries(update)) {
+		if (filter === null) delete next[projectId];
+		else next[projectId] = filter;
 	}
 	return next;
 }
@@ -271,8 +298,11 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		extensionSettings,
 		disabledPackages,
 		keybindings,
+		pullRequestFilters,
 		...rest
 	} = runtimeUpdate;
+	const pullRequestFiltersUpdate =
+		pullRequestFilters === undefined ? undefined : validatePullRequestFilters(pullRequestFilters);
 	const nextKeybindings = keybindings === undefined ? undefined : validateKeybindings(keybindings);
 	const extensionSettingsUpdate =
 		extensionSettings === undefined ? undefined : validateExtensionSettings(extensionSettings);
@@ -391,6 +421,14 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 				}),
 		...(nextDisabledPackages === undefined ? {} : { disabledPackages: nextDisabledPackages }),
 		...(nextKeybindings === undefined ? {} : { keybindings: nextKeybindings }),
+		...(pullRequestFiltersUpdate === undefined
+			? {}
+			: {
+					pullRequestFilters: mergePullRequestFilters(
+						current.pullRequestFilters ?? {},
+						pullRequestFiltersUpdate,
+					),
+				}),
 	};
 	if (defaultModel !== undefined) {
 		if (defaultModel === null) delete next.defaultModel;

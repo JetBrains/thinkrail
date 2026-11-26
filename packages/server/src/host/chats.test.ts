@@ -330,6 +330,10 @@ test("a chat is created with its folder, record and one session, listed without 
 		["workspace.create", { projectId: workspace.projectId }],
 		["workspace.listExisting", { projectId: workspace.projectId }],
 		["git.listBranches", { projectId: workspace.projectId }],
+		["pr.list", { projectId: workspace.projectId, filter: { scope: "all", drafts: true } }],
+		["pr.sizes", { projectId: workspace.projectId, numbers: [1] }],
+		["pr.authors", { projectId: workspace.projectId }],
+		["pr.get", { projectId: workspace.projectId, number: 1 }],
 	] as const) {
 		await expect(handleRequest(method, params, CTX)).rejects.toThrow("not a repository");
 	}

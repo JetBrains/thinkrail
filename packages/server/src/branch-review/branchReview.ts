@@ -11,7 +11,7 @@ import type {
 import { gitAsync, nonInteractiveGitEnv } from "../git";
 import { runBounded } from "../subprocess";
 
-const LOOKUP_TIMEOUT_MS = 8_000;
+export const LOOKUP_TIMEOUT_MS = 8_000;
 export const OPEN_BRANCH_REVIEW_CACHE_TTL_MS = 60_000;
 const REPO_MERGE_SETTINGS_TTL_MS = 10 * 60_000;
 

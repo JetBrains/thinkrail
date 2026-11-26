@@ -858,6 +858,7 @@ export default function syntheticExternalExtension(pi) {
 			"brainstorming",
 			"choosing-a-workflow",
 			"importing-a-codebase",
+			"reviewing-a-pr",
 			"setting-up-a-project",
 			"starting-a-new-project",
 			"writing-specs",
@@ -868,6 +869,12 @@ export default function syntheticExternalExtension(pi) {
 				`skill file missing: ${skill}`,
 			);
 		}
+		assert(
+			existsSync(
+				join(customHost.resources.skillsDir, "host", "reviewing-a-pr", "brief-template.html"),
+			),
+			"reviewing-a-pr's brief template is missing",
+		);
 		assert(
 			existsSync(join(customHost.resources.skillsDir, "host", "SPEC.md")),
 			"workflow SPEC is missing",

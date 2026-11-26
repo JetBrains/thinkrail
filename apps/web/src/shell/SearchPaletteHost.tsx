@@ -25,12 +25,14 @@ function renderFilePreview(file: PaletteFile) {
 
 export interface SearchPaletteHostProps {
 	readonly onNewWorkspace: (projectId: string | null, initialPrompt?: string) => boolean;
+	readonly onReviewPullRequest: () => boolean;
 	readonly onToggleProjectsHome: () => void;
 	readonly hasUpdateSettings: boolean;
 }
 
 export function SearchPaletteHost({
 	onNewWorkspace,
+	onReviewPullRequest,
 	onToggleProjectsHome,
 	hasUpdateSettings,
 }: SearchPaletteHostProps) {
@@ -46,6 +48,7 @@ export function SearchPaletteHost({
 				<OpenSearchPalette
 					key={session}
 					openNewWorkspace={onNewWorkspace}
+					openReviewPullRequest={onReviewPullRequest}
 					toggleProjectsHome={onToggleProjectsHome}
 					pickAndOpenProject={openProject.pickAndOpen}
 					enterHostPath={openProject.enterHostPath}
