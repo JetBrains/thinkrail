@@ -131,10 +131,6 @@ async function materialize(
 	return pending;
 }
 
-/**
- * A read-only folder holding only `roots` as they are at `ref` — what a worktree cut from it would
- * contain there — or `null` when the ref does not resolve or cannot be extracted.
- */
 export async function previewRefPaths(
 	project: RefPreviewProject,
 	ref: string,
