@@ -86,7 +86,11 @@ palette — plus anything run from the palette: up to five rows by `lastUsed`, n
 now (`currentPlaceIds`, read when the palette opens) nor a row Waiting or Actions already shows.
 `initSearchPreferences` watches the store's location (the active workspace's attention center chat tab;
 in a chat without a project, its one chat whatever tab shows and before its layout resolves, since the
-palette has no other row for it; else the workspace; else Project Home) and stamps a visit when the place changes; a chat's visit retires
+palette has no other row for it; else the workspace; else Project Home) and stamps a visit when the place changes.
+A chat is the place only while the palette lists it (`chatHasRow`, the one listing rule, over the host
+record's title, reported first prompt and attention): a just-created workspace's empty chat would retire
+the workspace's stamp for a row that does not exist, so the workspace is the place until the chat's first
+prompt or name reaches its record, when the place moves to the chat on its own. A chat's visit retires
 its workspace's stamp, and a pick of a row the current place already covers (its workspace, picked from
 its chat — a navigation that changes nothing, so no visit follows) stamps the place instead, so one place
 is one row while the pick still feeds frecency and adaptive learning. Visits order Recent only — typed-query ranking keeps

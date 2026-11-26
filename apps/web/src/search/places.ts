@@ -3,6 +3,7 @@ import {
 	isChatWorkspace,
 	selectAttentionCenterTab,
 	selectKnownChatTitle,
+	selectReportedFirstPrompt,
 	selectWorkspaceById,
 	type useAppStore,
 } from "../store";
@@ -30,12 +31,9 @@ function projectlessChat(state: PlaceState, workspaceId: string): string | undef
 function listedChat(state: PlaceState, workspaceId: string, sessionId: string): boolean {
 	const record = state.sessionStateByWorkspace[workspaceId]?.[sessionId];
 	if (!record) return false;
-	const closed = state.closedChatsByWorkspace[workspaceId]?.find(
-		(chat) => chat.sessionId === sessionId,
-	);
 	return chatHasRow(
 		selectKnownChatTitle(state, workspaceId, sessionId),
-		record.firstPrompt ?? closed?.firstPrompt,
+		selectReportedFirstPrompt(state, workspaceId, sessionId),
 		getSessionAttention(record.state),
 	);
 }
