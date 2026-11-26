@@ -110,6 +110,15 @@ extension had to adopt and wire up. It was replaced so voice is a property of th
   a transition (`startTransition`): mounting the mic on focus is not urgent and must not delay the
   field's first keystrokes. Rendered synchronously, it held off WebKit's text input long enough for a
   questionnaire's page-change focus to win the race.
+- **Resting composer mics** (user decision, 2026-11-26): every eligible chat composer
+  (`[data-dictation-fallback]`) shows its mic without focus too, so users discover dictation and can
+  start it with one click. Other fields stay focus-only, which keeps mics off every search box and
+  settings input. Composers are found by a frame-coalesced `MutationObserver` scan (they do nothing
+  themselves); a read-only or disabled one gets none, except the one being dictated into, which our
+  own lock makes read-only. Clicking an unfocused composer's mic focuses it first, as every mic press
+  does. A single mic that fell back to the composer on blur was rejected: it jumped between fields
+  and served only one split pane. Each mic is one `FieldMic` with its own placement; the setup
+  popover belongs to the field it was opened for. A mic's `data-mic-anchor` is `composer` or `field`.
 - **The mic** is rendered through a portal and re-placed against the field's rect whenever the field,
   the page or its container resizes or anything scrolls (one `requestAnimationFrame` per burst; no idle
   frame loop, which kept the desktop renderer awake at 60 Hz): inside the right edge, at the bottom corner of a field 40 px or taller, centred vertically on a
@@ -120,7 +129,7 @@ extension had to adopt and wire up. It was replaced so voice is a property of th
   - It portals into the field's nearest `[role="dialog"]` or Radix popper wrapper, absolutely
     positioned against it (including its scroll offset and border), so it sits inside that layer's focus trap and outside-click guard. Elsewhere
     it is fixed to the viewport.
-  - When focus leaves, the mic is hidden (`hidden`), not unmounted, until another field takes focus or
+  - When focus leaves, the focus-following mic is hidden (`hidden`), not unmounted, until another field takes focus or
     its field leaves the page. Radix focus scopes move focus to their container whenever a node inside
     them is removed while focus is on `body`. Removing the mic mid-focus-change closed a model-picker
     popover on a click inside it, and broke a field's own focus restore after it disabled itself.
