@@ -90,12 +90,16 @@ test("one repository matches across HTTPS, SSH, scp-style and .git spellings", (
 	}
 	expect(repositoryKey("https://gitlab.com/fastify/fastify")).not.toBe(key);
 	expect(repositoryKey("file:///srv/repos/widget.git")).toBe("file:/srv/repos/widget");
+	expect(repositoryKey("https://host/a%zz")).toBeNull();
 	expect(repositoryFolderName("git@github.com:fastify/fastify.git")).toBe("fastify");
 	expect(repositoryFolderName("file:///srv/repos/widget.git")).toBe("widget");
+	expect(repositoryFolderName("https://github.com/microsoft/TypeScript.git")).toBe("TypeScript");
+	expect(repositoryFolderName("https://host/a%zz")).toBe("repository");
 });
 
 test("owner/repo means GitHub; paths need an explicit absolute, ~ or ./ start", () => {
 	expect(expandRepository("fastify/fastify")).toBe("https://github.com/fastify/fastify.git");
+	expect(expandRepository("fastify/fastify.git")).toBe("https://github.com/fastify/fastify.git");
 	expect(expandRepository("https://example.com/a/b")).toBe("https://example.com/a/b");
 	for (const path of ["/srv/app", "~", "~/code/app", "./app", "../app", "C:\\code\\app"]) {
 		expect(isPathLike(path)).toBe(true);
@@ -184,6 +188,14 @@ test("a local repository opens without a prompt; a plain or missing folder is re
 	await expect(
 		planOpenProject("s-1", { repository: join(root, "nowhere") }, deps()),
 	).rejects.toThrow("No folder at");
+});
+
+test("one project with a malformed remote URL does not break matching for the others", async () => {
+	const broken = repo(join(root, "elsewhere", "broken"));
+	git(broken, "remote", "add", "origin", "https://host/a%zz");
+	openProject(broken);
+	const plan = await planOpenProject("s-1", { repository: url }, deps());
+	expect(plan).toMatchObject({ kind: "clone", name: "widget" });
 });
 
 test("a malformed repository is refused before any prompt", async () => {

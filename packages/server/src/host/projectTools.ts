@@ -65,7 +65,7 @@ export function isPathLike(repository: string): boolean {
 
 export function expandRepository(repository: string): string {
 	return GITHUB_SHORTHAND.test(repository) && !repository.startsWith(".")
-		? `https://github.com/${repository}.git`
+		? `https://github.com/${repository.replace(/\.git$/i, "")}.git`
 		: repository;
 }
 
@@ -81,22 +81,29 @@ export function repositoryKey(url: string): string | null {
 		return `${scp[1].toLowerCase()}/${trimRepoPath(scp[2].replace(/^\/+/, "")).toLowerCase()}`;
 	}
 	let parsed: URL;
+	let pathname: string;
 	try {
 		parsed = new URL(trimmed);
+		pathname = decodeURIComponent(parsed.pathname);
 	} catch {
 		return null;
 	}
-	const path = trimRepoPath(decodeURIComponent(parsed.pathname));
+	const path = trimRepoPath(pathname);
 	if (parsed.protocol === "file:") return `file:${path}`;
 	if (!parsed.hostname || !path) return null;
 	return `${parsed.hostname.toLowerCase()}/${path.replace(/^\/+/, "").toLowerCase()}`;
 }
 
 export function repositoryFolderName(url: string): string {
-	const key = repositoryKey(url) ?? url;
-	const last = key.replace(/\/+$/, "").split("/").pop() ?? "";
-	const name = last
-		.replace(/^file:/, "")
+	let path: string;
+	try {
+		path = url.includes("://")
+			? decodeURIComponent(new URL(url).pathname)
+			: url.slice(url.indexOf(":") + 1);
+	} catch {
+		path = "";
+	}
+	const name = (trimRepoPath(path).split("/").pop() ?? "")
 		.replace(/[/\\<>:"|?*\p{Cc}]/gu, "-")
 		.replace(/^[. ]+|[. ]+$/g, "");
 	return name || "repository";
