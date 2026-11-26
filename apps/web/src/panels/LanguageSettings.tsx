@@ -1,5 +1,9 @@
 import { RiExternalLinkLine as ExternalLink } from "@remixicon/react";
-import type { LocalLocaleFileErrorCode, LocalLocalesSnapshot } from "@thinkrail/contracts";
+import {
+	DEFAULT_CONFIG,
+	type LocalLocaleFileErrorCode,
+	type LocalLocalesSnapshot,
+} from "@thinkrail/contracts";
 import { languageName, SYSTEM_LOCALE } from "@thinkrail/locales";
 import { T, useT } from "@thinkrail/locales/react";
 import { type ReactNode, useMemo } from "react";
@@ -11,14 +15,23 @@ import {
 	languageOptions,
 	useSystemLanguages,
 } from "@/i18n";
+import {
+	SETTINGS_ROWS,
+	SettingsChoice,
+	type SettingsChoiceOption,
+	SettingsGroup,
+	SettingsPage,
+	SettingsRow,
+} from "@/settingsKit";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { type FolderActions, SettingsFolderRow, useFolderActions } from "./SettingsFolder";
-import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
-import { SettingsRadioCards, type SettingsRadioChoice } from "./SettingsRadioCards";
-import { SettingsRow } from "./SettingsRow";
+import { isConfigDefault } from "./settingDefaults";
+import { SETTING, settingProps } from "./settingsCatalog";
 
 export const CONTRIBUTE_TRANSLATIONS_URL = `${REPO_URL}/blob/main/CONTRIBUTING.md#translations`;
+
+const LINK = "text-primary underline underline-offset-2 hover:opacity-80 focus-visible:focus-ring";
 
 export function repoSourceUrl(appVersion: string | null, path: string): string {
 	const released =
@@ -30,14 +43,23 @@ export function englishSourceUrl(appVersion: string | null): string {
 	return repoSourceUrl(appVersion, "packages/locales/en.json");
 }
 
-function InlineLink({ href, children }: { href: string; children?: ReactNode }) {
+export function SettingsLink({
+	href,
+	testId,
+	children,
+}: {
+	href: string;
+	testId: string;
+	children?: ReactNode;
+}) {
 	return (
 		<a
-			data-testid="language-english-source"
+			data-testid={testId}
 			href={href}
 			target="_blank"
 			rel="noopener noreferrer"
-			className="text-primary underline underline-offset-2 hover:opacity-80 focus-visible:focus-ring"
+			tabIndex={0}
+			className={LINK}
 		>
 			{children}
 		</a>
@@ -136,14 +158,14 @@ export function LanguagePage({
 	const systemTag = effectiveLocale(SYSTEM_LOCALE, snapshot, systemLanguages);
 	const folder = snapshot?.dir;
 
-	const choices: SettingsRadioChoice<string>[] = [
+	const choices: SettingsChoiceOption<string>[] = [
 		{
 			id: SYSTEM_LOCALE,
 			label: t("settings.language.system.label"),
 			description: t("settings.language.system.description", { language: languageName(systemTag) }),
 			testId: "language-system",
 		},
-		...options.map((option): SettingsRadioChoice<string> => {
+		...options.map((option): SettingsChoiceOption<string> => {
 			if (option.kind === "language") {
 				return {
 					id: choiceId(option),
@@ -181,31 +203,52 @@ export function LanguagePage({
 		: preference;
 
 	return (
-		<SettingsPageContainer testId="settings-language">
+		<SettingsPage
+			title={t("settings.nav.language")}
+			description={t("settings.language.description")}
+			testId="settings-language"
+		>
+			<div className={SETTINGS_ROWS}>
+				<SettingsRow
+					{...settingProps(t, SETTING.interfaceLanguage)}
+					reset={{
+						changed: !isConfigDefault("locale", preference),
+						onReset: () => onSelect(DEFAULT_CONFIG.locale),
+					}}
+					layout="stacked"
+					control={
+						<SettingsChoice
+							label={t("settings.language.title")}
+							layout="list"
+							cost="expensive"
+							options={choices}
+							value={value}
+							onSelect={onSelect}
+							testId="language-choice"
+						/>
+					}
+				/>
+			</div>
 			<SettingsGroup
-				title={t("settings.language.title")}
-				description={t("settings.language.description")}
-			>
-				<div className="py-12">
-					<SettingsRadioCards
-						name="ui-language"
-						label={t("settings.language.title")}
-						choices={choices}
-						value={value}
-						onSelect={onSelect}
-					/>
-				</div>
-			</SettingsGroup>
-			<SettingsGroup title={t("settings.language.add.title")} testId="language-add">
-				<p className="py-12 tr-text-metadata text-text-muted">
+				title={t("settings.language.add.title")}
+				descriptionRowId="language-add-steps"
+				description={
 					<T
 						i18nKey="settings.language.add.steps"
-						components={[<InlineLink key="en" href={englishSourceUrl(appVersion)} />]}
+						components={[
+							<SettingsLink
+								key="en"
+								href={englishSourceUrl(appVersion)}
+								testId="language-english-source"
+							/>,
+						]}
 					/>
-				</p>
+				}
+				testId="language-add"
+			>
 				{folder ? (
 					<SettingsFolderRow
-						label={t("settings.language.folder.label")}
+						{...settingProps(t, SETTING.languageFolder)}
 						folder={folder}
 						testIdPrefix="language"
 						onCopyFolder={onCopyFolder}
@@ -213,15 +256,14 @@ export function LanguagePage({
 					/>
 				) : null}
 				<SettingsRow
-					label={t("settings.language.contribute.label")}
-					description={t("settings.language.contribute.description")}
-					noBorder
+					{...settingProps(t, SETTING.languageContribute)}
 					control={
 						<a
 							data-testid="language-contribute"
 							href={CONTRIBUTE_TRANSLATIONS_URL}
 							target="_blank"
 							rel="noopener noreferrer"
+							tabIndex={0}
 							className="inline-flex items-center gap-4 tr-text-ui text-primary underline-offset-2 hover:underline focus-visible:focus-ring"
 						>
 							<ExternalLink className="size-14" />
@@ -230,6 +272,6 @@ export function LanguagePage({
 					}
 				/>
 			</SettingsGroup>
-		</SettingsPageContainer>
+		</SettingsPage>
 	);
 }

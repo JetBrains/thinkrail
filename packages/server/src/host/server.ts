@@ -13,11 +13,14 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	ARTIFACTS_PROTOCOL_VERSION,
+	CHAT_ATTACHMENTS_ROUTE,
 	CONTINUATION_PROTOCOL_VERSION,
+	EXTENSION_ASSETS_ROUTE,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
 	GITHUB_STAR_PROTOCOL_VERSION,
 	IMAGES_ROUTE,
+	INSTALLED_EXTENSIONS_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
@@ -42,6 +45,8 @@ import {
 	disposeAllSessions,
 	getSessionAttribution,
 	getSessionWorkspaceId,
+	HOST_BUILTIN_EXTENSION_NAMES,
+	HOST_INLINE_FACTORIES,
 	handlePiSettingsFileChanged,
 	handleProjectPiSettingsChanged,
 	initializeSessionStates,
@@ -49,6 +54,7 @@ import {
 	liveSessionIdsOf,
 	mayHoldProjectSkills,
 	mcpPolicyOf,
+	piNpmCommand,
 	piTrustsProjectPath,
 	primeProjectPiSettings,
 	primeUserPiSettings,
@@ -56,6 +62,7 @@ import {
 	reconcileMcpSessions,
 	refreshAgentReviewTool,
 	refreshExtensionTools,
+	refreshInstalledExtensions,
 	refreshSkillAdmission,
 	refreshSubagentConcurrency,
 	refreshSubagentTools,
@@ -84,6 +91,7 @@ import {
 	setSkillAdmissionResolver,
 	setSpecsEnabledResolver,
 	setSubagentConcurrencyResolver,
+	setSubagentEnabledResolver,
 	setSubagentsEnabledResolver,
 	setTitleToolHost,
 	settleCredentialWritesForShutdown,
@@ -101,13 +109,13 @@ import {
 	track,
 } from "../analytics";
 import {
+	checkArtifactFiles,
 	noteArtifactPathsChanged,
 	observeArtifactSessionEvent,
 	setArtifactsPublisher,
 } from "../artifacts";
 import {
 	cancelAllLogins,
-	initializeJbcentralRuntime,
 	setJbcentralAppliedPublisher,
 	setJbcentralChangedPublisher,
 	setLoginPublisher,
@@ -115,7 +123,12 @@ import {
 	stopJbcentralRuntime,
 } from "../auth";
 import { forgetOpenBranchReview } from "../branch-review";
-import { artifactTools } from "../extensions";
+import {
+	artifactTools,
+	installedExtensions,
+	setArtifactFileCheck,
+	startInstalledExtensions,
+} from "../extensions";
 import {
 	configureSurveySource,
 	redeliverInvitation,
@@ -129,7 +142,7 @@ import { ignoredPaths } from "../git";
 import { forgetImageSession, resetImages, serveImage, setImageSource } from "../images";
 import { watchLocalLocales } from "../locales";
 import { logger, observeLoggedErrors } from "../log";
-import { loadWorkspaces } from "../persistence";
+import { dataDir, loadWorkspaces } from "../persistence";
 import {
 	getProjects,
 	grantProjectMcpTool,
@@ -194,9 +207,12 @@ import {
 	syncWorkspaceBranch,
 	type WorkspaceLifecycleEvent,
 } from "../workspaces";
+import { AbandonmentReporter } from "./abandonmentReporter";
 import { createArtifactEventMapper } from "./artifactEvents";
+import { serveChatAttachments } from "./attachments";
 import { seesChats } from "./chats";
 import { continueToolHost, observeContinuation, setContinuationPublisher } from "./continuations";
+import { serveExtensionAsset } from "./extensionRoutes";
 import {
 	BLOB_PREFIX,
 	FILES_PREFIX,
@@ -209,11 +225,13 @@ import { setFsNudgePublisher } from "./fsNudge";
 import { applyGitCeiling } from "./gitCeiling";
 import {
 	handleRequest,
+	releaseDisabledExtensionQueries,
 	requestErrorReport,
 	requestMethodDiagnostic,
 	workspaceCreationHandoff,
 } from "./handlers";
 import { HeldSnapshots, terminalsMayResume } from "./heldSnapshots";
+import { initializeHostRuntime } from "./hostRuntime";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { trackLoginOutcome } from "./loginAnalytics";
 import {
@@ -225,7 +243,6 @@ import {
 	setupObservation,
 } from "./productAnalytics";
 import {
-	AbandonmentReportBudget,
 	heaviestReplayMethod,
 	type ReplayLoad,
 	RequestAbandonedError,
@@ -339,12 +356,6 @@ function formatReplayLoad(load: ReplayLoad): string {
 const warnSlowConsumer = (message: string, error: SlowConsumerError): void =>
 	log.warn(message, error);
 
-function countMethods(methods: readonly string[]): string {
-	const counts = new Map<string, number>();
-	for (const method of methods) counts.set(method, (counts.get(method) ?? 0) + 1);
-	return [...counts].map(([method, count]) => `${method} ×${count}`).join(", ");
-}
-
 function clientProtocolVersion(value: string | null): number {
 	const parsed = Number(value);
 	return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
@@ -364,12 +375,13 @@ function sameHostUpdateRelease(
 
 export async function createServer(options: CreateServerOptions = {}): Promise<RunningServer> {
 	applyGitCeiling();
+	process.env.THINKRAIL_DATA_DIR = dataDir();
 	try {
 		ensureChatsContainer();
 	} catch (error) {
 		log.warn(`chats without a project are unavailable: ${String(error)}`);
 	}
-	await initializeJbcentralRuntime();
+	await initializeHostRuntime();
 	getConfig();
 	setPiTrustSeed(piTrustsProjectPath);
 	const {
@@ -402,15 +414,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const sockets = new Map<string, Bun.ServerWebSocket<SocketData>>();
 	const reapTimers = new Map<string, ReturnType<typeof setTimeout>>();
 	const requestReplays = new RequestReplayCache<string>();
-	const abandonmentReports = new AbandonmentReportBudget();
-	const reportAbandoned = (methods: readonly string[]): void => {
-		if (methods.length === 0) return;
-		log.warn(`requests abandoned before their handlers settled: ${countMethods(methods)}`);
-		for (const method of new Set(methods)) {
-			if (abandonmentReports.admit(method))
-				reportError(new RequestAbandonedError(), requestErrorReport(method));
-		}
-	};
+	const abandonmentReports = new AbandonmentReporter(log, (method) =>
+		reportError(new RequestAbandonedError(), requestErrorReport(method)),
+	);
 	const terminalBackpressured = new Set<string>();
 	let hostUpdateNotice: HostUpdateNotice | undefined;
 	let hostUpdateTimer: ReturnType<typeof setInterval> | undefined;
@@ -488,6 +494,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			if (url.pathname.startsWith(USER_FONTS_ROUTE)) {
 				return serveUserFonts(req, url.pathname);
 			}
+			if (url.pathname.startsWith(EXTENSION_ASSETS_ROUTE)) {
+				return serveExtensionAsset(req, url.pathname);
+			}
+			if (url.pathname.startsWith(CHAT_ATTACHMENTS_ROUTE)) {
+				return serveChatAttachments(req, url);
+			}
 			if (url.pathname.startsWith(WORKSPACE_VIEW_ROUTE)) {
 				return serveWorktreeView(req.method, url);
 			}
@@ -552,6 +564,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					ws.subscribe(WS_CHANNELS.themesChanged);
 				if (ws.data.protocolVersion >= PI_PACKAGES_PROTOCOL_VERSION)
 					ws.subscribe(WS_CHANNELS.packagesChanged);
+				if (ws.data.protocolVersion >= INSTALLED_EXTENSIONS_PROTOCOL_VERSION)
+					ws.subscribe(WS_CHANNELS.extensionsChanged);
 				if (ws.data.protocolVersion >= FONTS_PROTOCOL_VERSION)
 					ws.subscribe(WS_CHANNELS.fontsChanged);
 				const speech = ws.data.protocolVersion >= SPEECH_PROTOCOL_VERSION;
@@ -605,13 +619,15 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				}
 				if (typeof req !== "object" || req === null) return;
 				if ("ack" in req && Array.isArray(req.ack)) {
-					reportAbandoned(
+					abandonmentReports.record(
 						requestReplays.acknowledge(ws.data.clientKey, req.ack.filter(isRequestId)),
 					);
 					return;
 				}
 				if ("resume" in req && Array.isArray(req.resume)) {
-					reportAbandoned(requestReplays.retain(ws.data.clientKey, req.resume.filter(isRequestId)));
+					abandonmentReports.record(
+						requestReplays.retain(ws.data.clientKey, req.resume.filter(isRequestId)),
+					);
 					return;
 				}
 				if (
@@ -907,6 +923,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		grantProjectMcpTool(getWorkspace(workspaceId).projectId, server, target, tool);
 	});
 
+	setSubagentEnabledResolver((name) => !getConfig().disabledSubagents.includes(name));
 	setSubagentsEnabledResolver((workspaceId) => {
 		try {
 			return resolveSubagentsEnabled(getConfig().subagentsEnabled, getWorkspace(workspaceId));
@@ -930,8 +947,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setSpecsEnabledResolver((workspaceId) => !isChatWorkspaceId(workspaceId));
 
 	setDisabledExtensionsResolver(() => new Set(getConfig().disabledExtensions));
+	setArtifactFileCheck(checkArtifactFiles);
 	setExtensionSettingsResolver(() => getConfig().extensionSettings ?? {});
-	setDisabledPackagesResolver(() => new Set(getConfig().disabledPackages));
 
 	setProjectPublisher((project) => {
 		const capture = additionalCapture();
@@ -1018,6 +1035,16 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	for (const workspace of listAllWorkspaceRecords()) primeProjectPiSettings(workspace.worktreePath);
 	setPiPackagesPublisher(() => publishScoped(WS_CHANNELS.packagesChanged, {}));
 	const stopUserMcpWatch = watchUserMcpConfig({ onSettingsChanged: handlePiSettingsFileChanged });
+	const stopInstalledExtensions = startInstalledExtensions({
+		dataDir: dataDir(),
+		npmCommand: piNpmCommand,
+		hostExtensionNames: HOST_BUILTIN_EXTENSION_NAMES,
+		hostToolFactories: HOST_INLINE_FACTORIES,
+		onChange: () => {
+			refreshInstalledExtensions();
+			publishScoped(WS_CHANNELS.extensionsChanged, {});
+		},
+	});
 	const nudge = (channel: WsChannel) => () => publishScoped(channel, {});
 	const stopLocalesWatch = watchLocalLocales({ onChange: nudge(WS_CHANNELS.localesChanged) });
 	const stopThemesWatch = watchUserThemes({ onChange: nudge(WS_CHANNELS.themesChanged) });
@@ -1086,6 +1113,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		if (appliedUpdate.subagentMaxConcurrent !== undefined) refreshSubagentConcurrency();
 		if (appliedUpdate.agentReviewEnabled !== undefined) refreshAgentReviewTool();
 		if (appliedUpdate.disabledPackages !== undefined) bumpPackageSwitchGeneration();
+		if (appliedUpdate.disabledExtensions !== undefined) releaseDisabledExtensionQueries();
 		if (
 			appliedUpdate.disabledExtensions !== undefined ||
 			appliedUpdate.extensionSettings !== undefined ||
@@ -1093,7 +1121,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		) {
 			refreshExtensionTools();
 		}
-		if (appliedUpdate.disabledPackages !== undefined) publishPiPackagesChanged();
+		if (
+			appliedUpdate.disabledPackages !== undefined ||
+			appliedUpdate.disabledExtensions !== undefined
+		) {
+			publishPiPackagesChanged();
+		}
 		if (appliedUpdate.otherAgentSkills !== undefined) void refreshSkillAdmission();
 	});
 
@@ -1228,6 +1261,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	initializeAnalytics({
 		...(appVersion ? { appVersion } : {}),
 		...(analytics ?? {}),
+		foreignFrameRoots: () => installedExtensions()?.codeRoots() ?? [join(dataDir(), "extensions")],
 		additionalEnabled: initialAdditionalAnalyticsEnabled(initialConfig),
 	});
 	configureSurveySource(surveyEndpoint());
@@ -1252,6 +1286,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		if (stopping) return;
 		stopping = true;
 		clearInterval(reviewRefreshTimer);
+		clearInterval(abandonmentSummaryTimer);
+		abandonmentReports.flush();
 		setupObservation.clear();
 		runObservation.reset();
 		taskObservation.clear();
@@ -1263,6 +1299,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		stopJbcentralRuntime();
 		stopAllWatches();
 		stopUserMcpWatch();
+		stopInstalledExtensions();
 		stopLocalesWatch();
 		stopThemesWatch();
 		stopFontsWatch();
@@ -1305,6 +1342,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		if (config.analyticsEnabled && config.analyticsConsentConfirmed) startAttributionClaim();
 	};
 
+	const abandonmentSummaryTimer = setInterval(() => abandonmentReports.flush(), 60_000);
+	abandonmentSummaryTimer.unref?.();
+
 	return {
 		get port() {
 			return server.port ?? port;
@@ -1327,6 +1367,7 @@ function restoreSeamDefaults(): void {
 	setSkillAdmissionResolver(null);
 	setMcpPolicyResolver(null);
 	setMcpToolGrantWriter(() => {});
+	setSubagentEnabledResolver(null);
 	setSubagentsEnabledResolver(null);
 	setSubagentConcurrencyResolver(null);
 	setAgentReviewEnabledResolver(null);

@@ -1,14 +1,29 @@
 import { completionDelivery } from "@thinkrail/contracts";
 import type { ChatRow } from "./rows";
+import { carriesComposerSuggestions, currentToolRegistry, type ToolRegistry } from "./toolRegistry";
 
 export interface MessageActionState {
 	agentRespondedByUserId: ReadonlyMap<string, boolean>;
 	finalAnswerRowIds: ReadonlySet<string>;
 }
 
+function suggestionsOnly(
+	row: Extract<ChatRow, { kind: "tool" | "activity" }>,
+	registry: ToolRegistry,
+): boolean {
+	if (row.kind === "tool") return carriesComposerSuggestions(row.toolName, registry);
+	return (
+		row.steps.length > 0 &&
+		row.steps.every(
+			(step) => step.kind === "tool" && carriesComposerSuggestions(step.toolName, registry),
+		)
+	);
+}
+
 export function deriveMessageActions(
 	chronologicalRows: readonly ChatRow[],
 	isStreaming: boolean,
+	registry: ToolRegistry = currentToolRegistry(),
 ): MessageActionState {
 	const agentRespondedByUserId = new Map<string, boolean>();
 	const finalAnswerRowIds = new Set<string>();
@@ -34,7 +49,7 @@ export function deriveMessageActions(
 			case "tool":
 			case "activity":
 				sawRespondingRow = true;
-				roundHasLaterContent = true;
+				if (!suggestionsOnly(row, registry)) roundHasLaterContent = true;
 				break;
 			case "divider":
 				sawRespondingRow = true;

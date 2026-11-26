@@ -254,6 +254,84 @@ export interface MergePrResult {
 
 export type GhSetupProblem = "missing" | "unauthenticated";
 
+export type PullRequestState = "open" | "merged" | "closed";
+
+/** v133: a pull request's diff stats; `pr.list` rows come without them and `pr.sizes` fills them in. */
+export interface PullRequestSize {
+	additions: number;
+	deletions: number;
+	changedFiles: number;
+}
+
+/** v133 `pr.list` / `pr.get`: a GitHub pull request of a project's repository, as the user's `gh` reads it. */
+export interface PullRequestSummary {
+	number: number;
+	title: string;
+	/** The author's login; empty when GitHub reports none (a deleted account). */
+	author: string;
+	state: PullRequestState;
+	draft: boolean;
+	headRefName: string;
+	baseRefName: string;
+	/** The base on the local remote that hosts the PR (`origin/main`), ready to pass as a workspace `baseRef`. */
+	baseRef: string;
+	url: string;
+	/** Present from `pr.get`; a `pr.list` row leaves it out (see `pr.sizes`). */
+	size?: PullRequestSize;
+	/** ISO-8601 time of the PR's last update. */
+	updatedAt: string;
+	/** The signed-in `gh` user is a requested reviewer. */
+	reviewRequested: boolean;
+}
+
+/** Which open pull requests `pr.list` searches: requested from the signed-in user, authored by them, or all. */
+export type PullRequestScope = "review-requested" | "mine" | "all";
+
+export interface PullRequestFilter {
+	scope: PullRequestScope;
+	/** Include draft pull requests. */
+	drafts: boolean;
+	/** Only this author's pull requests (a GitHub login). */
+	author?: string;
+}
+
+export const DEFAULT_PULL_REQUEST_FILTER: PullRequestFilter = { scope: "all", drafts: true };
+
+const PULL_REQUEST_SCOPES: readonly string[] = ["review-requested", "mine", "all"];
+
+export function isPullRequestFilter(value: unknown): value is PullRequestFilter {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+	const filter = value as Record<string, unknown>;
+	return (
+		typeof filter.scope === "string" &&
+		PULL_REQUEST_SCOPES.includes(filter.scope) &&
+		typeof filter.drafts === "boolean" &&
+		(filter.author === undefined ||
+			(typeof filter.author === "string" && filter.author.trim().length > 0))
+	);
+}
+
+/** Why `pr.list` could not list: `gh` absent, signed out, a repository with no GitHub remote, or any other failure. */
+export type PullRequestListProblem = GhSetupProblem | "not-github" | "failed";
+
+export interface PullRequestPage {
+	/** One page of matching open pull requests, most recently updated first; empty when `unavailable` is set. */
+	pullRequests: PullRequestSummary[];
+	/** Pass back as `cursor` for the next page; absent on the last page. */
+	nextCursor?: string;
+	unavailable?: PullRequestListProblem;
+}
+
+export interface PullRequestSizeEntry extends PullRequestSize {
+	number: number;
+}
+
+export interface PullRequestAuthorPage {
+	/** Logins of open pull requests' authors on this page, each once, in GitHub's order. */
+	authors: string[];
+	nextCursor?: string;
+}
+
 export interface PrDraft {
 	title: string;
 	body: string;
@@ -337,10 +415,10 @@ export type WorkspaceArtifactState = "live" | "deleted";
 export type ArtifactRole = "result" | "working";
 
 export type ArtifactRoleReason =
+	| "published"
 	| "picked"
 	| "shown"
 	| "linked"
-	| "document"
 	| "working-folder"
 	| "script"
 	| "data"
@@ -360,6 +438,7 @@ export interface WorkspaceArtifact {
 	sessionId?: string;
 	role?: ArtifactRole;
 	reason?: ArtifactRoleReason;
+	published?: true;
 	rounds?: ArtifactRound[];
 }
 
@@ -1046,6 +1125,11 @@ export interface PiPackageSummary {
 	enabled: boolean;
 	/** `true` for a user declaration pi leaves aside because the repository declares the same identity. */
 	shadowed?: boolean;
+	/**
+	 * The ThinkRail extension, on now, that replaces this installed package (its `supersedesPackages`):
+	 * host sessions leave the package's extensions out. Absent otherwise, and before v130.
+	 */
+	supersededBy?: { name: string; title: string };
 	resources: PiPackageResource[];
 }
 
@@ -1282,12 +1366,19 @@ export type LoginFrame =
 	| { kind: "success" }
 	| { kind: "error"; message: string };
 
+/** The server an MCP sign-in is for and the workspace it started in; none when no workspace was open. */
+export interface McpLoginTarget {
+	kind: "mcp";
+	workspaceId?: string;
+	serverName: string;
+}
+
 export interface LoginPush {
 	loginId: string;
 	providerId: string;
 	frame: LoginFrame;
 	/** Present for MCP server sign-ins; such pushes reach only the connection that started the login. */
-	target?: { kind: "mcp"; workspaceId: string; serverName: string };
+	target?: McpLoginTarget;
 }
 
 export interface LoginReply {
@@ -1501,7 +1592,7 @@ export function isComposerGrowthLimit(value: unknown): value is ComposerGrowthLi
 	return COMPOSER_GROWTH_LIMITS.some((limit) => limit === value);
 }
 
-export const QUESTION_PANEL_HEIGHT_PERCENT = { min: 40, max: 100, default: 60 } as const;
+export const QUESTION_PANEL_HEIGHT_PERCENT = { min: 40, max: 100, default: 70 } as const;
 
 export function isQuestionPanelHeight(value: unknown): value is number {
 	return (
@@ -1527,6 +1618,14 @@ export function isLineWidth(value: unknown): value is number {
 		value >= LINE_WIDTH_COLUMNS.min &&
 		value <= LINE_WIDTH_COLUMNS.max
 	);
+}
+
+export interface SubagentCatalogEntry {
+	name: string;
+	description: string;
+	source: "builtin" | "personal" | "project";
+	model?: string;
+	thinking?: ThinkingLevel;
 }
 
 export interface AppConfig extends ThemePreference {
@@ -1572,6 +1671,8 @@ export interface AppConfig extends ThemePreference {
 	settleIdleDays: number | null;
 	/** Absolute root for newly created managed worktrees; unset keeps the data-dir default. */
 	worktreeDirectory?: string;
+	/** Agent definition names switched off globally; unknown names are retained. */
+	disabledSubagents: string[];
 	disabledExtensions: string[];
 	/** Values of settings bundled extensions declare, by extension name then setting key. */
 	extensionSettings: ExtensionSettingValues;
@@ -1595,6 +1696,8 @@ export interface AppConfig extends ThemePreference {
 	fontWeightOffset: number;
 	/** The user's chords by command id, replacing its defaults; `[]` unbinds it, an absent id keeps them. */
 	keybindings: KeybindingOverrides;
+	/** v133: the pull-request completion's last filter, by project id. */
+	pullRequestFilters: Record<string, PullRequestFilter>;
 }
 
 export type ExtensionSettingValues = Record<string, Record<string, boolean>>;
@@ -1602,6 +1705,19 @@ export type ExtensionSettingValues = Record<string, Record<string, boolean>>;
 export interface ExtensionSettingDescriptor {
 	key: string;
 	default: boolean;
+	title?: string;
+	description?: string;
+}
+
+/** Absent from a host below `INSTALLED_EXTENSIONS_PROTOCOL_VERSION`, where every entry is built in. */
+export type ExtensionKind = "builtin" | "installed";
+
+export type InstalledExtensionState = "loaded" | "failed" | "incompatible";
+
+export interface ExtensionWebHalf {
+	url: string;
+	styles?: string;
+	shadowed?: string[];
 }
 
 export interface ExtensionCatalogEntry {
@@ -1610,9 +1726,60 @@ export interface ExtensionCatalogEntry {
 	description?: string;
 	enabled: boolean;
 	tools: string[];
+	/** Whether the descriptor composes parent factories (`extensions` or `sessionExtensions`); absent before `EXTENSION_QUERY_PROTOCOL_VERSION`. */
+	hasParentExtensions?: boolean;
 	hasChildExtensions: boolean;
 	/** Absent before `EXTENSION_SETTINGS_PROTOCOL_VERSION`. */
 	settings?: ExtensionSettingDescriptor[];
+	/** The server half's payload version for its `extension.query` methods; absent when undeclared or before `EXTENSION_QUERY_PROTOCOL_VERSION`. */
+	apiVersion?: number;
+	kind?: ExtensionKind;
+	source?: string;
+	version?: string;
+	state?: InstalledExtensionState;
+	error?: string;
+	web?: ExtensionWebHalf;
+	/** Installed only, from `EXTENSION_BROWSE_PROTOCOL_VERSION`: the manifest's `api`, when it was read. */
+	api?: string;
+}
+
+export interface ExtensionQueryParams {
+	/** An `ExtensionCatalogEntry.name`. */
+	extension: string;
+	/** A query method that entry's server half declares. */
+	method: string;
+	/** The extension's own payload, validated by the extension. */
+	params?: unknown;
+}
+
+export type ExtensionHalf = "server" | "web";
+
+export interface ExtensionListing {
+	name: string;
+	version: string;
+	title?: string;
+	description: string;
+	author?: string;
+	api: string;
+	halves: ExtensionHalf[];
+	install: string;
+	npm: string;
+	repository?: string;
+	publishedAt: string;
+}
+
+export interface ExtensionBrowseEntry extends ExtensionListing {
+	installed: boolean;
+}
+
+export interface ExtensionBrowseResult {
+	generatedAt: string;
+	extensions: ExtensionBrowseEntry[];
+}
+
+export interface PackageInstallResult extends PiPackageSummary {
+	installed?: "package" | "extension";
+	extension?: ExtensionCatalogEntry;
 }
 
 /** How many recently chosen models the host remembers. */
@@ -1644,9 +1811,12 @@ export type AppConfigUpdate = Partial<
 		| "reviewEffort"
 		| "recentModels"
 		| "worktreeDirectory"
+		| "pullRequestFilters"
 	>
 > & {
 	worktreeDirectory?: string | null;
+	/** Merged per project; `null` forgets a project's filter. */
+	pullRequestFilters?: Record<string, PullRequestFilter | null>;
 	defaultModel?: WireModel | null;
 	defaultEffort?: ThinkingLevel | null;
 	reviewModel?: WireModel | null;
@@ -1894,6 +2064,9 @@ export interface InstalledFontsResult {
 
 /** Serves (`GET`) and accepts (`PUT`) user font files by base name. */
 export const USER_FONTS_ROUTE = "/fonts/";
+
+/** The host route that serves an installed extension's web half (§ Installed extensions). */
+export const EXTENSION_ASSETS_ROUTE = "/extensions/";
 /** Required on `PUT` uploads: a non-simple header forces a CORS preflight the host never answers. */
 export const USER_FONT_UPLOAD_HEADER = {
 	name: "X-ThinkRail-Request",
@@ -1948,6 +2121,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
 	settleIdleDays: SETTLE_IDLE_DAYS.default,
+	disabledSubagents: [],
 	disabledExtensions: [],
 	extensionSettings: {},
 	otherAgentSkills: false,
@@ -1960,6 +2134,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	codeLigatures: false,
 	fontWeightOffset: FONT_WEIGHT_OFFSET.default,
 	keybindings: {},
+	pullRequestFilters: {},
 };
 
 export type FontSettings = Pick<

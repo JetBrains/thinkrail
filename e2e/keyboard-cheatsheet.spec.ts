@@ -2,6 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 import {
 	enterDefaultWorkspace,
 	openFixtureProject,
+	openSettingsSection,
 	pressPlatformShortcut,
 	revealWorkbenchTool,
 } from "./fixtures/app";
@@ -173,15 +174,17 @@ test("a pane's Hide button shows its chord in the tooltip", async ({ page }) => 
 	await expect(page.getByRole("tooltip")).toHaveText(/Hide pane\s*Ctrl\s*B/);
 });
 
-test("Settings → Keyboard lists every shortcut with its own filter", async ({ page }) => {
+test("Settings → Keyboard lists every shortcut by area with its own filter", async ({ page }) => {
 	await openFixtureProject(page);
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-keyboard").click();
+	await openSettingsSection(page, "keyboard");
 	const section = page.getByTestId("settings-keyboard");
 	await expect(page.getByTestId("settings-double-shift")).toBeVisible();
-	const rows = section.getByTestId("keybinding-row");
-	await expect(rows.first()).toBeVisible();
-	expect(await rows.count()).toBeGreaterThan(40);
+	const areas = section.getByTestId("keybinding-group");
+	await expect(areas.first()).toBeVisible();
+	expect(await areas.count()).toBeGreaterThan(8);
+	await expect(section.getByTestId("keybinding-row")).toHaveCount(0);
+	const total = (await section.getByTestId("keybinding-count").textContent()) ?? "";
+	expect(Number(/^(\d+) shortcuts$/.exec(total)?.[1])).toBeGreaterThan(40);
 	await section.getByTestId("keybinding-filter").fill("find in files");
 	await expect(section.locator('[data-command="files.findInFiles"]')).toContainText(
 		"Find in files",

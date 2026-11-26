@@ -1,7 +1,13 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { openWorkspaceChat, revealWorkbenchTool } from "./fixtures/app";
+import {
+	closeSettings,
+	openAppFresh,
+	openSettingsSection,
+	openWorkspaceChat,
+	revealWorkbenchTool,
+} from "./fixtures/app";
 import { E2E_PI_AGENT_DIR } from "./fixtures/paths";
 import { seedExternalCwdSessions } from "./fixtures/sessions";
 import {
@@ -41,8 +47,7 @@ test.describe("templates management", () => {
 			}
 			await expect(offer).toHaveCount(0);
 
-			await page.keyboard.press("Escape");
-			await expect(settingsDialog).toBeHidden();
+			await closeSettings(page);
 
 			await input.fill("/rev");
 			await expect(
@@ -71,8 +76,7 @@ test.describe("templates management", () => {
 		await expect(menuHit).toHaveCount(0);
 		await input.fill("");
 
-		await page.getByTestId("open-settings").click();
-		await page.getByTestId("settings-nav-templates").click();
+		await openSettingsSection(page, "templates");
 		const settingsDialog = page.getByTestId("settings-dialog");
 		await expect(settingsDialog).toContainText("Prompt templates");
 
@@ -89,18 +93,21 @@ test.describe("templates management", () => {
 
 		const row = page.locator('[data-testid="template-row"][data-name="standup"]');
 		await expect(row).toBeVisible();
+		await expect(
+			page
+				.getByTestId("templates-global")
+				.locator('[data-testid="template-row"][data-name="standup"]'),
+		).toHaveCount(1);
 		await expect(row).toContainText("standup");
 		await expect(row).toContainText("Daily standup notes");
 
-		await page.keyboard.press("Escape");
-		await expect(settingsDialog).toBeHidden();
+		await closeSettings(page);
 
 		await input.fill("/stand");
 		await expect(menuHit).toHaveCount(1);
 		await input.fill("");
 
-		await page.getByTestId("open-settings").click();
-		await page.getByTestId("settings-nav-templates").click();
+		await openSettingsSection(page, "templates");
 		await row.getByTestId("template-edit").click();
 		await expect(editor).toBeVisible();
 		await expect(page.getByTestId("template-name-input")).toBeDisabled();
@@ -111,12 +118,18 @@ test.describe("templates management", () => {
 		await expect(row).toContainText("Standup notes, revised");
 
 		await row.getByTestId("template-delete").click();
-		await expect(page.getByRole("alertdialog", { name: /Delete standup/ })).toBeVisible();
+		const confirm = page.getByRole("alertdialog", { name: /Delete standup/ });
+		await expect(confirm).toBeVisible();
+		await confirm.getByRole("button", { name: "Cancel" }).click();
+		await expect(confirm).toBeHidden();
+		await expect(row).toHaveCount(1);
+		await row.focus();
+		await page.keyboard.press("Delete");
+		await expect(confirm).toBeVisible();
 		await page.getByTestId("template-confirm-delete").click();
 		await expect(row).toHaveCount(0);
 
-		await page.keyboard.press("Escape");
-		await expect(settingsDialog).toBeHidden();
+		await closeSettings(page);
 		await input.fill("/stand");
 		await expect(menuHit).toHaveCount(0);
 	});
@@ -126,11 +139,9 @@ test.describe("templates management", () => {
 	}) => {
 		await openWorkspaceChat(page);
 		const input = page.getByTestId("chat-input");
-		const settingsDialog = page.getByTestId("settings-dialog");
 		const editor = page.getByTestId("template-editor-dialog");
 
-		await page.getByTestId("open-settings").click();
-		await page.getByTestId("settings-nav-templates").click();
+		await openSettingsSection(page, "templates");
 		await page.getByTestId("template-new-global").click();
 		await expect(editor).toBeVisible();
 
@@ -140,8 +151,7 @@ test.describe("templates management", () => {
 		await page.getByTestId("template-save").click();
 		await expect(editor).toBeHidden();
 
-		await page.keyboard.press("Escape");
-		await expect(settingsDialog).toBeHidden();
+		await closeSettings(page);
 
 		await input.fill("/roundtrip");
 		await page
@@ -152,8 +162,7 @@ test.describe("templates management", () => {
 		await expect(input).toHaveValue("Notes for the day");
 		await input.fill("");
 
-		await page.getByTestId("open-settings").click();
-		await page.getByTestId("settings-nav-templates").click();
+		await openSettingsSection(page, "templates");
 		const row = page.locator('[data-testid="template-row"][data-name="roundtrip"]');
 		await row.getByTestId("template-edit").click();
 		await expect(editor).toBeVisible();
@@ -170,8 +179,7 @@ test.describe("templates management", () => {
 
 	test("an invalid template name shows an inline error instead of saving", async ({ page }) => {
 		await openWorkspaceChat(page);
-		await page.getByTestId("open-settings").click();
-		await page.getByTestId("settings-nav-templates").click();
+		await openSettingsSection(page, "templates");
 		await page.getByTestId("template-new-global").click();
 		const editor = page.getByTestId("template-editor-dialog");
 		await expect(editor).toBeVisible();
@@ -194,8 +202,7 @@ test.describe("templates management", () => {
 	}) => {
 		await openWorkspaceChat(page);
 
-		await page.getByTestId("open-settings").click();
-		await page.getByTestId("settings-nav-templates").click();
+		await openSettingsSection(page, "templates");
 		await page.getByTestId("template-new-project").click();
 		const editor = page.getByTestId("template-editor-dialog");
 		await expect(editor).toBeVisible();
@@ -206,9 +213,9 @@ test.describe("templates management", () => {
 		await page.getByTestId("template-save").click();
 		await expect(editor).toBeHidden();
 
-		const row = page.locator(
-			'[data-testid="template-row"][data-name="scoped-note"][data-scope="project"]',
-		);
+		const row = page
+			.getByTestId("templates-project")
+			.locator('[data-testid="template-row"][data-name="scoped-note"][data-scope="project"]');
 		await expect(row).toBeVisible();
 
 		const settingsDialog = page.getByTestId("settings-dialog");
@@ -228,6 +235,21 @@ test.describe("templates management", () => {
 			.filter({ hasText: /^scoped-note\.md[MAUR]?$/ });
 		await expect(scopedNote).toBeVisible();
 		await expect(scopedNote).toHaveAttribute("data-active", "true");
+	});
+
+	test("with no workspace open only All projects is listed, with its own New, under a project-templates line", async ({
+		page,
+	}) => {
+		await openAppFresh(page);
+		await openSettingsSection(page, "templates");
+		await expect(page.getByTestId("templates-global")).toBeVisible();
+		await expect(page.getByTestId("template-new-global")).toBeVisible();
+		await expect(page.getByTestId("templates-project")).toHaveCount(0);
+		await expect(page.getByTestId("template-new-project")).toHaveCount(0);
+		await expect(page.getByTestId("project-templates-hint")).toHaveText(
+			"Project templates appear when a workspace is open.",
+		);
+		await closeSettings(page);
 	});
 
 	test("history overlay: save-as-template opens the shared editor prefilled with the selected prompt", async ({
@@ -270,8 +292,7 @@ test.describe("templates management", () => {
 		page,
 	}) => {
 		await openWorkspaceChat(page);
-		await page.getByTestId("open-settings").click();
-		await page.getByTestId("settings-nav-templates").click();
+		await openSettingsSection(page, "templates");
 		const editor = page.getByTestId("template-editor-dialog");
 
 		await page.getByTestId("template-new-global").click();
@@ -327,8 +348,7 @@ test.describe("templates management", () => {
 		);
 		try {
 			await openWorkspaceChat(page);
-			await page.getByTestId("open-settings").click();
-			await page.getByTestId("settings-nav-templates").click();
+			await openSettingsSection(page, "templates");
 
 			const row = page.locator(
 				'[data-testid="template-row"][data-name="deep-meta"][data-scope="global"]',
@@ -366,8 +386,7 @@ test.describe("templates management", () => {
 		writeFileSync(filePath, `---\ndescription: "Trailing-space name"\n---\nHand-created body\n`);
 		try {
 			await openWorkspaceChat(page);
-			await page.getByTestId("open-settings").click();
-			await page.getByTestId("settings-nav-templates").click();
+			await openSettingsSection(page, "templates");
 
 			const row = page.locator(
 				'[data-testid="template-row"][data-name="report "][data-scope="global"]',

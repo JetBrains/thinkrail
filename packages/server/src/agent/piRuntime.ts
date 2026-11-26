@@ -1,11 +1,15 @@
 import {
 	createAgentSessionServices,
+	DefaultPackageManager,
+	DefaultResourceLoader,
 	getAgentDir,
+	type LoadExtensionsResult,
 	ModelRuntime,
 } from "@earendil-works/pi-coding-agent";
+import { EXTENSION_LOAD_TIMEOUT_MS, withForcedJitiTransform } from "../extensions";
 import { logger } from "../log";
 import { accountAvailableModels, type ModelAvailabilityRuntime } from "./modelAvailability";
-import { advancePiExtensionCache, createPiSettings } from "./packages";
+import { advancePiExtensionCache, createPiSettings, piResourcePathKey } from "./packages";
 
 const log = logger("agent");
 
@@ -15,6 +19,7 @@ export interface PiRuntimeGeneration {
 	readonly providerStatusIds: ReadonlySet<string>;
 	readonly providerStatusNames: ReadonlyMap<string, string>;
 	readonly opaqueProviderIds: ReadonlySet<string>;
+	readonly extensionProviderIds: ReadonlySet<string>;
 	readonly additionalExtensionPaths: readonly string[];
 	readonly excludedSessionExtensionPaths: readonly string[];
 }
@@ -39,9 +44,12 @@ interface PreparedRuntime {
 	providerStatusIds: ReadonlySet<string>;
 	providerStatusNames: ReadonlyMap<string, string>;
 	opaqueProviderIds: ReadonlySet<string>;
+	extensionProviderIds: ReadonlySet<string>;
 }
-let runtimeFactory: (additionalExtensionPaths: readonly string[]) => Promise<PreparedRuntime> =
-	createRuntimeWithExtensions;
+let runtimeFactory: (
+	additionalExtensionPaths: readonly string[],
+	excludedSessionExtensionPaths: readonly string[],
+) => Promise<PreparedRuntime> = createRuntimeWithExtensions;
 let generationInitializer: PiRuntimeGenerationInitializer = () => {};
 
 function captureProviderStatus(runtime: ModelRuntime): {
@@ -69,6 +77,7 @@ export function configurePiRuntime(rt: ModelRuntime | null): void {
 		providerStatusIds: providerStatus.ids,
 		providerStatusNames: providerStatus.names,
 		opaqueProviderIds: new Set<string>(),
+		extensionProviderIds: new Set<string>(),
 		additionalExtensionPaths: [],
 		excludedSessionExtensionPaths: [],
 	});
@@ -87,6 +96,7 @@ export function configurePiRuntimeFactory(
 					providerStatusIds: providerStatus.ids,
 					providerStatusNames: providerStatus.names,
 					opaqueProviderIds: new Set<string>(),
+					extensionProviderIds: new Set<string>(),
 				};
 			}
 		: createRuntimeWithExtensions;
@@ -117,6 +127,7 @@ async function createRuntimeOfflineByDefault(): Promise<ModelRuntime> {
 
 async function createRuntimeWithExtensions(
 	additionalExtensionPaths: readonly string[],
+	excludedSessionExtensionPaths: readonly string[],
 ): Promise<PreparedRuntime> {
 	await advancePiExtensionCache(getAgentDir());
 	const runtime = await createRuntimeOfflineByDefault();
@@ -131,13 +142,8 @@ async function createRuntimeWithExtensions(
 			},
 		]),
 	);
-	const priorJitiRebuild = process.env.JITI_REBUILD_FS_CACHE;
-	const priorJitiTryNative = process.env.JITI_TRY_NATIVE;
-	process.env.JITI_REBUILD_FS_CACHE = "1";
-	process.env.JITI_TRY_NATIVE = "false";
-	let services: Awaited<ReturnType<typeof createAgentSessionServices>>;
-	try {
-		services = await createAgentSessionServices({
+	const services = await withForcedJitiTransform(() =>
+		createAgentSessionServices({
 			cwd: getAgentDir(),
 			settingsManager: createPiSettings(getAgentDir(), getAgentDir(), { packages: "none" }),
 			modelRuntime: runtime,
@@ -149,13 +155,8 @@ async function createRuntimeWithExtensions(
 				noThemes: true,
 				noContextFiles: true,
 			},
-		});
-	} finally {
-		if (priorJitiRebuild === undefined) delete process.env.JITI_REBUILD_FS_CACHE;
-		else process.env.JITI_REBUILD_FS_CACHE = priorJitiRebuild;
-		if (priorJitiTryNative === undefined) delete process.env.JITI_TRY_NATIVE;
-		else process.env.JITI_TRY_NATIVE = priorJitiTryNative;
-	}
+		}),
+	);
 	const extensionErrors = services.resourceLoader.getExtensions().errors;
 	if (
 		extensionErrors.length > 0 ||
@@ -179,24 +180,135 @@ async function createRuntimeWithExtensions(
 				]
 			: [],
 	);
+	const extensionProviderIds = await registerUserExtensionProviders(runtime, [
+		...additionalExtensionPaths,
+		...excludedSessionExtensionPaths,
+	]);
 	return {
 		runtime,
 		providerStatusIds: providerStatus.ids,
 		providerStatusNames: providerStatus.names,
 		opaqueProviderIds,
+		extensionProviderIds,
 	};
+}
+
+function settleWithin<T>(task: Promise<T>, ms: number): Promise<T | undefined> {
+	return new Promise((settle, fail) => {
+		const timer = setTimeout(() => settle(undefined), ms);
+		void task.then(
+			(value) => {
+				clearTimeout(timer);
+				settle(value);
+			},
+			(error: unknown) => {
+				clearTimeout(timer);
+				fail(error);
+			},
+		);
+	});
+}
+
+async function loadUserExtensions(excludedPaths: readonly string[]): Promise<LoadExtensionsResult> {
+	const agentDir = getAgentDir();
+	const { extensions } = await new DefaultPackageManager({
+		cwd: agentDir,
+		agentDir,
+		settingsManager: createPiSettings(agentDir, agentDir, {
+			projectTrusted: false,
+			packages: "enabled",
+		}),
+	}).resolve(async () => "skip");
+	const excluded = new Set(excludedPaths.map(piResourcePathKey));
+	const loader = new DefaultResourceLoader({
+		cwd: agentDir,
+		agentDir,
+		settingsManager: createPiSettings(agentDir, agentDir, {
+			projectTrusted: false,
+			packages: "none",
+		}),
+		noExtensions: true,
+		additionalExtensionPaths: extensions
+			.filter((resource) => resource.enabled && !excluded.has(piResourcePathKey(resource.path)))
+			.map((resource) => resource.path),
+		noSkills: true,
+		noPromptTemplates: true,
+		noThemes: true,
+		noContextFiles: true,
+	});
+	await loader.reload();
+	return loader.getExtensions();
+}
+
+async function registerUserExtensionProviders(
+	runtime: ModelRuntime,
+	excludedPaths: readonly string[],
+): Promise<ReadonlySet<string>> {
+	const deadline = Date.now() + EXTENSION_LOAD_TIMEOUT_MS;
+	let loaded: LoadExtensionsResult | undefined;
+	try {
+		loaded = await settleWithin(loadUserExtensions(excludedPaths), EXTENSION_LOAD_TIMEOUT_MS);
+	} catch (error) {
+		log.warn("user extensions could not be loaded for the model catalog", error);
+		return new Set();
+	}
+	if (!loaded) {
+		log.warn(
+			`user extension loading exceeded ${EXTENSION_LOAD_TIMEOUT_MS}ms; their providers join the catalog when a chat loads them`,
+		);
+		return new Set();
+	}
+	let failures = loaded.errors.length;
+	let applied = 0;
+	const registered = new Set<string>();
+	const register = (apply: () => void, providerId?: string): void => {
+		try {
+			apply();
+			applied += 1;
+			if (providerId !== undefined) registered.add(providerId);
+		} catch {
+			failures += 1;
+		}
+	};
+	for (const { name, config } of loaded.runtime.pendingProviderRegistrations) {
+		register(() => runtime.registerProvider(name, config), name);
+	}
+	for (const { provider } of loaded.runtime.pendingNativeProviderRegistrations) {
+		register(() => runtime.registerNativeProvider(provider), provider.id);
+	}
+	for (const { definition } of loaded.runtime.pendingVirtualModelRegistrations) {
+		register(() => runtime.registerVirtualModel(definition));
+	}
+	if (failures > 0) {
+		log.warn(
+			`user extensions: ${failures} load or registration failure(s) skipped for the model catalog`,
+		);
+	}
+	if (applied > 0) {
+		try {
+			const refreshed = await settleWithin(
+				runtime.refresh({ allowNetwork: false }).then(() => true),
+				Math.max(0, deadline - Date.now()),
+			);
+			if (!refreshed) log.warn("user extension catalog refresh exceeded the startup deadline");
+		} catch {
+			log.warn("user extension catalog refresh failed");
+		}
+	}
+	return registered;
 }
 
 async function createGeneration(paths: readonly string[]): Promise<PiRuntimeGeneration> {
 	const additionalExtensionPaths = [...new Set(paths)];
 	const excludedSessionExtensionPaths = [...configuredSessionExtensionExclusions];
-	const prepared = await runtimeFactory(additionalExtensionPaths);
+	const prepared = await runtimeFactory(additionalExtensionPaths, excludedSessionExtensionPaths);
 	return {
 		id: nextGenerationId++,
 		runtime: prepared.runtime,
 		providerStatusIds: prepared.providerStatusIds,
 		providerStatusNames: prepared.providerStatusNames,
 		opaqueProviderIds: prepared.opaqueProviderIds,
+		extensionProviderIds: prepared.extensionProviderIds,
 		additionalExtensionPaths,
 		excludedSessionExtensionPaths,
 	};

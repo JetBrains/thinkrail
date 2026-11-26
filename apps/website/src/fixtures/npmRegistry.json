@@ -1,0 +1,195 @@
+{
+	"recordedAt": "2026-11-17T12:00:00.000Z",
+	"responses": {
+		"https://registry.npmjs.org/-/v1/search?text=keywords%3Athinkrail-extension&size=250&from=0": {
+			"status": 200,
+			"body": {
+				"objects": [
+					{
+						"package": {
+							"name": "thinkrail-ext-weather",
+							"keywords": ["thinkrail-extension", "weather"],
+							"version": "1.2.0",
+							"description": "Forecasts in chat.",
+							"date": "2026-11-10T09:30:00.000Z",
+							"publisher": { "email": "jane@example.com", "username": "janedoe" },
+							"maintainers": [{ "email": "jane@example.com", "username": "janedoe" }],
+							"links": { "npm": "https://www.npmjs.com/package/thinkrail-ext-weather" }
+						},
+						"score": { "final": 12.5 }
+					},
+					{
+						"package": {
+							"name": "@acme/thinkrail-review-cards",
+							"keywords": ["thinkrail-extension"],
+							"version": "0.3.1",
+							"description": "Review cards for diffs.",
+							"date": "2026-11-12T16:05:12.345Z",
+							"publisher": { "email": "bot@acme.example", "username": "acme-bot" },
+							"maintainers": [{ "email": "bot@acme.example", "username": "acme-bot" }]
+						},
+						"score": { "final": 9.1 }
+					},
+					{
+						"package": {
+							"name": "thinkrail-ext-jira",
+							"keywords": ["thinkrail-extension", "jira"],
+							"version": "2.0.0",
+							"description": "Jira issues as agent tools.",
+							"date": "2026-10-30T08:00:00.000Z",
+							"maintainers": [{ "email": "sam@example.com", "username": "samlee" }]
+						},
+						"score": { "final": 8.7 }
+					},
+					{
+						"package": {
+							"name": "thinkrail-ext-broken",
+							"keywords": ["thinkrail-extension"],
+							"version": "0.0.1",
+							"date": "2026-11-01T00:00:00.000Z",
+							"maintainers": [{ "email": "x@example.com", "username": "xdev" }]
+						},
+						"score": { "final": 3.2 }
+					},
+					{
+						"package": {
+							"name": "thinkrail-ext-no-manifest",
+							"keywords": ["thinkrail-extension"],
+							"version": "1.0.0",
+							"date": "2026-11-02T00:00:00.000Z",
+							"maintainers": [{ "email": "y@example.com", "username": "ydev" }]
+						},
+						"score": { "final": 2.4 }
+					},
+					{
+						"package": {
+							"name": "thinkrail-ext-weather",
+							"keywords": ["thinkrail-extension", "weather"],
+							"version": "1.2.0",
+							"date": "2026-11-10T09:30:00.000Z",
+							"maintainers": [{ "email": "jane@example.com", "username": "janedoe" }]
+						},
+						"score": { "final": 1.1 }
+					},
+					{
+						"package": {
+							"name": "thinkrail-ext-lovable.fonts.googleapis.com",
+							"keywords": ["thinkrail-extension"],
+							"version": "1.0.0-lovable.data-posthog-project",
+							"date": "2026-11-14T00:00:00.000Z",
+							"maintainers": [{ "email": "m@evil.example", "username": "mallory" }]
+						},
+						"score": { "final": 1.0 }
+					},
+					{
+						"package": {
+							"name": "thinkrail-ext-gone",
+							"keywords": ["thinkrail-extension"],
+							"version": "1.0.0",
+							"date": "2026-11-03T00:00:00.000Z",
+							"maintainers": [{ "email": "z@example.com", "username": "zdev" }]
+						},
+						"score": { "final": 0.9 }
+					}
+				],
+				"total": 8,
+				"time": "2026-11-17T12:00:00.000Z"
+			}
+		},
+		"https://registry.npmjs.org/thinkrail-ext-weather/latest": {
+			"status": 200,
+			"body": {
+				"name": "thinkrail-ext-weather",
+				"version": "1.2.0",
+				"description": "Forecasts in chat.",
+				"keywords": ["thinkrail-extension", "weather"],
+				"author": { "name": "Jane Doe", "email": "jane@example.com" },
+				"repository": {
+					"type": "git",
+					"url": "git+https://github.com/jane/thinkrail-ext-weather.git"
+				},
+				"thinkrail": {
+					"api": "1.0",
+					"server": "./server/index.ts",
+					"web": "./dist/web.js",
+					"styles": "./dist/web.css",
+					"title": "Weather",
+					"image": "https://example.com/preview.png"
+				},
+				"maintainers": [{ "name": "janedoe", "email": "jane@example.com" }],
+				"dist": {
+					"tarball": "https://registry.npmjs.org/thinkrail-ext-weather/-/thinkrail-ext-weather-1.2.0.tgz"
+				}
+			}
+		},
+		"https://registry.npmjs.org/@acme%2Fthinkrail-review-cards/latest": {
+			"status": 200,
+			"body": {
+				"name": "@acme/thinkrail-review-cards",
+				"version": "0.3.1",
+				"description": "Review cards for diffs.",
+				"keywords": ["thinkrail-extension"],
+				"repository": "github:acme/thinkrail-review-cards",
+				"thinkrail": {
+					"api": "1.0",
+					"web": "./dist/web.js",
+					"styles": "./dist/web.css",
+					"image": "http://acme.example/preview.png"
+				},
+				"maintainers": [{ "name": "acme-bot", "email": "bot@acme.example" }]
+			}
+		},
+		"https://registry.npmjs.org/thinkrail-ext-jira/latest": {
+			"status": 200,
+			"body": {
+				"name": "thinkrail-ext-jira",
+				"version": "2.0.0",
+				"description": "Jira issues as agent tools.",
+				"keywords": ["thinkrail-extension", "jira"],
+				"author": "Sam Lee <sam@example.com> (https://sam.example)",
+				"repository": { "type": "git", "url": "git@github.com:samlee/thinkrail-ext-jira.git" },
+				"thinkrail": { "api": "1.1", "server": "server/index.ts", "title": "Jira" },
+				"maintainers": [{ "name": "samlee", "email": "sam@example.com" }]
+			}
+		},
+		"https://registry.npmjs.org/thinkrail-ext-broken/latest": {
+			"status": 200,
+			"body": {
+				"name": "thinkrail-ext-broken",
+				"version": "0.0.1",
+				"keywords": ["thinkrail-extension"],
+				"thinkrail": { "api": "1.0", "server": "./server/index.ts", "styles": "./dist/web.css" },
+				"maintainers": [{ "name": "xdev", "email": "x@example.com" }]
+			}
+		},
+		"https://registry.npmjs.org/thinkrail-ext-no-manifest/latest": {
+			"status": 200,
+			"body": {
+				"name": "thinkrail-ext-no-manifest",
+				"version": "1.0.0",
+				"keywords": ["thinkrail-extension"],
+				"maintainers": [{ "name": "ydev", "email": "y@example.com" }]
+			}
+		},
+		"https://registry.npmjs.org/thinkrail-ext-lovable.fonts.googleapis.com/latest": {
+			"status": 200,
+			"body": {
+				"name": "thinkrail-ext-lovable.fonts.googleapis.com",
+				"version": "1.0.0-lovable.data-posthog-project",
+				"description": "Lovable integration for ThinkRail. fonts.googleapis.com content_viewed attribution_claimed data-install-popover <astro-island> <img src=\"https://evil.example/x.png\"> src=\"/does-not-exist.png\" href=\"missing.html\" id=\"editor-scroll\" class=\"ext-card\" data-catalog-source=\"npm\" </div></div></div> <div class=\"ext-grid\" data-catalog-entries> <script>alert(1)</script>",
+				"keywords": ["thinkrail-extension"],
+				"author": "Mallory orbitron-landing-creator data-gtm-container \"quoted\" id=\"editor-scroll\" > ' &",
+				"repository": "https://evil.example/lovable/fonts.googleapis.com/__l5e/x.png",
+				"thinkrail": {
+					"api": "1.0",
+					"server": "./server/index.ts",
+					"title": "<astro-island> data-posthog-project fonts.gstatic.com"
+				}
+			}
+		},
+		"https://registry.npmjs.org/thinkrail-ext-gone/latest": {
+			"status": 404,
+			"body": { "error": "Not found" }
+		}
+	}
+}

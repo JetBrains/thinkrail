@@ -6,7 +6,8 @@ import {
 	MODAL_LAYER_SELECTOR,
 	platformFamily,
 } from "@/lib";
-import { dictationFieldOf } from "./field";
+import { dictationFieldOf, inExcludedRoot } from "./field";
+import type { DictationPhase } from "./session";
 
 export const HOLD_MS = 300;
 
@@ -37,7 +38,12 @@ export function chordTarget(
 	if (dictating?.contains(document.activeElement)) return dictating;
 	const focused = dictationFieldOf(document.activeElement);
 	if (focused) return focused;
-	if (hasLayer(document, MODAL_LAYER_SELECTOR) || isTextEntryTarget(document.activeElement)) {
+	const active = document.activeElement;
+	if (
+		hasLayer(document, MODAL_LAYER_SELECTOR) ||
+		isTextEntryTarget(active) ||
+		inExcludedRoot(active)
+	) {
 		return null;
 	}
 	if (lastFallback?.isConnected) return lastFallback;
@@ -51,6 +57,51 @@ export interface ChordHandlers {
 	lastFallback: () => HTMLElement | null;
 	/** The field a dictation is running in: read-only meanwhile, so no longer "eligible". */
 	dictating: () => HTMLElement | null;
+}
+
+export function stopsDictation(
+	event: Pick<
+		KeyboardEvent,
+		| "key"
+		| "altKey"
+		| "ctrlKey"
+		| "metaKey"
+		| "shiftKey"
+		| "isComposing"
+		| "keyCode"
+		| "defaultPrevented"
+	>,
+	dictating: { contains(node: Node | null): boolean } | null,
+	target: Node | null,
+	phase: DictationPhase,
+): boolean {
+	return (
+		event.key === "Escape" &&
+		!event.altKey &&
+		!event.ctrlKey &&
+		!event.metaKey &&
+		!event.shiftKey &&
+		!event.defaultPrevented &&
+		!isImeComposing(event) &&
+		(phase === "connecting" || phase === "listening") &&
+		dictating?.contains(target) === true
+	);
+}
+
+export function installDictationEscape(
+	dictating: () => HTMLElement | null,
+	phase: () => DictationPhase,
+	stop: () => void,
+): () => void {
+	const onKeyDown = (event: KeyboardEvent) => {
+		const target = event.composedPath()[0];
+		const node = target instanceof Node ? target : null;
+		if (!stopsDictation(event, dictating(), node, phase())) return;
+		event.preventDefault();
+		stop();
+	};
+	document.addEventListener("keydown", onKeyDown);
+	return () => document.removeEventListener("keydown", onKeyDown);
 }
 
 /** ⌘⇧Space / Ctrl+Shift+Space: a tap toggles, holding past `HOLD_MS` is push-to-talk. */

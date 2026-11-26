@@ -32,7 +32,11 @@ import {
 	scheduleSessionStatePublish,
 } from "./agentSessionManager";
 import { archiveSubagentRun, publishSessionResourcesChanged } from "./chatResources";
-import { childBaseExtensionFactories, childExtensionFactories } from "./extensions";
+import {
+	childBaseExtensionFactories,
+	childExtensionFactories,
+	childInstalledExtensionFactories,
+} from "./extensions";
 import { getPiRuntime } from "./piRuntime";
 import { isHostResourceId, isPiSessionId } from "./resourceIdentity";
 import {
@@ -105,6 +109,7 @@ export function delegationServiceFor(workspaceId: string): DelegationService {
 			modelRuntime: getPiRuntime,
 			childBaseExtensionFactories: childBaseExtensionFactories(),
 			childExtensionFactories: childExtensionFactories(workspaceId),
+			childInstalledExtensionFactories: childInstalledExtensionFactories(),
 			buildChildSettings: buildSessionSettings,
 		});
 		created.onLifecycle((event) => {
@@ -132,6 +137,7 @@ export function subagentsFor(
 	workspaceId: string,
 	isEnabled: () => boolean,
 	canDeliverCompletion: () => boolean,
+	isAgentEnabled: (name: string) => boolean,
 ): Subagents {
 	return createSubagents({
 		service: delegationServiceFor(workspaceId),
@@ -139,6 +145,7 @@ export function subagentsFor(
 		scope: workspaceId,
 		isEnabled,
 		canDeliverCompletion,
+		isAgentEnabled,
 	});
 }
 

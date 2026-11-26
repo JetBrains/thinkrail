@@ -335,3 +335,22 @@ export function questionPageForKey(
 	if (edges && key === "End") return last;
 	return null;
 }
+
+export type PageKeyTarget =
+	| { readonly kind: "page"; readonly page: number }
+	| { readonly kind: "submit" }
+	| { readonly kind: "needsChoice" };
+
+export function pageKeyTarget(
+	key: string,
+	current: number,
+	last: number,
+	{ edges = false, canSubmit }: { edges?: boolean; canSubmit: boolean },
+): PageKeyTarget | null {
+	if (key === "ArrowRight" && current >= last) {
+		return canSubmit ? { kind: "submit" } : { kind: "needsChoice" };
+	}
+	if (last <= 0) return null;
+	const page = questionPageForKey(key, current, last, edges);
+	return page === null ? null : { kind: "page", page };
+}

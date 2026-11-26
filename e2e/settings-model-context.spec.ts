@@ -2,10 +2,11 @@ import { chmodSync, copyFileSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import { CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION, type Workspace } from "@thinkrail/contracts";
-import { openWorkspaceChat } from "./fixtures/app";
+import { closeSettings, openSettingsSection, openWorkspaceChat } from "./fixtures/app";
 import { connectCentral, openProviders, waitForCentralState } from "./fixtures/jbcentral";
 import { E2E_CENTRAL_EXTENSION_SOURCE, E2E_PI_AGENT_DIR } from "./fixtures/paths";
 import { shot } from "./fixtures/screenshots";
+import { unreachedInSection } from "./fixtures/settingsTree";
 import { E2eWire } from "./fixtures/wire";
 
 const modelsPath = join(E2E_PI_AGENT_DIR, "models.json");
@@ -26,8 +27,27 @@ let workspace: Workspace;
 let wire: E2eWire;
 
 async function openModels(page: Page): Promise<void> {
-	await openProviders(page);
-	await page.getByTestId("settings-nav-models").click();
+	await openSettingsSection(page, "models");
+}
+
+function option(page: Page, target: string, preset: "default" | "1m" | "custom") {
+	return page.getByTestId(`context-limit-${target}-${preset}`);
+}
+
+async function expectChosen(
+	page: Page,
+	target: string,
+	preset: "default" | "1m" | "custom",
+): Promise<void> {
+	await expect(option(page, target, preset)).toHaveAttribute("aria-selected", "true");
+}
+
+async function expandProviders(page: Page, ...ids: string[]): Promise<void> {
+	for (const id of ids) {
+		const row = page.locator(`[data-testid="model-context-provider"][data-provider="${id}"]`);
+		if ((await row.getAttribute("aria-expanded")) !== "true") await row.click();
+		await expect(row).toHaveAttribute("aria-expanded", "true");
+	}
 }
 
 async function setting(provider: string) {
@@ -47,10 +67,10 @@ async function choose(
 	target: string,
 	preset: "default" | "1m" | "custom",
 ): Promise<void> {
-	const control = page.getByTestId(`context-limit-${target}-${preset}`);
-	await expect(control.getByRole("radio")).toBeEnabled();
+	const control = option(page, target, preset);
+	await expect(control).toBeEnabled();
 	await control.click();
-	await expect(control.getByRole("radio")).toBeChecked();
+	await expect(control).toHaveAttribute("aria-selected", "true");
 }
 
 function savedConfig(): unknown {
@@ -69,7 +89,7 @@ test.beforeEach(async ({ page }) => {
 	await connectCentral(page);
 	await waitForCentralState(page, "configured");
 	await page.getByTestId("settings-nav-models").click();
-	await expect(page.getByTestId("context-limit-all-default").getByRole("radio")).toBeChecked();
+	await expectChosen(page, "all", "default");
 	wire = await E2eWire.connect(Number(new URL(page.url()).port));
 });
 
@@ -115,7 +135,7 @@ test("one shared selector sets 1M for API, Codex and proxy models and Default re
 
 	await page.reload();
 	await openModels(page);
-	await expect(page.getByTestId("context-limit-all-1m").getByRole("radio")).toBeChecked();
+	await expectChosen(page, "all", "1m");
 	await shot(page.getByTestId("settings-model-context"), "models-settings", "context-extended");
 	await choose(page, "all", "default");
 	await expectOverrides(null);
@@ -128,12 +148,9 @@ test("shared changes reach every provider row and uniform row changes flow back 
 	const rowOf = (provider: (typeof providers)[number]) => `${provider}-${modelId}`;
 	const rows = providers.map(rowOf);
 	const shared = page.getByTestId("context-limit-all");
-	const checked = async (target: string, preset: "default" | "1m" | "custom") => {
-		await expect(
-			page.getByTestId(`context-limit-${target}-${preset}`).getByRole("radio"),
-		).toBeChecked();
-	};
-	await page.getByTestId("model-context-customize").click();
+	const checked = (target: string, preset: "default" | "1m" | "custom") =>
+		expectChosen(page, target, preset);
+	await expandProviders(page, ...providers);
 	for (const row of rows) await checked(row, "default");
 
 	await choose(page, "all", "1m");
@@ -155,7 +172,7 @@ test("shared changes reach every provider row and uniform row changes flow back 
 
 	await choose(page, rowOf("openai"), "1m");
 	await expect(shared).toHaveAttribute("data-context-override", "mixed");
-	await expect(shared.getByRole("radio", { checked: true })).toHaveCount(0);
+	await expect(shared.locator('[role="option"][aria-selected="true"]')).toHaveCount(0);
 	await choose(page, "all", "1m");
 	await expectOverrides(1_000_000);
 	for (const row of rows) await checked(row, "1m");
@@ -197,7 +214,7 @@ test("shared saves leave an override set outside the app range alone until its o
 	await openModels(page);
 	const shared = page.getByTestId("context-limit-all");
 	await expect(shared).toContainText("2 available models \u00b7 1 kept at a limit set outside");
-	await expect(shared.getByTestId("context-limit-all-default").getByRole("radio")).toBeChecked();
+	await expectChosen(page, "all", "default");
 
 	await choose(page, "all", "1m");
 	for (const provider of ["openai", "openai-codex"]) {
@@ -210,7 +227,7 @@ test("shared saves leave an override set outside the app range alone until its o
 	}
 	expect((await setting("context-proxy"))?.override).toBe(1_050_000);
 
-	await page.getByTestId("model-context-customize").click();
+	await expandProviders(page, "context-proxy");
 	const row = `context-proxy-${modelId}`;
 	await expect(page.getByTestId(`context-limit-${row}-input`)).toHaveValue("1050000");
 	await expect(page.getByTestId(`context-limit-${row}-input`)).toHaveAttribute(
@@ -228,12 +245,9 @@ test("shared saves leave an override set outside the app range alone until its o
 
 test("expanded customization isolates the same model on different providers", async ({ page }) => {
 	await choose(page, "all", "1m");
-	await page.getByTestId("model-context-customize").click();
-	await expect(page.getByTestId("model-context-customize")).toHaveAttribute(
-		"aria-expanded",
-		"true",
-	);
-	await expect(page.getByRole("radiogroup", { name: /context-proxy/ })).toHaveCount(1);
+	await expandProviders(page, "context-proxy");
+	await expect(page.getByRole("listbox", { name: /context-proxy/ })).toHaveCount(1);
+	await expect(page.getByRole("listbox", { name: /\(openai\)/ })).toHaveCount(0);
 	await choose(page, `context-proxy-${modelId}`, "default");
 	await expect.poll(async () => (await setting("context-proxy"))?.override).toBeNull();
 	for (const provider of ["openai", "openai-codex"]) {
@@ -241,7 +255,7 @@ test("expanded customization isolates the same model on different providers", as
 	}
 	await expect(page.getByTestId("context-limit-all")).toContainText("Customized by model");
 	await expect(
-		page.getByTestId("context-limit-all").getByRole("radio", { checked: true }),
+		page.getByTestId("context-limit-all").locator('[role="option"][aria-selected="true"]'),
 	).toHaveCount(0);
 	await shot(page.getByTestId("settings-model-context"), "models-settings", "context-per-provider");
 	await page.reload();
@@ -252,7 +266,7 @@ test("expanded customization isolates the same model on different providers", as
 test("custom budgets save on Enter, validate the 272K–1M range and keep unrelated config", async ({
 	page,
 }) => {
-	await page.getByTestId("model-context-customize").click();
+	await expandProviders(page, "openai");
 	const target = `openai-${modelId}`;
 	await choose(page, target, "custom");
 	const input = page.getByTestId(`context-limit-${target}-input`);
@@ -273,12 +287,12 @@ test("custom budgets save on Enter, validate the 272K–1M range and keep unrela
 		"data-context-override",
 		"750000",
 	);
-	await expect(input).toBeFocused();
+	await expect(page.getByTestId(`context-limit-${target}`)).toBeFocused();
 	await expect.poll(async () => (await setting("openai"))?.contextWindow).toBe(750_000);
 	expect((await setting("openai-codex"))?.override).toBeNull();
 	await page.reload();
 	await openModels(page);
-	await page.getByTestId("model-context-customize").click();
+	await expandProviders(page, "openai");
 	await expect(page.getByTestId(`context-limit-${target}-input`)).toHaveValue("750000");
 	await shot(page.getByTestId("settings-model-context"), "models-settings", "context-custom");
 
@@ -307,11 +321,11 @@ test("another connected frontend converges and drops its invalidated drafts", as
 		await choose(peer, "all", "custom");
 		await peer.getByTestId("context-limit-all-input").fill("500000");
 		await choose(page, "all", "1m");
-		await expect(peer.getByTestId("context-limit-all-1m").getByRole("radio")).toBeChecked();
+		await expectChosen(peer, "all", "1m");
 		await expect(peer.getByTestId("context-limit-all-input")).toHaveCount(0);
 		await choose(peer, "all", "default");
-		await expect(page.getByTestId("context-limit-all-default").getByRole("radio")).toBeChecked();
-		await page.getByTestId("model-context-customize").click();
+		await expectChosen(page, "all", "default");
+		await expandProviders(page, "openai");
 		await choose(page, `openai-${modelId}`, "1m");
 		await expect(peer.getByTestId("context-limit-all")).toContainText("Customized by model");
 	} finally {
@@ -324,15 +338,15 @@ test("read and write failures disclose no configuration and Retry reloads the sa
 }) => {
 	const section = page.getByTestId("settings-model-context");
 	writeFileSync(modelsPath, "CONTEXT_PRIVATE_MALFORMED_SENTINEL");
-	await page.keyboard.press("Escape");
+	await closeSettings(page);
 	await openModels(page);
 	await expect(section.getByRole("alert")).toBeVisible();
-	await expect(section.getByRole("radio")).toHaveCount(0);
+	await expect(section.getByRole("option")).toHaveCount(0);
 	await expect(page.locator("body")).not.toContainText("CONTEXT_PRIVATE");
 	await shot(section, "models-settings", "context-read-error");
 	writeFileSync(modelsPath, JSON.stringify(seed));
 	await section.getByRole("button", { name: "Retry" }).click();
-	await expect(page.getByTestId("context-limit-all-default").getByRole("radio")).toBeChecked();
+	await expectChosen(page, "all", "default");
 
 	const before = readFileSync(modelsPath, "utf8");
 	chmodSync(modelsPath, 0o400);
@@ -341,23 +355,108 @@ test("read and write failures disclose no configuration and Retry reloads the sa
 	expect(readFileSync(modelsPath, "utf8")).toBe(before);
 	chmodSync(modelsPath, 0o600);
 	await section.getByRole("button", { name: "Retry" }).click();
-	await expect(page.getByTestId("context-limit-all-default").getByRole("radio")).toBeChecked();
+	await expectChosen(page, "all", "default");
 });
 
 test("the compact selector supports keyboard changes at mobile width", async ({ page }) => {
 	await page.setViewportSize({ width: 375, height: 812 });
 	const section = page.getByTestId("settings-model-context");
-	await page.getByTestId("context-limit-all-default").getByRole("radio").focus();
+	await option(page, "all", "default").focus();
 	await page.keyboard.press("ArrowRight");
-	await expect(page.getByTestId("context-limit-all-1m").getByRole("radio")).toBeChecked();
+	await expectChosen(page, "all", "1m");
 	await expectOverrides(1_000_000);
-	await expect(page.getByTestId("context-limit-all-1m").getByRole("radio")).toBeFocused();
+	await expect(option(page, "all", "1m")).toBeFocused();
 	await page.keyboard.press("ArrowLeft");
-	await expect(page.getByTestId("context-limit-all-default").getByRole("radio")).toBeChecked();
+	await expectChosen(page, "all", "default");
 	expect(await section.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(
 		false,
 	);
 	await shot(section, "models-settings", "context-mobile");
+});
+
+test("the per-model tree walks like the file tree; a model row's window changes only inside its choice, entered with Enter", async ({
+	page,
+}) => {
+	const provider = page.locator('[data-testid="model-context-provider"][data-provider="openai"]');
+	const model = page.getByTestId(`context-limit-openai-${modelId}`);
+	const reset = page.getByTestId(`context-limit-openai-${modelId}-reset`);
+	await provider.focus();
+	await page.keyboard.press("ArrowRight");
+	await expect(provider).toHaveAttribute("aria-expanded", "true");
+	await page.keyboard.press("ArrowRight");
+	await expect(model).toBeFocused();
+	await page.keyboard.press("ArrowDown");
+	await page.keyboard.press("ArrowUp");
+	await expect(model).toBeFocused();
+	await expectChosen(page, `openai-${modelId}`, "default");
+
+	await page.keyboard.press("Enter");
+	await expect(option(page, `openai-${modelId}`, "default")).toBeFocused();
+	await expectChosen(page, `openai-${modelId}`, "default");
+	await page.keyboard.press("ArrowRight");
+	await expectChosen(page, `openai-${modelId}`, "1m");
+	await expect.poll(async () => (await setting("openai"))?.override).toBe(1_000_000);
+	await page.keyboard.press("Escape");
+	await expect(model).toBeFocused();
+	await expectChosen(page, `openai-${modelId}`, "1m");
+	await page.keyboard.press("ArrowRight");
+	await expect(reset).toBeFocused();
+	await expectChosen(page, `openai-${modelId}`, "1m");
+	await page.keyboard.press("ArrowLeft");
+	await expect(model).toBeFocused();
+	await page.keyboard.press("Delete");
+	await expectChosen(page, `openai-${modelId}`, "default");
+	await expect.poll(async () => (await setting("openai"))?.override).toBeNull();
+	await expect(model).toBeFocused();
+	await page.keyboard.press("ArrowLeft");
+	await expect(provider).toBeFocused();
+	await page.keyboard.press("ArrowLeft");
+	await expect(provider).toHaveAttribute("aria-expanded", "false");
+	await expect(model).toHaveCount(0);
+	expect((await setting("openai-codex"))?.override).toBeNull();
+});
+
+test("with the context tree open and Custom chosen, every button, choice and field in Models is reachable with the arrows and Enter", async ({
+	page,
+}) => {
+	test.setTimeout(120_000);
+	await expandProviders(page, "openai");
+	await choose(page, "all", "custom");
+	await choose(page, `openai-${modelId}`, "custom");
+	await expect(page.getByTestId("context-limit-all-input")).toBeVisible();
+	await expect(page.getByTestId(`context-limit-openai-${modelId}-input`)).toBeVisible();
+	expect(await unreachedInSection(page, "models")).toEqual([]);
+	await expectOverrides(null);
+});
+
+test("the shared choice is entered with Enter, → → walks it to Custom, which the 1M save's later reply keeps, and → past Custom lands in the Custom field", async ({
+	page,
+}) => {
+	const row = page.locator('[data-setting-row="context-window"]');
+	const input = page.getByTestId("context-limit-all-input");
+	await row.focus();
+	await page.keyboard.press("Enter");
+	await expect(option(page, "all", "default")).toBeFocused();
+	await page.keyboard.press("ArrowRight");
+	await page.keyboard.press("ArrowRight");
+	await expectChosen(page, "all", "custom");
+	await expectOverrides(1_000_000);
+	await expect(page.getByTestId("context-limit-all")).toHaveAttribute(
+		"data-context-override",
+		"1000000",
+	);
+	await expectChosen(page, "all", "custom");
+	await expect(option(page, "all", "custom")).toBeFocused();
+	await expect(input).toBeVisible();
+	await page.keyboard.press("ArrowRight");
+	await expect(input).toBeFocused();
+	await expectChosen(page, "all", "custom");
+	await page.keyboard.press("ArrowLeft");
+	await expect(input).toBeFocused();
+	await page.keyboard.type("600000");
+	await page.keyboard.press("Enter");
+	await expect(row).toBeFocused();
+	await expectOverrides(600_000);
 });
 
 test("pre-v76 hosts hide context controls without sending unsupported requests", async ({

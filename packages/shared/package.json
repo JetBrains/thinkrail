@@ -13,6 +13,8 @@
 		"./paths": "./src/paths.ts",
 		"./artifactsDir": "./src/artifactsDir.ts",
 		"./codedError": "./src/codedError.ts",
+		"./packageInstallError": "./src/packageInstallError.ts",
+		"./stripAnsi": "./src/stripAnsi.ts",
 		"./removeTree": "./src/removeTree.ts",
 		"./spawn": "./src/spawn.ts",
 		"./toolHomes": "./src/toolHomes.ts"

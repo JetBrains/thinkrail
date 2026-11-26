@@ -1,9 +1,14 @@
+import type { CpuArchitecture } from "../installPlatform";
 import {
 	directDesktopDownload,
 	getInstallPlatform,
 	type InstallPlatform,
 } from "./desktopDownloads";
-import { CompactDownloadAction, useDetectedInstallPlatform } from "./InstallPicker";
+import {
+	CompactDownloadAction,
+	useDetectedCpuArchitecture,
+	useDetectedInstallPlatform,
+} from "./InstallPicker";
 import type { Positioning } from "./positioning";
 import { Reveal } from "./Reveal";
 import { Subtitle } from "./Subtitle";
@@ -21,7 +26,10 @@ const COPY: Record<Positioning, { heading: string; subtitle: string }> = {
 	},
 };
 
-export function desktopCtaAction(platform: InstallPlatform | null | undefined) {
+export function desktopCtaAction(
+	platform: InstallPlatform | null | undefined,
+	architecture?: CpuArchitecture,
+) {
 	if (!platform) {
 		return {
 			label: "View desktop downloads",
@@ -31,7 +39,7 @@ export function desktopCtaAction(platform: InstallPlatform | null | undefined) {
 		};
 	}
 	const option = getInstallPlatform(platform);
-	const download = directDesktopDownload(platform);
+	const download = directDesktopDownload(platform, architecture);
 	return {
 		label: `Download for ${option.label}`,
 		href: download?.href ?? "#quick-start",
@@ -42,7 +50,7 @@ export function desktopCtaAction(platform: InstallPlatform | null | undefined) {
 
 export function CallToAction({ positioning }: { positioning: Positioning }) {
 	const copy = COPY[positioning];
-	const action = desktopCtaAction(useDetectedInstallPlatform());
+	const action = desktopCtaAction(useDetectedInstallPlatform(), useDetectedCpuArchitecture());
 
 	return (
 		<section

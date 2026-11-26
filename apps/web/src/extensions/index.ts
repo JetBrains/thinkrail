@@ -1,8 +1,15 @@
+export { EXTENSION_API_VERSION, extensionApiFit } from "./compatibility";
+export { followInstalledWebExtensions } from "./follow";
+export { installExtensionHost } from "./host";
+export { useWebExtensionLoads, type WebExtensionLoadResult } from "./loader";
 export {
 	enabledWebExtensions,
+	extensionPanels,
+	findExtensionPanel,
+	type RegisteredPanel,
 	registerWebExtensions,
-	type WebExtensionCommands,
 	webExtensionCommands,
 	webExtensions,
+	webExtensionTitle,
 	webOnlyExtensions,
 } from "./registry";

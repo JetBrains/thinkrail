@@ -58,8 +58,19 @@ test("signs in through the OAuth dialog (select → open-URL + paste → success
 	await expect(dialog).toHaveCount(0);
 	await expect(page.locator(CONFIGURED)).toBeVisible();
 
-	await page.locator('[data-testid="provider-signout"][data-provider="e2e-oauth"]').click();
+	const search = page.getByTestId("settings-search");
+	const signedIn = page.locator(
+		'[data-testid="settings-search-result"][data-result-id="signed-in-providers"]',
+	);
+	await search.fill("Signed-in providers");
+	await signedIn.click();
+	await expect(page.locator(CONFIGURED)).toBeFocused();
+
+	await page.keyboard.press("Enter");
 	await expect(page.locator(CONFIGURED)).toHaveCount(0);
+	await search.fill("Signed-in providers");
+	await expect(page.getByTestId("settings-search-results")).toContainText("“Signed-in providers”");
+	await expect(signedIn).toHaveCount(0);
 });
 
 test("cancelling the OAuth dialog aborts the login and leaves the provider unconfigured", {

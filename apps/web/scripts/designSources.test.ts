@@ -46,3 +46,10 @@ test("Tailwind scans the same external roots as the adoption guards", () => {
 	expect(labels).toContain("index.css");
 	expect(labels).toContain("packages/ui/dialog.tsx");
 });
+
+test("Tailwind scans only declared sources, never stray build output or extension files", () => {
+	const css = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
+	expect(css).toStartWith('@import "tailwindcss" source(none);');
+	expect(css).toContain('@source "./";');
+	expect(css).toContain('@source not "./extensions/fixtures";');
+});

@@ -12,6 +12,7 @@ export interface CursorOption {
 
 export interface CursorProxyProps {
 	ref: Ref<HTMLDivElement>;
+	focusDefault?: boolean;
 	label: string;
 	option: CursorOption;
 	onKeyDown: KeyboardEventHandler<HTMLDivElement>;
@@ -21,7 +22,15 @@ export interface CursorProxyProps {
 
 export const CURSOR_PROXY_HOST = "has-[>[data-review-surface]:focus-visible]:focus-ring-inset";
 
-export function CursorProxy({ ref, label, option, onKeyDown, onFocus, onBlur }: CursorProxyProps) {
+export function CursorProxy({
+	ref,
+	focusDefault = false,
+	label,
+	option,
+	onKeyDown,
+	onFocus,
+	onBlur,
+}: CursorProxyProps) {
 	const t = useT();
 	const id = `${useId()}${option.key}`;
 	const at = t("viewer.cursor.at", {
@@ -33,6 +42,7 @@ export function CursorProxy({ ref, label, option, onKeyDown, onFocus, onBlur }: 
 			ref={ref}
 			data-testid="review-cursor"
 			data-review-surface
+			data-focus-default={focusDefault || undefined}
 			role="listbox"
 			aria-label={label}
 			aria-activedescendant={id}

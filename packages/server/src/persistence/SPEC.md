@@ -13,7 +13,7 @@ Durable host state—projects, workspaces, cross-frontend app config, terminal c
 
 ## Boundary
 
-- **Owns:** `dataDir()` (`THINKRAIL_DATA_DIR` for dev/e2e isolation, else `~/.thinkrail`, always resolved to an absolute path — a relative override would otherwise land managed worktrees in two places: `mkdirSync` resolves it against the host's cwd, `git -C <project>` against the project); project/workspace/config load-save operations and fieldwise validation over `DEFAULT_CONFIG` while preserving unknown top-level extension fields; versioned atomic `session-lifecycle.json` (latest observed settled completion + explicit-cancel run id), `session-receipts.json` (first-install baseline complete + session→handled completion id) and `turns.json` (per-workspace agent-run change sets, owned by `turns`); server-only `installation.json` (`{ id, appInstalled?: true }`) and campaign-only `attribution.json`; the structural load/save of `environment.json` (`loadHostEnvironment` / `saveHostEnvironment`, atomic, mode `0600`, semantics owned by [[submodule-server-environment]]). The non-rotating install UUID never crosses the wire.
+- **Owns:** `dataDir()` (`THINKRAIL_DATA_DIR` — a supported, documented override that relocates all app state, also used for dev/e2e isolation; blank counts as unset and a leading `~` is the home directory — else `~/.thinkrail`, always resolved to an absolute path — a relative override would otherwise land managed worktrees in two places: `mkdirSync` resolves it against the host's cwd, `git -C <project>` against the project); project/workspace/config load-save operations and fieldwise validation over `DEFAULT_CONFIG` while preserving unknown top-level extension fields; versioned atomic `session-lifecycle.json` (latest observed settled completion + explicit-cancel run id), `session-receipts.json` (first-install baseline complete + session→handled completion id) and `turns.json` (per-workspace agent-run change sets, owned by `turns`); server-only `installation.json` (`{ id, appInstalled?: true }`) and campaign-only `attribution.json`; the structural load/save of `environment.json` (`loadHostEnvironment` / `saveHostEnvironment`, atomic, mode `0600`, semantics owned by [[submodule-server-environment]]). The non-rotating install UUID never crosses the wire.
 - **Data folders:** `listDataFolder` (sorted, dot-files skipped, filtered by the owner), `fileStatSignature`, and
   `watchDataFolder`, the once-a-second folder-signature poll [[submodule-server-locales]] explains: it creates
   the folder once at start (reporting a failure to the owner), nudges once per changed listing, and never
@@ -82,10 +82,18 @@ Analytics config preserves a saved boolean preference and a valid `analyticsCons
 independently; absent/malformed values default false. A preference-only write never implies completion.
 Settings owns initial preference priming and preference-plus-confirmation writes.
 
+Every config save stamps `configVersion` (currently `1`); load strips it, so it never reaches `AppConfig`
+or the wire. A config without it was written before version 1, and version 1's one step loads its stored
+question panel height 60 (the old default) as 70 ([[submodule-server-settings]]); the next save stamps the
+version, so a 60 chosen later stays. A later value migration bumps the version and adds its own step. A
+newer host's higher version is not kept: this host stamps its own.
+
 An absent `otherAgentSkills` defaults by install age: `true` in a stored config that lacks it, since only a host
 from before the switch writes one (it loaded other agents' skills, #1210), and `false` with no readable config.
 Every config this host saves carries the field, so the default never flips later; an old install that never
 saved a config gets the new default.
+
+Config validation normalizes `disabledSubagents` like `disabledExtensions`: absent/non-array → `[]`, malformed entries dropped, non-blank names deduped, unknown names retained.
 
 Config validation normalizes the closed theme mode plus complete opaque system pair, the closed
 composer-growth preference, the closed Windows terminal-shell preference (invalid/absent →

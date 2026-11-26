@@ -131,10 +131,12 @@ get no further environment retries.
 A platform's native behavior is proven only on that platform. Windows remains a PR gate because its
 executable, environment, path, and trash behavior differs materially from POSIX hosts. Its subprocess unit
 gate also exercises native descendant-console behavior, which the Linux unit run cannot prove. Its
-desktop window-chrome unit gate binds the `user32.dll` frame symbols the frameless title bar relies on,
+keyboard and pi-settings source guards run as a separate step, so platform-specific relative-path
+comparisons are exercised on Windows as well as Linux without broadening the Decision 22 path gate.
+Its desktop window-chrome unit gate binds the `user32.dll` frame symbols the frameless title bar relies on,
 round-trips the window icon through a real window, and stamps an AppUserModelID onto real shortcuts
-([[module-desktop]]). Neither gate needs the
-Electrobun devkit. Its binary smoke also checks the compiled exe's icon and file properties
+([[module-desktop]]). These unit gates run without the Electrobun devkit. Its binary smoke also checks
+the compiled exe's icon and file properties
 ([[module-artifact-tests]]). A separate Windows desktop job builds the desktop app and runs the native
 desktop smoke, which checks the branded `bun.exe`, `launcher.exe` and uninstaller. Only a Windows build
 runs the desktop `postBuild` branding over Hutch's output ([[module-desktop]]). Before this job existed, a

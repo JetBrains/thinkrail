@@ -5,7 +5,7 @@ status: active
 title: skills/ — the workflow family and its meta-layer
 parent: module-thinkrail-workflow
 references: [module-spec-graph]
-tags: [workflow-system, skill, brainstorming, setting-up-a-project]
+tags: [workflow-system, skill, brainstorming, setting-up-a-project, reviewing-a-pr]
 ---
 
 ## Responsibility
@@ -29,6 +29,13 @@ whose workflows are an *example* of a possible future complex workflow, not a te
 - **Sibling doc** — a file beside a skill's `SKILL.md` holding an internal workflow node (a branch,
   stage, or shared tail) or reference detail; named at the exact step that hands to it, read on
   demand, never discoverable on its own (rules 1 and 3).
+- **Argument completion** — a skill's optional frontmatter key `argument-completion: <kind>` (today
+  only `pull-request`), read by the host into its slash catalog so prompts can offer the argument;
+  pi ignores the key, and a skill without it behaves as before.
+- **Template** — a static, non-Markdown file beside the docs (today `reviewing-a-pr`'s
+  `brief-template.html`) that a step copies and fills; named in the doc that uses it, never read as
+  instructions. It ships like the docs: development reads the skill root in place, and the compiled
+  binary and desktop stage embed every file under a skill root, so no packaging list names it.
 - **Concept** — one topic's reusable rules, conventions, or mental model — shared ground the
   process skills stand on, codified as its own skill when more than one skill needs it.
 - **Handoff** — the explicit, by-name transition at the end of a workflow skill, or a declared
@@ -80,6 +87,8 @@ flowchart LR
   router --> ps[setting-up-a-project — dispatcher]
   router --> bs[brainstorming]
   router --> ship[shipping-a-pr]
+  router --> rev[reviewing-a-pr]
+  completion(["/skill:reviewing-a-pr + PR completion"]) --> rev
   card(["/skill:setting-up-a-project card"]) --> ps
   ps --> pn[starting-a-new-project]
   ps --> pim[importing-a-codebase]
@@ -117,7 +126,8 @@ flowchart LR
 
 **Discovery & entry**
 4. At the start of a new piece of work, one always-on entry rule names the workflow-eligible classes —
-   project onboarding and PR lifecycle work take precedence regardless of whether they edit code; every
+   project onboarding, PR lifecycle work and reviewing a pull request take precedence regardless of
+   whether they edit code; every
    other change to what the product does — a feature, a behavior change, or a bug fix, however small —
    enters too. Only non-PR questions, explanations, and checks, and edits that change no behavior (typos,
    documentation or configuration only, mechanical refactors) proceed directly. The rule points only
@@ -204,6 +214,7 @@ flowchart LR
 | `writing-specs` | concept — the spec quality bar (short / honest / on-rails) for every spec-producing flow | — (reached by name, rule 4) | active; observed by use (2026-07 manual: self-triggered for a spec revision and applied) |
 | `choosing-a-workflow` | router (root) — classification + routing for workflow-eligible work | — (conditional pointer from the always-on rule, rule 4) | active; every classification, including the default entry for small behavior changes and bug reports, observed green by the routing suite (2026-10) |
 | `writing-workflow-skills` | worker — authoring checklist for adding workflows | — (self-trigger only, rule 4) | active |
+| `reviewing-a-pr` | worker — review a PR the user is not shipping: intake (the PR's code moved into a fresh workspace, or a hand-off to a separate one), measure, map, hunt, challenge, assess, a one-page brief with decision cards, then a GitHub review posted only on confirmation — stages as sibling docs plus the brief's `brief-template.html` | `choosing-a-workflow` (root) + narrow self-trigger + `/skill:reviewing-a-pr <url>` typed with the prompts' pull-request completion (`argument-completion: pull-request`) | active; unverified by use (the stages were piloted by hand on PR #1431 before the skill existed; the routing scenario is written, not yet observed) |
 | `shipping-a-pr` | worker — PR lifecycle (create with gates / body or screenshot maintenance / up-to-date sync / checks / review comments — phases as sibling docs) | `choosing-a-workflow` (root) + narrow self-trigger | active; snapshot-by-default completion and verification reuse unverified by use (rule 14 suspended) |
 
 The family is open and grows from real use; candidates (research/spike, refactor, a composing
@@ -362,6 +373,34 @@ follows is only the rationale the skill bodies don't state:
   each phase doc instantiates it at its own action points (pre-push re-assertions after
   tree-mutating steps, title/body re-fetched and the requested mutation reapplied to the fresh value,
   `UNKNOWN` merge state polled, throwaway cleanup owned by the phase that made the throwaway).
+- **`reviewing-a-pr`** came from a hand-run pilot review of PR #1431 (2026-11): a brief of about
+  1,400 words was read in 10–15 minutes and produced seven decisions, and every stage corrected the one
+  before it (about a third of the first problem list was dropped or downgraded), hence "a finding is a
+  candidate until it is challenged" and the `browser`/`run`/`test`/`read` evidence labels. Reproduction
+  in a real product and scripted measurement were the most decisive per minute; read-everything passes
+  the most expensive — so reading is delegated by change group and every number comes from a rerunnable
+  command. One skill, not eight: the stages are reached only as a whole (rule 1), and every stage runs
+  for every PR — depth is not a choice, the number of agents per stage follows the number of change
+  groups. Its own entry point is the command itself: its frontmatter declares
+  `argument-completion: pull-request` (a ThinkRail key pi ignores; the host surfaces it on the slash
+  catalog), so the Cmd+N prompt and the chat composer offer pull requests as its argument — a
+  colleague's review of the first build preferred this to a dedicated dialog mode. Cmd+N creates the
+  workspace from the PR's **base**; the skill's intake moves the fresh branch to the PR's head itself,
+  because workspace creation uses one ref as both checkout point and base. Intake moves only a
+  checkout git shows to be freshly created for the review — clean, level with the PR's base, not the
+  base branch, no upstream, a reflog holding only its creation and renames, and not the
+  repository's main checkout; Cmd+N's workspaces are exactly that (created `--no-track` from the
+  base). Renames are allowed because naming a workspace for its PR (`set_title`) runs `git branch -m`,
+  which writes a reflog line before intake reaches the check; any commit, reset or checkout of the
+  branch adds a different line. Anything else —
+  including a project opened from a linked worktree, which git cannot tell apart by path — hands off
+  to a separate review workspace through `start_workspace`, so a review typed in any chat lands in
+  the same shape. The handed-off prompt carries a "do not hand off again" line and a chat started
+  that way only reports a failed check, so a worktree that is dirty from birth (line-ending
+  normalisation, a checkout hook) cannot start an endless chain of workspaces. It is a separate
+  route from `shipping-a-pr` — which keeps "Not for reviewing a PR you are not shipping" — because
+  reviewing judges someone else's change and posts only what the user confirms, while shipping acts on
+  the user's own branch.
 - **`writing-specs`** carries the family's spec quality bar once — short / honest / on-rails — and is
   the accruing home for the family's rules about specs and the spec graph as they grow. Graph
   *mechanics* (frontmatter, link kinds, the `spec_*` tools) stay with the spec-graph skill

@@ -35,19 +35,26 @@ import {
 	finalizeTemplateSlotSession,
 	highlightSegments,
 	type ParsedTemplate,
+	promptTintClass,
+	replaceSlashArgument,
 	type SlashCommandItem,
 	SlashCommandMenu,
 	type SlotHighlightState,
 	type SlotSegment,
 	selectedSlashCommandValue,
+	slashArgument,
+	slashArgumentTint,
 	slashCommandQuery,
 	stepTemplateSlotSession,
 	TemplateSlotHint,
 	type TemplateSlotSessionState,
+	useArgumentCompletion,
 	usePendingSelection,
 	useSlashCommandCompletion,
 } from "@/prompt";
 import { DICTATION_EVENT } from "@/speech";
+import type { PromptFile } from "@/store";
+import { withoutSentDraft, withRestoredDraft } from "./attachments";
 import { FileChip } from "./FileChip";
 import {
 	ModelEffortPicker,
@@ -55,12 +62,17 @@ import {
 	type ModelSelection,
 } from "./ModelEffortPicker";
 import { isModelCommand, parseModelCommand } from "./nativeCommands";
+import { PullRequestCompletionMenu } from "./PullRequestCompletionMenu";
 import {
-	imagePasteDropHandlers,
+	AttachFilesButton,
+	attachmentPasteDropHandlers,
+	type PromptChipsHandle,
 	PromptImageChips,
 	type PromptImagesOwner,
 	usePromptImages,
 } from "./promptImages";
+import { isPullRequestArgumentComplete, pullRequestReferenceOf } from "./pullRequestArguments";
+import type { PullRequestCompletion } from "./pullRequestCompletion";
 import { composerShiftTabOut, composerTranscriptStep } from "./transcriptNavigation";
 import type { ChatAttachment } from "./types";
 import type { ModelPreferences } from "./useModelPreferences";
@@ -68,6 +80,11 @@ import type { ModelPreferences } from "./useModelPreferences";
 export type SubmitBehavior = "send" | "steer" | "followUp" | "interrupt";
 
 export type ComposerSubmitDisposition = { accepted: true } | { accepted: false; reason: string };
+
+export interface ComposerUpload {
+	signal: AbortSignal;
+	onCopied: (id: string, path: string) => void;
+}
 
 const COMPOSER_EDITOR_LIMIT_CLASS = {
 	compact: "max-h-[calc(6lh+var(--space-8)+var(--space-8))]",
@@ -174,7 +191,10 @@ function highlightTint(state: SlotHighlightState): string {
 interface ComposerProps {
 	value: string;
 	onChange: (value: string) => void;
+	readDraft: () => string;
 	imageOwner?: PromptImagesOwner;
+	acceptsFiles: boolean;
+	onAttachmentNotice: (message: string) => void;
 	isStreaming: boolean;
 	awaitingResponse: boolean;
 	growthLimit: ComposerGrowthLimit;
@@ -196,7 +216,9 @@ interface ComposerProps {
 		text: string,
 		attachments: ChatAttachment[],
 		behavior: SubmitBehavior,
-	) => ComposerSubmitDisposition;
+		files: PromptFile[],
+		upload: ComposerUpload,
+	) => ComposerSubmitDisposition | Promise<ComposerSubmitDisposition>;
 	onAbort: () => void;
 	onEnterTranscript?: () => void;
 	onShiftTabOut?: () => boolean;
@@ -205,10 +227,15 @@ interface ComposerProps {
 	onPickTemplate?: (name: string) => void;
 	onManageTemplates?: () => void;
 	templatesEmpty?: boolean;
+	/** The pull requests a `/<command> <argument>` draft offers, when its command declares a PR argument. */
+	pullRequests?: PullRequestCompletion | null;
+	/** One line above the pull-request filters (the chat says where a review would run). */
+	pullRequestNotice?: string;
 }
 
 export interface ComposerHandle {
 	insertText: (text: string) => void;
+	insertAtCaret: (text: string) => void;
 	applyEdit: (kind: "replace" | "paste", text: string) => void;
 	insertAndSubmit: (text: string, behavior: SubmitBehavior) => void;
 	insertTemplate: (parsed: ParsedTemplate) => void;
@@ -222,7 +249,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	{
 		value,
 		onChange,
+		readDraft,
 		imageOwner,
+		acceptsFiles,
+		onAttachmentNotice,
 		isStreaming,
 		awaitingResponse,
 		growthLimit,
@@ -249,6 +279,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		onPickTemplate,
 		onManageTemplates,
 		templatesEmpty,
+		pullRequests = null,
+		pullRequestNotice,
 	},
 	handleRef,
 ) {
@@ -256,14 +288,16 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const keys = useLocalKeys("composer", LOCAL_KEY_DEFAULTS.composer);
 	const ref = useRef<HTMLTextAreaElement>(null);
 	const pickerRef = useRef<ModelEffortPickerHandle>(null);
+	const chipsRef = useRef<PromptChipsHandle>(null);
 	const [caret, setCaret] = useState(0);
-	const attachedImages = usePromptImages(imageOwner);
-	const { images } = attachedImages;
+	const attachedImages = usePromptImages(imageOwner, acceptsFiles);
+	const { images, files, errors: attachmentErrors, uploading } = attachedImages;
 	const [submitError, setSubmitError] = useState<string | null>(null);
 	const pendingImages = attachedImages.pending;
+	const attachmentCount = images.length + files.length;
 	useEffect(() => {
-		if (images.length === 0) setSubmitError(null);
-	}, [images.length]);
+		if (attachmentCount === 0) setSubmitError(null);
+	}, [attachmentCount]);
 	const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
 	const [mentionDismissed, setMentionDismissed] = useState(false);
 	const [sendMenuOpen, setSendMenuOpen] = useState(false);
@@ -325,7 +359,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		setMentionDismissed(false);
 	}, [mentionQuery]);
 
-	const mentionOpen = !mentionDismissed && mentionQuery !== null && mentionCandidates.length > 0;
+	const mentionOpen =
+		!uploading && !mentionDismissed && mentionQuery !== null && mentionCandidates.length > 0;
 
 	const focusSelection = usePendingSelection(ref, setCaret);
 
@@ -355,7 +390,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	}, []);
 
 	const canSubmit = (raw: string) =>
-		!dictating && !templatePending && pendingImages === 0 && (!!raw.trim() || images.length > 0);
+		!dictating &&
+		!templatePending &&
+		pendingImages === 0 &&
+		!uploading &&
+		(!!raw.trim() || attachmentCount > 0);
 	const canSend = canSubmit(value);
 
 	const openModelPicker = (query: string) => {
@@ -371,21 +410,51 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			openModelPicker(modelQuery);
 			return;
 		}
-		const disposition = onSubmit(
-			text,
-			images.map(({ name, content }) => ({ name, content })),
-			behavior,
-		);
-		if (!disposition.accepted) {
-			setSubmitError(disposition.reason);
+		const sentDraft = value;
+		const sentChips = [...attachmentErrors, ...images, ...files].map((chip) => chip.id);
+		const upload = new AbortController();
+		const failed: ComposerSubmitDisposition = {
+			accepted: false,
+			reason: t("chat.composer.submitFailed"),
+		};
+		const settle = (disposition: ComposerSubmitDisposition) => {
+			if (!disposition.accepted) {
+				if (!upload.signal.aborted) setSubmitError(disposition.reason);
+				return;
+			}
+			setSubmitError(null);
+			onChange(withoutSentDraft(readDraft(), sentDraft));
+			attachedImages.clearSent(sentChips);
+			recallIdxRef.current = null;
+			setSlotSession(null);
+		};
+		let disposition: ComposerSubmitDisposition | Promise<ComposerSubmitDisposition>;
+		try {
+			disposition = onSubmit(
+				text,
+				images.map(({ name, content }) => ({ name, content })),
+				behavior,
+				files,
+				{ signal: upload.signal, onCopied: attachedImages.markCopied },
+			);
+		} catch {
+			disposition = failed;
+		}
+		if (!(disposition instanceof Promise)) {
+			settle(disposition);
 			return;
 		}
-		setSubmitError(null);
-		onChange("");
-		attachedImages.reset();
-		recallIdxRef.current = null;
-		setSlotSession(null);
+		const release = attachedImages.holdForUpload(upload);
+		void disposition
+			.catch(() => failed)
+			.then((settled) => {
+				release();
+				settle(settled);
+			})
+			.finally(release);
 	};
+
+	const holdText = (text: string) => onChange(withRestoredDraft(text, readDraft()));
 
 	const pickMention = (c: MentionCandidate) => {
 		const before = value.slice(0, start);
@@ -408,7 +477,32 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		},
 	});
 
-	const menuOpen = mentionOpen || slashCompletion.open;
+	const prChipRef = useRef<HTMLButtonElement>(null);
+	const pickPullRequest = (index: number) => {
+		const pr = pullRequests?.pick(index);
+		const argument = slashArgument(value, commands);
+		if (pr && argument) replaceDraft(replaceSlashArgument(value, argument, pr.url));
+	};
+	const prCompletion = useArgumentCompletion({
+		value,
+		commands,
+		itemCount: pullRequests?.optionCount ?? 0,
+		isComplete: (argument) =>
+			argument.command.argumentCompletion !== "pull-request" ||
+			isPullRequestArgumentComplete(argument.query),
+		onPick: pickPullRequest,
+		onTab: () => prChipRef.current?.focus(),
+	});
+	const prMenuOpen = !uploading && prCompletion.argument !== null && pullRequests !== null;
+	const tintArgument = slots ? null : slashArgument(value, commands);
+	const tintLink = tintArgument?.query.split(/\s/)[0] ?? "";
+	const promptTint = tintArgument
+		? slashArgumentTint(value, tintArgument, pullRequestReferenceOf(tintLink) ? tintLink.length : 0)
+		: null;
+
+	const slashOpen = !uploading && slashCompletion.open;
+	const menuOpen = mentionOpen || slashOpen || prMenuOpen;
+	const slotsActive = slots !== null && !uploading;
 
 	const openHistory = () => {
 		setMentionDismissed(true);
@@ -417,7 +511,22 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	};
 
 	useImperativeHandle(handleRef, () => ({
-		insertText: (text: string) => replaceDraft(text),
+		insertText: (text: string) => (uploading ? holdText(text) : replaceDraft(text)),
+		insertAtCaret: (text: string) => {
+			if (uploading) {
+				holdText(text);
+				return;
+			}
+			const at = Math.min(caret, value.length);
+			const before = value.slice(0, at);
+			const after = value.slice(at);
+			const lead = before === "" || /\s$/.test(before) ? "" : " ";
+			const trail = after === "" || /^\s/.test(after) ? "" : " ";
+			replaceDraft(
+				`${before}${lead}${text}${trail}${after}`,
+				before.length + lead.length + text.length,
+			);
+		},
 		applyEdit: (kind: "replace" | "paste", text: string) => {
 			const textarea = ref.current;
 			const focused = textarea !== null && textarea === document.activeElement;
@@ -434,9 +543,17 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			);
 		},
 		insertAndSubmit: (text: string, behavior: SubmitBehavior) =>
-			canSubmit(text) ? submitText(text, behavior) : replaceDraft(text),
+			uploading
+				? holdText(text)
+				: canSubmit(text)
+					? submitText(text, behavior)
+					: replaceDraft(text),
 		insertTemplate: (parsed: ParsedTemplate) => {
 			const transition = beginTemplateSlotSession(parsed);
+			if (uploading) {
+				holdText(transition.value);
+				return;
+			}
 			recallIdxRef.current = null;
 			setSubmitError(null);
 			onChange(transition.value);
@@ -458,7 +575,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		ownsEscape: () =>
 			ref.current !== null &&
 			ref.current === document.activeElement &&
-			(menuOpen || slots !== null),
+			(menuOpen || slots !== null || uploading),
 	}));
 
 	const submit = (behavior: SubmitBehavior) => {
@@ -475,6 +592,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
 	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
 		if (isImeComposing(e.nativeEvent)) return;
+		if (uploading && e.key === "Escape" && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+			e.preventDefault();
+			attachedImages.cancelUpload();
+			return;
+		}
 		const local = keys.match(e.nativeEvent);
 		if (onEnterTranscript && local === "composer.enterTranscript") {
 			e.preventDefault();
@@ -490,7 +612,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			return;
 		}
 		const fixed = local === null && !e.altKey && !e.ctrlKey && !e.metaKey;
-		if (fixed && slots && !menuOpen) {
+		if (fixed && slotsActive && !menuOpen) {
 			if (e.key === "Tab") {
 				e.preventDefault();
 				stepSlot(e.shiftKey ? -1 : 1);
@@ -526,8 +648,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				return;
 			}
 		}
-		if (fixed && slashCompletion.handleKeyDown(e)) return;
-		if (composerShiftTabOut(e, menuOpen || slots !== null) && onShiftTabOut?.()) {
+		if (fixed && prMenuOpen && prCompletion.handleKeyDown(e)) return;
+		if (fixed && slashOpen && slashCompletion.handleKeyDown(e)) return;
+		const shiftTabOut = composerShiftTabOut(e, menuOpen || slotsActive);
+		if (shiftTabOut && (onShiftTabOut?.() || chipsRef.current?.focus())) {
 			e.preventDefault();
 			return;
 		}
@@ -543,7 +667,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		}
 		if (local !== null) return;
 		const recallAt = recallIdxRef.current;
-		const recallKey = fixed && !e.shiftKey;
+		const recallKey = fixed && !e.shiftKey && !uploading;
 		if (
 			recallKey &&
 			e.key === "ArrowUp" &&
@@ -581,7 +705,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		}
 	};
 
-	const { onPaste, onDrop } = imagePasteDropHandlers(attachedImages);
+	const { onPaste, onDragOver, onDrop } = attachmentPasteDropHandlers(
+		attachedImages,
+		onAttachmentNotice,
+	);
+	const refocusField = () => focusSelection(caret);
 
 	return (
 		<fieldset
@@ -589,6 +717,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			data-expanded={expanded}
 			data-streaming={isStreaming}
 			aria-label={t("chat.composer.label")}
+			onDragOver={onDragOver}
+			onDrop={onDrop}
 			onMouseDown={(e) => {
 				if (isComposerDeadZone(e, shellRef.current)) {
 					e.preventDefault();
@@ -597,7 +727,19 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			}}
 			className="relative m-0 flex min-w-0 shrink-0 flex-col border-0 border-border-muted border-t bg-container-workspace-bg p-0"
 		>
-			{mentionOpen ? (
+			{prMenuOpen && pullRequests ? (
+				<PullRequestCompletionMenu
+					completion={pullRequests}
+					activeIndex={prCompletion.activeIndex}
+					onPick={pickPullRequest}
+					onHover={prCompletion.setActiveIndex}
+					firstChipRef={prChipRef}
+					onLeaveFilters={() => ref.current?.focus()}
+					{...(pullRequestNotice ? { notice: pullRequestNotice } : {})}
+					anchor={shellRef}
+					className="w-[min(36rem,var(--radix-popover-trigger-width))]"
+				/>
+			) : mentionOpen ? (
 				<div
 					data-testid="mention-menu"
 					className="absolute bottom-full left-12 mb-4 max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-md border border-border-default bg-container-elevated-bg p-4 shadow-[var(--shadow-md)]"
@@ -619,7 +761,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						</button>
 					))}
 				</div>
-			) : slashCompletion.open ? (
+			) : slashOpen ? (
 				<SlashCommandMenu
 					commands={slashCompletion.matches}
 					activeIndex={slashCompletion.activeIndex}
@@ -644,7 +786,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				/>
 			) : null}
 
-			{slots && !menuOpen ? (
+			{slots && !uploading && !menuOpen ? (
 				<TemplateSlotHint
 					activeIndex={slotIdx}
 					count={slots.length}
@@ -655,6 +797,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
 			<PromptImageChips
 				controller={attachedImages}
+				handleRef={chipsRef}
+				onField={refocusField}
+				onTabOut={(backward) => (backward ? pickerRef.current?.focus() : refocusField())}
 				leading={
 					submitError ? (
 						<FileChip
@@ -680,6 +825,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					<div className="col-start-1 row-start-2 flex min-w-0 items-center self-end">
 						<ModelEffortPicker
 							ref={pickerRef}
+							onTriggerKeyDown={(e) => {
+								if (isImeComposing(e.nativeEvent) || e.key !== "Tab" || e.shiftKey) return;
+								if (e.altKey || e.ctrlKey || e.metaKey) return;
+								if (chipsRef.current?.focus()) e.preventDefault();
+							}}
 							models={models}
 							current={currentModel}
 							level={thinkingLevel}
@@ -705,6 +855,26 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						>
 							{`${value}\u200b`}
 						</div>
+						{promptTint ? (
+							<div
+								ref={attachBackdrop}
+								data-testid="prompt-tint"
+								aria-hidden
+								className="pointer-events-none absolute inset-0 overflow-hidden rounded-sm"
+							>
+								<div className="w-full whitespace-pre-wrap break-words px-12 py-8 tr-text-ui">
+									{promptTint.map((segment) => (
+										<span
+											key={segment.start}
+											data-tint={segment.tone === "plain" ? undefined : segment.tone}
+											className={`text-transparent ${promptTintClass(segment.tone)}`}
+										>
+											{segment.text}
+										</span>
+									))}
+								</div>
+							</div>
+						) : null}
 						{slots ? (
 							<div
 								ref={attachBackdrop}
@@ -751,7 +921,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							onClick={(e) => setCaret(e.currentTarget.selectionStart)}
 							onKeyDown={onKeyDown}
 							onPaste={onPaste}
-							onDrop={onDrop}
+							readOnly={uploading}
 							rows={1}
 							placeholder={
 								awaitingResponse
@@ -769,6 +939,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						/>
 					</div>
 					<div className="col-start-3 row-start-2 flex shrink-0 items-center gap-4 self-end">
+						<AttachFilesButton
+							testId="composer-attach"
+							disabled={uploading}
+							onFiles={attachedImages.addFiles}
+							onPicked={refocusField}
+						/>
 						<IconButton
 							icon={History}
 							data-testid="history-open"

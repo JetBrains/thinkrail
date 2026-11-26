@@ -258,4 +258,12 @@ describe("hintAction", () => {
 			expect(HINT_SELECTOR).toContain(part);
 		}
 	});
+
+	it("takes a list or slider only when it can hold focus", () => {
+		const parts = HINT_SELECTOR.split(", ");
+		expect(parts).toContain("[role='listbox'][tabindex]");
+		expect(parts).toContain("[role='slider'][tabindex]");
+		expect(parts).not.toContain("[role='listbox']");
+		expect(parts).not.toContain("[role='slider']");
+	});
 });

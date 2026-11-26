@@ -11,8 +11,8 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
-import { packPiPackage, publishablePiPackages, repoRoot } from "./pi-packages.ts";
+import { basename, dirname, join } from "node:path";
+import { BUN_ONLY, packPiPackage, publishablePiPackages, repoRoot } from "./pi-packages.ts";
 
 interface ScriptedUi {
 	mode: "tui" | "rpc";
@@ -29,12 +29,37 @@ interface ParityCase {
 	expectText?: string[];
 	expectTerminate?: boolean;
 	expectRender?: { width?: number; contains?: string[] };
+	/** Session entries the tool reads through `ctx.sessionManager.getBranch()`. */
+	branch?: unknown[];
+}
+
+/** A slash command run with a scripted context: notifications are collected, print mode's stderr too. */
+interface CommandCase {
+	command: string;
+	name: string;
+	args: string;
+	mode: "tui" | "rpc" | "print";
+	expectLevel?: "info" | "warning" | "error";
+	expectNotify?: string[];
+	expectStderr?: string[];
+	/** Files the run must leave under the agent dir: a folder and a name suffix. */
+	expectFiles?: { dir: string; suffix: string }[];
+}
+
+interface SeedFile {
+	/** Relative to the fixture's agent dir. */
+	path: string;
+	text: string;
 }
 
 interface Expectation {
 	tools: string[];
 	skills: string[];
 	cases: ParityCase[];
+	commands?: string[];
+	commandCases?: CommandCase[];
+	/** Files written into the fixture's agent dir before pi loads, given the fixture project's cwd. */
+	seed?: (cwd: string) => SeedFile[];
 }
 
 const rootManifest = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8")) as {
@@ -69,6 +94,74 @@ const KEY = {
 	tab: "\t",
 	ctrlEnter: "\x1b[13;5u",
 };
+
+/** Three sessions in the fixture project, each running `npm test` once failing and once passing. */
+function insightsSessions(cwd: string): SeedFile[] {
+	const files: SeedFile[] = [];
+	for (let n = 1; n <= 3; n++) {
+		const id = `019a3b1${n}-7c2e-7000-8000-00000000000${n}`;
+		let clock = Date.parse(`2026-11-0${n + 2}T10:00:00.000Z`);
+		let parent: string | null = null;
+		let sequence = 0;
+		const lines: unknown[] = [
+			{ type: "session", version: 3, id, timestamp: new Date(clock).toISOString(), cwd },
+		];
+		const entry = (message: Record<string, unknown>) => {
+			clock += 1000;
+			sequence += 1;
+			const entryId = sequence.toString(16).padStart(8, "0");
+			lines.push({
+				type: "message",
+				id: entryId,
+				parentId: parent,
+				timestamp: new Date(clock).toISOString(),
+				message: { ...message, timestamp: clock },
+			});
+			parent = entryId;
+		};
+		const spend = {
+			input: 1000,
+			output: 100,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 1100,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.01 },
+		};
+		const reply = { api: "faux", provider: "faux", model: "faux-1", usage: spend };
+		entry({ role: "user", content: "Make the tests pass" });
+		for (const failed of [true, false]) {
+			const toolCallId = `call-${n}-${sequence}`;
+			entry({
+				role: "assistant",
+				content: [
+					{ type: "toolCall", id: toolCallId, name: "bash", arguments: { command: "npm test" } },
+				],
+				...reply,
+				stopReason: "toolUse",
+			});
+			entry({
+				role: "toolResult",
+				toolCallId,
+				toolName: "bash",
+				content: [
+					{ type: "text", text: failed ? "Error: 1 failing\nCommand exited with code 1" : "ok" },
+				],
+				isError: failed,
+			});
+		}
+		entry({
+			role: "assistant",
+			content: [{ type: "text", text: "Done." }],
+			...reply,
+			stopReason: "stop",
+		});
+		files.push({
+			path: `sessions/--fixture-project--/2026-11-0${n + 2}T10-00-00-000Z_${id}.jsonl`,
+			text: `${lines.map((line) => JSON.stringify(line)).join("\n")}\n`,
+		});
+	}
+	return files;
+}
 
 const EXPECTATIONS: Record<string, Expectation> = {
 	"@thinkrail/pi-ask-user-question": {
@@ -222,6 +315,108 @@ const EXPECTATIONS: Record<string, Expectation> = {
 			},
 		],
 	},
+	"@thinkrail/pi-next-steps": {
+		tools: ["suggest_next_steps"],
+		skills: [],
+		cases: [
+			{
+				tool: "suggest_next_steps",
+				name: "suggestions-ask-for-the-final-message",
+				args: { suggestions: ["  Run the   e2e suite ", "run the e2e suite", "Open a PR"] },
+				expectText: ["one-click next messages", "Now write your final message"],
+				expectTerminate: false,
+				expectRender: { width: 80, contains: ["1. Run the e2e suite", "2. Open a PR"] },
+			},
+			{
+				tool: "suggest_next_steps",
+				name: "an-answer-written-before-the-call-ends-the-turn",
+				args: { suggestions: ["Open a PR"] },
+				branch: [
+					{
+						type: "message",
+						id: "a1",
+						parentId: null,
+						timestamp: "",
+						message: {
+							role: "assistant",
+							content: [
+								{ type: "text", text: "Fixed. ".repeat(40) },
+								{
+									type: "toolCall",
+									id: "parity-an-answer-written-before-the-call-ends-the-turn",
+									name: "suggest_next_steps",
+									arguments: { suggestions: ["Open a PR"] },
+								},
+							],
+							stopReason: "toolUse",
+							timestamp: 1,
+						},
+					},
+				],
+				expectText: ["Your turn is over"],
+				expectTerminate: true,
+				expectRender: { width: 80, contains: ["1. Open a PR"] },
+			},
+			{
+				tool: "suggest_next_steps",
+				name: "blank-suggestions-still-ask-for-the-final-message",
+				args: { suggestions: ["   "] },
+				expectText: ["No usable suggestions", "Now write your final message"],
+				expectTerminate: false,
+				expectRender: { width: 80, contains: ["No usable suggestions."] },
+			},
+		],
+	},
+	"@thinkrail/pi-session-insights": {
+		tools: [],
+		skills: [],
+		cases: [],
+		commands: ["insights"],
+		seed: insightsSessions,
+		commandCases: [
+			{
+				command: "insights",
+				name: "folder-report",
+				args: "",
+				mode: "tui",
+				expectLevel: "info",
+				expectNotify: [
+					"Session insights · ",
+					"3 sessions",
+					"“npm test” fails in 3 of 6 runs",
+					"$0.09 recorded by pi",
+					"nothing was sent anywhere",
+				],
+			},
+			{
+				command: "insights",
+				name: "session-with-exports",
+				args: "--session 019a3b12 --html --trace",
+				mode: "rpc",
+				expectLevel: "info",
+				expectNotify: ["Session 019a3b12", "1 turn · 3 model calls", "Exported", ".trace.json"],
+				expectFiles: [
+					{ dir: "session-insights", suffix: ".html" },
+					{ dir: "session-insights", suffix: ".trace.json" },
+				],
+			},
+			{
+				command: "insights",
+				name: "print-mode-help",
+				args: "--help",
+				mode: "print",
+				expectStderr: ["Usage: /insights", "without a model or the network"],
+			},
+			{
+				command: "insights",
+				name: "unknown-option-warns",
+				args: "--bogus",
+				mode: "tui",
+				expectLevel: "warning",
+				expectNotify: ["Unknown option --bogus."],
+			},
+		],
+	},
 	"@thinkrail/pi-visualize": {
 		tools: ["visualize"],
 		skills: [],
@@ -297,13 +492,6 @@ const EXPECTATIONS: Record<string, Expectation> = {
 		],
 	},
 };
-
-const BUN_ONLY = [
-	/\bBun\./,
-	/from\s+["']bun(?::|["'])/,
-	/import\s*\(\s*["']bun:/,
-	/import\.meta\.(?:dir|require)\b/,
-];
 
 function fail(message: string): never {
 	console.error(`check-pi-packages: FAIL — ${message}`);
@@ -409,6 +597,11 @@ try {
 			join(agentDir, "settings.json"),
 			JSON.stringify({ packages: [`npm:${pkg.name}`] }, null, 2),
 		);
+		for (const file of expectation.seed?.(cwd) ?? []) {
+			const path = join(agentDir, file.path);
+			mkdirSync(dirname(path), { recursive: true });
+			writeFileSync(path, file.text);
+		}
 
 		const spec = {
 			name: pkg.name,
@@ -419,6 +612,8 @@ try {
 			tools: expectation.tools,
 			skills: expectation.skills,
 			cases: expectation.cases,
+			commands: expectation.commands ?? [],
+			commandCases: expectation.commandCases ?? [],
 		};
 		const specPath = join(agentDir, "parity-spec.json");
 		writeFileSync(specPath, JSON.stringify(spec));

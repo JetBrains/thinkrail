@@ -24,6 +24,7 @@ import {
 } from "./resolve";
 import {
 	keyChords,
+	localIds,
 	SHORTCUT_CATALOG,
 	SHORTCUT_SURFACES,
 	type ShortcutCatalogEntry,
@@ -207,8 +208,15 @@ function catalogEntries(
 	const source = THINKRAIL_SOURCE;
 	const place = { id: entry.id, title: entry.title, position: null, source, surface };
 	if (entry.local !== undefined) {
-		const command = keybindings.byId.get(entry.local);
-		return command ? [commandEntry(command, { ...place, fixed: entry.keys ?? [] }, context)] : [];
+		const ids = localIds(entry);
+		const many = ids.length > 1;
+		const title = many ? (entry.bindingTitle ?? entry.title) : entry.title;
+		return ids.flatMap((id, index) => {
+			const command = keybindings.byId.get(id);
+			if (command === undefined) return [];
+			const at = many ? { id, title, position: index + 1 } : {};
+			return [commandEntry(command, { ...place, ...at, fixed: entry.keys ?? [] }, context)];
+		});
 	}
 	if (entry.keys) {
 		const scope = entry.scope ?? null;

@@ -76,6 +76,7 @@ interface ArtifactRecord {
 	keptCopy?: true;
 	presented?: Presented;
 	picked?: true;
+	published?: true;
 	rounds?: ArtifactRound[];
 }
 
@@ -120,6 +121,7 @@ export type ArtifactSessionEvent =
 			toolName: string;
 			presented?: readonly string[];
 			picked?: readonly string[];
+			published?: readonly string[];
 	  };
 
 const states = new Map<string, WorkspaceArtifacts>();
@@ -198,6 +200,7 @@ function parseArtifact(value: unknown): ArtifactRecord | null {
 			? { presented: value.presented }
 			: {}),
 		...(value.picked === true ? { picked: true as const } : {}),
+		...(value.published === true ? { published: true as const } : {}),
 		...parseRounds(value.rounds),
 	};
 }
@@ -324,11 +327,52 @@ function contextFolder(root: string): "real" | "missing" | "foreign" {
 	return "real";
 }
 
-function skippedEntry(entry: Dirent): boolean {
+function skippedName(name: string, directory: boolean): boolean {
 	return (
-		entry.name.startsWith(DELETE_CLAIM_PREFIX) ||
-		(entry.isDirectory() &&
-			(DEPENDENCY_AND_CACHE_DIRS.has(entry.name) || BUILD_DIRS.has(entry.name)))
+		name.startsWith(DELETE_CLAIM_PREFIX) ||
+		(directory && (DEPENDENCY_AND_CACHE_DIRS.has(name) || BUILD_DIRS.has(name)))
+	);
+}
+
+function skippedEntry(entry: Dirent): boolean {
+	return skippedName(entry.name, entry.isDirectory());
+}
+
+export type ArtifactFileCheck = { path: string } | { error: string };
+
+function artifactPathProblem(root: string, rel: string): string | null {
+	if (!isArtifactPath(rel)) return `it is not inside \`${CONTEXT_PREFIX}\``;
+	const names = rel.slice(CONTEXT_PREFIX.length).split("/");
+	let at = WORKSPACE_CONTEXT_DIR;
+	for (const [index, name] of names.entries()) {
+		at = `${at}/${name}`;
+		const entry = lstatSync(join(root, at), { throwIfNoEntry: false });
+		if (!entry) return "no such file";
+		if (entry.isSymbolicLink()) return "it is a link, and Artifacts lists only real files";
+		const last = index === names.length - 1;
+		if (skippedName(name, !last)) return `Artifacts does not list what is in \`${name}\``;
+		if (last ? !entry.isFile() : !entry.isDirectory()) return "not a regular file";
+	}
+	return null;
+}
+
+export function checkArtifactFiles(paths: readonly string[], cwd: string): ArtifactFileCheck[] {
+	const root = resolve(cwd);
+	const real = contextFolder(root) === "real";
+	const checks = paths.map((path): ArtifactFileCheck => {
+		const abs = resolve(root, path);
+		const rel = isInside(root, abs) ? relative(root, abs).split(sep).join("/") : "";
+		const problem = artifactPathProblem(root, rel);
+		if (problem) return { error: problem };
+		return real ? { path: rel } : { error: `\`${CONTEXT_PREFIX}\` is not a real folder` };
+	});
+	if (!checks.some((check) => "path" in check)) return checks;
+	const scan = scanContext(root);
+	const unreached = scan.complete
+		? "Artifacts does not list it"
+		: `the artifacts folder holds more than ${MAX_ARTIFACT_SCAN_ENTRIES} entries, and Artifacts lists only what its walk reaches first`;
+	return checks.map((check) =>
+		"path" in check && !scan.files.has(check.path) ? { error: unreached } : check,
 	);
 }
 
@@ -541,6 +585,7 @@ function reconcile(workspace: Workspace): boolean {
 			firstSeenAt: prior?.firstSeenAt ?? Date.now(),
 			...(prior?.presented ? { presented: prior.presented } : {}),
 			...(prior?.picked ? { picked: prior.picked } : {}),
+			...(prior?.published ? { published: prior.published } : {}),
 			...(prior?.rounds ? { rounds: prior.rounds } : {}),
 		};
 		const runWriter = writerOf(workspaceId, file.path);
@@ -625,6 +670,7 @@ function toWire(record: ArtifactRecord): WorkspaceArtifact {
 		...(record.sessionId ? { sessionId: record.sessionId } : {}),
 		role,
 		reason,
+		...(record.published ? { published: true as const } : {}),
 		...(record.rounds ? { rounds: record.rounds } : {}),
 	};
 }
@@ -935,6 +981,12 @@ const markPicked = (record: ArtifactRecord) => {
 	return true;
 };
 
+const markPublished = (record: ArtifactRecord) => {
+	if (record.published) return false;
+	record.published = true;
+	return true;
+};
+
 function markReply(workspace: Workspace, sessionId: string): boolean {
 	const reply = replies.get(workspace.id)?.get(sessionId);
 	forgetSession(replies, workspace.id, sessionId);
@@ -1012,7 +1064,12 @@ export async function observeArtifactSessionEvent(
 				markShown,
 			);
 			const picked = markRecords(workspace, toolArtifactPaths(workspace, event.picked), markPicked);
-			if (shown || picked) {
+			const published = markRecords(
+				workspace,
+				toolArtifactPaths(workspace, event.published),
+				markPublished,
+			);
+			if (shown || picked || published) {
 				save(workspaceId, load(workspaceId));
 				changed = true;
 			}

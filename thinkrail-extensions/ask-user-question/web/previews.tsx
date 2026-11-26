@@ -18,6 +18,7 @@ import {
 	useResourceScope,
 } from "@thinkrail/resource-renderers";
 import { Button, IconButton } from "@thinkrail/ui/button";
+import { focusAndReveal, scrollsVertically } from "@thinkrail/ui/focus";
 import { Keycaps } from "@thinkrail/ui/keycaps";
 import { cn } from "@thinkrail/ui/utils";
 import { type FocusEvent, useLayoutEffect, useRef, useState } from "react";
@@ -49,14 +50,6 @@ export function scrollsWithPage(source: PreviewSource | null): boolean {
 	return source !== null && !isHtmlSource(source);
 }
 
-function scrollsVertically(element: HTMLElement): boolean {
-	const { overflowY } = getComputedStyle(element);
-	return (
-		(overflowY === "auto" || overflowY === "scroll") &&
-		element.scrollHeight > element.clientHeight + 1
-	);
-}
-
 export function scrollPreview(pane: HTMLElement, direction: 1 | -1): boolean {
 	const scroller = [pane, ...pane.querySelectorAll<HTMLElement>("*")].find(scrollsVertically);
 	scroller?.scrollBy({ top: direction * 0.9 * scroller.clientHeight });
@@ -66,7 +59,7 @@ export function scrollPreview(pane: HTMLElement, direction: 1 | -1): boolean {
 export function enterPreviewFrame(pane: HTMLElement | null): boolean {
 	const frame = pane?.querySelector("iframe");
 	if (!frame) return false;
-	frame.focus();
+	focusAndReveal(frame);
 	return true;
 }
 

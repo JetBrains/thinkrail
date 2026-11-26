@@ -17,7 +17,8 @@ model *is*; `visualize` is a rendering tool.) It contributes exactly two things,
 `package.json` pi manifest (`pi: { extensions: ["./index.ts"], skills: ["./skills"] }`):
 
 - **`index.ts`** — an `ExtensionFactory` registering one always-on `before_agent_start` rule that,
-  at the start of a new piece of work, sends project onboarding, PR lifecycle work, and every change to
+  at the start of a new piece of work, sends project onboarding, PR lifecycle work, reviewing a pull
+  request the user is not shipping, and every change to
   what the product does (a feature, a behavior change, or a bug fix) to the root router skill
   (`choosing-a-workflow`); the entry model and its rationale live in [[submodule-workflow-skills]]
   (rule 4). Work already routed resumes its active workflow; work that changes no behavior proceeds
@@ -62,7 +63,7 @@ dispatcher to load rather than relying on description-matching (see [[module-web
   tool *name* only: `spec_*` from the portable `pi-spec-graph`, and `ask_user_question` from the portable
   `@thinkrail/pi-ask-user-question` package ([[module-pi-ask-user-question]]) — composed into ThinkRail by
   [[module-ext-ask-user-question]], installable from npm in vanilla `pi`. When the tool is absent
-  (switched off in Settings → Extensions, or never installed), `asking-user-questions` asks the round as a
+  (switched off in Settings → Extensions & skills, or never installed), `asking-user-questions` asks the round as a
   plain chat message and ends the turn, so no workflow blocks on it. The package still does not claim to
   run under vanilla `pi` — it is unpublished and staged only by ThinkRail — and it stays its own package
   rather than folding into `packages/server` for the same reason `packages/shared` isn't folded into

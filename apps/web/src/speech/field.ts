@@ -14,6 +14,10 @@ export interface FieldCandidate {
 	closest(selector: string): unknown;
 }
 
+export function inExcludedRoot(target: Element | null): boolean {
+	return target?.closest(EXCLUDED_ROOTS) != null;
+}
+
 /** Text inputs, textareas and contenteditable regions, outside the code editor and the terminal. */
 export function isDictationField(candidate: FieldCandidate): boolean {
 	if (candidate.closest(EXCLUDED_ROOTS)) return false;

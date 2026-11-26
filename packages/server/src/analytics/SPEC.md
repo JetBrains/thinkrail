@@ -19,7 +19,7 @@ modules remain analytics-free. Sibling dependency edges belong to [[module-serve
   and response capture (`surveyEndpoint`, `SurveyEndpoint`, `captureSurveyResponse`), additional-data
   enablement, error reports (`reportError`, `reportFatalError`, `reportClientError`, `ErrorReport`, `ErrorSource`),
   shutdown/test reset, event types, bucket helpers and `BuildKind`.
-- **Allowed deps:** persistence, log, contracts types, pi-ai's built-in catalog, Node, and `posthog-node`
+- **Allowed deps:** persistence, log, contracts types and `EXTENSION_ASSETS_ROUTE`, pi-ai's built-in catalog, Node, and `posthog-node`
   inside the sink only (`errors.ts` is SDK-free; the sink adapts it into `before_send`).
 - **Forbidden:** importing host/feature siblings; being imported outside host; exposing the installation
   UUID on the wire; copying rich feature payloads into telemetry except the survey response documented
@@ -55,7 +55,7 @@ bounded browser-derived strings, never resource identities or arbitrary product 
 | `setup_state_observed` | Provider/model/project readiness (`yes/no/unknown`); first current observation and changes, not every poll. |
 | `setup_action_finished` | Explicit setup operation, outcome and fixed failure category; automatic Default provisioning is excluded. `directory_pick` is the native folder picker (succeeded / cancelled / failed, never the path); `project_create` is the in-app new-project bootstrap; `project_open` reports the typed `not_git` / `already_open` reasons from the projects module's coded errors, and every untyped failure stays `unknown` — reasons are never derived from error text. |
 | `agent_run_started` | Work-cycle origin, workspace kind and catalog-bucketed provider/model. |
-| `agent_run_settled` | Final outcome, elapsed-time/retry/compaction buckets; only `agent_settled`, never attempt-level `agent_end`. |
+| `agent_run_settled` | Final outcome, elapsed-time/retry/compaction buckets; only `agent_settled`, never attempt-level `agent_end`. A `toolUse` terminal is `normal_stop`: pi settles on one only when a tool batch ended the run (`terminate`, e.g. next-step suggestions or a deferred question); an abort during tools settles as `aborted`. |
 | `task_completed` | Nonempty task-group completion transition after artifact reconciliation, change evidence and whether verification was recorded. |
 | `plan_opened` | The plan surfaced for the user, by `surface` (`page`/`rail`); a deliberate open action, not every plan refetch. |
 | `plan_item_added` | A user-added plan item (`origin:"user"`), by `surface` (`chat`/`page`/`rail`); the user curating the plan, not agent re-plans. |
@@ -151,7 +151,18 @@ normalized `filename`, `lineno`, `colno`, `in_app` and a UUID-shaped `chunk_id`.
 root (repo root from source, the bundle dir when packaged, `Resources/app` for desktop via `appRoot`)
 become root-relative; loopback/`views:` web URLs become `web/…`/`views/…`; `node:` and `native` stay
 as-is; everything else becomes `<external>` with function `?` — user extensions and project files leave
-no name. A relative filename can only come from the CLI binary's embedded source map (Bun remaps frames
+no name. **Installed ThinkRail extensions are third-party code on ThinkRail's own origin and disk**, so
+two cases are carved out of "in-app" and become `<external>` like any other third-party frame: a
+loopback/`views:` URL under the extension asset route (`contracts`' `EXTENSION_ASSETS_ROUTE`, whose path
+carries the package name, version and file hash), and an absolute path under a host-injected
+`foreignFrameRoots()` folder — the installed runtime's `<data dir>/extensions` (install folders and the
+descriptor shims) and every folder source's root, as given and resolved, that ran in this process
+(`InstalledExtensions.codeRoots()`). It is read at each report, so a folder declared later is covered;
+it matters whenever the data dir or a folder source sits inside the app root (source runs from a
+checkout), and is a no-op otherwise. So no package name, version, hash, source path or function name
+of an installed extension reaches a report — web half (`tool-renderer`, `extension-load:*`) or server
+half (an unhandled rejection from its code, a throwing factory) alike; its errors' own messages never
+did. An extension's error class name and `code` pass like any third-party error's. A relative filename can only come from the CLI binary's embedded source map (Bun remaps frames
 relative to its compile directory) and resolves solely through the launcher's `remapBase` to a
 repo-relative JS/TS path, never through `cwd`.
 

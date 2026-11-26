@@ -4,9 +4,9 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 import { type AppConfigUpdate, DEFAULT_CONFIG, normalizeFontSettings } from "@thinkrail/contracts";
 import {
 	createWorkspaceViaDialog,
-	expandDisclosure,
 	hideAuxiliaryWorkbench,
 	openFixtureProject,
+	openSettingsSection,
 	PHONE_VIEWPORT,
 	revealWorkbenchTool,
 } from "./fixtures/app";
@@ -36,10 +36,8 @@ const rootToken = (page: Page, token: string) =>
 	page.evaluate((name) => document.documentElement.style.getPropertyValue(name), token);
 
 async function openFonts(page: Page): Promise<Locator> {
-	const dialog = page.getByTestId("settings-dialog");
-	if (!(await dialog.isVisible())) await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-appearance").click();
-	await expect(dialog.getByTestId("settings-fonts")).toBeVisible();
+	const dialog = await openSettingsSection(page, "text");
+	await expect(dialog.getByTestId("font-interface-trigger")).toBeVisible();
 	return dialog;
 }
 
@@ -78,9 +76,11 @@ test("font settings write the typography tokens, reach every window, and survive
 	expect(await rootToken(page, "--tr-font-size-code")).toBe("");
 
 	const size = dialog.getByTestId("font-code-size-input");
-	await dialog.getByRole("button", { name: "Larger" }).click();
-	await expect(size).toHaveValue("14");
-	await dialog.getByRole("button", { name: "Larger" }).click();
+	await size.fill("25");
+	await expect(size).toHaveAttribute("aria-invalid", "true");
+	await expect(dialog.getByText("Use 10–24")).toBeVisible();
+	await size.fill("15");
+	await size.press("Enter");
 	await expect(size).toHaveValue("15");
 	await expect.poll(() => rootToken(page, "--tr-font-size-code")).toBe("15px");
 	await expect(preview.locator("pre").first()).toHaveCSS("font-size", "15px");
@@ -130,7 +130,7 @@ test("font settings write the typography tokens, reach every window, and survive
 	await expect(reopened.getByTestId("font-ligatures")).toHaveAttribute("data-active", "true");
 
 	const resets = reopened
-		.getByTestId("settings-fonts")
+		.getByTestId("settings-text")
 		.getByRole("button", { name: /^Reset .+ to default$/ });
 	await expect(resets).toHaveCount(5);
 	while ((await resets.count()) > 0) {
@@ -191,7 +191,6 @@ test("the installed list comes from the host's font service, scrolls inside the 
 	writeFileSync(E2E_INSTALLED_FONTS, JSON.stringify({ error: "fc-list is not installed" }));
 	await connect(page);
 	const dialog = await openFonts(page);
-	await expandDisclosure(dialog.getByTestId("font-advanced-toggle"));
 	await dialog.getByTestId("font-code-fallbacks-add").click();
 	await expect(page.getByTestId("font-installed-failed")).toBeVisible();
 

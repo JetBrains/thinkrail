@@ -55,7 +55,13 @@ import type {
 	LayoutToolId,
 	WorkspaceLayoutDocument,
 } from "./types";
-import type { DragData, DropTarget, RegisterChatRename, WorkbenchProps } from "./workbenchShared";
+import type {
+	DragData,
+	DropTarget,
+	RegisterChatRename,
+	TabSelectOptions,
+	WorkbenchProps,
+} from "./workbenchShared";
 import {
 	canInsertDraggedTab,
 	DropZone,
@@ -104,7 +110,7 @@ export interface TabStripProps {
 	maxSideGroups: number;
 	maxBottomGroups: number;
 	draggingTab: LayoutTab | null;
-	onSelect: (tabId: string, keep?: boolean) => void;
+	onSelect: (tabId: string, options?: TabSelectOptions) => void;
 	onClose: (tab: LayoutTab) => void;
 	onApply: (result: LayoutMutationResult) => void;
 	onFocusAdjacentGroup: (delta: -1 | 1, fromGroupId?: string) => void;
@@ -113,6 +119,7 @@ export interface TabStripProps {
 	onRenameChat: WorkbenchProps["onRenameChat"];
 	registerChatRename?: RegisterChatRename | undefined;
 	chatFirstPrompts?: WorkbenchProps["chatFirstPrompts"];
+	chatActions?: WorkbenchProps["chatActions"];
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
 	splitGeometry?: CenterSplitGeometry;
@@ -147,6 +154,7 @@ export const TabStrip = memo(function TabStrip({
 	onRenameChat,
 	registerChatRename,
 	chatFirstPrompts,
+	chatActions,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
 	splitGeometry,
@@ -161,9 +169,9 @@ export const TabStrip = memo(function TabStrip({
 	const overflowFocusTarget = useRef<string | null>(null);
 	const [overflowOpen, setOverflowOpen] = useState(false);
 	const overflowing = scrollOverflow.before || scrollOverflow.after;
-	const selectTab = (tabId: string, keep?: boolean) => {
+	const selectTab = (tabId: string, options?: TabSelectOptions) => {
 		selectionEpochRef.current += 1;
-		onSelect(tabId, keep);
+		onSelect(tabId, options);
 	};
 	const applyResult = (result: LayoutMutationResult) => {
 		selectionEpochRef.current += 1;
@@ -259,6 +267,7 @@ export const TabStrip = memo(function TabStrip({
 							onRenameChat={onRenameChat}
 							registerChatRename={registerChatRename}
 							{...(chatFirstPrompts ? { chatFirstPrompts } : {})}
+							{...(chatActions ? { chatActions } : {})}
 							canFocusAdjacentGroup={canFocusAdjacentGroup}
 							renderTabAdornment={renderTabAdornment}
 							worktreePath={worktreePath}
@@ -405,7 +414,7 @@ export interface WorkbenchTabProps {
 	maxSideGroups: number;
 	maxBottomGroups: number;
 	register: (node: HTMLElement | null) => void;
-	onSelect: (tabId: string, keep?: boolean) => void;
+	onSelect: (tabId: string, options?: TabSelectOptions) => void;
 	onClose: () => void;
 	onApply: (result: LayoutMutationResult) => void;
 	onFocusAdjacentGroup: (delta: -1 | 1, fromGroupId?: string) => void;
@@ -414,6 +423,7 @@ export interface WorkbenchTabProps {
 	onRenameChat: WorkbenchProps["onRenameChat"];
 	registerChatRename?: RegisterChatRename | undefined;
 	chatFirstPrompts?: WorkbenchProps["chatFirstPrompts"];
+	chatActions?: WorkbenchProps["chatActions"];
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
 	worktreePath: string;
@@ -446,6 +456,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 	onRenameChat,
 	registerChatRename,
 	chatFirstPrompts,
+	chatActions,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
 	worktreePath,
@@ -552,13 +563,13 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 			) {
 				return;
 			}
-			onSelect(tab.id, true);
+			onSelect(tab.id, { keep: true, moveFocus: false });
 		}, DOUBLE_CLICK_SETTLE_MS);
 	};
 	const selectFromDoubleClick = () => {
 		if (pendingPreviewKeep.current) clearTimeout(pendingPreviewKeep.current);
 		pendingPreviewKeep.current = null;
-		onSelect(tab.id, true);
+		onSelect(tab.id, { keep: true });
 	};
 	const beforeIndex = rail?.beforeIndex ?? index;
 	const afterIndex = rail?.afterIndex ?? index + 1;
@@ -590,7 +601,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 	const chatTitle =
 		tab.kind === "chat" ? chatLabel(t, tab.name, chatFirstPrompts?.[tab.sessionId]) : undefined;
 	const focusTab = (keep: boolean) => {
-		onSelect(tab.id, keep);
+		onSelect(tab.id, { keep });
 		focusControl();
 	};
 
@@ -724,6 +735,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 							icon={X}
 							label={t("workbench.tab.closeNamed", { name })}
 							tabIndex={-1}
+							data-hint-reveal
 							data-testid={tab.kind === "terminal" ? "terminal-tab-close" : "editor-tab-close"}
 							onClick={onClose}
 							className="mr-4 shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
@@ -752,6 +764,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 						canRenameChat: onRenameChat !== undefined,
 						worktreePath,
 						chatFirstPrompts,
+						chatActions,
 					}}
 					handlers={{
 						apply: onApply,

@@ -38,6 +38,7 @@ export {
 	stopWorkspaceCreations,
 	WorkspaceCreationStopped,
 } from "./creations";
+export { previewRefPaths } from "./refPreview";
 export { resolveWorkspacePath } from "./resolvePath";
 export {
 	backfillWorkspaceActivity,

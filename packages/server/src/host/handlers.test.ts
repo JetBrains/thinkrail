@@ -17,6 +17,8 @@ import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type {
 	AppConfig,
 	Project,
+	SlashCommandInfo,
+	SubagentCatalogEntry,
 	Template,
 	TemplateInfo,
 	WireModel,
@@ -43,6 +45,7 @@ import {
 } from "../agent";
 import { initializeAnalytics, resetAnalyticsForTests, shutdownAnalytics } from "../analytics";
 import { reconcileArtifacts } from "../artifacts";
+import { serverExtensions } from "../extensions";
 import {
 	configureSurveySource,
 	recordAcceptedMessage,
@@ -52,7 +55,7 @@ import {
 } from "../feedback";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
 import { addComment, getReviewSnapshot } from "../reviews";
-import { resetConfigCache } from "../settings";
+import { getConfig, resetConfigCache, setSettingsPublisher, updateConfig } from "../settings";
 import { listTerminals } from "../terminal";
 import { todoReviewRecord } from "../todos";
 import { setTrashImplementationForTests } from "../trash";
@@ -67,6 +70,7 @@ import {
 import {
 	handleRequest,
 	openReviewForClient,
+	releaseDisabledExtensionQueries,
 	requestMethodDiagnostic,
 	shouldRefreshOpenReview,
 	workspaceCreationHandoff,
@@ -232,6 +236,19 @@ test("file mutation handlers invalidate watcher-ignored paths after success", as
 		{ workspaceId: "w1", paths: ["node_modules/demo"], truncated: false, skillChange: "unknown" },
 	]);
 	expect(existsSync(directory)).toBe(false);
+});
+
+test("fs.reveal refuses entries outside the worktree or missing from it", async () => {
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify([{ id: "wa", projectId: "p1", name: "a", worktreePath: repo, createdAt: 1 }]),
+	);
+	await expect(
+		handleRequest("fs.reveal", { workspaceId: "wa", path: "../outside.md" }, CTX),
+	).rejects.toThrow(/escapes the worktree/);
+	await expect(
+		handleRequest("fs.reveal", { workspaceId: "wa", path: ".thinkrail/context/gone.md" }, CTX),
+	).rejects.toThrow(/Not found/);
 });
 
 test("user file mutations keep the artifact index honest", async () => {
@@ -744,6 +761,59 @@ test("template reads resolve a project's current checkout and reject ambiguous l
 	}
 });
 
+test("skill and template previews read the selected base branch instead of the checkout", async () => {
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([
+			{
+				id: "p1",
+				name: "repo",
+				path: repo,
+				slug: "repo",
+				lastOpened: 1,
+				trusted: true,
+				piResourceTrust: "granted",
+			},
+		]),
+	);
+	git(repo, "switch", "-c", "next");
+	mkdirSync(join(repo, ".agents", "skills", "upgrade"), { recursive: true });
+	writeFileSync(
+		join(repo, ".agents", "skills", "upgrade", "SKILL.md"),
+		"---\nname: upgrade\ndescription: Upgrade a core dependency.\n---\nBody\n",
+	);
+	mkdirSync(join(repo, ".pi", "prompts"), { recursive: true });
+	writeFileSync(join(repo, ".pi", "prompts", "kickoff.md"), "branch body");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "resources");
+	git(repo, "switch", "main");
+
+	const names = (commands: unknown) => (commands as SlashCommandInfo[]).map((c) => c.name);
+	expect(names(await handleRequest("skill.list", { projectId: "p1" }, CTX))).not.toContain(
+		"skill:upgrade",
+	);
+	expect(
+		names(await handleRequest("skill.list", { projectId: "p1", baseRef: "next" }, CTX)),
+	).toContain("skill:upgrade");
+	const listed = (await handleRequest(
+		"template.list",
+		{ projectId: "p1", baseRef: "next" },
+		CTX,
+	)) as { templates: TemplateInfo[] };
+	expect(listed.templates).toContainEqual(
+		expect.objectContaining({ name: "kickoff", scope: "project" }),
+	);
+	const template = (await handleRequest(
+		"template.get",
+		{ projectId: "p1", baseRef: "next", name: "kickoff" },
+		CTX,
+	)) as Template;
+	expect(template.content).toBe("branch body");
+	expect(
+		names(await handleRequest("skill.list", { projectId: "p1", baseRef: "gone" }, CTX)),
+	).not.toContain("skill:upgrade");
+});
+
 test("a background create hands the finished workspace a terminal and the held chat", async () => {
 	const cleanup = await setupDefaultModelRuntime();
 	setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd, { id: "kickoff-chat" }));
@@ -856,7 +926,9 @@ test("extension.list reflects disabledExtensions written through settings.update
 			description: expect.any(String),
 			enabled: true,
 			tools: ["visualize"],
+			hasParentExtensions: true,
 			hasChildExtensions: false,
+			kind: "builtin",
 		},
 		{
 			name: "ask-user-question",
@@ -864,8 +936,10 @@ test("extension.list reflects disabledExtensions written through settings.update
 			description: expect.any(String),
 			enabled: true,
 			tools: ["ask_user_question"],
+			hasParentExtensions: true,
 			hasChildExtensions: false,
 			settings: [{ key: "richPreviews", default: true }],
+			kind: "builtin",
 		},
 		{
 			name: "web-access",
@@ -873,7 +947,41 @@ test("extension.list reflects disabledExtensions written through settings.update
 			description: expect.any(String),
 			enabled: true,
 			tools: ["web_search", "source_check", "fetch_content", "get_search_content", "web_enable"],
+			hasParentExtensions: true,
 			hasChildExtensions: true,
+			kind: "builtin",
+		},
+		{
+			name: "next-steps",
+			title: "Next-step suggestions",
+			description: expect.any(String),
+			enabled: true,
+			tools: ["suggest_next_steps"],
+			hasParentExtensions: true,
+			hasChildExtensions: false,
+			kind: "builtin",
+		},
+		{
+			name: "outputs",
+			title: "Outputs",
+			description: expect.any(String),
+			enabled: true,
+			tools: ["present_files"],
+			hasParentExtensions: true,
+			hasChildExtensions: false,
+			kind: "builtin",
+		},
+		{
+			name: "session-insights",
+			title: "Session insights",
+			description: expect.any(String),
+			enabled: true,
+			tools: [],
+			hasParentExtensions: false,
+			hasChildExtensions: false,
+			apiVersion: serverExtensions().find((entry) => entry.extension.name === "session-insights")
+				?.extension.apiVersion,
+			kind: "builtin",
 		},
 	]);
 	await handleRequest(
@@ -885,13 +993,116 @@ test("extension.list reflects disabledExtensions written through settings.update
 		{ name: "visualize", enabled: false },
 		{ name: "ask-user-question", enabled: true },
 		{ name: "web-access", enabled: false },
+		{ name: "next-steps", enabled: true },
+		{ name: "outputs", enabled: true },
+		{ name: "session-insights", enabled: true },
 	]);
 	await handleRequest("settings.update", { config: { disabledExtensions: [] } }, CTX);
 	expect(await handleRequest("extension.list", {}, CTX)).toMatchObject([
 		{ name: "visualize", enabled: true },
 		{ name: "ask-user-question", enabled: true },
 		{ name: "web-access", enabled: true },
+		{ name: "next-steps", enabled: true },
+		{ name: "outputs", enabled: true },
+		{ name: "session-insights", enabled: true },
 	]);
+});
+
+test("extension.query refuses unknown queries and a switched-off extension with their codes", async () => {
+	await expect(
+		handleRequest("extension.query", { extension: "retired", method: "rows" }, CTX),
+	).rejects.toMatchObject({ code: "UNKNOWN_EXTENSION_QUERY" });
+	await expect(
+		handleRequest("extension.query", { extension: "visualize", method: "rows" }, CTX),
+	).rejects.toMatchObject({ code: "UNKNOWN_EXTENSION_QUERY" });
+	await expect(
+		handleRequest("extension.query", { method: "rows" } as never, CTX),
+	).rejects.toMatchObject({ code: "UNKNOWN_EXTENSION_QUERY" });
+	await handleRequest("settings.update", { config: { disabledExtensions: ["visualize"] } }, CTX);
+	await expect(
+		handleRequest("extension.query", { extension: "visualize", method: "rows" }, CTX),
+	).rejects.toMatchObject({ code: "EXTENSION_DISABLED" });
+	await handleRequest("settings.update", { config: { disabledExtensions: [] } }, CTX);
+	await expect(
+		handleRequest("extension.query", { extension: "visualize", method: "rows" }, CTX),
+	).rejects.toMatchObject({ code: "UNKNOWN_EXTENSION_QUERY" });
+});
+
+test("extension.query answers session insights' sessions.list over the host's sessions, and refuses it while off", async () => {
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify([
+			{ id: "w1", projectId: "p1", name: "Default", worktreePath: repo, createdAt: 1 },
+		]),
+	);
+	const agentDir = process.env.PI_CODING_AGENT_DIR ?? join(dataDir, "pi");
+	const at = Date.parse("2026-11-01T10:00:00.000Z");
+	const fixture = writeFixtureSession(defaultSessionDirFor(agentDir, repo), {
+		cwd: repo,
+		name: "Insights fixture",
+		messages: [
+			{ role: "user", text: "List the sessions", timestamp: at },
+			{ role: "assistant", text: "Done.", timestamp: at + 60_000 },
+		],
+	});
+	const request = {
+		extension: "session-insights",
+		method: "sessions.list",
+		params: { scope: { kind: "project", projectId: "p1" } },
+	};
+	type ListAnswer = {
+		apiVersion: number;
+		state: { phase: string };
+		projects: unknown[];
+		rows: {
+			sessionId: string;
+			workspaceId: string | null;
+			workspaceState: string;
+			title: string | null;
+			live: boolean;
+		}[];
+	};
+	let answer: ListAnswer | undefined;
+	const deadline = Date.now() + 10_000;
+	while (Date.now() < deadline) {
+		answer = (await handleRequest("extension.query", request, CTX)) as ListAnswer;
+		if (answer.state.phase === "ready" && answer.rows.length > 0) break;
+		await Bun.sleep(100);
+	}
+	expect(answer?.apiVersion).toBe(
+		serverExtensions().find((entry) => entry.extension.name === "session-insights")?.extension
+			.apiVersion ?? -1,
+	);
+	expect(answer?.projects).toEqual([{ id: "p1", name: "repo", kind: "repository" }]);
+	expect(answer?.rows).toMatchObject([
+		{
+			sessionId: fixture.id,
+			workspaceId: "w1",
+			workspaceState: "open",
+			title: "Insights fixture",
+			live: false,
+		},
+	]);
+	await expect(
+		handleRequest("extension.query", { ...request, params: { scope: { kind: "nope" } } }, CTX),
+	).rejects.toThrow("Invalid sessions.list params");
+	await handleRequest(
+		"settings.update",
+		{ config: { disabledExtensions: ["session-insights"] } },
+		CTX,
+	);
+	await expect(handleRequest("extension.query", request, CTX)).rejects.toMatchObject({
+		code: "EXTENSION_DISABLED",
+	});
+	releaseDisabledExtensionQueries();
+	await handleRequest("settings.update", { config: { disabledExtensions: [] } }, CTX);
+	let rebuilt: ListAnswer | undefined;
+	while (Date.now() < deadline + 10_000) {
+		rebuilt = (await handleRequest("extension.query", request, CTX)) as ListAnswer;
+		if (rebuilt.state.phase === "ready" && rebuilt.rows.length > 0) break;
+		await Bun.sleep(100);
+	}
+	expect(rebuilt?.rows.map((row) => row.sessionId)).toEqual([fixture.id]);
 });
 
 test("disabled JetBrains quota returns hidden through its handler", async () => {
@@ -1540,5 +1751,120 @@ test("resource handlers scope every read/control to a registered workspace and a
 		else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
 		if (priorOffline === undefined) delete process.env.PI_OFFLINE;
 		else process.env.PI_OFFLINE = priorOffline;
+	}
+});
+
+test("subagent.list admits only pi-resource-trusted workspace metadata and never arbitrary cwd", async () => {
+	const define = (dir: string, name: string, extra = "") => {
+		mkdirSync(dir, { recursive: true });
+		writeFileSync(
+			join(dir, `${name}.md`),
+			`---\nname: ${name}\ndescription: ${name} description\n${extra}---\nSECRET PROMPT`,
+		);
+	};
+	define(
+		join(dataDir, "pi", "agents"),
+		"personal-role",
+		"model: provider/pinned\nthinking: high\n",
+	);
+	define(join(repo, ".pi", "agents"), "project-role");
+	define(join(repo, ".agents", "agents"), "other-project-role");
+	define(join(repo, ".pi", "agents"), "scout");
+	define(join(repo, ".pi", "agents"), "personal-role");
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify([
+			{ id: "w1", projectId: "p1", name: "Default", worktreePath: repo, createdAt: 1 },
+		]),
+	);
+	const list = (params: unknown = {}) =>
+		handleRequest("subagent.list", params, CTX) as Promise<SubagentCatalogEntry[]>;
+	const personal: SubagentCatalogEntry = {
+		name: "personal-role",
+		description: "personal-role description",
+		source: "personal",
+		model: "provider/pinned",
+		thinking: "high",
+	};
+	expect(await list()).toContainEqual(personal);
+	expect((await list({ cwd: repo })).some((entry) => entry.source === "project")).toBe(false);
+	expect((await list({ workspaceId: "w1" })).some((entry) => entry.source === "project")).toBe(
+		false,
+	);
+	await handleRequest("project.setTrust", { id: "p1", trusted: true }, CTX);
+	expect((await list({ workspaceId: "w1" })).some((entry) => entry.source === "project")).toBe(
+		false,
+	);
+	await handleRequest("project.setTrust", { id: "p1", trusted: true, resources: true }, CTX);
+	const trusted = await list({ workspaceId: "w1", cwd: "/not-used" });
+	expect((await list()).some((entry) => entry.source === "project")).toBe(false);
+	expect(trusted).toContainEqual(personal);
+	expect(trusted.find((entry) => entry.name === "scout")?.source).toBe("builtin");
+	expect(
+		trusted
+			.filter((entry) => entry.source === "project")
+			.map((entry) => entry.name)
+			.sort(),
+	).toEqual(["other-project-role", "project-role"]);
+	for (const entry of trusted) {
+		expect(
+			Object.keys(entry).every((key) =>
+				["name", "description", "source", "model", "thinking"].includes(key),
+			),
+		).toBe(true);
+	}
+	expect(JSON.stringify(trusted)).not.toContain("SECRET PROMPT");
+	await handleRequest(
+		"settings.update",
+		{ config: { disabledSubagents: ["project-role", "missing", "project-role"] } },
+		CTX,
+	);
+	expect(await list({ workspaceId: "w1" })).toEqual(trusted);
+	await handleRequest("project.setTrust", { id: "p1", trusted: false }, CTX);
+	expect((await list({ workspaceId: "w1" })).some((entry) => entry.source === "project")).toBe(
+		false,
+	);
+	await expect(list({ workspaceId: "unknown" })).rejects.toThrow("Unknown workspace");
+});
+
+test("subagent.setEnabled retains unknown names and rejects malformed payloads without mutation or publication", async () => {
+	updateConfig({ disabledSubagents: ["temporarily-missing"] });
+	await handleRequest("subagent.setEnabled", { name: "unlisted-role", enabled: false }, CTX);
+	expect(getConfig().disabledSubagents).toEqual(["temporarily-missing", "unlisted-role"]);
+	const before = getConfig();
+	const stored = readFileSync(join(dataDir, "config.json"), "utf8");
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	try {
+		for (const params of [
+			undefined,
+			null,
+			[],
+			"scout",
+			false,
+			1,
+			{},
+			{ enabled: false },
+			{ name: "scout" },
+			{ name: "", enabled: false },
+			{ name: " \t", enabled: true },
+			{ name: null, enabled: false },
+			{ name: 1, enabled: false },
+			{ name: ["scout"], enabled: false },
+			{ name: {}, enabled: false },
+			{ name: "scout", enabled: "false" },
+			{ name: "scout", enabled: 0 },
+			{ name: "scout", enabled: null },
+			{ name: "scout", enabled: [] },
+			{ name: "scout", enabled: {} },
+			{ cwd: repo, disabledSubagents: ["scout"] },
+		]) {
+			await expect(handleRequest("subagent.setEnabled", params, CTX)).rejects.toThrow();
+		}
+		expect(getConfig()).toBe(before);
+		expect(readFileSync(join(dataDir, "config.json"), "utf8")).toBe(stored);
+		expect(published).toEqual([]);
+	} finally {
+		setSettingsPublisher(null);
 	}
 });

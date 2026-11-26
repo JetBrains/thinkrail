@@ -3,6 +3,7 @@ import type {
 	AskUserQuestionDiscussReason,
 	AskUserQuestionItem,
 } from "@thinkrail/pi-ask-user-question/core";
+import { focusAndReveal } from "@thinkrail/ui/focus";
 import type { LocalKeys } from "@thinkrail/ui/local-keys";
 import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
@@ -60,8 +61,9 @@ export interface QuestionBodyProps {
 	onTogglePreview: () => void;
 }
 
-const focusOf = (element: HTMLElement | null | undefined) =>
-	element?.focus({ preventScroll: true });
+const focusOf = (element: HTMLElement | null | undefined) => {
+	if (element) focusAndReveal(element);
+};
 
 export function QuestionBody({
 	question,
@@ -149,7 +151,7 @@ export function QuestionBody({
 	const rowKeys = (source: PreviewSource | null) =>
 		[
 			ROW_KEYS,
-			pageKeys ? "ArrowLeft ArrowRight" : "",
+			pageKeys ? "ArrowLeft ArrowRight" : "ArrowRight",
 			scrollsWithPage(source) ? "PageUp PageDown" : "",
 			keys.aria(
 				...[

@@ -49,6 +49,7 @@ not reproduce.
 | Command | Handler | Context / gate | Palette |
 | --- | --- | --- | --- |
 | `workspace.new` New workspace… (`Mod+N`; `Mod+Alt+N` shown in a browser) | shell `NewWorkspaceDialog` | context repository (`selectContextRepoProject`, never the Chats container) | yes |
+| `workspace.reviewPr` Review a pull request… | shell `NewWorkspaceDialog`, opened with `/skill:reviewing-a-pr ` seeded so its pull-request completion is open (`chat/pullRequestArguments`' `REVIEW_PULL_REQUEST_PROMPT`) | context repository and a v133+ host (`supportsPullRequestReview`) | yes |
 | `chat.newProjectless` New chat without a project | `panels/chatActions.startProjectlessChat` | a host with chats without a project (`canStartProjectlessChat`) | yes |
 | Start work from the typed text (the Start work row, `Mod+↵` from any row) | the same shell `NewWorkspaceDialog`, opened with the text as its prompt through `PaletteStart.openDialog` — nothing starts without the dialog | a context repository, or a host with chats without a project (the dialog then opens on its chat target); a typed query in All or Work | yes |
 | `workspace.openDefault` Work in project folder | `panels/defaultWorkspace.enterDefaultWorkspace` | context repository | yes |
@@ -59,6 +60,7 @@ not reproduce.
 | Reopen a recent project | `AddProjectMenu` recents | a recent path | Row UI |
 | `chat.history` Search chat history (`Ctrl+R`) | `shell/chordActions.openChatHistory` | a chat tab | yes |
 | `view.show.{specs,files,artifacts,review,plan}` (every `LayoutToolId` but `projects`) | `store.requestToolView` | active workspace | yes |
+| `view.extension.<ext>.<panel>` Open *panel title* (one per extension panel; the chord of its `rail.command` when it names one) | `shell/extensionPanelHost.openExtensionPanel`, on Project Home `openExtensionPanelInProject` | an openable panel whose `scopes` include `project`; an active workspace or a context repository | yes |
 | `view.toggleLeft/Right/Bottom` (`Mod+B`/`Mod+J`/`Mod+Shift+J`) | `shell/chordActions` (the functions the chords run) | right/bottom need a workspace | yes |
 | `view.zoomIn` / `zoomOut` / `zoomReset` Zoom in / out / Reset zoom (`Mod+=` / `Mod+-` / `Mod+Numpad0`, the desktop preload's chords) | `NativePageZoomBridge.request` | the desktop page-zoom bridge | yes |
 | `settings.open` and every Settings section (incl. Keyboard's double-Shift row, Extensions, MCP servers) | `store.openSettings(section)`; the native menu's `Mod+,` is shown where it exists | protocol-gated sections only | yes |

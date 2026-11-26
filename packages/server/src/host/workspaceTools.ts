@@ -9,6 +9,7 @@ import type {
 	Workspace,
 	WorkspaceKickoff,
 } from "@thinkrail/contracts";
+import { withAttachedFiles } from "@thinkrail/contracts";
 import {
 	getSessionWorkspaceId,
 	listSessions,
@@ -145,11 +146,6 @@ export function prepareAttachments(paths: readonly string[], cwd: string): Prepa
 	return prepared;
 }
 
-export function composePrompt(prompt: string, files: readonly string[]): string {
-	if (files.length === 0) return prompt;
-	return `${prompt}\n\nAttached files:\n${files.map((file) => `- ${file}`).join("\n")}`;
-}
-
 async function defaultBaseBranch(projectId: string, signal?: AbortSignal): Promise<string> {
 	const { defaultBranch } = await listBranches(projectId);
 	try {
@@ -202,7 +198,7 @@ export async function startWorkspace(
 	const baseRef = params.base_branch?.trim() || (await deps.defaultBaseBranch(project.id, signal));
 	if (signal?.aborted) throw new Error(NOTHING_CREATED);
 	const kickoff: WorkspaceKickoff = {
-		text: composePrompt(prompt, files),
+		text: withAttachedFiles(prompt, files),
 		...(images.length > 0 ? { images } : {}),
 		...(model ? { model } : {}),
 		...(params.effort ? { thinkingLevel: params.effort } : {}),

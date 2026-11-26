@@ -4,6 +4,7 @@ import {
 	ARROW_TWINS_SCOPE,
 	type LocalKeyCommand,
 } from "@thinkrail/ui/keyboard";
+import { READING_COMMANDS, READING_SCOPE } from "@thinkrail/ui/reading";
 import type { PhysicalChord } from "./keybindings";
 
 export interface LocalScopeInfo {
@@ -19,6 +20,10 @@ export const LOCAL_SCOPES = {
 	[ARROW_TWINS_SCOPE]: {
 		where: "shortcuts.scope.arrows.where",
 		inside: "shortcuts.scope.arrows.inside",
+	},
+	[READING_SCOPE]: {
+		where: "shortcuts.scope.reading.where",
+		inside: "shortcuts.scope.reading.inside",
 	},
 	tabs: {
 		where: "shortcuts.scope.tabs.where",
@@ -45,14 +50,37 @@ export const LOCAL_SCOPES = {
 	transcript: {
 		where: "shortcuts.scope.transcript.where",
 		inside: "shortcuts.scope.transcript.inside",
-		includes: ARROWS,
+		includes: [ARROW_TWINS_SCOPE, READING_SCOPE],
 	},
-	composer: { where: "shortcuts.scope.composer.where", inside: "shortcuts.scope.composer.inside" },
+	reader: {
+		where: "shortcuts.scope.reader.where",
+		inside: "shortcuts.scope.reader.inside",
+		includes: [ARROW_TWINS_SCOPE, READING_SCOPE],
+	},
+	composer: {
+		where: "shortcuts.scope.composer.where",
+		inside: "shortcuts.scope.composer.inside",
+	},
 	history: { where: "shortcuts.scope.history.where", inside: "shortcuts.scope.history.inside" },
 	palette: { where: "shortcuts.scope.palette.where", inside: "shortcuts.scope.palette.inside" },
 	findInFiles: {
 		where: "shortcuts.scope.findInFiles.where",
 		inside: "shortcuts.scope.findInFiles.inside",
+	},
+	"settings.nav": {
+		where: "shortcuts.scope.settingsNav.where",
+		inside: "shortcuts.scope.settingsNav.inside",
+		includes: ARROWS,
+	},
+	settings: {
+		where: "shortcuts.scope.settings.where",
+		inside: "shortcuts.scope.settings.inside",
+		includes: ARROWS,
+	},
+	"settings.list": {
+		where: "shortcuts.scope.settingsList.where",
+		inside: "shortcuts.scope.settingsList.inside",
+		includes: ARROWS,
 	},
 } as const satisfies Record<string, LocalScopeInfo>;
 
@@ -102,6 +130,7 @@ export const APP_LOCAL_COMMANDS: readonly LocalCommandDefaults[] = [
 		title: null,
 		chords,
 	})),
+	...READING_COMMANDS.map(({ id, chords }) => ({ id, scope: READING_SCOPE, title: null, chords })),
 	local("tabs", "close", DELETE),
 	local("tabs", "moveBefore", { ...LEFT, ...MOVE }),
 	local("tabs", "moveAfter", { ...RIGHT, ...MOVE }),
@@ -136,6 +165,9 @@ export const APP_LOCAL_COMMANDS: readonly LocalCommandDefaults[] = [
 	local("findInFiles", "openKept", ...enter({ mod: true })),
 	local("findInFiles", "matchCase", letter("C", { alt: true })),
 	local("findInFiles", "wholeWord", letter("W", { alt: true })),
+	local("settings.nav", "search", letter("S"), { code: "Slash", key: "/" }),
+	local("settings", "reset", DELETE),
+	local("settings.list", "remove", DELETE),
 ];
 
 export const APP_LOCAL_SCOPES: readonly LocalScopeDeclaration[] = Object.entries(LOCAL_SCOPES).map(
@@ -154,16 +186,21 @@ function scopeDefaults(scope: AppLocalScope): readonly LocalKeyCommand[] {
 
 export const LOCAL_KEY_DEFAULTS: Readonly<Record<AppLocalScope, readonly LocalKeyCommand[]>> = {
 	[ARROW_TWINS_SCOPE]: scopeDefaults(ARROW_TWINS_SCOPE),
+	[READING_SCOPE]: scopeDefaults(READING_SCOPE),
 	tabs: scopeDefaults("tabs"),
 	rails: scopeDefaults("rails"),
 	trees: scopeDefaults("trees"),
 	review: scopeDefaults("review"),
 	"review.surface": scopeDefaults("review.surface"),
 	transcript: scopeDefaults("transcript"),
+	reader: scopeDefaults("reader"),
 	composer: scopeDefaults("composer"),
 	history: scopeDefaults("history"),
 	palette: scopeDefaults("palette"),
 	findInFiles: scopeDefaults("findInFiles"),
+	"settings.nav": scopeDefaults("settings.nav"),
+	settings: scopeDefaults("settings"),
+	"settings.list": scopeDefaults("settings.list"),
 };
 
 export function isAppLocalScope(scope: string): scope is AppLocalScope {

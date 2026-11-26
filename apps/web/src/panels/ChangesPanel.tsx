@@ -1,8 +1,10 @@
 import type { GitFileChange, GitStatus } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { DiffStatBadge } from "@thinkrail/ui/diff-stat-badge";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { useTreeItem } from "@thinkrail/ui/tree-item";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { firstClickOnly } from "../lib";
 import {
@@ -29,10 +31,9 @@ import { ChangeRowActions } from "./ChangeRowActions";
 import { ChangesScopeMenu } from "./ChangesScopeMenu";
 import { ChangesTree } from "./ChangesTree";
 import { changesTabId, scopeKey, splitPath, statusNameClass } from "./changesModel";
-import { DiffStatBadge } from "./DiffStatBadge";
 import { openChangesTab, openDiffInTab } from "./openTabs";
 import { RememberedScrollArea } from "./RememberedScrollArea";
-import { Tree, useTreeItem } from "./treeNavigation";
+import { Tree } from "./treeNavigation";
 import { ViewedMark } from "./ViewedMark";
 
 function selectReviewTab(

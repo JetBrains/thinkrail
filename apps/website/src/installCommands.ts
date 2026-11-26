@@ -12,11 +12,15 @@ export const desktopInstallerPlatforms = [
 	{
 		id: "macos",
 		label: "macOS",
-		detail: "Apple Silicon",
+		detail: "Apple Silicon / Intel",
 		downloads: [
 			{
-				label: "Download .dmg",
+				label: "Apple Silicon .dmg",
 				href: desktopDownload("thinkrail-desktop-darwin-arm64.dmg"),
+			},
+			{
+				label: "Intel .dmg",
+				href: desktopDownload("thinkrail-desktop-darwin-x64.dmg"),
 			},
 		],
 	},

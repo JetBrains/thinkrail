@@ -77,7 +77,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 	};
 
 	return (
-		<div className="flex h-full min-h-0 flex-col">
+		<div data-file-pane className="flex h-full min-h-0 flex-col">
 			{showToolbar ? (
 				<div
 					data-testid="resource-view-toggle"
@@ -106,6 +106,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 				<Suspense fallback={loading}>
 					<RendererView
 						key={implementationKey}
+						focusHome
 						renderer={renderer}
 						mobile={mobile}
 						resource={resource}

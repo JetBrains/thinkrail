@@ -25,7 +25,7 @@ import { type ListProps, Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { useShallow } from "zustand/react/shallow";
 import {
 	EMPTY_RUNTIME,
-	selectArtifactsSmartOffered,
+	selectArtifactsRoundFilter,
 	selectChatAttended,
 	selectChatsContainer,
 	selectReadyCompletionAck,
@@ -37,11 +37,12 @@ import {
 import { errorText, getTransport, respondToTool } from "@/transport";
 import { ACTIVITY_BREADCRUMB_HEIGHT, ActivityBreadcrumbTrail } from "./activityBreadcrumbs";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
+import { locateChatRow, locateToolItem } from "./chatLocation";
 import type { ChatMessageOrder } from "./chatPreferences";
 import { refreshContinuation, requestContinuation } from "./continuations";
-import { type PendingExtUi, PendingExtUiContext, PendingExtUiPrompt } from "./ExtUiPrompt";
+import { PendingExtUiContext, PendingExtUiPrompt } from "./ExtUiPrompt";
 import { workspaceFileTarget } from "./fileTargets";
-import { FoldGeometryProvider } from "./foldState";
+import { expandFolds, FoldGeometryProvider } from "./foldState";
 import {
 	awaitingToolCallIdOf,
 	deriveInteractionStates,
@@ -52,21 +53,21 @@ import {
 } from "./interactionState";
 import { deriveMessageActions } from "./messageActions";
 import { openWorkspace } from "./openWorkspace";
-import { turnAnchorText } from "./recentPrompts";
+import { usePendingExtUi } from "./pendingExtUi";
 import { estimateChatRowHeights } from "./rowHeightEstimates";
 import {
 	type ChatRow,
 	deriveRows,
 	projectRows,
-	rowIndexForTurn,
 	rowsHaveToolCall,
 	sessionRoundArtifacts,
 	stabilizeRows,
 } from "./rows";
 import { type StreamStatus, StreamStatusSlot, streamStatus } from "./StreamIndicator";
-import { TranscriptItem, TranscriptNavigationContext } from "./TranscriptItem";
+import { ToolRendererBoundary } from "./ToolRendererBoundary";
+import { TranscriptItem, TranscriptProvider } from "./TranscriptItem";
 import { useToolInteraction } from "./toolInteraction";
-import { getToolRenderer } from "./toolRegistry";
+import { DefaultToolRenderer, useToolRegistry, useToolRenderer } from "./toolRegistry";
 import { newestContentRowId } from "./transcriptNavigation";
 import { ChatTurnView, type DividerReveal } from "./turns";
 import { type ChatReadingPosition, useChatScroll } from "./useChatScroll";
@@ -162,6 +163,7 @@ function TranscriptFeed({
 			aria-label={t("chat.transcript.label")}
 			tabIndex={-1}
 			data-transcript-feed
+			data-focus-park
 			className="outline-none"
 		>
 			{children}
@@ -222,7 +224,8 @@ const ChatTranscript = forwardRef<
 		onOpenFile?: ((path: string) => void) | undefined;
 		workspaceRoot: string | undefined;
 		focusComposer: () => void;
-		mayClaimFocus: () => boolean;
+		waitingQuestion: () => HTMLElement | null;
+		mayClaimFocus: ChatActions["mayClaimFocus"];
 		landingChord: string;
 		openSubagentTranscript: (childSessionId: string | null) => void;
 		resultOpener: ChatActions["resultOpener"];
@@ -233,6 +236,7 @@ const ChatTranscript = forwardRef<
 		readMcpOutput?: ChatActions["readMcpOutput"];
 		openMcpSettings?: ChatActions["openMcpSettings"];
 		openProviderSettings?: ChatActions["openProviderSettings"];
+		disableServerFallback?: ChatActions["disableServerFallback"];
 		findModel?: ChatActions["findModel"];
 		dockTarget?: HTMLElement | null;
 		onDockedInteractionChange?: (toolCallId: string | null) => void;
@@ -245,6 +249,7 @@ const ChatTranscript = forwardRef<
 		onOpenFile,
 		workspaceRoot,
 		focusComposer,
+		waitingQuestion,
 		mayClaimFocus,
 		landingChord,
 		openSubagentTranscript,
@@ -256,6 +261,7 @@ const ChatTranscript = forwardRef<
 		readMcpOutput,
 		openMcpSettings,
 		openProviderSettings,
+		disableServerFallback,
 		findModel,
 		dockTarget,
 		onDockedInteractionChange,
@@ -307,11 +313,12 @@ const ChatTranscript = forwardRef<
 		[sessionId, workspaceTurns],
 	);
 	const artifactsSnapshot = useAppStore((state) => state.artifactsByWorkspace[workspaceId]);
-	const smartArtifacts = useAppStore(selectArtifactsSmartOffered);
+	const artifactsFilter = useAppStore(selectArtifactsRoundFilter);
 	const roundArtifacts = useMemo(
-		() => sessionRoundArtifacts(artifactsSnapshot, sessionId, smartArtifacts),
-		[artifactsSnapshot, sessionId, smartArtifacts],
+		() => sessionRoundArtifacts(artifactsSnapshot, sessionId, artifactsFilter),
+		[artifactsSnapshot, sessionId, artifactsFilter],
 	);
+	const toolRegistry = useToolRegistry();
 	const derivedRows = useMemo(
 		() =>
 			deriveRows(
@@ -322,8 +329,18 @@ const ChatTranscript = forwardRef<
 				agentTurns,
 				workspaceRoot,
 				roundArtifacts,
+				toolRegistry,
 			),
-		[turns, toolResults, isStreaming, isSpec, agentTurns, workspaceRoot, roundArtifacts],
+		[
+			turns,
+			toolResults,
+			isStreaming,
+			isSpec,
+			agentTurns,
+			workspaceRoot,
+			roundArtifacts,
+			toolRegistry,
+		],
 	);
 	// Keep the stabilized rows in state (never a ref written during render): a render-written ref both
 	// violates apps/web/SPEC.md and makes the React Compiler skip memoizing this component.
@@ -347,16 +364,16 @@ const ChatTranscript = forwardRef<
 		setRowHeightEstimateCache({ messageOrder: chatMessageOrder, heights: new Map() });
 	}
 	const rowHeightEstimates = useMemo(
-		() => estimateChatRowHeights(rows, rowHeightEstimateCache.heights),
-		[rows, rowHeightEstimateCache],
+		() => estimateChatRowHeights(rows, rowHeightEstimateCache.heights, toolRegistry),
+		[rows, rowHeightEstimateCache, toolRegistry],
 	);
 	const visibleAnchorRowId = useRef<string | null>(null);
 	const virtualRows = useVirtualRows(rows, chatMessageOrder, visibleAnchorRowId);
 	const firstItemIndex = virtualRows.firstItemIndex;
 
 	const messageActions = useMemo(
-		() => deriveMessageActions(chronologicalRows, isStreaming),
-		[chronologicalRows, isStreaming],
+		() => deriveMessageActions(chronologicalRows, isStreaming, toolRegistry),
+		[chronologicalRows, isStreaming, toolRegistry],
 	);
 
 	const currentStreamStatus = useMemo<StreamStatus | null>(
@@ -414,6 +431,7 @@ const ChatTranscript = forwardRef<
 		scrollMoving,
 		scrollToLatest,
 		scrollPage,
+		keyboardScrollBy,
 		armImmediateTurn,
 		cancelImmediateTurn,
 		cancelAutomaticReveal,
@@ -486,8 +504,11 @@ const ChatTranscript = forwardRef<
 		revealRow,
 		revealElement,
 		leaveFollow,
+		scrollBy: keyboardScrollBy,
+		scrollPage,
 		scrollToLatest,
 		focusComposer,
+		waitingQuestion,
 		fileTarget: (path) => (onOpenFile ? workspaceFileTarget(path, workspaceRoot) : null),
 		openFile: (target) => onOpenFile?.(target),
 		onCopied: () => toast.success(t("common.copied")),
@@ -527,10 +548,27 @@ const ChatTranscript = forwardRef<
 	);
 	const [interactionFocusScope] = useState<object>(() => ({}));
 
+	const revealToolItem = useCallback(
+		(itemId: string) => {
+			const target = scrollerElement?.querySelector<HTMLElement>(
+				`[data-transcript-item="${CSS.escape(itemId)}"]`,
+			);
+			if (!target) return;
+			revealElement(target, {
+				block: "nearest",
+				provenance: "user-navigation",
+				runway: "preserve",
+				stability: "none",
+				topInset: ACTIVITY_BREADCRUMB_HEIGHT,
+			});
+		},
+		[revealElement, scrollerElement],
+	);
+
 	const chatLocationRequest = useAppStore((s) => s.chatLocationRequest);
 	const activeChatLocationReveal = useRef<typeof chatLocationRequest>(null);
 	const locationRowsReady = rows.length > 0;
-	const [flashRowId, setFlashRowId] = useState<string | null>(null);
+	const [flashItemId, setFlashItemId] = useState<string | null>(null);
 
 	useEffect(() => {
 		if (
@@ -543,27 +581,29 @@ const ChatTranscript = forwardRef<
 		}
 		if (useAppStore.getState().chatLocationRequest !== chatLocationRequest) return;
 		if (activeChatLocationReveal.current === chatLocationRequest) return;
-		const { messageIndex, anchorText } = chatLocationRequest;
 		const currentRows = locationRowsRef.current;
-		const currentTurns = locationTurnsRef.current;
-		const prefix = anchorText.slice(0, 40);
-		const mappedId = locationTurnMapRef.current?.[messageIndex];
-		const mapped = mappedId ? currentTurns.find((t) => t.id === mappedId) : undefined;
-		const target =
-			mapped && turnAnchorText(mapped).includes(prefix)
-				? mapped
-				: currentTurns.findLast((t) => turnAnchorText(t).includes(prefix));
-		const index = target ? rowIndexForTurn(currentRows, target.id) : -1;
+		const { index, nearest } = locateChatRow(
+			chatLocationRequest,
+			currentRows,
+			locationTurnsRef.current,
+			locationTurnMapRef.current,
+		);
 		if (index === -1) {
 			toast.error(translate("chat.transcript.locateFailed"));
 			useAppStore.getState().clearChatLocation();
 			return;
 		}
-		const rowId = currentRows[index]?.id;
-		if (!rowId) {
+		const row = currentRows[index];
+		if (!row) {
 			useAppStore.getState().clearChatLocation();
 			return;
 		}
+		const rowId = row.id;
+		const toolItem = chatLocationRequest.toolCallId
+			? locateToolItem(row, chatLocationRequest.toolCallId)
+			: null;
+		if (toolItem) expandFolds(toolItem.folds);
+		const keepsFocus = chatLocationRequest.focus === false;
 		const revealClaim = {};
 		chatLocationRevealClaims.set(chatLocationRequest, revealClaim);
 		activeChatLocationReveal.current = chatLocationRequest;
@@ -576,8 +616,10 @@ const ChatTranscript = forwardRef<
 				activeChatLocationReveal.current = null;
 				if (useAppStore.getState().chatLocationRequest !== chatLocationRequest) return;
 				if (result === "found") {
-					setFlashRowId(rowId);
-					navigation.focusRow(rowId);
+					setFlashItemId(toolItem?.itemId ?? rowId);
+					if (toolItem) revealToolItem(toolItem.itemId);
+					if (!keepsFocus) navigation.focusRow(rowId);
+					if (nearest) toast.info(translate("chat.transcript.locatedNearest"));
 				} else if (result === "missing") toast.error(translate("chat.transcript.locateFailed"));
 				useAppStore.getState().clearChatLocation();
 			},
@@ -594,13 +636,21 @@ const ChatTranscript = forwardRef<
 				if (state.chatLocationRequest === chatLocationRequest) state.clearChatLocation();
 			});
 		};
-	}, [chatLocationRequest, locationRowsReady, navigation, revealRow, sessionId, workspaceId]);
+	}, [
+		chatLocationRequest,
+		locationRowsReady,
+		navigation,
+		revealRow,
+		revealToolItem,
+		sessionId,
+		workspaceId,
+	]);
 
 	useEffect(() => {
-		if (flashRowId === null) return;
-		const timer = setTimeout(() => setFlashRowId(null), 1600);
+		if (flashItemId === null) return;
+		const timer = setTimeout(() => setFlashItemId(null), 1600);
 		return () => clearTimeout(timer);
-	}, [flashRowId]);
+	}, [flashItemId]);
 
 	const onOpenChange = useCallback(
 		(path: string) => {
@@ -630,30 +680,12 @@ const ChatTranscript = forwardRef<
 	);
 
 	const pendingExtUiRequest = useAppStore((s) => s.sessions[sessionId]?.pendingExtUi ?? null);
-	const pendingExtUi = useMemo<PendingExtUi | null>(() => {
-		if (!pendingExtUiRequest) return null;
-		let draft: string | undefined;
-		let revealed = false;
-		return {
-			request: pendingExtUiRequest,
-			reply: (value) => {
-				const { id } = pendingExtUiRequest;
-				useAppStore.getState().clearPendingExtUi(sessionId, id);
-				getTransport()
-					.request("session.extUiReply", { response: { id, value } })
-					.catch(() => {});
-			},
-			draft: () => draft,
-			rememberDraft: (text) => {
-				draft = text;
-			},
-			claimReveal: () => {
-				if (revealed) return false;
-				revealed = true;
-				return true;
-			},
-		};
-	}, [pendingExtUiRequest, sessionId]);
+	const pendingExtUi = usePendingExtUi(pendingExtUiRequest, ({ id }, value) => {
+		useAppStore.getState().clearPendingExtUi(sessionId, id);
+		getTransport()
+			.request("session.extUiReply", { response: { id, value } })
+			.catch(() => {});
+	});
 	const pendingExtUiId = pendingExtUiRequest?.id ?? null;
 	const [announcedExtUiId, setAnnouncedExtUiId] = useState<string | null>(null);
 	useEffect(() => {
@@ -670,17 +702,29 @@ const ChatTranscript = forwardRef<
 		anchorToolCallId !== undefined && rowsHaveToolCall(chronologicalRows, anchorToolCallId);
 
 	const interactionStates = useMemo(
-		() => deriveInteractionStates(runtime.turns, runtime.toolResponses, runtime.toolResults),
-		[runtime.turns, runtime.toolResponses, runtime.toolResults],
+		() =>
+			deriveInteractionStates(
+				runtime.turns,
+				runtime.toolResponses,
+				runtime.toolResults,
+				toolRegistry,
+			),
+		[runtime.turns, runtime.toolResponses, runtime.toolResults, toolRegistry],
 	);
 	const awaitingToolCallId = awaitingToolCallIdOf(runtime.hostState);
 	const dockedCall = useMemo(
 		() =>
 			dockedInteraction(
-				latestPendingInteraction(runtime.turns, runtime.toolResults, interactionStates),
+				latestPendingInteraction(
+					runtime.turns,
+					runtime.toolResults,
+					interactionStates,
+					toolRegistry,
+				),
 				awaitingToolCallId,
+				toolRegistry,
 			),
-		[runtime.turns, runtime.toolResults, interactionStates, awaitingToolCallId],
+		[runtime.turns, runtime.toolResults, interactionStates, awaitingToolCallId, toolRegistry],
 	);
 	const dockedToolCallId = dockedCall?.toolCallId;
 	useLayoutEffect(() => {
@@ -731,6 +775,7 @@ const ChatTranscript = forwardRef<
 			readMcpOutput,
 			openMcpSettings,
 			openProviderSettings,
+			disableServerFallback,
 			findModel,
 			continuationOf,
 			retryContinuation: (details) => {
@@ -756,6 +801,7 @@ const ChatTranscript = forwardRef<
 		[
 			cancelAutomaticReveal,
 			continuationOf,
+			disableServerFallback,
 			findModel,
 			focusComposer,
 			landingChord,
@@ -798,7 +844,7 @@ const ChatTranscript = forwardRef<
 							{/* One provider above the list: its value is the single transcript-wide callback, so a
 						    per-row provider would only re-commit that identical value for every visible row. */}
 							<ResourceScopeProvider value={resourceScope}>
-								<TranscriptNavigationContext value={navigation}>
+								<TranscriptProvider navigation={navigation} flashedItemId={flashItemId}>
 									<FoldGeometryProvider onBeforeChange={prepareFoldChange}>
 										<Virtuoso<ChatRow, ChatListContext>
 											key={chatMessageOrder}
@@ -844,11 +890,7 @@ const ChatTranscript = forwardRef<
 													data-testid="chat-row"
 													data-chat-row-id={row.id}
 													data-chat-row-index={index - firstItemIndex}
-													data-flash={row.id === flashRowId || undefined}
-													className={cn(
-														measureClassName,
-														"rounded-sm px-chat-gutter py-4 transition-colors data-[flash]:bg-primary-subtle",
-													)}
+													className={cn(measureClassName, "rounded-sm px-chat-gutter py-4")}
 												>
 													<ChatTurnView
 														row={row}
@@ -878,7 +920,7 @@ const ChatTranscript = forwardRef<
 											)}
 										/>
 									</FoldGeometryProvider>
-								</TranscriptNavigationContext>
+								</TranscriptProvider>
 							</ResourceScopeProvider>
 							<ActivityBreadcrumbTrail
 								scroller={scrollerElement}
@@ -962,10 +1004,24 @@ function DockedTool({
 	workspaceRoot: string | undefined;
 	onOpenFile: ((path: string) => void) | undefined;
 }) {
-	const Renderer = getToolRenderer(call.toolName);
+	const Renderer = useToolRenderer(call.toolName);
 	const interaction = useToolInteraction(call.toolCallId, call.toolName, "dock");
 	const props: ToolRenderProps = { ...call, workspaceRoot, onOpenFile, interaction };
-	return <Renderer {...props} />;
+	return (
+		<ToolRendererBoundary
+			renderer={Renderer}
+			toolCallId={call.toolCallId}
+			status={call.status}
+			streaming={call.streaming}
+			fallback={
+				<div data-testid="tool-renderer-fallback">
+					<DefaultToolRenderer {...props} />
+				</div>
+			}
+		>
+			<Renderer {...props} />
+		</ToolRendererBoundary>
+	);
 }
 
 export default ChatTranscript;

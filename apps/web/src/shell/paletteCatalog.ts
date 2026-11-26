@@ -11,6 +11,7 @@ import {
 	RiDeleteBinLine,
 	RiDragMove2Line,
 	RiEdit2Line,
+	RiExpandDiagonalLine,
 	RiExternalLinkLine,
 	RiFileCopyLine,
 	RiFileEditLine,
@@ -19,6 +20,7 @@ import {
 	RiFolder2Line,
 	RiFolderLine,
 	RiFolderOpenLine,
+	RiGitPullRequestLine,
 	RiHistoryLine,
 	RiHome4Line,
 	RiInboxArchiveLine,
@@ -46,6 +48,7 @@ import type { EditorInfo, NativePageZoomBridge, Workspace } from "@thinkrail/con
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import type { Command, CommandShortcut } from "../commands";
+import type { RegisteredPanel } from "../extensions";
 import {
 	DESKTOP_KEYS,
 	FOCUS_GROUP_BINDINGS,
@@ -54,6 +57,7 @@ import {
 	keybindingShortcut,
 	type ResolvedKeybindings,
 } from "../keybindings";
+import type { SettingEntry } from "../panels/settingsCatalog";
 import type { SettingsNavGroup } from "../panels/settingsNav";
 import type { PaletteItem } from "../search";
 import type { SettingsSection } from "../store";
@@ -81,6 +85,7 @@ export interface PaletteCatalogDeps {
 	readonly t: Translator;
 	readonly contextProjectId: string | null;
 	readonly canStartChat: boolean;
+	readonly reviewAvailable: boolean;
 	readonly activeWorkspace: Workspace | null;
 	readonly editors: readonly EditorInfo[];
 	readonly historyAvailable: boolean;
@@ -96,12 +101,15 @@ export interface PaletteCatalogDeps {
 	readonly settled: boolean;
 	readonly settleBlocked: boolean;
 	readonly settingsGroups: readonly SettingsNavGroup[];
+	readonly settingEntries: readonly SettingEntry[];
 	readonly tabActions: readonly TabAction[];
+	readonly extensionPanels: readonly RegisteredPanel[];
 	readonly actions: PaletteCatalogActions;
 }
 
 export interface PaletteCatalogActions {
 	readonly newWorkspace: (projectId: string) => void;
+	readonly reviewPullRequest: () => void;
 	readonly newProjectlessChat: () => void;
 	readonly openDefaultWorkspace: (projectId: string) => void;
 	readonly openProject: () => void;
@@ -112,7 +120,10 @@ export interface PaletteCatalogActions {
 	readonly toggleLeft: () => void;
 	readonly toggleRight: () => void;
 	readonly toggleBottom: () => void;
+	readonly toggleAllPanels: () => void;
 	readonly showTool: (workspaceId: string, tool: PaletteTool) => void;
+	readonly openExtensionPanel: (workspaceId: string, panel: RegisteredPanel) => void;
+	readonly openExtensionPanelInProject: (projectId: string, panel: RegisteredPanel) => void;
 	readonly showFiles: (mode: "all" | "changed") => void;
 	readonly focusRegion: (delta: 1 | -1) => void;
 	readonly focusComposer: () => void;
@@ -128,14 +139,14 @@ export interface PaletteCatalogActions {
 	readonly reveal: (workspace: Workspace) => void;
 	readonly copyPath: (workspace: Workspace) => void;
 	readonly openIn: (workspace: Workspace, editor: EditorInfo) => void;
-	readonly openSettings: (section?: SettingsSection) => void;
+	readonly openSettings: (section?: SettingsSection, settingId?: string) => void;
 	readonly openShortcuts: () => void;
 	readonly runTabAction: (actionId: string) => void;
 }
 
 function shortcutOf(
 	{ keybindings, nativeShortcuts }: PaletteCatalogDeps,
-	id: KeybindingId,
+	id: string,
 ): { shortcut?: CommandShortcut } {
 	const shortcut = keybindingShortcut(keybindings, id, { browser: !nativeShortcuts });
 	return shortcut ? { shortcut } : {};
@@ -154,6 +165,16 @@ function workCommands(deps: PaletteCatalogDeps): Command[] {
 			...shortcutOf(deps, "workspace.new"),
 			run: () => actions.newWorkspace(contextProjectId),
 		});
+		if (deps.reviewAvailable) {
+			commands.push({
+				id: "workspace.reviewPr",
+				title: t("commands.workspace.reviewPr"),
+				group: "work",
+				icon: RiGitPullRequestLine,
+				keywords: ["pull request", "pr", "review", "github", "code review"],
+				run: actions.reviewPullRequest,
+			});
+		}
 	}
 	if (activeWorkspace) {
 		commands.push({
@@ -374,6 +395,33 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 			});
 		}
 	}
+	const { contextProjectId } = deps;
+	const openPanel = activeWorkspace
+		? (panel: RegisteredPanel) => actions.openExtensionPanel(activeWorkspace.id, panel)
+		: contextProjectId !== null
+			? (panel: RegisteredPanel) => actions.openExtensionPanelInProject(contextProjectId, panel)
+			: null;
+	if (openPanel) {
+		for (const panel of deps.extensionPanels) {
+			const { declaration } = panel;
+			if (!declaration.scopes.includes("project")) continue;
+			commands.push({
+				id: `view.extension.${panel.extension}.${panel.panel}`,
+				title: t("commands.view.openPanel", { panel: t(declaration.title) }),
+				group: "view",
+				icon: declaration.icon,
+				keywords: [
+					"panel",
+					"extension",
+					panel.extension,
+					panel.panel,
+					...(declaration.keywords ? [t(declaration.keywords)] : []),
+				],
+				...(declaration.rail?.command ? shortcutOf(deps, declaration.rail.command) : {}),
+				run: () => openPanel(panel),
+			});
+		}
+	}
 	if (deps.changesAvailable) {
 		commands.push({
 			id: "view.changes",
@@ -413,6 +461,15 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 				keywords: ["terminal", "bottom", "hide", "show"],
 				...shortcutOf(deps, "view.toggleBottom"),
 				run: actions.toggleBottom,
+			},
+			{
+				id: "view.toggleAllPanels",
+				title: t("commands.view.toggleAllPanels"),
+				group: "view",
+				icon: RiExpandDiagonalLine,
+				keywords: ["panels", "sidebar", "bottom", "hide", "restore", "focus", "zen"],
+				...shortcutOf(deps, "view.toggleAllPanels"),
+				run: actions.toggleAllPanels,
 			},
 		);
 	}
@@ -603,21 +660,33 @@ function settingsSectionItems(group: SettingsNavGroup, deps: PaletteCatalogDeps)
 	);
 }
 
-export function buildSettingsItems(deps: PaletteCatalogDeps): PaletteItem[] {
+function settingEntryItems(deps: PaletteCatalogDeps): PaletteItem[] {
 	const { t } = deps;
-	return [
-		...deps.settingsGroups.flatMap((group) => settingsSectionItems(group, deps)),
-		{
-			id: "setting:double-shift",
+	const sections = new Map(
+		deps.settingsGroups.flatMap((group) => group.sections.map((section) => [section.id, section])),
+	);
+	return deps.settingEntries.map((entry): PaletteItem => {
+		const section = sections.get(entry.section);
+		return {
+			id: `setting:${entry.id}`,
 			kind: "setting",
-			title: t("settings.keyboard.doubleShift"),
-			subtitle: t("search.item.settingsPath", { group: t("settings.nav.keyboard") }),
+			title: t(entry.label),
+			subtitle: t("search.item.settingsPath", {
+				group: section ? t(section.label) : t("settings.dialog.feedbackCta"),
+			}),
 			group: "settings",
 			scope: "commands",
-			icon: RiKeyboardLine,
-			keywords: ["shortcut", "hotkey", "shift"],
-			run: () => deps.actions.openSettings("keyboard"),
-		},
+			icon: section?.icon ?? RiSettings3Line,
+			keywords: ["settings", ...(entry.keywords ?? [])],
+			run: () => deps.actions.openSettings(entry.section, entry.id),
+		};
+	});
+}
+
+export function buildSettingsItems(deps: PaletteCatalogDeps): PaletteItem[] {
+	return [
+		...deps.settingsGroups.flatMap((group) => settingsSectionItems(group, deps)),
+		...settingEntryItems(deps),
 	];
 }
 

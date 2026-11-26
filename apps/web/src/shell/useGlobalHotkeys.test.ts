@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import type { RegisteredPanel } from "../extensions";
 import { type ResolvedKeybindings, resolveKeybindings } from "../keybindings";
+import { railCommandPanel } from "./extensionPanelHost";
 import type { ShortcutPlatform } from "./shortcutCommands";
 import { globalHotkeyCommand, routeHotkey } from "./useGlobalHotkeys";
 
@@ -12,6 +14,7 @@ const key = (
 		altKey: boolean;
 		shiftKey: boolean;
 		isComposing: boolean;
+		keyCode: number;
 	}> = {},
 ) => ({
 	code,
@@ -114,6 +117,32 @@ describe("global hotkey routing", () => {
 		expect(route(key("KeyF", { shiftKey: true }), withFind, true, "Linux")).toBeNull();
 	});
 
+	test("routes Mod+Shift+F12 to hide all panels, from xterm too, never behind a modal or without a workspace", () => {
+		const withAllPanels = { ...all, onAllPanels: noop };
+		const hideAll = key("F12", { key: "F12", shiftKey: true });
+		expect(route(hideAll, withAllPanels, false, "Linux")).toBe("view.toggleAllPanels");
+		expect(
+			route(
+				key("F12", { key: "F12", ctrlKey: false, metaKey: true, shiftKey: true }),
+				withAllPanels,
+				false,
+				"MacIntel",
+			),
+		).toBe("view.toggleAllPanels");
+		expect(route(hideAll, withAllPanels, false, "Linux", true)).toBe("view.toggleAllPanels");
+		expect(route(hideAll, withAllPanels, true, "Linux")).toBeNull();
+		expect(route(hideAll, all, false, "Linux")).toBeNull();
+		expect(route(key("F12", { key: "F12" }), withAllPanels, false, "Linux")).toBeNull();
+		expect(
+			route(
+				key("F12", { key: "F12", ctrlKey: false, shiftKey: true }),
+				withAllPanels,
+				false,
+				"Linux",
+			),
+		).toBeNull();
+	});
+
 	test("does not claim unavailable workspace commands or any panel chord behind a modal", () => {
 		expect(route(key("KeyJ", { shiftKey: true }), { onProjects: noop }, false, "Linux")).toBeNull();
 		expect(route(key("KeyB"), all, true, "Linux")).toBeNull();
@@ -158,6 +187,18 @@ describe("region and focus chords", () => {
 				"view.changes",
 			);
 		}
+	});
+
+	test("Ctrl+Tab and Ctrl+Shift+Tab switch recent workspaces on every platform, the terminal included", () => {
+		const switching = { ...focus, onRecentWorkspace: noop };
+		for (const platform of ["Linux", "MacIntel"]) {
+			expect(route(key("Tab"), switching, false, platform)).toBe("workspace.recentNext");
+			expect(route(key("Tab", { shiftKey: true }), switching, false, platform, true)).toBe(
+				"workspace.recentPrevious",
+			);
+			expect(route(key("Tab"), switching, true, platform)).toBeNull();
+		}
+		expect(route(key("Tab", command), switching, false, "MacIntel")).toBeNull();
 	});
 
 	test("leave Ctrl+L to a focused terminal's shell, but take Cmd+L there on a Mac", () => {
@@ -324,7 +365,7 @@ describe("routing a press", () => {
 	const at = (
 		desktop: ShortcutPlatform,
 		keybindings: ResolvedKeybindings,
-		place: { inTerminal?: boolean; textEntry?: boolean; localScopes?: readonly string[] } = {},
+		place: Partial<Parameters<typeof routeHotkey>[2]> = {},
 	): Parameters<typeof routeHotkey>[2] => ({
 		keybindings,
 		desktop,
@@ -333,6 +374,8 @@ describe("routing a press", () => {
 		localScopes: [],
 		inTerminal: false,
 		inEditorFind: false,
+		inCodeEditor: false,
+		hasSuggestion: () => false,
 		...place,
 	});
 	const azertyCtrlW = key("KeyZ", { key: "w" });
@@ -509,6 +552,87 @@ describe("routing a press", () => {
 		expect(routeHotkey(key("KeyR"), all, at("linux", defaults))).toEqual({ kind: "history" });
 	});
 
+	describe("next-step chips", () => {
+		const defaults = resolveKeybindings({ platform: "Linux" });
+		const altDigit = (n: number, extra: Parameters<typeof key>[1] = {}) =>
+			key(`Digit${n}`, { key: String(n), ctrlKey: false, altKey: true, ...extra });
+		const chips = (count: number) => (index: number) => index < count;
+
+		test("Alt+N sends and Shift+Alt+N edits chip N from anywhere, only while that chip is shown", () => {
+			const shown = { hasSuggestion: chips(2) };
+			expect(routeHotkey(altDigit(2), all, at("browser", defaults, shown))).toEqual({
+				kind: "suggestion",
+				index: 1,
+				edit: false,
+			});
+			expect(
+				routeHotkey(altDigit(1, { shiftKey: true }), all, at("browser", defaults, shown)),
+			).toEqual({ kind: "suggestion", index: 0, edit: true });
+			for (const place of [
+				{ localScopes: ["trees"] },
+				{ localScopes: ["tabs"] },
+				{ localScopes: ["ask-user-question.card"] },
+				{ localScopes: ["composer"], textEntry: true },
+			]) {
+				expect(
+					routeHotkey(altDigit(1), all, at("browser", defaults, { ...shown, ...place })),
+				).toEqual({ kind: "suggestion", index: 0, edit: false });
+			}
+			expect(routeHotkey(altDigit(3), all, at("browser", defaults, shown))).toBeNull();
+			expect(routeHotkey(altDigit(1), all, at("browser", defaults))).toBeNull();
+		});
+
+		test("the terminal, the code editor, a modal and IME composition keep the key", () => {
+			const shown = { hasSuggestion: chips(9) };
+			for (const place of [{ inTerminal: true }, { inCodeEditor: true }, { modalOpen: true }]) {
+				expect(
+					routeHotkey(altDigit(1), all, at("browser", defaults, { ...shown, ...place })),
+				).toBeNull();
+			}
+			expect(
+				routeHotkey(altDigit(1, { isComposing: true }), all, at("browser", defaults, shown)),
+			).toBeNull();
+			expect(
+				routeHotkey(altDigit(1, { keyCode: 229 }), all, at("browser", defaults, shown)),
+			).toBeNull();
+			expect(
+				routeHotkey(
+					altDigit(1, { shiftKey: true, keyCode: 229 }),
+					all,
+					at("browser", defaults, shown),
+				),
+			).toBeNull();
+		});
+
+		test("a rebound chip key acts on its new chord, and a focused element's local key wins it", () => {
+			const shown = { hasSuggestion: chips(9) };
+			const moved = resolveKeybindings({
+				platform: "Linux",
+				overrides: { "suggestions.send1": ["Mod+Alt+Digit1"] },
+			});
+			expect(routeHotkey(altDigit(1), all, at("browser", moved, shown))).toBeNull();
+			expect(routeHotkey(altDigit(1, { ctrlKey: true }), all, at("browser", moved, shown))).toEqual(
+				{ kind: "suggestion", index: 0, edit: false },
+			);
+			const treeTakesIt = resolveKeybindings({
+				platform: "Linux",
+				overrides: { "trees.search": ["Alt+Digit1"] },
+			});
+			expect(
+				routeHotkey(
+					altDigit(1),
+					all,
+					at("browser", treeTakesIt, { ...shown, localScopes: ["trees"] }),
+				),
+			).toBeNull();
+			expect(routeHotkey(altDigit(1), all, at("browser", treeTakesIt, shown))).toEqual({
+				kind: "suggestion",
+				index: 0,
+				edit: false,
+			});
+		});
+	});
+
 	test("chat history rebound off Ctrl+R waits out IME composition; the literal Ctrl+R still wins it", () => {
 		const onF6 = resolveKeybindings({ platform: "Linux", overrides: { "chat.history": ["F6"] } });
 		const f6 = (isComposing: boolean) => key("F6", { key: "F6", ctrlKey: false, isComposing });
@@ -518,5 +642,66 @@ describe("routing a press", () => {
 		expect(routeHotkey(key("KeyR", { isComposing: true }), all, at("browser", defaults))).toEqual({
 			kind: "history",
 		});
+	});
+
+	test("a panel's rail chord opens the panel while it is openable and no modal is up, and reaches no overlay", () => {
+		const panel: RegisteredPanel = {
+			extension: "insights",
+			panel: "sessions",
+			declaration: {
+				title: "common.retry",
+				icon: () => null,
+				scopes: ["project"],
+				rail: { command: "insights.open" },
+				load: async () => ({ default: () => null }),
+			},
+		};
+		const extensions = [
+			{
+				extension: "insights",
+				enabled: true,
+				commands: [
+					{
+						id: "insights.open",
+						title: "common.retry" as const,
+						chords: [{ code: "KeyI", key: "I", ctrl: true, alt: true }],
+					},
+				],
+			},
+			hint,
+		];
+		const ctrlAltI = key("KeyI", { key: "i", altKey: true });
+		const openable = (panels: readonly RegisteredPanel[]) => (extension: string, id: string) =>
+			railCommandPanel(extension, id, () => panels, [panel]);
+		for (const platform of ["Linux", "MacIntel"]) {
+			const keybindings = resolveKeybindings({ platform, extensions });
+			const place = (panels: readonly RegisteredPanel[], modalOpen = false) => ({
+				...at("browser", keybindings),
+				modalOpen,
+				railPanel: openable(panels),
+			});
+			expect(routeHotkey(ctrlAltI, all, place([panel]))).toEqual({ kind: "panel", panel });
+			expect(routeHotkey(ctrlAltI, all, place([]))).toBeNull();
+			expect(routeHotkey(ctrlAltI, all, place([panel], true))).toBeNull();
+			const modSemicolon = key("Semicolon", {
+				ctrlKey: platform === "Linux",
+				metaKey: platform === "MacIntel",
+			});
+			expect(routeHotkey(modSemicolon, all, place([panel]))).toEqual(HINT);
+			const rebound = resolveKeybindings({
+				platform,
+				extensions,
+				overrides: { "insights.open": ["Mod+Shift+KeyY"] },
+			});
+			const modShiftY = key("KeyY", {
+				key: "y",
+				shiftKey: true,
+				ctrlKey: platform === "Linux",
+				metaKey: platform === "MacIntel",
+			});
+			const there = { ...place([panel]), keybindings: rebound };
+			expect(routeHotkey(modShiftY, all, there)).toEqual({ kind: "panel", panel });
+			expect(routeHotkey(ctrlAltI, all, there)).toBeNull();
+		}
 	});
 });

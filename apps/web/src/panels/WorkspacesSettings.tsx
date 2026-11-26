@@ -4,19 +4,35 @@ import {
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
-import { toast, useAppStore } from "../store";
-import { getTransport } from "../transport";
-import { SettingsGroup } from "./SettingsGroup";
-import { SettingsRadioCards, type SettingsRadioChoice } from "./SettingsRadioCards";
-import { SETTINGS_INPUT, useSettingsDraft } from "./settingsDraft";
+import { Button } from "@thinkrail/ui/button";
+import { cn } from "@thinkrail/ui/utils";
+import { useState } from "react";
+import {
+	SETTINGS_INPUT,
+	SETTINGS_ROWS,
+	SettingsChoice,
+	SettingsPage,
+	type SettingsReset,
+	SettingsRow,
+	useSettingsDraft,
+} from "@/settingsKit";
+import { useAppStore } from "@/store";
+import { getTransport } from "@/transport";
+import { saveSettings } from "./saveSettings";
+import { useConfigReset } from "./settingDefaults";
+import { SETTING, settingProps } from "./settingsCatalog";
 
 type IdleChoice = `${number}` | "never";
 
-type IdleChoiceSpec = Omit<SettingsRadioChoice<IdleChoice>, "label" | "hint" | "description"> & {
+interface IdleChoiceSpec {
+	id: IdleChoice;
 	days: number | null;
 	hint?: MessageKey;
 	description: MessageKey;
-};
+	testId: string;
+}
+
+const FAILURE = "settings.workspaces.changeFailed";
 
 const IDLE_CHOICES: readonly IdleChoiceSpec[] = [
 	{ id: "1", days: 1, description: "settings.workspaces.idle.oneDay", testId: "settle-idle-1" },
@@ -46,6 +62,11 @@ export function toChoice(days: number | null): IdleChoice {
 	return days === null ? "never" : (String(days) as IdleChoice);
 }
 
+export function idleDescription(pending: IdleChoice | null, value: IdleChoice): MessageKey | null {
+	const shown = pending ?? value;
+	return IDLE_CHOICES.find((choice) => choice.id === shown)?.description ?? null;
+}
+
 function isAbsolutePath(value: string): boolean {
 	const path = value.trim();
 	return (
@@ -58,6 +79,8 @@ export function WorkspacesSettings() {
 	const settleIdleDays = useAppStore((s) => s.settleIdleDays);
 	const worktreeDirectory = useAppStore((s) => s.worktreeDirectory);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
+	const settleReset = useConfigReset("settleIdleDays", FAILURE);
+	const directoryReset = useConfigReset("worktreeDirectory", FAILURE);
 	const supported =
 		protocolVersion !== null && protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION;
 	const directorySupported =
@@ -66,88 +89,121 @@ export function WorkspacesSettings() {
 	const select = (choice: IdleChoice) => {
 		const next = choice === "never" ? null : Number(choice);
 		if (next === settleIdleDays) return;
-		getTransport()
-			.request("settings.update", { config: { settleIdleDays: next } })
-			.catch(() => toast.error(t("settings.workspaces.changeFailed")));
+		void saveSettings({ settleIdleDays: next }, t(FAILURE));
 	};
 
+	return (
+		<WorkspacesSettingsView
+			settleIdleDays={settleIdleDays}
+			supported={supported}
+			reset={settleReset}
+			onSelect={select}
+			worktreeDirectory={worktreeDirectory}
+			directorySupported={directorySupported}
+			directoryReset={directoryReset}
+			onSaveDirectory={(directory) => saveSettings({ worktreeDirectory: directory }, t(FAILURE))}
+			onPickDirectory={() =>
+				getTransport()
+					.request("dialog.selectDirectory", {})
+					.then(({ path }) => path)
+			}
+		/>
+	);
+}
+
+export function WorkspacesSettingsView({
+	settleIdleDays,
+	supported,
+	reset,
+	onSelect,
+	worktreeDirectory,
+	directorySupported,
+	directoryReset,
+	onSaveDirectory,
+	onPickDirectory,
+}: {
+	settleIdleDays: number | null;
+	supported: boolean;
+	reset: SettingsReset;
+	onSelect: (choice: IdleChoice) => void;
+	worktreeDirectory: string | undefined;
+	directorySupported: boolean;
+	directoryReset: SettingsReset;
+	onSaveDirectory: (directory: string | null) => Promise<boolean>;
+	onPickDirectory: () => Promise<string | null>;
+}) {
+	const t = useT();
+	const [pending, setPending] = useState<IdleChoice | null>(null);
+	const value = toChoice(settleIdleDays);
+	const description = idleDescription(pending, value);
 	const directoryDraft = useSettingsDraft({
 		saved: worktreeDirectory ?? "",
 		isValid: isAbsolutePath,
-		commit: (draft) =>
-			getTransport()
-				.request("settings.update", { config: { worktreeDirectory: draft.trim() || null } })
-				.then(() => true)
-				.catch(() => {
-					toast.error(t("settings.workspaces.changeFailed"));
-					return false;
-				}),
+		commit: (draft) => onSaveDirectory(draft.trim() || null),
 	});
+	const label = (days: number | null) =>
+		days === null
+			? t("settings.workspaces.idle.neverLabel")
+			: t("settings.workspaces.idle.days", { count: days });
 
 	return (
-		<section data-testid="settings-workspaces" className="flex flex-col gap-16">
-			{directorySupported ? (
-				<SettingsGroup
-					title={t("settings.workspaces.directoryTitle")}
-					description={t("settings.workspaces.directoryDescription")}
-				>
-					<div className="flex flex-col gap-8 px-12 py-12">
-						<div className="flex min-w-0 gap-8">
-							<input
-								{...directoryDraft.inputProps}
-								data-testid="settings-worktree-directory"
-								placeholder={t("settings.workspaces.directoryDefault")}
-								className={`${SETTINGS_INPUT} min-w-0 flex-1`}
-							/>
-							<button
-								type="button"
-								data-testid="settings-worktree-directory-browse"
-								onClick={() =>
-									getTransport()
-										.request("dialog.selectDirectory", {})
-										.then(({ path }) => {
+		<SettingsPage
+			title={t("settings.nav.workspaces")}
+			description={t("settings.workspaces.description")}
+			testId="settings-workspaces"
+		>
+			<div className={SETTINGS_ROWS}>
+				{directorySupported ? (
+					<SettingsRow
+						{...settingProps(t, SETTING.worktreeDirectory)}
+						reset={directoryReset}
+						control={
+							<span className="flex min-w-0 flex-wrap items-center justify-end gap-4">
+								<input
+									{...directoryDraft.inputProps}
+									aria-label={t(SETTING.worktreeDirectory.label)}
+									data-testid="settings-worktree-directory"
+									placeholder={t("settings.workspaces.directoryDefault")}
+									className={cn(SETTINGS_INPUT, "w-[20rem] max-w-full tr-code-text")}
+								/>
+								<Button
+									variant="outline"
+									size="s"
+									data-testid="settings-worktree-directory-browse"
+									onClick={() =>
+										void onPickDirectory().then((path) => {
 											if (path) directoryDraft.submit(path);
 										})
-										.catch(() => toast.error(t("settings.workspaces.changeFailed")))
-								}
-								className="shrink-0 rounded-sm border border-control-border-default px-8 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
-							>
-								{t("settings.workspaces.directoryBrowse")}
-							</button>
-						</div>
-						<button
-							type="button"
-							data-testid="settings-worktree-directory-reset"
-							onClick={() => directoryDraft.submit("")}
-							className="self-start tr-text-metadata text-text-muted hover:text-text-default"
-						>
-							{t("settings.workspaces.directoryReset")}
-						</button>
-					</div>
-				</SettingsGroup>
-			) : null}
-			<div className="flex flex-col gap-8">
-				<div className="flex flex-col gap-4">
-					<h3 className="tr-title-section text-text-default">{t("settings.workspaces.title")}</h3>
-					<p className="text-text-muted tr-text-metadata">{t("settings.workspaces.description")}</p>
-				</div>
-				<SettingsRadioCards
-					name="settle-idle-days"
-					label={t("settings.workspaces.title")}
-					choices={IDLE_CHOICES.map(({ days, hint, description, ...choice }) => ({
-						...choice,
-						label:
-							days === null
-								? t("settings.workspaces.idle.neverLabel")
-								: t("settings.workspaces.idle.days", { count: days }),
-						...(hint ? { hint: t(hint) } : {}),
-						description: t(description),
-					}))}
-					value={toChoice(settleIdleDays)}
-					disabled={!supported}
-					onSelect={select}
+									}
+								>
+									{t("settings.workspaces.directoryBrowse")}
+								</Button>
+							</span>
+						}
+					/>
+				) : null}
+				<SettingsRow
+					{...settingProps(t, SETTING.settleIdle)}
+					description={description ? t(description) : label(settleIdleDays)}
+					reset={reset}
+					control={
+						<SettingsChoice
+							label={t(SETTING.settleIdle.label)}
+							cost="expensive"
+							options={IDLE_CHOICES.map(({ id, days, hint, testId }) => ({
+								id,
+								label: label(days),
+								...(hint ? { hint: t(hint) } : {}),
+								testId,
+							}))}
+							value={value}
+							disabled={!supported}
+							onSelect={onSelect}
+							onPendingChange={setPending}
+						/>
+					}
 				/>
 			</div>
-		</section>
+		</SettingsPage>
 	);
 }

@@ -18,6 +18,7 @@ import {
 	packageSourceIdentity,
 	piDeclarationIdentity,
 	piPackageSourceKind,
+	piResourcePathKey,
 } from "./identity";
 import { createPiSettings } from "./settingsView";
 
@@ -71,8 +72,8 @@ async function buildCatalog(options: PiPackageCatalogOptions): Promise<PiPackage
 		builtinExtensions: [...options.builtinExtensions],
 	});
 	const resolved = await packageManager.resolve(async () => "skip");
-	const excluded = new Set((options.excludedExtensionPaths ?? []).map((path) => resolve(path)));
-	const isExcluded = (path: string) => excluded.has(resolve(path));
+	const excluded = new Set((options.excludedExtensionPaths ?? []).map(piResourcePathKey));
+	const isExcluded = (path: string) => excluded.has(piResourcePathKey(path));
 
 	const packages = new Map<string, PiPackageSummary>();
 	const declarationKey = (scope: PiPackageScope, source: string) => `${scope}\0${source}`;

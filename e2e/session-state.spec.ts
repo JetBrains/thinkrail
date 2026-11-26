@@ -152,24 +152,30 @@ test("marking a workspace unread relights its result until the chat is left, and
 		const workspace = defaultWorkspaceRow(page);
 		await enterDefaultWorkspace(page);
 		await openPersistedChat(page, "mark unread receipt");
+		const tab = page.locator(`[data-testid="editor-tab"][data-session-id="${session.id}"]`);
 		await expect(page.getByText("Result to revisit.", { exact: true })).toBeVisible();
 		await expect(workspace).not.toHaveAttribute("data-attention", /.+/);
+		await expect(tab.getByTestId("attention-dot")).toHaveCount(0);
 
 		await openWorkspaceMenu(workspace);
 		await expect(page.getByTestId("workspace-mark-read")).toHaveCount(0);
 		await page.getByTestId("workspace-mark-unread").click();
 		await expectAttentionDot(workspace);
+		await expect(tab.getByTestId("attention-dot")).toHaveAttribute("aria-label", "Needs attention");
 		await settleFrames(page);
 		await expectAttentionDot(workspace);
+		await expect(tab.getByTestId("attention-dot")).toBeVisible();
 
 		await page.getByTestId("scope-workspace").click();
 		await expect(page.getByTestId("scope-workspace-mark-unread")).toHaveCount(0);
 		await page.getByTestId("scope-workspace-mark-read").click();
 		await expect(workspace).not.toHaveAttribute("data-attention", /.+/);
+		await expect(tab.getByTestId("attention-dot")).toHaveCount(0);
 
 		await page.getByTestId("scope-workspace").click();
 		await page.getByTestId("scope-workspace-mark-unread").click();
 		await expectAttentionDot(workspace);
+		await expect(tab.getByTestId("attention-dot")).toBeVisible();
 		await goProjectHome(page);
 		await expectAttentionDot(workspace);
 		await workspace.getByTestId("workspace-name").click();

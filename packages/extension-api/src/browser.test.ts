@@ -83,4 +83,35 @@ describe("browser-safe public surface", () => {
 			expect(await build.outputs[0]?.text()).not.toContain("defineServerExtension");
 		},
 	);
+
+	it("bundles @thinkrail/extension-api/installed with no runtime imports at all", async () => {
+		const imports: string[] = [];
+		const build = await Bun.build({
+			entrypoints: [Bun.resolveSync("@thinkrail/extension-api/installed", import.meta.dir)],
+			target: "browser",
+			plugins: [
+				{
+					name: "enforce-dependency-free-entry",
+					setup(builder) {
+						builder.onResolve({ filter: /^[^./]/ }, ({ path }) => {
+							if (!isAbsolute(path)) imports.push(path);
+							return undefined;
+						});
+						builder.onLoad({ filter: /.*/ }, ({ path }) => {
+							assertBrowserSource(path);
+							return undefined;
+						});
+					},
+				},
+			],
+		});
+
+		expect(build.logs).toEqual([]);
+		expect(build.success).toBe(true);
+		expect(imports).toEqual([]);
+		const output = await build.outputs[0]?.text();
+		expect(output).not.toContain("defineServerExtension");
+		expect(output).not.toContain("function defineWebExtension");
+		expect(output).not.toContain("function parseToolResultContent");
+	});
 });

@@ -181,6 +181,7 @@ export function ReviewThreadCard({
 						e.stopPropagation();
 						if (isImeComposing(e.nativeEvent)) return;
 						if (e.key === "Escape") {
+							e.preventDefault();
 							changeEdit(() => undefined);
 							returnFocus();
 						}

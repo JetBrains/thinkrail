@@ -212,7 +212,7 @@ describe("colour at a call site", () => {
 });
 
 describe("raw colour values", () => {
-	const ALLOWLIST = new Set(["lib/utils.ts"]);
+	const ALLOWLIST = new Set(["packages/ui/theme.ts"]);
 
 	it("appear in no component", () => {
 		const literal = /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(/;

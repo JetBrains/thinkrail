@@ -14,6 +14,7 @@ import {
 	InstallPackageBody,
 	type InstallStep,
 	installFailureOutcome,
+	installFailureText,
 	installStepHeader,
 	sourceDisplayName,
 } from "./InstallPackageDialog";
@@ -67,6 +68,7 @@ function render(
 	catalog: PiPackagesCatalog | null,
 	step: InstallStep = { kind: "form" },
 	source = "",
+	extensionsSupported = true,
 ) {
 	return renderToStaticMarkup(
 		<TooltipProvider>
@@ -76,12 +78,14 @@ function render(
 				scope="user"
 				catalog={catalog}
 				workspaceId={workspaceId}
+				extensionsSupported={extensionsSupported}
 				onSourceChange={() => {}}
 				onScopeChange={() => {}}
 				onSubmit={() => {}}
 				onCancel={() => {}}
 				onBack={() => {}}
 				onDone={() => {}}
+				onInstallGlobally={() => {}}
 			/>
 		</TooltipProvider>,
 	);
@@ -96,7 +100,14 @@ test("the form offers both scopes with a trusted workspace and shows the setting
 	expect(markup).not.toContain("install-package-notice");
 	expect(markup).toContain('data-testid="install-package-source-help"');
 	expect(markup).toContain('aria-label="What can I paste here?"');
-	expect(markup).toContain('data-testid="packages-gallery-link"');
+	expect(markup.indexOf('data-testid="extensions-gallery-link"')).toBeGreaterThan(-1);
+	expect(markup.indexOf('data-testid="extensions-gallery-link"')).toBeLessThan(
+		markup.indexOf('data-testid="packages-gallery-link"'),
+	);
+	expect(markup).toContain('href="https://thinkrail.ai/extensions/"');
+	const older = render("w1", CATALOG, { kind: "form" }, "", false);
+	expect(older).toContain('data-testid="packages-gallery-link"');
+	expect(older).not.toContain("extensions-gallery-link");
 	expect(markup).toMatch(/data-testid="install-package-submit"[^>]*disabled/);
 	const typed = render("w1", CATALOG, { kind: "form" }, "npm:@acme/pi-jira@1.4.2");
 	expect(typed).toContain('data-testid="install-package-echo"');
@@ -190,8 +201,46 @@ test("only a failure the host raised before persisting means nothing was added",
 	expect(installFailureOutcome(new RequestTimeoutError("slow"))).toBe("timedOut");
 });
 
+test("an install failure says what happened and keeps npm's text as details", () => {
+	const npm =
+		"npm install nope --prefix /p --legacy-peer-deps --no-audit --no-fund failed with code 1:\nnpm error code E404";
+	expect(installFailureText(t, new RequestError("PACKAGE_NOT_FOUND", npm))).toEqual({
+		message: t("settings.packages.installDialog.failedNotFound"),
+		details: npm,
+	});
+	expect(installFailureText(t, new RequestError("PACKAGE_REGISTRY_UNREACHABLE", npm)).message).toBe(
+		"Couldn't reach the npm registry. Check your internet connection or proxy, then retry.",
+	);
+	expect(installFailureText(t, new RequestError("PACKAGE_INSTALL_FAILED", npm))).toEqual({
+		message: "The install stopped with an error. The details say why.",
+		details: npm,
+	});
+	expect(installFailureText(t, new RequestError("PACKAGE_OFFLINE", "pi is offline"))).toEqual({
+		message: "pi is offline",
+	});
+	expect(installFailureText(t, new RequestTimeoutError("slow")).details).toBeUndefined();
+	expect(installFailureOutcome(new RequestError("PACKAGE_NOT_FOUND", npm))).toBe("nothingAdded");
+	expect(installFailureOutcome(new RequestError("PACKAGE_REGISTRY_UNREACHABLE", npm))).toBe(
+		"nothingAdded",
+	);
+	const failed = render("w1", CATALOG, {
+		kind: "failed",
+		name: "nope",
+		message: t("settings.packages.installDialog.failedNotFound"),
+		details: npm,
+		outcome: "nothingAdded",
+	});
+	expect(failed).toContain("npm couldn&#x27;t find this package");
+	expect(failed).toContain('data-testid="install-package-error-details-toggle"');
+	expect(failed).toContain('aria-expanded="false"');
+	expect(failed).not.toContain("E404");
+	expect(
+		render("w1", CATALOG, { kind: "failed", name: "x", message: "m", outcome: "unknown" }),
+	).not.toContain("install-package-error-details-toggle");
+});
+
 test("each step has its dialog title", () => {
-	expect(installStepHeader(t, { kind: "form" }).title).toBe("Install a pi package");
+	expect(installStepHeader(t, { kind: "form" }).title).toBe("Install an extension or pi package");
 	expect(installStepHeader(t, { kind: "installing", name: "x" }).title).toBe("Installing x…");
 	expect(installStepHeader(t, { kind: "installed", summary: SUMMARY }).title).toBe(
 		"Installed @acme/pi-jira · 1.4.2",
@@ -234,17 +283,100 @@ test("a pasted `pi install -l …` line selects the repository scope when it is 
 						projectSettingsPath: "/repo/.pi/settings.json",
 					}}
 					workspaceId="w1"
+					extensionsSupported
 					onSourceChange={() => {}}
 					onScopeChange={() => {}}
 					onSubmit={() => {}}
 					onCancel={() => {}}
 					onBack={() => {}}
 					onDone={() => {}}
+					onInstallGlobally={() => {}}
 				/>
 			</TooltipProvider>,
 		);
 	source = "pi install -l npm:@acme/pi-jira";
 	if (parsePiPackageInput(source).local) scope = "project";
-	expect(render()).toContain('data-testid="install-package-scope-project" data-active="true"');
+	expect(render()).toMatch(/data-active="true"[^>]*data-testid="install-package-scope-project"/);
 	expect(render()).toContain("npm · @acme/pi-jira");
+});
+
+const PALETTE_ENTRY = {
+	name: "@thinkrail/example-extension-palette",
+	title: "Palette",
+	description: "Colour palettes in chat.",
+	enabled: true,
+	tools: ["color_palette"],
+	hasChildExtensions: false,
+	settings: [
+		{ key: "contrast", default: true, title: "Contrast ratings", description: "Add WCAG ratings." },
+	],
+	kind: "installed" as const,
+	source: "/Users/me/palette",
+	version: "0.1.0",
+	state: "loaded" as const,
+	web: { url: "/extensions/p/0.1.0-abc/dist/web.js" },
+};
+
+test("an installed extension says its kind and shows its tools, chat cards and own settings", () => {
+	const summary = {
+		...SUMMARY,
+		name: PALETTE_ENTRY.name,
+		resources: [],
+		installed: "extension" as const,
+		extension: PALETTE_ENTRY,
+	};
+	const markup = render("w1", CATALOG, { kind: "installed", summary });
+	expect(markup).toContain('data-kind="extension"');
+	expect(markup).toContain("A ThinkRail extension");
+	expect(markup).toContain("color_palette");
+	expect(markup).toContain('data-testid="install-package-cards"');
+	expect(markup).toContain("Contrast ratings");
+	expect(markup).toContain("Add WCAG ratings.");
+	expect(markup).toContain("open chats pick it up when their current turn ends");
+	expect(installStepHeader(t, { kind: "installed", summary }).title).toBe(
+		"Installed Palette · 0.1.0",
+	);
+	const plain = render("w1", CATALOG, {
+		kind: "installed",
+		summary: { ...SUMMARY, installed: "package" },
+	});
+	expect(plain).toContain('data-kind="package"');
+	expect(plain).toContain("A pi package.");
+	const bare = render("w1", CATALOG, {
+		kind: "installed",
+		summary: { ...SUMMARY, resources: [], installed: "extension" },
+	});
+	expect(bare).toContain('data-kind="extension"');
+	expect(bare).toContain("open chats pick it up when their current turn ends");
+});
+
+test("a repository-scope extension offers to install globally instead of a dead end", () => {
+	const markup = render("w1", CATALOG, { kind: "scopeUnsupported", name: "Palette" });
+	expect(markup).toContain('data-testid="install-package-scope-unsupported"');
+	expect(markup).toContain("Extensions install for you");
+	expect(markup).toContain('data-testid="install-package-install-globally"');
+	expect(markup).toContain('data-testid="install-package-back"');
+	expect(installStepHeader(t, { kind: "scopeUnsupported", name: "Palette" }).title).toBe(
+		"Palette installs for you only",
+	);
+});
+
+test("a Browse preset opens at the confirm step with its source and the trust statement", () => {
+	const preset = {
+		source: "npm:thinkrail-ext-weather",
+		title: "Weather",
+		version: "1.2.0",
+		author: "Jane Doe",
+		description: "Forecasts in chat.",
+	};
+	const markup = render(null, CATALOG, { kind: "confirm", preset });
+	expect(markup).toContain('data-step="confirm"');
+	expect(markup).toContain("npm:thinkrail-ext-weather");
+	expect(markup).toContain("runs code on this machine");
+	expect(markup).toContain('data-testid="install-package-confirm"');
+	expect(markup).not.toContain("install-package-scope");
+	expect(installStepHeader(t, { kind: "confirm", preset })).toEqual({
+		title: "Install Weather?",
+		description: "From the community catalog · 1.2.0 · Jane Doe",
+	});
 });

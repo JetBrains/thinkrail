@@ -32,7 +32,7 @@ export function createAgentRunPlan(
 ): AgentRunPlan {
 	const listOnly = playwrightArgs.includes("--list");
 	const buildCommand =
-		listOnly || options.webBuildReady === true ? null : [bun, "run", "build:web"];
+		listOnly || options.webBuildReady === true ? null : [bun, "run", "build:e2e"];
 	const childEnv = stripAmbientPiCredentials({
 		...env,
 		THINKRAIL_E2E_SKIP_BUILD: "1",

@@ -82,3 +82,18 @@ test("only the latest request settles the probe", () => {
 	});
 	expect(stillChecking.pending).toBe(3);
 });
+
+test("the CLI status is one Settings row: visible state and instruction, Refresh as its stop", () => {
+	const markup = view({ status: { connected: false } });
+	expect(markup).toContain('data-setting-row="github-cli"');
+	expect(markup).toContain(`>${EN["settings.github.cli"]}</span>`);
+	expect(markup).toContain(String(EN["settings.github.title"]));
+	expect(markup).toContain('<code class="tr-code-text">gh auth login</code>');
+	expect(markup).toMatch(/<button[^>]*tabindex="0"[^>]*data-testid="settings-gh-refresh"/);
+	expect(markup).toMatch(/<button[^>]*data-size="m"[^>]*data-testid="settings-gh-refresh"/);
+	expect(markup).not.toContain(" title=");
+
+	const connected = view({ status: { connected: true, login: "octo" } });
+	expect(connected).toContain(String(EN["settings.github.connected"]));
+	expect(connected).toMatch(/data-setting-control=""[\s\S]*settings-gh-refresh/);
+});

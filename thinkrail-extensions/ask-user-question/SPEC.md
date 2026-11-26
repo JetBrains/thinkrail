@@ -24,7 +24,7 @@ client of that contract ([[module-extension-api]]) and is deletable without a co
 
 - `@thinkrail/ext-ask-user-question/server` default-exports a session-only descriptor:
   - `extensions: []`;
-  - `settings: { richPreviews: { type: "boolean", default: true } }` — Settings → Extensions shows it as the
+  - `settings: { richPreviews: { type: "boolean", default: true } }` — Settings → Extensions & skills shows it as the
     nested "Rich previews in questions" switch ([[module-thinkrail-extensions]]);
   - `sessionExtensions: (session) => [factory]`, a factory that reads `session.setting("richPreviews")`
     **inside its body** and composes `createAskUserQuestionExtension({ ask, announce, guidance, filePreviews,
@@ -67,8 +67,8 @@ client of that contract ([[module-extension-api]]) and is deletable without a co
 - The card imports `extension-api/web`, the package's argument/result **types** (type-only, from
   `@thinkrail/pi-ask-user-question/core`; a value import of the pi package stays forbidden in browser code,
   so the result guard `readAskUserQuestionResult` and the answer model in `web/state.ts` are the card's own),
-  `@thinkrail/ui` (`attention-line`, `button`, `dialog`, `dropdown-menu`, `keyboard`, `keycaps`, `local-keys`,
-  `textarea`, `utils`),
+  `@thinkrail/ui` (`attention-line`, `button`, `dialog`, `dropdown-menu`, `focus`, `keyboard`, `keycaps`,
+  `local-keys`, `textarea`, `utils`),
   `@thinkrail/resource-renderers` (`useOptionalResourceHost` for the host's Markdown — mermaid included —,
   `FramedResourcePreview` + `useResourceScope` for file previews, and `ResourcePreview` + `HtmlViewportSwitch`
   for the compare overlay), `@thinkrail/locales` (types) and `/react`, React and Remix Icon. It never imports
@@ -79,7 +79,8 @@ client of that contract ([[module-extension-api]]) and is deletable without a co
     Skip are enabled, and the attention line, active styling and focus claim appear, only while it holds,
     so a call the host is not waiting on never asks for attention);
   - `respond`;
-  - the focus scope and `mayClaimFocus()` (false once the chat served a focus chord in this mount);
+  - the focus scope and `mayClaimFocus()` (false only for the question a served composer-focus request, such as
+    Mod+L, won over; [[submodule-web-chat]]);
   - the layout callback and its `placement` (docked, transcript stub, or neither);
   - composer and transcript hand-off (`focusComposer`, `focusTranscript`), and `landingChord`, the label of the
     key that lands on the question (F6 by default).
@@ -99,7 +100,7 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   **sheet**: full column width, accent top rule, no radius; one header row holds the attention line, the
   question tabs (a single question shows its short header) and a collapse toggle; the page stack sits in
   a body that scrolls; the footer (legend, nudge, Skip, Next/Submit) is pinned. The chat caps the dock at
-  its *Question panel height* setting (40–100% of the chat, default 60), so only the content between
+  its *Question panel height* setting (40–100% of the chat, default 70), so only the content between
   header and footer scrolls. This overturns the earlier "no nested vertical scroller" rule for the dock:
   with a fixed bottom edge the alternative is a form that swallows the transcript. **Collapse** is manual
   and keeps only the header row; a tab click expands on that page, the stub expands and focuses the form,
@@ -199,12 +200,14 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   the header drives every HTML pane (`ResourcePreview.htmlViewport`) and is remembered for the session; the
   panes drop review surfaces (`reviewable={false}`), since commenting belongs to the file's own tab. The
   view switch is hidden on narrow screens, so a phone gets one at a time only.
-  **Choose and stay** (chosen by the user): Choose on a shown option, or Enter while the overlay body itself
-  has focus (so it never fights a focused button), picks it through the card's own `onSelect` — the note
-  follows the selection as in the card — and the overlay stays open; notes and Submit stay in the card, and
-  closing returns focus to the chosen row, else to the row it was opened from (Radix's trigger-less dialog
-  would leave it on `<body>`). The body's `aria-keyshortcuts` lists every key it takes, each jump digit included. Keys live on the overlay body, so Choose and an All pane title —
-  each removes the control it was pressed on — move focus to the body, and the dialog hands focus it
+  **Choose closes** (the user, 2026-11-17, overturning #1393's "Choose and stay"): in every view, Choose on a
+  shown option, or Enter while the overlay body itself has focus (so it never fights a focused button), picks
+  it through the card's own `onSelect` — the note follows the selection as in the card — and closes the
+  overlay; notes and Submit stay in the card. Closing, by Choose or Esc, returns focus to the chosen row,
+  else to the row it was opened from (Radix's trigger-less dialog would leave it on `<body>`), revealed in
+  the dock like any focus the card moves. An All pane title only opens that item alone. The body's
+  `aria-keyshortcuts` lists every key it takes, each jump digit included. Keys live on the overlay body, so
+  an All pane title — which removes the control it was pressed on — moves focus to the body, and the dialog hands focus it
   receives itself to the body too: Radix's own recovery parks it on the first tab stop or the dialog, where
   Enter would press the wrong control or the keys would stop. Keys: ←/→ flip (wrapping), 1–9 jump, Esc closes; keys owned by a
   slider, a field or a menu, and anything typed inside a frame, stay there. The dialog is portaled, so its
@@ -245,31 +248,28 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   the line. The stub never claims.
   Per active-chat mount the form focuses the selected choice (including Other) or first authored choice
   once; a fresh `ChatView` mount claims again (see [[submodule-web-chat]] — any switch back to the chat
-  tab). **It takes focus from `<body>`, an empty composer, or a non-text element the mouse focused**, and
-  only while `mayClaimFocus()` holds (a focus chord such as Mod+L served in this mount settles the remount
-  race for the composer). The mouse case exists because WebKit — so the macOS desktop — never focuses a
-  clicked button: a chat opened from History with the mouse leaves focus on the History button, where
-  Radix returns it, and a literal "body or empty composer" rule left the card unfocused there
-  (post-mortem: every WebKit e2e failure on #1416 was this). "The mouse focused it" is judged by the
-  focus's **provenance**, not by whether a key was pressed: a document-level keydown/pointerdown/focusin
-  watch remembers whether the latest `focusin` followed a key press with no pointer press in between, and
-  `isKeyboardFocused(active)` holds only for the element that focus change reached. Bare modifiers (Shift,
-  Control, Alt, Meta, CapsLock, AltGraph) are no key press, a pointer press hands focus back to the mouse,
-  and a key that moves no focus leaves it the mouse's. Mod+↑ from a clicked composer focuses a transcript
-  row after the key, so the row is the keyboard's. `:focus-visible` no longer takes part: both engines
-  leave that row without it, and WebKit's heuristic after a key on a mouse-focused button is unreliable.
-  The earlier "any key since the last pointer press" rule let a bare Shift before the card's first frame
-  turn the History button into keyboard focus (post-mortem: the last WebKit failure on #1416). From
-  anything keyboard navigation reached (the transcript, a tree or tab walk), a draft, other
-  text entry, Monaco or xterm, or a modal surface (dialog, alertdialog, menu, listbox), it stays put and
-  the announcement says "Agent asks a question — {landingChord} to answer". `focusTargetKind` stays pure:
-  the card passes that keyboard verdict in; the docked sheet shows
-  "waiting · {landingChord} to answer" whenever focus is outside it. The ways in are the shell's: F6 or
-  Mod+1…9 into the chat land on `[data-focus-claim]` — the current option (the cursor row, or Other's
-  field when its text is the answer), the expand toggle while collapsed — and Shift+Tab from the composer
-  focuses the same target, never Skip ([[submodule-web-chat]], [[submodule-web-shell]]). A **coarse pointer never gives up focus** at all: focusing a row (the Other input
+  tab). **It takes focus from anywhere except while the user types**: from `<body>`, an empty composer and
+  any non-text element (the feed, a transcript item, a tree row, a tab, a rail or panel root, a button),
+  however focus got there, and only while `mayClaimFocus()` holds (false for the one question a served
+  composer-focus request won over, so Mod+L opening a chat whose question already waits keeps the
+  composer, across remounts too, until that question is answered). It never claims from a composer with a
+  draft, other text entry (input, textarea, select, contenteditable, an iframe), Monaco or xterm, or
+  anything inside a modal surface (dialog, alertdialog, menu, listbox): there it stays put and the
+  announcement says "Agent asks a question — {landingChord} to answer". `focusTargetKind` stays pure; the
+  docked sheet shows "waiting · {landingChord} to answer" whenever focus is outside it. **Reversed
+  2026-11-17 (user):** #1416 claimed only from `<body>`, an empty composer or a control the *mouse* focused,
+  judged by a document-level input-modality watch, and never from keyboard navigation; it also let one
+  served Mod+L silence every later question of the mount. A waiting question is where focus belongs (the
+  focus home the Esc ladder climbs to, [[submodule-web-shell]]), so the provenance watch is gone and the
+  Mod+L exemption is per question. The ways in are the shell's and the chat's: F6 or Mod+1…9 into the chat
+  land on `[data-focus-claim]` — the current option (the cursor row, or Other's field when its text is the
+  answer), the expand toggle while collapsed —, and so do Esc in the composer, Esc on the transcript, the
+  Esc ladder from another panel and Shift+Tab from the composer, never Skip ([[submodule-web-chat]],
+  [[submodule-web-shell]]). A **coarse pointer never gives up focus** at all: focusing a row (the Other input
   especially) raises the soft keyboard over someone who was reading. A **page change** follows a tap, so
-  it may focus — except into a text field on a coarse pointer (`shouldFocusPageTarget`). The transcript is
+  it may focus — except into a text field on a coarse pointer (`shouldFocusPageTarget`). It focuses a frame
+  later and only if focus is not on the new page yet, so a tap into its Other field before that frame keeps
+  the caret. The transcript is
   never scrolled for attention: the dock is always visible. The card used to reveal itself in the
   virtualized transcript through a bounded settling window that yielded to the user's first input; docking
   removed the reveal, the settling window and the `revealElement` / `cancelAutomaticReveal` members of the
@@ -306,7 +306,11 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   discussion** and focuses its text. Enter on the primary button goes on or sends; **the platform
   modifier + Enter** (`hasPlatformModifier`: Cmd on Apple, Ctrl elsewhere) **submits from anywhere in the
   card**, fields included; **←/→ switch questions** without wrapping outside text fields, except on Skip and
-  the primary button, where they move between the two; Home/End on the question tabs jump to the first or
+  the primary button, where they move between the two; **→ past the last question goes to Submit** — on an
+  option, the last question's tab or the card itself, on a single-question card too (one rule, user
+  2026-11-20; `pageKeyTarget`): it focuses Submit, or, while Submit is disabled, says "Choose an option
+  first" as the submit chord does and keeps focus (until then → on the last page was swallowed and Submit
+  was reachable only by ↓ or Tab); Home/End on the question tabs jump to the first or
   last question; Tab keeps moving
   focus (taking it for paging would trap keyboard users in the card — the terminal, which has no focus
   order, pages with Tab too). A legend states all of it. Inside the Other field ←/→/Home/End stay caret
@@ -317,6 +321,20 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   a `<label>` **explicitly bound to its field via `htmlFor`** — `<button>` is labelable too, so on
   multi-select the implicit control would be the include toggle and clicking the row's chrome would flip an
   empty checkbox instead of putting the caret in the field.
+  **The card reveals the focus it moves.** Every focus it moves itself — ↑/↓, Home/End, ←/→ on Skip and
+  the primary button, a field parking on its row, `i` into a frame, the compare overlay closing onto a row,
+  the stub's focus request — goes through `focusAndReveal` (`@thinkrail/ui/focus`, which the chat and shell
+  use for the same target): focus with `preventScroll`, then
+  move only the nearest ancestor that actually scrolls (the dock body; inline, the plan page's scroller) just
+  enough (block "nearest", the focus ring included) for the control to be fully visible. Not
+  `scrollIntoView`, which scrolls every ancestor, the transcript and overflow-hidden boxes included. The
+  first focus claim and a page change focus in place: the body is at its top then. **The selected tab
+  stays in view:** a page change (←/→, Home/End, a chip click, Next), in the frame that focuses the page,
+  and the strip's mount (a remount restoring a cached page) move only the horizontally scrolling tab strip
+  just enough to show the selected chip (`revealActiveTab` over `@thinkrail/ui/focus`'s
+  `revealHorizontally`), never the transcript or the page; before 2026-11-20 a narrow dock left the open
+  question's chip past the strip's edge. Until 2026-11-17 every
+  such focus used `preventScroll` alone, so ↓ walked below the edge of a capped dock.
   **Fields park focus on their own row.** Enter (no modifier) or plain Escape closes the note, Other or
   discuss text and moves focus to that field's row — the saved-note button, the Other row, the discuss
   panel (`tabIndex=-1` targets). From a parked row Enter reopens the field (on the Other row it also

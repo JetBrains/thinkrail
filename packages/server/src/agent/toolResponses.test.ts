@@ -3,10 +3,10 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { AgentMessage } from "@thinkrail/contracts";
 import { TOOL_RESPONSE_CUSTOM_TYPE } from "@thinkrail/contracts";
 import {
+	builtinServerExtensions,
 	extensionSessionServices,
 	type InteractiveTools,
 	interactiveTools,
-	serverExtensions,
 } from "../extensions";
 import {
 	assessRespondability,
@@ -55,7 +55,7 @@ function composeAsk(waiters: ToolResponseWaiters): {
 	tool: AskTool;
 	messageEnd: MessageEndHook | undefined;
 } {
-	const entry = serverExtensions.find(
+	const entry = builtinServerExtensions.find(
 		(candidate) => candidate.extension.name === "ask-user-question",
 	);
 	const services = toolResponseSessionServices(waiters);
@@ -76,6 +76,7 @@ function composeAsk(waiters: ToolResponseWaiters): {
 			...services,
 			workspaceFiles: {
 				check: async () => {},
+				checkArtifacts: async (paths) => paths.map((path) => ({ path })),
 				ensureArtifactsDir: async () => {},
 				scratchDir: "",
 				artifactsDir: "",

@@ -3,6 +3,7 @@ import { localKeys } from "@thinkrail/ui/local-keys";
 import { LOCAL_KEY_DEFAULTS } from "../keybindings";
 import {
 	type TreeSearchRow,
+	treeKeyMove,
 	treeRowKey,
 	treeSearchMatches,
 	treeSearchStep,
@@ -114,5 +115,36 @@ describe("treeRowKey", () => {
 		expect(press("KeyR")).toBe("rename");
 		expect(press("F2")).toBeNull();
 		expect(press("Delete")).toBeNull();
+	});
+});
+
+describe("treeKeyMove", () => {
+	const rows = [
+		{ level: 1, expanded: true },
+		{ level: 2, expanded: undefined },
+		{ level: 1, expanded: false },
+	];
+
+	it("keeps an edge inside the tree by default", () => {
+		expect(treeKeyMove("ArrowUp", rows, 0, false)).toEqual({ kind: "stay" });
+		expect(treeKeyMove("ArrowDown", rows, 2, false)).toEqual({ kind: "stay" });
+		expect(treeKeyMove("ArrowRight", rows, 1, false)).toEqual({ kind: "stay" });
+	});
+
+	it("with leaveAtEdges hands every stay to the surrounding walk", () => {
+		expect(treeKeyMove("ArrowUp", rows, 0, true)).toBe("leave");
+		expect(treeKeyMove("ArrowDown", rows, 2, true)).toBe("leave");
+		expect(treeKeyMove("ArrowRight", rows, 1, true)).toBe("leave");
+		expect(treeKeyMove("ArrowLeft", rows, 2, true)).toBe("leave");
+	});
+
+	it("with leaveAtEdges still moves and toggles inside the tree", () => {
+		expect(treeKeyMove("ArrowDown", rows, 0, true)).toEqual({ kind: "focus", index: 1 });
+		expect(treeKeyMove("ArrowLeft", rows, 1, true)).toEqual({ kind: "focus", index: 0 });
+		expect(treeKeyMove("ArrowRight", rows, 2, true)).toEqual({ kind: "toggle" });
+		expect(treeKeyMove("ArrowLeft", rows, 0, true)).toEqual({ kind: "toggle" });
+		expect(treeKeyMove("End", rows, 0, true)).toEqual({ kind: "focus", index: 2 });
+		expect(treeKeyMove("Enter", rows, 0, true)).toBeNull();
+		expect(treeKeyMove(null, rows, 0, true)).toBeNull();
 	});
 });

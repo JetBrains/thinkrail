@@ -10,6 +10,7 @@ import { cn } from "@thinkrail/ui/utils";
 import {
 	type ComponentProps,
 	createContext,
+	type ReactNode,
 	type RefCallback,
 	use,
 	useLayoutEffect,
@@ -35,6 +36,25 @@ export interface TranscriptNavigation {
 
 export const TranscriptNavigationContext = createContext<TranscriptNavigation | null>(null);
 
+const TranscriptFlashContext = createContext<string | null>(null);
+
+/** The transcript's navigation, and the item a jump landed on, highlighted for a moment. */
+export function TranscriptProvider({
+	navigation,
+	flashedItemId,
+	children,
+}: {
+	navigation: TranscriptNavigation;
+	flashedItemId: string | null;
+	children: ReactNode;
+}) {
+	return (
+		<TranscriptNavigationContext value={navigation}>
+			<TranscriptFlashContext value={flashedItemId}>{children}</TranscriptFlashContext>
+		</TranscriptNavigationContext>
+	);
+}
+
 const MENU_LABELS = {
 	expand: "chat.transcript.menu.expand",
 	collapse: "chat.transcript.menu.collapse",
@@ -51,6 +71,7 @@ type TranscriptItemProps = Omit<ComponentProps<"article">, "id" | "ref" | "role"
 
 export function TranscriptItem({ id, ref, className, children, ...rest }: TranscriptItemProps) {
 	const navigation = use(TranscriptNavigationContext);
+	const flashed = use(TranscriptFlashContext) === id;
 	const subscribe = navigation?.subscribe ?? subscribeNothing;
 	const current = useSyncExternalStore(
 		subscribe,
@@ -76,7 +97,11 @@ export function TranscriptItem({ id, ref, className, children, ...rest }: Transc
 			tabIndex={-1}
 			data-transcript-item={id}
 			data-transcript-current={current || undefined}
-			className={cn("relative focus-visible:focus-ring-inset", className)}
+			data-flash={flashed || undefined}
+			className={cn(
+				"relative transition-colors focus-visible:focus-ring-inset data-[flash]:bg-primary-subtle",
+				className,
+			)}
 			{...rest}
 		>
 			{children}

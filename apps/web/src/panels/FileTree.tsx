@@ -17,13 +17,14 @@ import {
 	ContextMenuTrigger,
 	openContextMenuFromKeyboard,
 } from "@thinkrail/ui/context-menu";
+import { type ResolvedFolderChain, resolveFolderChain } from "@thinkrail/ui/folder-chains";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { TreeRow } from "@thinkrail/ui/tree-row";
 import { type ReactElement, useEffect, useMemo, useRef, useState } from "react";
 import { statusLetter } from "../chat/planView";
-import { copyText, fileName, firstClickOnly, joinWorkspacePath } from "../lib";
+import { fileName, firstClickOnly } from "../lib";
 import {
 	selectFilesTreeView,
-	selectWorkspaceById,
 	selectWorkspaceIsRunning,
 	supportsArtifacts,
 	type TabIntent,
@@ -33,11 +34,16 @@ import { getTransport } from "../transport";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { type ChangeMarks, statusMarkClass } from "./changesModel";
 import { holdEditorWarm, useEditorWarm, warmOnHover } from "./editorWarm";
-import { deleteEntry, pasteDestination, pasteInto, supportsFileMutations } from "./fileTreeActions";
-import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
+import {
+	copyWorkspacePath,
+	deleteEntry,
+	pasteDestination,
+	pasteInto,
+	supportsFileMutations,
+} from "./fileTreeActions";
 import { OpenInBrowserMenuItem } from "./OpenInBrowserButton";
-import { openFileInTab } from "./openTabs";
-import { TreeRow } from "./TreeRow";
+import { KEYBOARD_OPEN, type OpenTabOptions, openFileInTab, treeOpenFocus } from "./openTabs";
+import { RevealInFileManagerMenuItem } from "./RevealMenuItems";
 import { Tree, treeRowKey, useTreeKeys } from "./treeNavigation";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
@@ -95,7 +101,9 @@ export function FileTree({
 				label={t("panels.fileTree.label")}
 				focusList="files"
 				className="flex flex-col motion-safe:animate-reveal"
-				onOpenKept={(path) => void openFileInTab(workspaceId, path, "keep")}
+				onOpenKept={(path) =>
+					void openFileInTab(workspaceId, path, "keep", undefined, KEYBOARD_OPEN)
+				}
 			>
 				{nodes.map((node) => (
 					<FileNodeRow
@@ -237,7 +245,8 @@ function FileNodeRow({
 		setPathsExpanded(representedPaths, nextExpanded);
 		if (nextExpanded) reload();
 	};
-	const open = (intent: TabIntent) => void openFileInTab(workspaceId, node.path, intent);
+	const open = (intent: TabIntent, options?: OpenTabOptions) =>
+		void openFileInTab(workspaceId, node.path, intent, undefined, options);
 	const fileStatus = isDir ? undefined : marks.files.get(node.path);
 	const dirChanged = isDir && marks.dirs.has(directory?.path ?? node.path);
 	const ignored = (directory?.deepest ?? node).gitignored === true;
@@ -294,7 +303,11 @@ function FileNodeRow({
 								/>
 							) : undefined
 						}
-						onClick={isDir ? toggleDirectory : firstClickOnly(() => open("preview"))}
+						onClick={
+							isDir
+								? toggleDirectory
+								: firstClickOnly((event) => open("preview", treeOpenFocus(event)))
+						}
 						onDoubleClick={isDir ? undefined : () => open("keep")}
 						onWarm={
 							isDir || !warmFile
@@ -352,10 +365,7 @@ function FileTreeMenu({
 	const mutations = useAppStore((s) => supportsFileMutations(s.protocolVersion));
 	const moves = useAppStore((s) => supportsArtifacts(s.protocolVersion));
 	const canPaste = useAppStore((s) => s.fileClipboard !== null);
-	const copyPath = (absolute: boolean) => {
-		const worktreePath = selectWorkspaceById(useAppStore.getState(), workspaceId)?.worktreePath;
-		void copyText(absolute ? joinWorkspacePath(worktreePath ?? "", path) : path);
-	};
+	const copyPath = (absolute: boolean) => copyWorkspacePath(workspaceId, path, absolute);
 	return (
 		<ContextMenu open={open} onOpenChange={setOpen}>
 			<ContextMenuTrigger
@@ -379,6 +389,11 @@ function FileTreeMenu({
 						testId="file-tree-open-in-browser"
 					/>
 				) : null}
+				<RevealInFileManagerMenuItem
+					workspaceId={workspaceId}
+					path={path}
+					testId="file-tree-reveal-os"
+				/>
 				<ContextMenuItem data-testid="file-copy-path" onSelect={() => copyPath(true)}>
 					<Copy />
 					{t("panels.fileTree.copyPath")}

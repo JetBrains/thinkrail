@@ -231,7 +231,42 @@ function baseView(t: Translator, row: McpServerRow, now: number): McpRowView {
 	}
 }
 
+const PER_CHAT_ACTIONS: ReadonlySet<McpRowAction> = new Set(["open-chat", "reconnect", "reload"]);
+
+/** A row with no workspace open: configuration only, so no per-chat actions and no project wording. */
+export function mcpUserRowView(t: Translator, row: McpServerRow, now: number): McpRowView {
+	if (row.state === "not-running") {
+		const { summary } = row;
+		const action: McpRowAction | undefined = summary.oauth
+			? "sign-in"
+			: summary.transport === "http"
+				? "test-connection"
+				: undefined;
+		return {
+			label: t("mcp.row.userOn"),
+			tone: "success",
+			reason: t("mcp.row.userOnReason"),
+			...(action ? { action } : {}),
+			secondary: "show-log",
+		};
+	}
+	const { action, secondary, ...view } = mcpRowView(t, row, now);
+	return {
+		...view,
+		...(action && !PER_CHAT_ACTIONS.has(action) && action !== "edit" ? { action } : {}),
+		...(secondary && !PER_CHAT_ACTIONS.has(secondary) ? { secondary } : {}),
+	};
+}
+
 export type McpSettingChange = { enabled: boolean } | { exposure: McpEditableExposure };
+
+/** The no-workspace switch and exposure: the user entry itself, guarded by the rendered fingerprint. */
+export function mcpUserServerWrite(
+	summary: McpServerSummary,
+	change: McpSettingChange,
+): WsParams<"mcp.setUserServer"> {
+	return { name: summary.name, expectedFingerprint: summary.fingerprint, ...change };
+}
 
 type McpSettingWrite =
 	| { method: "mcp.setProjectOverride"; params: WsParams<"mcp.setProjectOverride"> }

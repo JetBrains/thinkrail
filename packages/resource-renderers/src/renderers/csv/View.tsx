@@ -1,9 +1,11 @@
 import { useT } from "@thinkrail/locales/react";
+import { READING_LINE } from "@thinkrail/ui/reading";
 import { useEffect, useMemo, useRef } from "react";
 import { TableVirtuoso, type TableVirtuosoHandle } from "react-virtuoso";
 import type { ResourceViewProps, ReviewThread } from "../../registry";
 import { ReviewComposer } from "../../support/ReviewComposer";
 import { ReviewThreadCard } from "../../support/ReviewThreadCard";
+import { READING_SURFACE_CLASS, useReadingSurface } from "../../support/readingSurface";
 import { revealReviewCard } from "../../support/revealFocus";
 import { contentStamp, useStampedComposer } from "../reviewComposerState";
 import { StaleComposerNotice } from "../StaleComposerNotice";
@@ -36,6 +38,17 @@ export default function CsvView({
 	onPlacedThreadIds,
 }: ResourceViewProps) {
 	const t = useT();
+	const virtuosoRef = useRef<TableVirtuosoHandle>(null);
+	const reading = useReadingSurface({
+		label: resource.path,
+		sideways: true,
+		toEdge: (direction) =>
+			virtuosoRef.current?.scrollToIndex(
+				direction < 0
+					? { index: 0, align: "start" }
+					: { index: "LAST", align: "end", offset: READING_LINE },
+			),
+	});
 	const text = content.kind === "text" ? content.text : "";
 	const table = useMemo(
 		() => parseCsv(text, sniffDelimiter(resource.path, text)),
@@ -43,7 +56,6 @@ export default function CsvView({
 	);
 	const composer = useStampedComposer<CsvSelection>(contentStamp(content));
 	const selection = composer.selection;
-	const virtuosoRef = useRef<TableVirtuosoHandle>(null);
 	const cardRefs = useRef(new Map<string, HTMLDivElement>());
 	const handledFocusRef = useRef<string | null>(null);
 	const placed = useMemo(
@@ -157,7 +169,8 @@ export default function CsvView({
 					<TableVirtuoso
 						ref={virtuosoRef}
 						data={body}
-						className="h-full"
+						{...reading}
+						className={`h-full ${READING_SURFACE_CLASS}`}
 						computeItemKey={(_index, row) => row.index}
 						components={{
 							Table: (props) => <table {...props} className="w-max min-w-full border-collapse" />,

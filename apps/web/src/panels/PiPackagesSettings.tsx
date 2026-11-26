@@ -24,9 +24,20 @@ import {
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
 import { cn } from "@thinkrail/ui/utils";
-import type { ReactNode } from "react";
-import { SETTINGS_TAG } from "./SettingsGroup";
-import { SettingsNotice } from "./SettingsNotice";
+import { Fragment, type ReactNode, useState } from "react";
+import { webExtensionTitle } from "@/extensions";
+import {
+	SETTINGS_LIST_PRIMARY,
+	SETTINGS_ROW_FOCUS,
+	SETTINGS_ROW_INSET,
+	SETTINGS_TAG,
+	SettingsGroup,
+	SettingsList,
+	SettingsNotice,
+	SettingsRow,
+	useSettingsListRow,
+} from "@/settingsKit";
+import { SETTING } from "./settingsCatalog";
 
 /** `rowKey` is the row the action came from — what the page marks busy or shows an error on. */
 export type PiPackageAction =
@@ -109,13 +120,15 @@ function Chips({ chips, dim }: { chips: readonly string[]; dim: boolean }) {
 	);
 }
 
+type SideProps = ReturnType<typeof useSettingsListRow>["sideProps"];
+
 function LoadError({
 	error,
-	path,
+	sideProps,
 	onReveal,
 }: {
 	error: string;
-	path: string;
+	sideProps: SideProps;
 	onReveal: () => void;
 }) {
 	const t = useT();
@@ -123,16 +136,20 @@ function LoadError({
 		<SettingsNotice
 			variant="error"
 			testId="package-load-error"
-			className="mt-8"
+			className="mt-4"
 			action={
-				<Button variant="ghost" size="s" data-testid="package-load-error-reveal" onClick={onReveal}>
+				<Button
+					variant="ghost"
+					size="s"
+					{...sideProps}
+					data-testid="package-load-error-reveal"
+					onClick={onReveal}
+				>
 					{t("settings.packages.openFolder")}
 				</Button>
 			}
 		>
-			<span className="break-words" title={path}>
-				{t("settings.packages.failedToLoad", { error })}
-			</span>
+			<span className="break-words">{t("settings.packages.failedToLoad", { error })}</span>
 		</SettingsNotice>
 	);
 }
@@ -141,11 +158,13 @@ function ResourceList({
 	summary,
 	installedPath,
 	busy,
+	sideProps,
 	onAction,
 }: {
 	summary: PiPackageSummary;
 	installedPath: string;
 	busy: boolean;
+	sideProps: SideProps;
 	onAction: (action: PiPackageAction) => void;
 }) {
 	const t = useT();
@@ -155,7 +174,7 @@ function ResourceList({
 	return (
 		<div
 			data-testid="package-resources"
-			className="mt-8 flex flex-col gap-8 rounded-sm border border-border-default bg-container-elevated-bg px-12 py-8"
+			className="ml-24 flex flex-col gap-8 rounded-sm bg-control-bg px-12 py-8"
 		>
 			{groups.map((group) => (
 				<div key={group.type} className="flex flex-col gap-2">
@@ -169,14 +188,14 @@ function ResourceList({
 							className="flex items-center justify-between gap-12 py-2"
 						>
 							<span className="flex min-w-0 flex-col">
-								<span
-									className="truncate tr-code-text-small text-text-default"
-									title={resource.path}
-								>
+								<span className="wrap-anywhere tr-code-text-small text-text-default">
 									{resource.displayName}
 								</span>
+								<span className="wrap-anywhere tr-code-text-small text-text-subtle">
+									{resource.path}
+								</span>
 								{resource.type === "extensions" && resource.enabled ? (
-									<span className="truncate tr-text-metadata text-text-muted">
+									<span className="wrap-anywhere tr-text-metadata text-text-muted">
 										{resourceChips(resource).join(" · ")}
 									</span>
 								) : null}
@@ -194,6 +213,7 @@ function ResourceList({
 				<Button
 					variant="outline"
 					size="s"
+					{...sideProps}
 					data-testid="package-reveal"
 					disabled={busy}
 					onClick={() =>
@@ -206,6 +226,7 @@ function ResourceList({
 					variant="outline"
 					size="s"
 					tone="danger"
+					{...sideProps}
 					data-testid="package-remove"
 					disabled={busy}
 					onClick={() =>
@@ -219,33 +240,30 @@ function ResourceList({
 	);
 }
 
-function RowShell({
-	testId,
-	dataAttributes,
-	off,
-	caret,
-	children,
-	actions,
-}: {
-	testId: string;
-	dataAttributes?: Record<string, string | undefined>;
-	off: boolean;
-	caret?: ReactNode;
-	children: ReactNode;
-	actions: ReactNode;
-}) {
-	return (
-		<li
-			data-testid={testId}
-			data-enabled={off ? "false" : "true"}
-			{...dataAttributes}
-			className="flex items-start gap-8 px-12 py-8"
-		>
-			<span className="flex w-16 shrink-0 justify-center pt-2">{caret}</span>
-			<div className="flex min-w-0 flex-1 flex-col gap-4">{children}</div>
-			<div className="flex shrink-0 items-center gap-8 pt-2">{actions}</div>
-		</li>
-	);
+/** The list row id of a package: its scope and source, which pi keys a declaration by. */
+function packageRowId(target: { scope: PiPackageScope; source: string }): string {
+	return `${target.scope}:${target.source}`;
+}
+
+function looseRowId(entry: { path: string }): string {
+	return `file:${entry.path}`;
+}
+
+export interface RowMenuControl {
+	menuOpen?: boolean | undefined;
+	onMenuOpenChange?: ((open: boolean) => void) | undefined;
+}
+
+export function menuControl({ menuOpen = false, onMenuOpenChange }: RowMenuControl) {
+	return onMenuOpenChange ? { open: menuOpen, onOpenChange: onMenuOpenChange } : {};
+}
+
+function supersedingTitle(
+	t: Translator,
+	by: NonNullable<PiPackageSummary["supersededBy"]>,
+): string {
+	const key = webExtensionTitle(by.name);
+	return key ? t(key) : by.title;
 }
 
 export function PackageRow({
@@ -254,6 +272,8 @@ export function PackageRow({
 	expanded,
 	busy,
 	error,
+	menuOpen,
+	onMenuOpenChange,
 	onToggleExpanded,
 	onAction,
 }: {
@@ -264,54 +284,121 @@ export function PackageRow({
 	error: string | undefined;
 	onToggleExpanded: () => void;
 	onAction: (action: PiPackageAction) => void;
-}) {
+} & RowMenuControl) {
 	const t = useT();
+	const { rowProps, primaryProps, sideProps } = useSettingsListRow(packageRowId(summary));
 	const rowKey = piPackageKey(summary);
 	const installedPath = summary.installedPath;
 	const off = !summary.enabled;
 	const loadError = off ? undefined : firstLoadError(summary.resources);
-	const titleClass = off ? "text-text-muted" : "text-text-default";
+	const Caret = expanded ? ChevronDown : ChevronRight;
 	return (
-		<RowShell
-			testId="package-row"
-			dataAttributes={{
-				"data-identity": summary.identity,
-				"data-scope": summary.scope,
-				"data-installed": installedPath === undefined ? "false" : "true",
-			}}
-			off={off}
-			caret={
-				installedPath === undefined ? undefined : (
-					<IconButton
-						icon={expanded ? ChevronDown : ChevronRight}
-						size="s"
-						label={t(expanded ? "settings.packages.collapse" : "settings.packages.expand", {
-							name: summary.name,
-						})}
-						data-testid="package-expand"
-						aria-expanded={expanded}
-						onClick={onToggleExpanded}
-					/>
-				)
-			}
-			actions={
-				<>
+		<li
+			{...rowProps}
+			data-testid="package-row"
+			data-enabled={off ? "false" : "true"}
+			data-identity={summary.identity}
+			data-scope={summary.scope}
+			data-installed={installedPath === undefined ? "false" : "true"}
+			className={cn(
+				"flex flex-col gap-4 border-border-muted border-b py-6 last:border-b-0",
+				SETTINGS_ROW_INSET,
+				SETTINGS_ROW_FOCUS,
+			)}
+		>
+			<div className="flex flex-wrap items-center gap-8">
+				<button
+					type="button"
+					{...primaryProps}
+					{...(installedPath === undefined
+						? { "aria-haspopup": "menu" as const, onClick: () => onMenuOpenChange?.(true) }
+						: {
+								"data-testid": "package-expand",
+								"aria-expanded": expanded,
+								"aria-label": t(
+									expanded ? "settings.packages.collapse" : "settings.packages.expand",
+									{ name: summary.name },
+								),
+								onClick: onToggleExpanded,
+							})}
+					className={cn(SETTINGS_LIST_PRIMARY, "min-w-[12rem]")}
+				>
+					<span className="flex min-w-0 max-w-full flex-wrap items-center gap-x-8 gap-y-4">
+						{installedPath === undefined ? null : (
+							<Caret aria-hidden className="size-14 shrink-0 text-text-muted" />
+						)}
+						<span
+							className={cn(
+								"wrap-anywhere tr-title-compact",
+								off ? "text-text-muted" : "text-text-default",
+							)}
+						>
+							{summary.name}
+						</span>
+						<span data-testid="package-type" className={cn(SETTINGS_TAG, "text-text-muted")}>
+							{t("settings.packages.type")}
+						</span>
+						<span data-testid="package-kind" className={cn(SETTINGS_TAG, "text-text-muted")}>
+							{t(KIND_LABEL[summary.kind])}
+						</span>
+						<span data-testid="package-scope" className={cn(SETTINGS_TAG, "text-text-muted")}>
+							{t(SCOPE_LABEL[summary.scope])}
+						</span>
+						{updateAvailable ? (
+							<span
+								data-testid="package-update-available"
+								className={cn(SETTINGS_TAG, "border-feedback-warning text-feedback-warning")}
+							>
+								{t("settings.packages.updateAvailable")}
+							</span>
+						) : null}
+						{installedPath === undefined ? (
+							<span
+								data-testid="package-not-installed"
+								className={cn(SETTINGS_TAG, "border-feedback-warning text-feedback-warning")}
+							>
+								{t("settings.packages.notInstalled")}
+							</span>
+						) : null}
+					</span>
+					<span
+						className={cn(
+							"wrap-anywhere tr-text-metadata",
+							off ? "text-text-subtle" : "text-text-muted",
+						)}
+					>
+						{[
+							summary.source,
+							installedPath === undefined ? t("settings.packages.notInstalledHint") : null,
+							summary.version
+								? t("settings.packages.installed", { version: summary.version })
+								: null,
+							summary.description ?? null,
+						]
+							.filter((part): part is string => part !== null)
+							.join(" · ")}
+					</span>
+					<Chips chips={packageChips(summary.resources)} dim={off} />
+				</button>
+				<div className="ml-auto flex shrink-0 items-center gap-8">
 					{installedPath === undefined ? null : (
 						<Switch
 							checked={summary.enabled}
 							label={t("settings.packages.enable", { name: summary.name })}
 							testId="package-toggle"
+							{...sideProps}
 							disabled={busy}
 							onCheckedChange={(enabled) =>
 								onAction({ kind: "togglePackage", rowKey, target: summary, enabled })
 							}
 						/>
 					)}
-					<DropdownMenu>
+					<DropdownMenu {...menuControl({ menuOpen, onMenuOpenChange })}>
 						<DropdownMenuTrigger asChild>
 							<IconButton
 								icon={MoreVertical}
 								label={t("settings.packages.more", { name: summary.name })}
+								{...sideProps}
 								data-testid="package-menu"
 							/>
 						</DropdownMenuTrigger>
@@ -343,63 +430,29 @@ export function PackageRow({
 							</DropdownMenuItem>
 						</DropdownMenuContent>
 					</DropdownMenu>
-				</>
-			}
-		>
-			<div className="flex min-w-0 flex-wrap items-center gap-x-8 gap-y-4">
-				<span className={cn("min-w-0 truncate tr-title-compact", titleClass)} title={summary.name}>
-					{summary.name}
-				</span>
-				<span data-testid="package-kind" className={cn(SETTINGS_TAG, "text-text-muted")}>
-					{t(KIND_LABEL[summary.kind])}
-				</span>
-				<span data-testid="package-scope" className={cn(SETTINGS_TAG, "text-text-muted")}>
-					{t(SCOPE_LABEL[summary.scope])}
-				</span>
-				{updateAvailable ? (
-					<span
-						data-testid="package-update-available"
-						className={cn(SETTINGS_TAG, "border-feedback-warning text-feedback-warning")}
-					>
-						{t("settings.packages.updateAvailable")}
-					</span>
-				) : null}
-				{installedPath === undefined ? (
-					<span
-						data-testid="package-not-installed"
-						className={cn(SETTINGS_TAG, "border-feedback-warning text-feedback-warning")}
-					>
-						{t("settings.packages.notInstalled")}
-					</span>
-				) : null}
+				</div>
 			</div>
-			<span
-				className={cn("truncate tr-text-metadata", off ? "text-text-subtle" : "text-text-muted")}
-			>
-				{[
-					summary.source,
-					installedPath === undefined ? t("settings.packages.notInstalledHint") : null,
-					summary.version ? t("settings.packages.installed", { version: summary.version }) : null,
-					summary.description ?? null,
-				]
-					.filter((part): part is string => part !== null)
-					.join(" · ")}
-			</span>
 			{summary.shadowed ? (
-				<span data-testid="package-shadowed" className="tr-text-metadata text-text-subtle">
+				<span data-testid="package-shadowed" className="px-4 tr-text-metadata text-text-subtle">
 					{t("settings.packages.shadowed")}
 				</span>
 			) : null}
-			<Chips chips={packageChips(summary.resources)} dim={off} />
+			{summary.supersededBy ? (
+				<span data-testid="package-superseded" className="px-4 tr-text-metadata text-text-subtle">
+					{t("settings.packages.supersededBy", {
+						extension: supersedingTitle(t, summary.supersededBy),
+					})}
+				</span>
+			) : null}
 			{loadError && installedPath !== undefined ? (
 				<LoadError
 					error={loadError}
-					path={installedPath}
+					sideProps={sideProps}
 					onReveal={() => onAction({ kind: "reveal", rowKey, path: installedPath })}
 				/>
 			) : null}
 			{error ? (
-				<SettingsNotice variant="error" testId="package-action-error" className="mt-8">
+				<SettingsNotice variant="error" testId="package-action-error" className="mt-4">
 					{error}
 				</SettingsNotice>
 			) : null}
@@ -408,10 +461,11 @@ export function PackageRow({
 					summary={summary}
 					installedPath={installedPath}
 					busy={busy}
+					sideProps={sideProps}
 					onAction={onAction}
 				/>
 			) : null}
-		</RowShell>
+		</li>
 	);
 }
 
@@ -419,26 +473,72 @@ export function LooseRow({
 	entry,
 	busy,
 	error,
+	menuOpen,
+	onMenuOpenChange,
 	onAction,
 }: {
 	entry: PiLooseExtension;
 	busy: boolean;
 	error: string | undefined;
 	onAction: (action: PiPackageAction) => void;
-}) {
+} & RowMenuControl) {
 	const t = useT();
+	const { rowProps, primaryProps, sideProps } = useSettingsListRow(looseRowId(entry));
 	const off = !entry.enabled;
 	return (
-		<RowShell
-			testId="loose-extension-row"
-			dataAttributes={{ "data-path": entry.path, "data-scope": entry.scope }}
-			off={off}
-			actions={
-				<>
+		<li
+			{...rowProps}
+			data-testid="loose-extension-row"
+			data-enabled={off ? "false" : "true"}
+			data-path={entry.path}
+			data-scope={entry.scope}
+			className={cn(
+				"flex flex-col gap-4 border-border-muted border-b py-6 last:border-b-0",
+				SETTINGS_ROW_INSET,
+				SETTINGS_ROW_FOCUS,
+			)}
+		>
+			<div className="flex flex-wrap items-center gap-8">
+				<button
+					type="button"
+					{...primaryProps}
+					aria-haspopup="menu"
+					className={cn(SETTINGS_LIST_PRIMARY, "min-w-[12rem]")}
+					onClick={() => onMenuOpenChange?.(true)}
+				>
+					<span className="flex min-w-0 max-w-full flex-wrap items-center gap-x-8 gap-y-4">
+						<span
+							className={cn(
+								"wrap-anywhere tr-code-text",
+								off ? "text-text-muted" : "text-text-default",
+							)}
+						>
+							{entry.displayName}
+						</span>
+						<span className={cn(SETTINGS_TAG, "text-text-muted")}>
+							{t("settings.packages.kind.file")}
+						</span>
+						<span className={cn(SETTINGS_TAG, "text-text-muted")}>
+							{t(SCOPE_LABEL[entry.scope])}
+						</span>
+					</span>
+					<span
+						className={cn(
+							"wrap-anywhere tr-text-metadata",
+							off ? "text-text-subtle" : "text-text-muted",
+						)}
+					>
+						<span className="tr-code-text-small">{entry.path}</span>
+						{` · ${t("settings.packages.looseHint")}`}
+					</span>
+					<Chips chips={resourceChips(entry)} dim={off} />
+				</button>
+				<div className="ml-auto flex shrink-0 items-center gap-8">
 					<Switch
 						checked={entry.enabled}
 						label={t("settings.packages.enableResource", { name: entry.displayName })}
 						testId="loose-extension-toggle"
+						{...sideProps}
 						disabled={busy}
 						onCheckedChange={(enabled) =>
 							onAction({
@@ -451,11 +551,12 @@ export function LooseRow({
 							})
 						}
 					/>
-					<DropdownMenu>
+					<DropdownMenu {...menuControl({ menuOpen, onMenuOpenChange })}>
 						<DropdownMenuTrigger asChild>
 							<IconButton
 								icon={MoreVertical}
 								label={t("settings.packages.more", { name: entry.displayName })}
+								{...sideProps}
 								data-testid="loose-extension-menu"
 							/>
 						</DropdownMenuTrigger>
@@ -468,44 +569,21 @@ export function LooseRow({
 							</DropdownMenuItem>
 						</DropdownMenuContent>
 					</DropdownMenu>
-				</>
-			}
-		>
-			<div className="flex min-w-0 flex-wrap items-center gap-x-8 gap-y-4">
-				<span
-					className={cn(
-						"min-w-0 truncate tr-code-text",
-						off ? "text-text-muted" : "text-text-default",
-					)}
-					title={entry.path}
-				>
-					{entry.displayName}
-				</span>
-				<span className={cn(SETTINGS_TAG, "text-text-muted")}>
-					{t("settings.packages.kind.file")}
-				</span>
-				<span className={cn(SETTINGS_TAG, "text-text-muted")}>{t(SCOPE_LABEL[entry.scope])}</span>
+				</div>
 			</div>
-			<span
-				className={cn("truncate tr-text-metadata", off ? "text-text-subtle" : "text-text-muted")}
-			>
-				<span className="tr-code-text-small">{entry.path}</span> ·{" "}
-				{t("settings.packages.looseHint")}
-			</span>
-			<Chips chips={resourceChips(entry)} dim={off} />
 			{!off && entry.error ? (
 				<LoadError
 					error={entry.error}
-					path={entry.path}
+					sideProps={sideProps}
 					onReveal={() => onAction({ kind: "reveal", rowKey: entry.path, path: entry.path })}
 				/>
 			) : null}
 			{error ? (
-				<SettingsNotice variant="error" testId="package-action-error" className="mt-8">
+				<SettingsNotice variant="error" testId="package-action-error" className="mt-4">
 					{error}
 				</SettingsNotice>
 			) : null}
-		</RowShell>
+		</li>
 	);
 }
 
@@ -523,7 +601,15 @@ export interface PiPackagesGroupProps {
 	onAction: (action: PiPackageAction) => void;
 	onUpdateAll: () => void;
 	onCheckUpdates: () => void;
-	onInstall?: () => void;
+	onRetry?: (() => void) | undefined;
+	extensionRows?: readonly LeadingListRow[];
+	extraUpdates?: number;
+}
+
+export interface LeadingListRow {
+	id: string;
+	render: (menu: RowMenuControl) => ReactNode;
+	onRemove?: (() => void) | undefined;
 }
 
 export function PiPackagesGroup({
@@ -538,34 +624,109 @@ export function PiPackagesGroup({
 	onAction,
 	onUpdateAll,
 	onCheckUpdates,
-	onInstall,
+	onRetry,
+	extensionRows = [],
+	extraUpdates = 0,
 }: PiPackagesGroupProps) {
 	const t = useT();
-	const header = (
-		<div className="flex flex-wrap items-baseline justify-between gap-8 pb-8">
-			<span className="flex flex-col gap-2">
-				<h4 className="tr-text-label-pill text-text-subtle">
-					{t("settings.extensions.group.installed")}
-				</h4>
-				<p className="tr-text-metadata text-text-muted">
-					{t("settings.extensions.group.installedDescription")}
-				</p>
-			</span>
-			{catalog !== "loading" && catalog !== "failed" ? (
-				<span className="flex flex-wrap items-center gap-8 tr-text-metadata text-text-muted">
-					{updates.size > 0 ? (
-						<Button
-							variant="ghost"
-							size="s"
-							data-testid="packages-update-all"
-							onClick={onUpdateAll}
-						>
-							{t("settings.packages.updateAll")}
-						</Button>
-					) : null}
+	const [menuFor, setMenuFor] = useState<string | null>(null);
+	const menuProps = (id: string) => ({
+		menuOpen: menuFor === id,
+		onMenuOpenChange: (open: boolean) => setMenuFor(open ? id : null),
+	});
+	const group = (children: ReactNode) => (
+		<SettingsGroup
+			testId="settings-packages"
+			title={t("settings.extensions.group.installed")}
+			description={t("settings.extensions.group.installedDescription")}
+		>
+			{children}
+		</SettingsGroup>
+	);
+	const list = (rowIds: readonly string[], onRemove: (id: string) => void, rows: ReactNode) => (
+		<SettingsList
+			focusList="packages"
+			label={t("settings.extensions.group.installed")}
+			rowIds={[...extensionRows.map((row) => row.id), ...rowIds]}
+			settingId={SETTING.installedPackages.id}
+			testId="packages-list"
+			onRemove={(id) => {
+				const leading = extensionRows.find((row) => row.id === id);
+				if (leading) leading.onRemove?.();
+				else onRemove(id);
+			}}
+			onMenu={setMenuFor}
+		>
+			{extensionRows.map((row) => (
+				<Fragment key={row.id}>{row.render(menuProps(row.id))}</Fragment>
+			))}
+			{rows}
+		</SettingsList>
+	);
+	const leading = extensionRows.length > 0 ? list([], () => {}, null) : null;
+	if (catalog === "loading") {
+		return group(
+			<>
+				{leading}
+				<LoadingRegion rows={2} className="py-8" />
+			</>,
+		);
+	}
+	if (catalog === "failed") {
+		return group(
+			<>
+				{leading}
+				<SettingsNotice
+					variant="error"
+					rowId="packages-failed"
+					testId="packages-failed"
+					action={
+						onRetry ? (
+							<Button
+								variant="outline"
+								size="s"
+								tabIndex={0}
+								data-testid="packages-retry"
+								onClick={onRetry}
+							>
+								{t("common.retry")}
+							</Button>
+						) : undefined
+					}
+				>
+					{t("settings.packages.loadFailed")}
+				</SettingsNotice>
+			</>,
+		);
+	}
+	const ordered = [...catalog.packages].sort((a, b) =>
+		a.scope === b.scope ? a.name.localeCompare(b.name) : a.scope === "user" ? -1 : 1,
+	);
+	const removable = (id: string) => ordered.find((summary) => packageRowId(summary) === id);
+	return group(
+		<>
+			{catalog.projectSettingsPath && !catalog.projectTrusted ? (
+				<SettingsNotice variant="info" testId="packages-project-untrusted" className="mb-8">
+					{t("settings.packages.projectUntrusted")}
+				</SettingsNotice>
+			) : null}
+			<SettingsRow
+				rowId="packages-updates"
+				label={t("settings.packages.updatesLabel")}
+				description={
+					checkError ? (
+						<span data-testid="packages-check-error" className="text-feedback-error">
+							{checkError}
+						</span>
+					) : updates.size + extraUpdates > 0 ? (
+						t("settings.packages.updatesAvailable", { count: updates.size + extraUpdates })
+					) : undefined
+				}
+				control={
 					<Button
-						variant="ghost"
-						size="s"
+						variant="outline"
+						size="m"
+						tabIndex={0}
 						data-testid="packages-check-updates"
 						disabled={checkingUpdates}
 						onClick={onCheckUpdates}
@@ -576,115 +737,108 @@ export function PiPackagesGroup({
 								: "settings.packages.checkUpdates",
 						)}
 					</Button>
-				</span>
-			) : null}
-		</div>
-	);
-	if (catalog === "loading") {
-		return (
-			<section data-testid="settings-packages">
-				{header}
-				<LoadingRegion rows={2} className="py-8" />
-			</section>
-		);
-	}
-	if (catalog === "failed") {
-		return (
-			<section data-testid="settings-packages">
-				{header}
-				<p
-					data-testid="packages-failed"
-					className="rounded-sm border border-border-default bg-container-elevated-bg px-12 py-8 text-text-muted tr-text-metadata"
-				>
-					{t("settings.packages.loadFailed")}
-				</p>
-			</section>
-		);
-	}
-	const ordered = [...catalog.packages].sort((a, b) =>
-		a.scope === b.scope ? a.name.localeCompare(b.name) : a.scope === "user" ? -1 : 1,
-	);
-	return (
-		<section data-testid="settings-packages" className="flex flex-col">
-			{header}
-			{catalog.projectSettingsPath && !catalog.projectTrusted ? (
-				<SettingsNotice variant="info" testId="packages-project-untrusted" className="mb-8">
-					{t("settings.packages.projectUntrusted")}
-				</SettingsNotice>
-			) : null}
-			{checkError ? (
-				<SettingsNotice variant="error" testId="packages-check-error" className="mb-8">
-					{checkError}
-				</SettingsNotice>
-			) : null}
-			{ordered.length === 0 && catalog.loose.length === 0 ? (
+				}
+				sides={
+					updates.size + extraUpdates > 0 ? (
+						<Button
+							variant="primary"
+							size="m"
+							tabIndex={0}
+							data-testid="packages-update-all"
+							onClick={onUpdateAll}
+						>
+							{t("settings.packages.updateAll")}
+						</Button>
+					) : null
+				}
+			/>
+			{ordered.length === 0 && catalog.loose.length === 0 && extensionRows.length === 0 ? (
 				<div
 					data-testid="packages-empty"
-					className="flex flex-col items-start gap-8 rounded-sm border border-border-default px-12 py-12"
+					data-setting-id={SETTING.installedPackages.id}
+					className="flex flex-col gap-2 px-8 py-8"
 				>
 					<span className="tr-text-ui text-text-default">{t("settings.packages.empty")}</span>
 					<span className="tr-text-metadata text-text-muted">
 						{t("settings.packages.emptyHint")}
 					</span>
-					<span className="flex flex-wrap items-center gap-8">
-						{onInstall ? (
-							<Button
-								variant="outline"
-								size="s"
-								data-testid="packages-empty-install"
-								onClick={onInstall}
-							>
-								{t("settings.extensions.install")}
-							</Button>
-						) : null}
-						<GalleryLink />
-					</span>
 				</div>
 			) : (
-				<ul className="flex flex-col divide-y divide-border-default rounded-sm border border-border-default bg-control-bg">
-					{ordered.map((summary) => {
-						const key = piPackageKey(summary);
-						return (
-							<PackageRow
-								key={key}
-								summary={summary}
-								updateAvailable={updates.has(key)}
-								expanded={expanded.has(key)}
-								busy={busy.has(key)}
-								error={errors.get(key)}
-								onToggleExpanded={() => onToggleExpanded(key)}
+				list(
+					[...ordered.map(packageRowId), ...catalog.loose.map(looseRowId)],
+					(id) => {
+						const target = removable(id);
+						if (target && !busy.has(piPackageKey(target))) {
+							onAction({ kind: "remove", rowKey: piPackageKey(target), target });
+						}
+					},
+					<>
+						{ordered.map((summary) => {
+							const key = piPackageKey(summary);
+							return (
+								<PackageRow
+									key={key}
+									summary={summary}
+									updateAvailable={updates.has(key)}
+									expanded={expanded.has(key)}
+									busy={busy.has(key)}
+									error={errors.get(key)}
+									{...menuProps(packageRowId(summary))}
+									onToggleExpanded={() => onToggleExpanded(key)}
+									onAction={onAction}
+								/>
+							);
+						})}
+						{catalog.loose.map((entry) => (
+							<LooseRow
+								key={entry.path}
+								entry={entry}
+								busy={busy.has(entry.path)}
+								error={errors.get(entry.path)}
+								{...menuProps(looseRowId(entry))}
 								onAction={onAction}
 							/>
-						);
-					})}
-					{catalog.loose.map((entry) => (
-						<LooseRow
-							key={entry.path}
-							entry={entry}
-							busy={busy.has(entry.path)}
-							error={errors.get(entry.path)}
-							onAction={onAction}
-						/>
-					))}
-				</ul>
+						))}
+					</>,
+				)
 			)}
-		</section>
+		</>,
 	);
 }
 
-export function GalleryLink() {
+export const EXTENSIONS_SHOWCASE_URL = "https://thinkrail.ai/extensions/";
+
+export function GalleryLinks({ extensions }: { extensions: boolean }) {
 	const t = useT();
-	return (
+	const links = [
+		...(extensions
+			? [
+					{
+						testId: "extensions-gallery-link",
+						href: EXTENSIONS_SHOWCASE_URL,
+						label: t("settings.extensions.gallery"),
+					},
+				]
+			: []),
+		{
+			testId: "packages-gallery-link",
+			href: "https://pi.dev/packages",
+			label: t("settings.packages.gallery"),
+		},
+	];
+	return links.map((link) => (
 		<a
-			data-testid="packages-gallery-link"
-			href="https://pi.dev/packages"
+			key={link.testId}
+			data-testid={link.testId}
+			href={link.href}
 			target="_blank"
 			rel="noopener noreferrer"
+			tabIndex={0}
 			className="tr-text-metadata text-primary underline underline-offset-2 focus-visible:focus-ring"
 		>
-			{t("settings.packages.gallery")} ↗
+			{link.label} ↗
 		</a>
-	);
+	));
 }
 
 function builtinTitle(t: Translator, name: string): string {
@@ -711,59 +865,55 @@ export function PiBuiltinsGroup({
 	const t = useT();
 	if (builtins.length === 0) return null;
 	return (
-		<section data-testid="settings-builtins" className="flex flex-col">
-			<div className="flex flex-col gap-2 pb-8">
-				<h4 className="tr-text-label-pill text-text-subtle">
-					{t("settings.extensions.group.builtin")}
-				</h4>
-				<p className="tr-text-metadata text-text-muted">
+		<SettingsGroup
+			testId="settings-builtins"
+			title={t("settings.extensions.group.builtin")}
+			description={
+				<span className="wrap-anywhere">
 					{t("settings.extensions.group.builtinDescription", {
 						path: builtins.some((b) => b.scope === "project")
 							? (projectSettingsPath ?? settingsPath)
 							: settingsPath,
 					})}
-				</p>
-			</div>
-			<ul className="flex flex-col divide-y divide-border-default rounded-sm border border-border-default bg-control-bg">
+				</span>
+			}
+		>
+			<div data-setting-id={SETTING.piBuiltins.id} className="flex flex-col">
 				{builtins.map((builtin) => {
 					const copy = BUILTIN_COPY[builtin.name];
 					const key = `builtin:${builtin.name}`;
 					const error = errors.get(key);
 					return (
-						<li
+						<SettingsRow
 							key={builtin.name}
-							data-testid={`builtin-row-${builtin.name}`}
-							className="flex items-start justify-between gap-12 px-12 py-8"
-						>
-							<div className="flex min-w-0 flex-col gap-4">
-								<span className="flex flex-wrap items-center gap-x-8 gap-y-4">
-									<span className="tr-title-compact text-text-default">
-										{builtinTitle(t, builtin.name)}
-									</span>
-									<code className={cn(SETTINGS_TAG, "tr-code-text-small text-text-muted")}>
-										{key}
-									</code>
+							rowId={key}
+							testId={`builtin-row-${builtin.name}`}
+							label={builtinTitle(t, builtin.name)}
+							description={
+								<span className="flex flex-col gap-2">
+									{copy ? <span>{t(copy.description)}</span> : null}
+									<code className="tr-code-text-small text-text-subtle">{key}</code>
+									{error ? (
+										<SettingsNotice variant="error" testId="package-action-error" className="mt-4">
+											{error}
+										</SettingsNotice>
+									) : null}
 								</span>
-								{copy ? (
-									<span className="tr-text-metadata text-text-muted">{t(copy.description)}</span>
-								) : null}
-								{error ? (
-									<SettingsNotice variant="error" testId="package-action-error" className="mt-4">
-										{error}
-									</SettingsNotice>
-								) : null}
-							</div>
-							<Switch
-								checked={builtin.enabled}
-								label={t("settings.packages.enable", { name: builtinTitle(t, builtin.name) })}
-								testId={`builtin-toggle-${builtin.name}`}
-								disabled={busy.has(key)}
-								onCheckedChange={(enabled) => onToggle(builtin, enabled)}
-							/>
-						</li>
+							}
+							control={
+								<Switch
+									checked={builtin.enabled}
+									label={t("settings.packages.enable", { name: builtinTitle(t, builtin.name) })}
+									testId={`builtin-toggle-${builtin.name}`}
+									tabIndex={0}
+									disabled={busy.has(key)}
+									onCheckedChange={(enabled) => onToggle(builtin, enabled)}
+								/>
+							}
+						/>
 					);
 				})}
-			</ul>
-		</section>
+			</div>
+		</SettingsGroup>
 	);
 }

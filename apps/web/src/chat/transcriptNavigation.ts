@@ -1,7 +1,7 @@
 import { resultText, strArg } from "@thinkrail/extension-api/web";
 import { isContextMenuKey } from "@thinkrail/ui/context-menu";
-import { twinArrow } from "@thinkrail/ui/keyboard";
 import type { LocalKeyEvent, LocalKeys } from "@thinkrail/ui/local-keys";
+import { type ReadingDirection, readingCommand } from "@thinkrail/ui/reading";
 import { parseSkillInvocation, userText } from "@/lib";
 import { parseReviewPackage } from "./reviewPackage";
 import type { ActivityStep, ChatRow } from "./rows";
@@ -15,31 +15,19 @@ export interface TranscriptNavItem {
 	source: ChatRow | ActivityStep;
 }
 
-export type TranscriptMoveKey =
-	| "ArrowUp"
-	| "ArrowDown"
-	| "ArrowLeft"
-	| "ArrowRight"
-	| "Home"
-	| "End";
+export type TranscriptMoveKey = "ArrowLeft" | "ArrowRight";
 
 export type TranscriptKeyAction =
 	| { kind: "move"; key: TranscriptMoveKey }
-	| { kind: "page"; direction: -1 | 1 }
+	| { kind: "line"; direction: ReadingDirection }
+	| { kind: "page"; direction: ReadingDirection }
+	| { kind: "edge"; direction: ReadingDirection }
 	| { kind: "toggle" }
 	| { kind: "copy" }
 	| { kind: "open" }
 	| { kind: "menu" }
-	| { kind: "leave" };
-
-const MOVE_KEYS: Readonly<Record<string, TranscriptMoveKey>> = {
-	ArrowUp: "ArrowUp",
-	ArrowDown: "ArrowDown",
-	ArrowLeft: "ArrowLeft",
-	ArrowRight: "ArrowRight",
-	Home: "Home",
-	End: "End",
-};
+	| { kind: "leave" }
+	| { kind: "question" };
 
 const LOCAL_ACTIONS: Readonly<Record<string, TranscriptKeyAction>> = {
 	"transcript.copy": { kind: "copy" },
@@ -119,6 +107,8 @@ export function transcriptItemFilePath(item: TranscriptNavItem): string | null {
 export function transcriptKeyAction(
 	event: LocalKeyEvent,
 	keys: Pick<LocalKeys, "match">,
+	parked = false,
+	questionWaiting = false,
 ): TranscriptKeyAction | null {
 	if (isContextMenuKey(event)) {
 		return event.altKey || event.ctrlKey || event.metaKey ? null : { kind: "menu" };
@@ -126,21 +116,20 @@ export function transcriptKeyAction(
 	const local = keys.match(event);
 	const action = LOCAL_ACTIONS[local ?? ""];
 	if (action) return action;
-	const twin = twinArrow(local);
-	if (twin === undefined && (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey)) {
+	const reading = readingCommand(event, keys, local);
+	if (reading?.kind === "side") {
+		return { kind: "move", key: reading.direction < 0 ? "ArrowLeft" : "ArrowRight" };
+	}
+	if (reading) return reading;
+	if (local !== null || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) {
 		return null;
 	}
-	const move = MOVE_KEYS[twin ?? event.key];
-	if (move) return { kind: "move", key: move };
 	switch (event.key) {
-		case "PageUp":
-			return { kind: "page", direction: -1 };
-		case "PageDown":
-			return { kind: "page", direction: 1 };
 		case "Enter":
 			return { kind: "toggle" };
 		case "Escape":
-			return { kind: "leave" };
+			if (questionWaiting) return { kind: "question" };
+			return parked ? null : { kind: "leave" };
 		default:
 			return null;
 	}

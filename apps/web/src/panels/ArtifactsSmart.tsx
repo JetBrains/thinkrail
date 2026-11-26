@@ -6,12 +6,12 @@ import {
 import type { WorkspaceArtifact } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { useTreeItem } from "@thinkrail/ui/tree-item";
+import { TreeRow } from "@thinkrail/ui/tree-row";
 import { useAppStore } from "../store";
 import { ArtifactFileRow, ArtifactTreeRows, type TreeRowContext } from "./ArtifactsTree";
 import { NewDot } from "./artifactRowParts";
 import { type ArtifactRow, artifactTree, type SmartGroup, type SmartView } from "./artifactsModel";
-import { TreeRow } from "./TreeRow";
-import { useTreeItem } from "./treeNavigation";
 
 interface SmartContext extends TreeRowContext {
 	dir: string;

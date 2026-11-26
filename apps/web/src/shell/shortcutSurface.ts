@@ -10,6 +10,8 @@ const SURFACE_SELECTORS: readonly (readonly [string, ShortcutSurface])[] = [
 		'[data-review-surface], [data-testid="review-composer"], [data-testid="review-thread-card"]',
 		"review",
 	],
+	['[data-key-scope="reader"]', "reader"],
+	["[data-settings-dialog]", "settings"],
 	['[data-key-scope="trees"]', "trees"],
 	['[data-key-scope="tabs"]', "tabs"],
 	["[data-rail-entry]", "panels"],

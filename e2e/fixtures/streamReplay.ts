@@ -115,6 +115,32 @@ export const textStreamReplay = (
 	};
 };
 
+type ToolCall = Extract<AssistantMessage["content"][number], { type: "toolCall" }>;
+
+export const toolCallReplay = (sessionId: string, toolCall: ToolCall, timestamp: number) => {
+	const push = (event: PiEvent) =>
+		JSON.stringify({ channel: WS_CHANNELS.piEvent, data: { sessionId, event } } satisfies WsPush);
+	const message: AssistantMessage = { ...assistantShell(timestamp), stopReason: "toolUse" };
+	const final: AssistantMessage = { ...message, content: [toolCall] };
+	return [
+		push({ type: "agent_start" }),
+		push({ type: "turn_start" }),
+		push({ type: "message_start", message }),
+		push({
+			type: "message_update",
+			message: final,
+			assistantMessageEvent: { type: "toolcall_start", contentIndex: 0, partial: final },
+		}),
+		push({ type: "message_end", message: final }),
+		push({
+			type: "tool_execution_start",
+			toolCallId: toolCall.id,
+			toolName: toolCall.name,
+			args: toolCall.arguments,
+		}),
+	];
+};
+
 export const interceptAppWire = async (page: Page) => {
 	let current: WebSocketRoute | null = null;
 	await page.routeWebSocket(/\/ws(\?|$)/, (browser) => {

@@ -21,6 +21,15 @@ test("cn resolves a named layout role against a numeric step of the same utility
 	expect(cn("px-chat-gutter", "px-4")).toBe("px-4");
 });
 
+test("cn lets a caller's own top and translate replace the dialog's rounded centre", () => {
+	expect(
+		cn(
+			"-translate-x-(--dialog-center) -translate-y-(--dialog-center) top-(--dialog-center) left-(--dialog-center)",
+			"top-[12vh] translate-y-0",
+		),
+	).toBe("-translate-x-(--dialog-center) left-(--dialog-center) top-[12vh] translate-y-0");
+});
+
 test("cn lets a later focus ring placement replace an earlier one", () => {
 	expect(cn("focus-visible:focus-ring", "focus-visible:focus-ring-inset")).toBe(
 		"focus-visible:focus-ring-inset",

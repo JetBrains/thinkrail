@@ -590,6 +590,7 @@ export function McpAddDialog({
 	initialPreset,
 	existing,
 	projectScopeAvailable,
+	userOnly = false,
 	onOpenChange,
 	onAdd,
 	onEnableInProject,
@@ -599,9 +600,10 @@ export function McpAddDialog({
 	initialPreset?: McpPreset | undefined;
 	existing: readonly McpServerSummary[];
 	projectScopeAvailable: boolean;
+	userOnly?: boolean;
 	onOpenChange: (open: boolean) => void;
 	onAdd: McpAddServers;
-	onEnableInProject: (name: string) => Promise<void>;
+	onEnableInProject?: ((name: string) => Promise<void>) | undefined;
 }) {
 	const t = useT();
 	const [tier, setTier] = useState(initialTier);
@@ -738,21 +740,27 @@ export function McpAddDialog({
 									]}
 									onChange={setTier}
 								/>
-								<Segments
-									testId="mcp-add-scope"
-									value={scope}
-									options={[
-										{ id: "user", label: t("mcp.addDialog.scopeUser") },
-										{
-											id: "project",
-											label: t("mcp.addDialog.scopeProject"),
-											disabled: !projectScopeAvailable,
-										},
-									]}
-									onChange={setSelectedScope}
-								/>
+								{userOnly ? null : (
+									<Segments
+										testId="mcp-add-scope"
+										value={scope}
+										options={[
+											{ id: "user", label: t("mcp.addDialog.scopeUser") },
+											{
+												id: "project",
+												label: t("mcp.addDialog.scopeProject"),
+												disabled: !projectScopeAvailable,
+											},
+										]}
+										onChange={setSelectedScope}
+									/>
+								)}
 							</div>
-							{!projectScopeAvailable ? (
+							{userOnly ? (
+								<p data-testid="mcp-add-user-only" className="text-text-muted tr-text-metadata">
+									{t("mcp.addDialog.userOnly")}
+								</p>
+							) : !projectScopeAvailable ? (
 								<p className="text-text-muted tr-text-metadata">{t("mcp.addDialog.untrusted")}</p>
 							) : null}
 							{tier === "form" ? (

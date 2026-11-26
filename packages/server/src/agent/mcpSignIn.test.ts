@@ -149,6 +149,24 @@ test("Test connection reports a reachable server that still needs sign-in", asyn
 	expect(pushes.every((entry) => entry.owner === "owner")).toBe(true);
 });
 
+test("a probe started with no workspace publishes login pushes whose target names no workspace", async () => {
+	const { loginId, done } = startMcpProbe({
+		action: "test",
+		cwd,
+		projectTrusted: false,
+		policy: { approvals: {}, overrides: {}, toolGrants: {} },
+		serverName: "oauthy",
+		ownerClientKey: "owner",
+	});
+	expect(await done).toEqual({ kind: "error", message: "Reachable — needs sign-in." });
+	const own = pushes.filter((entry) => entry.push.loginId === loginId);
+	expect(own.length).toBeGreaterThan(0);
+	for (const { push } of own) {
+		expect(push.target).toEqual({ kind: "mcp", serverName: "oauthy" });
+		expect(push.target && "workspaceId" in push.target).toBe(false);
+	}
+});
+
 test("a failed Test connection reports pi's reason with credentials masked", async () => {
 	const leaky = Bun.serve({
 		hostname: "127.0.0.1",

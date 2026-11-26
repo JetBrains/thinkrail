@@ -78,10 +78,15 @@ export function createArtifactEventMapper(tools: () => ArtifactTools) {
 					tool.presented && (() => tool.presented?.(args, details)),
 				);
 				const picked = extract(event.toolName, tool.picked && (() => tool.picked?.(args, details)));
+				const published = extract(
+					event.toolName,
+					tool.published && (() => tool.published?.(args, details)),
+				);
 				return {
 					...end,
 					...(presented?.length ? { presented } : {}),
 					...(picked?.length ? { picked } : {}),
+					...(published?.length ? { published } : {}),
 				};
 			}
 			default:

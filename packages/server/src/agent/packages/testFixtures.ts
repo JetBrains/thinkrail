@@ -33,6 +33,45 @@ export function fixtureExtensionSource(tool: string, command?: string): string {
 	].join("\n");
 }
 
+const PROVIDER_EXTENSION_RUNS = "__thinkrailProviderExtensionRuns";
+
+/** How many times the factory of `fixtureProviderExtensionSource(provider)` ran in this process. */
+export function fixtureProviderExtensionRuns(provider: string): number {
+	const runs = (globalThis as Record<string, unknown>)[PROVIDER_EXTENSION_RUNS] as
+		| Record<string, number>
+		| undefined;
+	return runs?.[provider] ?? 0;
+}
+
+/** A pi extension module registering one keyed provider `<provider>` serving `<provider>-model`. */
+export function fixtureProviderExtensionSource(provider: string): string {
+	const model = {
+		id: `${provider}-model`,
+		name: `${provider} model`,
+		reasoning: false,
+		input: ["text"],
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+		contextWindow: 8192,
+		maxTokens: 1024,
+	};
+	const config = {
+		name: `${provider} name`,
+		api: "openai-completions",
+		baseUrl: `https://${provider}.invalid/v1`,
+		apiKey: "fixture-key",
+		models: [model],
+	};
+	const key = JSON.stringify(provider);
+	return [
+		"export default function (pi) {",
+		`  const runs = (globalThis.${PROVIDER_EXTENSION_RUNS} ??= {});`,
+		`  runs[${key}] = (runs[${key}] ?? 0) + 1;`,
+		`  pi.registerProvider(${key}, ${JSON.stringify(config)});`,
+		"}",
+		"",
+	].join("\n");
+}
+
 /** Writes a pi package folder with a `pi` manifest for the resources given; returns its path. */
 export function writeFixturePiPackage(dir: string, options: FixturePackageOptions = {}): string {
 	const extensions = options.extensions ?? [

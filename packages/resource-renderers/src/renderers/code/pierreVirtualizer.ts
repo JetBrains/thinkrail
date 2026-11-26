@@ -107,9 +107,18 @@ function codeLineHeight(): number {
 	return Number.parseFloat(height) || DEFAULT_VIRTUAL_FILE_METRICS.lineHeight;
 }
 
+export type AttachPierreScroller<T extends HTMLElement> = (
+	node: T | null,
+	content?: HTMLElement,
+) => void;
+
 export function usePierreVirtualizer<T extends HTMLElement>(
 	attachScroller: RefCallback<T>,
-): { virtualizer: PierreVirtualizer; metrics: VirtualFileMetrics; attach: RefCallback<T> } {
+): {
+	virtualizer: PierreVirtualizer;
+	metrics: VirtualFileMetrics;
+	attach: AttachPierreScroller<T>;
+} {
 	const [virtualizer] = useState(() => new PierreVirtualizer({ overscrollSize: OVERSCROLL_SIZE }));
 	const lineHeight = useSyncExternalStore(onFontsChange, codeLineHeight);
 	const metrics = useMemo<VirtualFileMetrics>(
@@ -117,9 +126,9 @@ export function usePierreVirtualizer<T extends HTMLElement>(
 		[lineHeight],
 	);
 	useEffect(() => virtualizer.setMetrics(metrics), [virtualizer, metrics]);
-	const attach = useCallback<RefCallback<T>>(
-		(node) => {
-			if (node) virtualizer.setup(node);
+	const attach = useCallback<AttachPierreScroller<T>>(
+		(node, content) => {
+			if (node) virtualizer.setup(node, content);
 			else virtualizer.cleanUp();
 			attachScroller(node);
 		},

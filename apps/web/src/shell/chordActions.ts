@@ -1,6 +1,12 @@
 import { FOCUS_GROUP_BINDINGS, type KeybindingId } from "../keybindings";
 import { openChatInTab } from "../panels/openChat";
-import { selectChatAttended, selectHistoryTarget, useAppStore } from "../store";
+import { SETTING_ATTR } from "../settingsKit";
+import {
+	selectActiveFilePath,
+	selectChatAttended,
+	selectHistoryTarget,
+	useAppStore,
+} from "../store";
 import {
 	focusCenterRegion,
 	focusPreviousRegion,
@@ -10,7 +16,12 @@ import {
 	terminalTarget,
 	whenSettled,
 } from "./regions";
-import { hasDismissibleLayer, isInTerminal } from "./shortcutLayers";
+import {
+	activeLayer,
+	hasDismissibleLayer,
+	isInTerminal,
+	type LayerDocument,
+} from "./shortcutLayers";
 import { runActiveTabAction } from "./workbenchCommands";
 
 export function toggleLeftSide(toggleProjectsHome: () => void): void {
@@ -30,6 +41,17 @@ export function toggleBottomPanel(): void {
 	const state = useAppStore.getState();
 	const workspaceId = state.activeWorkspaceId;
 	if (workspaceId) state.enqueueLayoutIntent({ kind: "toggle-bottom", workspaceId });
+}
+
+export function toggleAllPanels(): void {
+	const state = useAppStore.getState();
+	const workspaceId = state.activeWorkspaceId;
+	if (workspaceId) state.enqueueLayoutIntent({ kind: "toggle-all-panels", workspaceId });
+}
+
+/** Hides the left, right and bottom panes of the workspace's frame, remembering what it hid for `view.toggleAllPanels`. */
+export function hideAllPanels(workspaceId: string): void {
+	useAppStore.getState().enqueueLayoutIntent({ kind: "hide-all-panels", workspaceId });
 }
 
 export function openChatHistory(): void {
@@ -66,7 +88,7 @@ export function focusProjects(toggleProjectsHome: () => void): void {
 	const state = useAppStore.getState();
 	const workspaceId = state.activeWorkspaceId;
 	if (workspaceId) {
-		state.requestToolView(workspaceId, "projects");
+		state.enqueueLayoutIntent({ kind: "reveal-tool", workspaceId, tool: "projects", focus: false });
 		focusToolBody("projects");
 		return;
 	}
@@ -76,13 +98,21 @@ export function focusProjects(toggleProjectsHome: () => void): void {
 	focusRegionOfKind("home");
 }
 
-export function showFiles(mode: "all" | "changed"): void {
+const ACTIVE_FILE_ROW = '[role="treeitem"][aria-current="true"]';
+
+export function showFiles(mode: "all" | "changed", { activeRow = false } = {}): void {
 	const state = useAppStore.getState();
 	const workspaceId = state.activeWorkspaceId;
 	if (!workspaceId) return;
 	state.setFilesMode(mode);
-	state.requestToolView(workspaceId, "files");
-	focusToolBody("files", (body) => body.querySelector(`[data-files-mode="${mode}"]`) !== null);
+	state.enqueueLayoutIntent({ kind: "reveal-tool", workspaceId, tool: "files", focus: false });
+	const activePath = activeRow && mode === "all" ? selectActiveFilePath(state, workspaceId) : null;
+	if (activePath !== null) state.revealInFiles(workspaceId, activePath);
+	focusToolBody(
+		"files",
+		(body) => body.querySelector(`[data-files-mode="${mode}"]`) !== null,
+		activePath !== null ? ACTIVE_FILE_ROW : undefined,
+	);
 }
 
 export function focusTerminal(): void {
@@ -119,6 +149,28 @@ function dismissTopLayer(): boolean {
 	return true;
 }
 
+const SETTINGS_LAYER_SELECTOR = `[${SETTING_ATTR.dialog}][data-state="open"]`;
+
+export function settingsLayer(doc: Pick<ParentNode, "querySelector">): Element | null {
+	return doc.querySelector(SETTINGS_LAYER_SELECTOR);
+}
+
+export function closesSettings(doc: LayerDocument & ParentNode): boolean {
+	const settings = settingsLayer(doc);
+	if (settings === null) return false;
+	return activeLayer(doc) === settings || settings.contains(doc.activeElement);
+}
+
+function closeSettingsAtOnce(): boolean {
+	const doc = globalThis.document;
+	if (!closesSettings(doc)) return false;
+	const active = doc.activeElement;
+	if (active instanceof HTMLElement && settingsLayer(doc)?.contains(active)) active.blur();
+	useAppStore.getState().closeSettings();
+	return true;
+}
+
 export function closeActiveItem(): void {
+	if (closeSettingsAtOnce()) return;
 	if (!dismissTopLayer()) runActiveTabAction("tab.close");
 }

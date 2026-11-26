@@ -29,8 +29,8 @@ export const USAGE = `Usage: thinkrail [options] [project-dir]
 
 Boots the ThinkRail engine host in-process and opens the browser to the app.
 The \`update\` subcommand re-downloads + installs the latest build for your channel;
-\`uninstall\` removes ThinkRail from this machine (your ~/.thinkrail app state is kept
-unless you ask for it to go). Both take \`--help\`.
+\`uninstall\` removes ThinkRail from this machine (your app state, ~/.thinkrail or
+THINKRAIL_DATA_DIR, is kept unless you ask for it to go). Both take \`--help\`.
 
 Options:
   --port <n>     Listen port (default ${DEFAULT_PORT}; falls back to a free port if taken).
@@ -39,7 +39,7 @@ Options:
   --no-analytics Disable additional usage analytics this run.
                  The saved sharing preference lives in Settings → Privacy.
   --verbose      Debug-level logging (terminal + the rotated log files under
-                 ~/.thinkrail/logs).
+                 logs/ in the app state dir).
   -v, --version  Print the version and exit.
   -h, --help     Show this help.
 
@@ -49,6 +49,8 @@ Arguments:
 Env:
   THINKRAIL_PORT / THINKRAIL_HOST   Defaults for --port / --host.
   THINKRAIL_STATIC_DIR                 Override the built web app served by the host.
+  THINKRAIL_DATA_DIR                   App state dir: projects, worktrees, logs, themes, fonts,
+                                       locales (default ~/.thinkrail; read by the host).
   THINKRAIL_NO_ANALYTICS               Same as --no-analytics (any non-empty value; read by the host).
   THINKRAIL_LOG_LEVEL                  Log level: debug|info|warn|error (default info; read by the host).`;
 

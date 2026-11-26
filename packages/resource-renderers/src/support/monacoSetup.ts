@@ -15,11 +15,17 @@ import "monaco-editor/features/wordHighlighter/register.js";
 import "monaco-editor/features/quickCommand/register.js";
 import "monaco-editor/features/gotoLine/register.js";
 import { fontsLoaded, fontsRevision, type ResolvedFont, resolveFont } from "@thinkrail/ui/fonts";
+import {
+	type ReadingCommand,
+	type ReadingDirection,
+	readingScrollTarget,
+} from "@thinkrail/ui/reading";
 import { onThemeSwap } from "@thinkrail/ui/theme";
 import type { Environment, editor } from "monaco-editor/editor/editor.api.js";
 import * as monaco from "monaco-editor/editor/editor.api.js";
 import editorWorker from "monaco-editor/editor/editor.worker?worker";
 import type { ResourceCodeHost, ResourceCodeLanguage } from "../host";
+import { readingAnchor } from "./codeReading";
 import { editorLanguages } from "./editorLanguages";
 import { editorWrappingOptions } from "./editorWrapping";
 import { createPierreTokens } from "./pierreTokens";
@@ -180,6 +186,64 @@ export function syncFileModel(
 
 export function revealLineNow(codeEditor: editor.IStandaloneCodeEditor, line: number): void {
 	codeEditor.revealLineInCenter(line, monaco.editor.ScrollType.Immediate);
+}
+
+const READING_ACTIONS = {
+	edge: ["cursorTop", "cursorBottom"],
+	side: ["cursorLeft", "cursorRight"],
+} as const;
+
+function anchorCaretInView(
+	codeEditor: editor.IStandaloneCodeEditor,
+	direction: ReadingDirection,
+): void {
+	const caret = codeEditor.getPosition();
+	const model = codeEditor.getModel();
+	if (!caret || !model) return;
+	const anchor = readingAnchor(caret, codeEditor.getVisibleRanges(), direction, (line) =>
+		model.getLineMaxColumn(line),
+	);
+	if (!anchor) return;
+	codeEditor.setPosition(anchor);
+	codeEditor.trigger("keyboard", "cursorMove", { to: "wrappedLineStart" });
+}
+
+function pageCode(codeEditor: editor.IStandaloneCodeEditor, direction: ReadingDirection): void {
+	const { width, height } = codeEditor.getLayoutInfo();
+	const { top } = readingScrollTarget(
+		{ kind: "page", direction },
+		{
+			scrollTop: codeEditor.getScrollTop(),
+			scrollLeft: codeEditor.getScrollLeft(),
+			clientHeight: height,
+			clientWidth: width,
+			scrollHeight: codeEditor.getScrollHeight(),
+			scrollWidth: codeEditor.getScrollWidth(),
+		},
+	);
+	codeEditor.setScrollTop(top, monaco.editor.ScrollType.Immediate);
+	anchorCaretInView(codeEditor, 1);
+	codeEditor.setScrollTop(top, monaco.editor.ScrollType.Immediate);
+}
+
+export function readCode(codeEditor: editor.IStandaloneCodeEditor, command: ReadingCommand): void {
+	const forward = command.direction > 0 ? 1 : 0;
+	if (command.kind === "page") {
+		pageCode(codeEditor, command.direction);
+		return;
+	}
+	if (command.kind !== "line") {
+		codeEditor.trigger("keyboard", READING_ACTIONS[command.kind][forward], null);
+		return;
+	}
+	const lineHeight = codeEditor.getOption(monaco.editor.EditorOption.lineHeight);
+	const scrollTop = codeEditor.getScrollTop();
+	anchorCaretInView(codeEditor, command.direction);
+	codeEditor.trigger("keyboard", forward ? "cursorDown" : "cursorUp", null);
+	codeEditor.setScrollTop(
+		scrollTop + command.direction * lineHeight,
+		monaco.editor.ScrollType.Immediate,
+	);
 }
 
 export function disposeFileEditor(codeEditor: editor.IStandaloneCodeEditor): void {

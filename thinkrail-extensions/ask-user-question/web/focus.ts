@@ -1,13 +1,14 @@
+import { revealHorizontally } from "@thinkrail/ui/focus";
+
 export type QuestionFocusTarget =
 	| "none"
 	| "inside"
 	| "empty-composer"
-	| "pointer"
-	| "keyboard"
+	| "element"
 	| "editing"
 	| "modal";
 
-const CLAIMABLE: ReadonlySet<QuestionFocusTarget> = new Set(["none", "empty-composer", "pointer"]);
+const CLAIMABLE: ReadonlySet<QuestionFocusTarget> = new Set(["none", "empty-composer", "element"]);
 
 export function shouldClaimQuestionFocus(
 	target: QuestionFocusTarget,
@@ -48,11 +49,7 @@ const MODAL_SURFACES = '[role="dialog"], [role="alertdialog"], [role="menu"], [r
 const EDITING_SURFACES = '.monaco-editor, .xterm, [contenteditable="true"]';
 const TEXT_CONTROLS = "input, textarea, select, iframe";
 
-export function focusTargetKind(
-	active: FocusedNode | null,
-	inside: boolean,
-	keyboardFocused: boolean,
-): QuestionFocusTarget {
+export function focusTargetKind(active: FocusedNode | null, inside: boolean): QuestionFocusTarget {
 	const page = active?.ownerDocument;
 	if (!active || !page || active === page.body || active === page.documentElement) return "none";
 	if (inside) return "inside";
@@ -65,50 +62,7 @@ export function focusTargetKind(
 			active.value === "";
 		return emptyComposer ? "empty-composer" : "editing";
 	}
-	return keyboardFocused ? "keyboard" : "pointer";
-}
-
-const MODIFIER_KEYS: ReadonlySet<string> = new Set([
-	"Shift",
-	"Control",
-	"Alt",
-	"Meta",
-	"CapsLock",
-	"AltGraph",
-]);
-
-let keyboardLast = false;
-let keyboardFocus: EventTarget | null = null;
-
-export function watchInputModality(target: Pick<Document, "addEventListener">): void {
-	target.addEventListener(
-		"keydown",
-		(event) => {
-			if (!MODIFIER_KEYS.has(event.key)) keyboardLast = true;
-		},
-		true,
-	);
-	target.addEventListener(
-		"pointerdown",
-		() => {
-			keyboardLast = false;
-			keyboardFocus = null;
-		},
-		true,
-	);
-	target.addEventListener(
-		"focusin",
-		(event) => {
-			keyboardFocus = keyboardLast ? event.target : null;
-		},
-		true,
-	);
-}
-
-if (typeof document !== "undefined") watchInputModality(document);
-
-export function isKeyboardFocused(active: object | null): boolean {
-	return active !== null && active === keyboardFocus;
+	return "element";
 }
 
 export function hasCoarsePointer(): boolean {
@@ -134,25 +88,35 @@ export function isInsidePreview(target: EventTarget | null): boolean {
 	return target instanceof Element && !!target.closest("[data-ask-preview]");
 }
 
+type Focuser = (element: HTMLElement) => void;
+
+const focusInPlace: Focuser = (element) => element.focus({ preventScroll: true });
+
 export function activeQuestionPage(card: HTMLElement): HTMLElement {
 	return card.querySelector<HTMLElement>('[data-ask-active="true"]') ?? card;
 }
 
-export function focusCurrentQuestionPage(card: HTMLElement): void {
+export function focusCurrentQuestionPage(card: HTMLElement, focus: Focuser = focusInPlace): void {
 	const target = activeQuestionPage(card).querySelector<HTMLElement>(
 		'[data-ask-page-focus="true"]:not([disabled])',
 	);
 	if (!target) return;
 	if (!shouldFocusPageTarget(isTextEntryTarget(target), hasCoarsePointer())) return;
-	target.focus({ preventScroll: true });
+	focus(target);
 }
 
-export function focusQuestionAttention(card: HTMLElement): void {
+export function revealActiveTab(root: ParentNode | null): void {
+	const chip = root?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+	if (chip) revealHorizontally(chip);
+}
+
+export function focusQuestionAttention(card: HTMLElement, focus: Focuser = focusInPlace): void {
 	const selected = activeQuestionPage(card).querySelector<HTMLElement>(
 		'[data-ask-discuss-text], [data-ask-option][data-selected="true"], [data-ask-custom-row][data-selected="true"] textarea',
 	);
-	if (selected) selected.focus({ preventScroll: true });
-	else focusCurrentQuestionPage(card);
+	if (selected) focus(selected);
+	else focusCurrentQuestionPage(card, focus);
 	if (card.contains(document.activeElement)) return;
-	card.querySelector<HTMLElement>("[data-focus-claim]")?.focus({ preventScroll: true });
+	const claim = card.querySelector<HTMLElement>("[data-focus-claim]");
+	if (claim) focus(claim);
 }

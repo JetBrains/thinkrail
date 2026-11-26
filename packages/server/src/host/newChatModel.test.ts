@@ -98,7 +98,7 @@ test("a thinking-only request uses the resolved default model and clamps the req
 
 test("new-chat model resolution prefers pi's provider default over catalog order", async () => {
 	const legacy = wireModel("openai", "gpt-4");
-	const current = wireModel("openai", "gpt-6.1-sol");
+	const current = wireModel("openai", "gpt-6.2-sol");
 	const { resolve } = resolver({}, [legacy, current]);
 
 	expect(await resolve()).toEqual({ model: current, thinkingLevel: "medium" });
@@ -125,11 +125,11 @@ test("an unavailable pi default falls through to the preferred model", async () 
 	expect(await resolve()).toEqual({ model: first, thinkingLevel: "medium" });
 });
 
-const environmentModel = wireModel("openai", "gpt-6.1-sol", {
+const environmentModel = wireModel("openai", "gpt-6.2-sol", {
 	kind: "env",
 	detail: "OPENAI_API_KEY",
 });
-const subscriptionModel = wireModel("openai-codex", "gpt-6.1-sol", { kind: "oauth" });
+const subscriptionModel = wireModel("openai-codex", "gpt-6.2-sol", { kind: "oauth" });
 
 test("an ambient OpenAI API key does not preempt the configured Codex subscription", async () => {
 	const { resolve } = resolver({}, [environmentModel, subscriptionModel]);
@@ -180,7 +180,7 @@ test("an explicitly requested environment model still takes precedence over a su
 test("pi's configured default environment model still takes precedence over a subscription", async () => {
 	const { resolve } = resolver({}, [environmentModel, subscriptionModel], {
 		provider: "openai",
-		id: "gpt-6.1-sol",
+		id: "gpt-6.2-sol",
 	});
 
 	expect(await resolve()).toEqual({ model: environmentModel, thinkingLevel: "medium" });

@@ -1,4 +1,5 @@
 import type { WireUserMessage } from "@thinkrail/contracts";
+import { EN, type MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import { browserPlatform, isApplePlatform } from "@thinkrail/ui/keyboard";
 
@@ -6,14 +7,14 @@ export const DOUBLE_CLICK_SETTLE_MS = 250;
 
 let lastFirstClickAt = Number.NEGATIVE_INFINITY;
 
-export function firstClickOnly(
-	run: () => void,
+export function firstClickOnly<E extends { detail: number }>(
+	run: (event: E) => void,
 	now: () => number = () => performance.now(),
-): (event: { detail: number }) => void {
+): (event: E) => void {
 	return (event) => {
 		if (event.detail > 1) return;
 		if (event.detail === 1) lastFirstClickAt = now();
-		run();
+		run(event);
 	};
 }
 
@@ -39,7 +40,26 @@ type LayoutResourceIdentityInput =
 	| { kind: "chat"; sessionId: string }
 	| { kind: "document"; documentKind: string; sourceId: string }
 	| { kind: "terminal"; tabKey: string }
-	| { kind: "tool"; tool: string };
+	| { kind: "tool"; tool: string }
+	| {
+			kind: "extension";
+			extension: string;
+			panel: string;
+			params: Readonly<Record<string, string>>;
+	  };
+
+export function extensionParamsKey(params: Readonly<Record<string, string>>): string {
+	return tupleKey(
+		"params",
+		...Object.keys(params)
+			.sort()
+			.flatMap((key) => [key, params[key] ?? ""]),
+	);
+}
+
+export function isMessageKey(key: string): key is MessageKey {
+	return Object.hasOwn(EN, key) || Object.hasOwn(EN, `${key}_other`);
+}
 
 function layoutScopeReference(scope: LayoutDiffScopeInput): string {
 	switch (scope.kind) {
@@ -87,6 +107,14 @@ export function layoutResourceIdentity<T extends LayoutResourceIdentityInput>(ta
 			return tupleKey("layout-resource", "terminal", tab.tabKey);
 		case "tool":
 			return tupleKey("layout-resource", "tool", tab.tool);
+		case "extension":
+			return tupleKey(
+				"layout-resource",
+				"extension",
+				tab.extension,
+				tab.panel,
+				extensionParamsKey(tab.params),
+			);
 	}
 }
 
@@ -242,61 +270,8 @@ export function joinWorkspacePath(worktreePath: string, path: string): string {
 	return `${root}${windows ? path.replaceAll("/", "\\") : path}`;
 }
 
-let colorCanvas: CanvasRenderingContext2D | null | undefined;
-
-function canvasNormalize(color: string): string {
-	if (typeof document === "undefined") return "";
-	colorCanvas ??= document.createElement("canvas").getContext("2d");
-	if (!colorCanvas) return "";
-	colorCanvas.fillStyle = "#000000";
-	colorCanvas.fillStyle = color;
-	const first = colorCanvas.fillStyle;
-	colorCanvas.fillStyle = "#ffffff";
-	colorCanvas.fillStyle = color;
-	return first === colorCanvas.fillStyle ? first : "";
-}
-
-function srgbColorToHex(color: string): string {
-	const component = "([+-]?(?:\\d*\\.)?\\d+(?:e[+-]?\\d+)?%?)";
-	const match = new RegExp(
-		`^color\\(srgb\\s+${component}\\s+${component}\\s+${component}(?:\\s*\\/\\s*${component})?\\)$`,
-		"i",
-	).exec(color);
-	if (!match) return "";
-	const fraction = (value: string | undefined, fallback: number): number => {
-		if (value === undefined) return fallback;
-		return value.endsWith("%") ? Number.parseFloat(value) / 100 : Number(value);
-	};
-	const values = [
-		fraction(match[1], 0),
-		fraction(match[2], 0),
-		fraction(match[3], 0),
-		fraction(match[4], 1),
-	];
-	if (values.some((value) => !Number.isFinite(value))) return "";
-	const channels = values.map((value) => Math.round(Math.min(1, Math.max(0, value)) * 255));
-	if (match[4] === undefined) channels.pop();
-	return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
-}
-
-export function cssColorToHex(color: string): string {
-	const value = color.trim();
-	const short = /^#([0-9a-f]{3,4})$/i.exec(value)?.[1];
-	if (short) return `#${[...short].map((c) => c + c).join("")}`;
-	if (/^#([0-9a-f]{6}|[0-9a-f]{8})$/i.test(value)) return value;
-	const directSrgb = srgbColorToHex(value);
-	if (directSrgb) return directSrgb;
-	const parsed = canvasNormalize(value);
-	if (parsed.startsWith("#")) return parsed;
-	const parsedSrgb = srgbColorToHex(parsed);
-	if (parsedSrgb) return parsedSrgb;
-	const [, r, g, b, a] = /^rgba\((\d+), (\d+), (\d+), ([\d.]+)\)$/.exec(parsed) ?? [];
-	const channels = [Number(r), Number(g), Number(b), Math.round(Number(a) * 255)];
-	if (channels.some((c) => !Number.isFinite(c))) return "";
-	return `#${channels.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
-}
-
 export { hasPlatformModifier } from "@thinkrail/ui/keyboard";
+export { cssColorToHex } from "@thinkrail/ui/theme";
 
 export function platformFamily(platform = browserPlatform()) {
 	if (isApplePlatform(platform)) return "apple";
@@ -359,6 +334,7 @@ export function hasLayer(root: Pick<Document, "querySelector">, selector: string
 }
 
 const TEXT_ENTRY_ROOT_SELECTOR = ".monaco-editor, .xterm";
+export const READ_ONLY_TEXT_SELECTOR = '[data-text-entry="false"]';
 
 export function isTextEntryTarget(target: EventTarget | null): boolean {
 	const element = target as {
@@ -366,10 +342,13 @@ export function isTextEntryTarget(target: EventTarget | null): boolean {
 		tagName?: string;
 		closest?: (selector: string) => Element | null;
 	} | null;
+	if (element === null) return false;
+	const within = (selector: string) =>
+		typeof element.closest === "function" && element.closest(selector) !== null;
+	if (within(READ_ONLY_TEXT_SELECTOR)) return false;
 	return (
-		element !== null &&
-		(element.isContentEditable === true ||
-			/^(INPUT|TEXTAREA|SELECT)$/.test(element.tagName ?? "") ||
-			(typeof element.closest === "function" && element.closest(TEXT_ENTRY_ROOT_SELECTOR) !== null))
+		element.isContentEditable === true ||
+		/^(INPUT|TEXTAREA|SELECT)$/.test(element.tagName ?? "") ||
+		within(TEXT_ENTRY_ROOT_SELECTOR)
 	);
 }

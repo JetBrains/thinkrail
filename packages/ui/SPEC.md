@@ -24,7 +24,18 @@ or typed key, exact modifiers, `Mod` = ⌘ on Apple and Ctrl elsewhere, no Alt c
 Apple — the app's keybinding matcher delegates to it, so the two cannot drift), `chordCaps`, `keyCap`,
 `codeLabel` (a code's US label), `ariaKeyShortcuts(chords, platform)` (one platform's modifier names, never
 Meta and Control both; the numpad Enter reads `Enter`, so a pair announces once), `isTypingChord`, `ARROW_TWIN_COMMANDS` (`arrows.left/down/up/right`, H/J/K/L
-by `code`, in shared scope `ARROW_TWINS_SCOPE`) and `twinArrow(id)` (the arrow a matched twin stands for). `./local-keys` is the seam an element matches its
+by `code`, in shared scope `ARROW_TWINS_SCOPE`) and `twinArrow(id)` (the arrow a matched twin stands for). `./reading` is the
+one definition of reading keys, shared by the chat transcript and the resource renderers' reading
+surfaces: `READING_COMMANDS` (`reading.top` G and `reading.bottom` Shift+G by `code`, shared scope
+`READING_SCOPE`), `readingCommand(event, keys, local?)` (a line, a page, an end or a step sideways from
+the arrows and their twins, Space/Shift+Space, PgUp/PgDn, Home/End and g/G; modified, shifted and composing
+presses pass), `READING_LINE` (40 px) and `readingPage` (the viewport less a line), the pure
+scroll-before-step geometry — `scrollBeforeStep` (scroll a line, clamped to the item's far edge, until
+that edge shows; then 0 and the cursor steps) and `stepRevealDelta` (the least scroll showing a stepped-to
+item: all of it when it fits, else its near edge plus a line) over `ReadingSpan`s, `spansOverlap`,
+`ownReadingSpan(stop, next)` (a stop's own extent: its box, ended where the next stop begins when that
+stop is nested inside it, so a parent never counts its children's height) — and
+`readingScrollTarget` / `scrollReading` for a plain scroller. `./local-keys` is the seam an element matches its
 rebindable local keys through, whoever renders it (the app, resource renderers, an extension card):
 `useLocalKeys(scope, defaults)` returns `{ match(event, { ignoreShift, textEntry }), caps(id), label(id),
 aria(...ids) }` (`label` joins the caps the platform's way, `""` when unbound; `aria` lists every chord of
@@ -38,11 +49,24 @@ the same one way). `match` ignores an IME composition and a typing chord in text
 `isTextEntry`, else inputs and contenteditable — `textEntry` overrides that verdict for a caller that
 knows a press edits nothing, as the history search's `Delete` at the end of its query); `defaults` must be a stable module constant. `./focus` exposes
 the one tabbable-control selector (`TABBABLE_SELECTOR`, which includes a `<details>` element's own
-`<summary>`, natively tabbable) and `focusFirstControl(container)` (the first
+`<summary>`, natively tabbable), `focusFirstControl(container)` (the first
 control, focused with `preventScroll`), shared by the app's focus recovery and reveal moves and the
-resource renderers' reveal of a comment card; `./theme` exposes
-only `onThemeSwap`, a DOM MutationObserver subscription to the completed `data-theme` signal, with
-explicit cleanup. It knows nothing about the theme catalog or preferences. `./fonts` is the same seam for
+resource renderers' reveal of a comment card, the one default-focus rule — `canFocus` (connected,
+rendered, not inert or disabled, tabbable or carrying a `tabindex`), `focusTarget` (the element, else its
+first such control) and `defaultFocusTarget(container)` (the innermost `FOCUS_DEFAULT_SELECTOR`
+marker's target, then an outer one's), which the shell's region landings and a keyboard open's tab
+content share — and `focusAndReveal(element)` — focus with `preventScroll`,
+then scroll only the nearest vertically scrolling ancestor just enough (`revealDelta`, the outline
+included) to show it, never `scrollIntoView`'s every ancestor — which the ask card, the chat and the
+shell's Esc landing use for a waiting question's controls (`scrollsVertically` is its scroller test) —
+and its horizontal companion `revealHorizontally(element)` (no focus; the nearest ancestor that
+`scrollsHorizontally`, same `revealDelta` along the x axis), which keeps the ask card's selected question tab
+in view inside its strip; `./theme` exposes
+`onThemeSwap`, a DOM MutationObserver subscription to the completed `data-theme` signal, with
+explicit cleanup, and `cssColorToHex` (a computed colour — `rgb()`, `rgba()`, `color(srgb …)` or a
+named colour — canonicalized to hex, `""` when unparseable), which strict consumers such as Monaco, xterm
+and extension canvases take instead of a token's raw `color-mix()`. It knows nothing about the theme
+catalog or preferences. `./fonts` is the same seam for
 the font settings: `onFontsChange` / `fontsRevision` over the `data-fonts` signal, `resolveFont(className)`
 (the computed family, size, weight and ligatures of a generated typography class, for surfaces that take
 fonts as JS options), `fontsLoaded` (resolves once the faces for that family, size and weight have
@@ -136,7 +160,8 @@ test's documented specialized list names it.
 ## Primitive invariants
 
 The per-file surface is `button`, `switch`, `dialog`, `dropdown-menu`, `context-menu`, `menu-styles`,
-`popover`, `command` (cmdk combobox body), `textarea`, `tooltip`, `resizable`, `toast`, `toggle-segment`
+`popover`, `command` (cmdk combobox body), `textarea`, `tooltip`, `resizable`, `toast`, `tree-row`,
+`tree-item`, `diff-stat-badge`, `folder-chains`, `toggle-segment`
 (the slim header toggle: active segment on `control-bg-selected` + `text-default`, `data-active` /
 `aria-pressed`, and an explicit `tabIndex={0}` because the macOS WKWebView skips a `<button>` without one
 on Tab), `skeleton` (`SkeletonRows` / `LoadingRegion`, the one loading placeholder; its usage rules
@@ -148,9 +173,22 @@ region carries the announcement, `announcement` replaces its default text, `live
 moved here from the app when the resource renderers became a package, because both the app and
 [[module-resource-renderers]] use them; `attention-line` moved for the same reason when the
 `ask_user_question` card became an extension web half, because the app's extension prompts use it too.
+`tree-row` (`TreeRow`, the file-style tree row: chevron or spacer, folder or file icon — or the caller's
+`icon` —, truncated label, trailing slot, `data-path`; a `treeitem` at its `level` in tree `treeId`, with
+`aria-expanded` on folders, `aria-current` on the active row, a folder its own toggle and a file opened kept),
+`diff-stat-badge` (`DiffStatBadge`, the `+N −M` line counts) and `folder-chains` (`startFolderChain` /
+`extendFolderChain` / `resolveFolderChain`, pure: a run of single-directory children shown as one
+slash-joined row) moved here from `apps/web/src/panels` with the session-insights heat tree, their second
+consumer; the app's Files, Changes, Plan and Artifacts trees keep using them and `ChangesTree` itself stays
+app-local (it reaches the store). `tree-item` is the item half of the app's keyboard tree model
+(`useTreeItem(id, { level, label, expanded?, selected?, toggles?, openKept? })`: the `treeitem` role,
+`aria-*` and `data-tree-*` attributes, and the roving tab stop and search mark read from
+`TreeItemScopeContext`); it moved with `TreeRow`, which renders one. The container — keys, search field,
+the cursor and marks it provides — stays the app's `Tree` (`apps/web/src/panels/treeNavigation.tsx`), so
+outside one an item is natively tabbable and unmarked, as in an extension's tree.
 
 - Switch exposes native disabled behavior and `role="switch"`/`aria-checked`, not visible On/Off
-  text. Every modal dialog's overlay carries `data-modal-layer`, and `useModalLayerOpen()` reports whether one is open: it lets callers tell "covered by a modal" from their own visibility without a dialog registry, independent of how `aria-hidden` treats live regions. Dialog accepts `hideClose` for chromeless surfaces. `DialogContent` contains what it holds: width and max height keep a window gutter, the body scrolls by default, long text wraps, and `DialogFooter` wraps its actions and then their labels (a footer `Button` grows past its fixed height only then). A caller adding a pinned footer scrolls an inner `min-h-0 flex-1` body; one portalling popovers into the content element sets `overflow-visible` and scrolls an inner body. An inner scroll body is `relative`: otherwise an absolutely positioned descendant (an `sr-only` label) takes the dialog as its containing block and stretches the dialog's own scroll area, giving it a second scrollbar. Flex rows of data still need `min-w-0`. `DialogPanel` renders Radix content in place
+  text. Every modal dialog's overlay carries `data-modal-layer`, and `useModalLayerOpen()` reports whether one is open: it lets callers tell "covered by a modal" from their own visibility without a dialog registry, independent of how `aria-hidden` treats live regions. Dialog accepts `hideClose` for chromeless surfaces. `DialogContent` centres on whole pixels — `top`, `left` and both translates are `--dialog-center`, `round(50%, 1px)` where that parses and plain `50%` elsewhere — because a scroll pane on a half pixel can blur its text (#1443); a caller's own `top-*` / `translate-y-0` replaces it. `DialogContent` contains what it holds: width and max height keep a window gutter, the body scrolls by default, long text wraps, and `DialogFooter` wraps its actions and then their labels (a footer `Button` grows past its fixed height only then). A caller adding a pinned footer scrolls an inner `min-h-0 flex-1` body; one portalling popovers into the content element sets `overflow-visible` and scrolls an inner body. An inner scroll body is `relative`: otherwise an absolutely positioned descendant (an `sr-only` label) takes the dialog as its containing block and stretches the dialog's own scroll area, giving it a second scrollbar. Flex rows of data still need `min-w-0`. `DialogPanel` renders Radix content in place
   without a portal or overlay for caller-positioned, non-modal dialogs; title/role semantics, Escape
   dismissal, and focus return remain Radix-owned while surrounding UI stays interactive.
 - **An active IME owns the key** ([[module-web]]'s text-field rule). `isImeComposing` is `isComposing`
@@ -177,7 +215,11 @@ moved here from the app when the resource renderers became a package, because bo
   listener, before Radix's document-level layer handling, so one Escape dismisses the tooltip *and* the
   dialog, popover or menu beneath it. An optional `shortcut` (pre-formatted caps — the tooltip never
   formats a chord, the app passes its own labels) renders as `Keycaps` after the label; `Button` and
-  `IconButton` forward it as `tooltipShortcut`. Tooltip content stacks at `z-150`, above dialogs and the toast
+  `IconButton` forward it as `tooltipShortcut`. `passThrough` makes a tooltip that never takes the pointer
+  (a tooltip over dense row targets, where it would cover the next row's click targets): it closes as the
+  pointer leaves the trigger (`disableHoverableContent`) and the content carries `data-pass-through` and
+  `pointer-events-none`; the app's `global.css` gives Radix's positioning wrapper around such content
+  `pointer-events: none` with one `:has()` rule, since a class on the content cannot reach its parent. Tooltip content stacks at `z-150`, above dialogs and the toast
   viewport (`z-[100]`), so a toast's own close tooltip is never painted under the toast.
 - Context and dropdown menus share menu geometry and token classes: content surface, radius/shadow,
   item/icon spacing, separators, semantic action colors, focus rows, and viewport collision behavior.

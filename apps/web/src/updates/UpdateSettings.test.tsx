@@ -329,3 +329,30 @@ test("a failed last install explains its cause in Settings and keeps the topbar 
 	);
 	expect(installed).toBe("");
 });
+
+test("Updates is a Settings page with one catalog row whose extra actions are its sides", () => {
+	const idle = render(nativeUpdates(nativeState("idle")));
+	expect(idle).toMatch(/<h2[^>]*>Updates<\/h2>/);
+	expect(idle).toContain(">Software updates</h3>");
+	expect(idle).toContain('data-setting-row="software-updates"');
+	expect(idle).toContain('data-setting-id="software-updates"');
+	expect(idle).toMatch(/<button[^>]*data-size="m"[^>]*tabindex="0"[^>]*data-testid="update-check"/);
+
+	const retained = render(
+		nativeUpdates(
+			nativeState("ready", {
+				availableVersion: "0.1.0-nightly.46",
+				error: "The background check failed",
+				failedPhase: "check",
+			}),
+		),
+	);
+	const buttons = retained.match(/<button\b[^>]*>/g) ?? [];
+	expect(buttons).toHaveLength(2);
+	expect(buttons[0]).toContain('data-testid="update-retry"');
+	expect(buttons[1]).toContain('data-testid="update-restart"');
+	expect(retained).toMatch(
+		/data-setting-control=""[^>]*><button[^>]*data-testid="update-retry"[\s\S]*<\/div><button[^>]*data-testid="update-restart"/,
+	);
+	expect(buttons.every((button) => button.includes('data-size="m"'))).toBe(true);
+});

@@ -1,3 +1,4 @@
+import { ownReadingSpan, type ReadingSpan } from "@thinkrail/ui/reading";
 import type { CursorCommand } from "./cursorKeys";
 import type { SourceLineRange } from "./sourceLines";
 
@@ -63,13 +64,20 @@ export function cursorBlocksOf(elements: readonly Element[]): CursorBlock[] {
 	});
 }
 
+export function blockSpan(elements: readonly Element[], index: number): ReadingSpan | null {
+	const element = elements[index];
+	return element ? ownReadingSpan(element, elements[index + 1]) : null;
+}
+
 export function firstVisibleBlock(
 	elements: readonly Element[],
 	scroller: Element,
 ): BlockCursorState | null {
 	const top = scroller.getBoundingClientRect().top;
 	const element =
-		elements.find((candidate) => candidate.getBoundingClientRect().bottom > top) ?? elements[0];
+		elements.find(
+			(candidate, index) => ownReadingSpan(candidate, elements[index + 1]).bottom > top,
+		) ?? elements[0];
 	const line = element ? stampOf(element, START) : 0;
 	return line >= 1 ? { line, anchor: null } : null;
 }

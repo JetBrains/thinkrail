@@ -1,3 +1,4 @@
+import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -5,11 +6,13 @@ import {
 	createSyntheticSourceInfo,
 	DefaultPackageManager,
 	DefaultResourceLoader,
+	type ExtensionAPI,
 	type ExtensionFactory,
 	getAgentDir,
 	type InlineExtension,
 	type LoadExtensionsResult,
 	type PathMetadata,
+	parseFrontmatter,
 	type ResourceDiagnostic,
 	type ResourceLoader,
 	type SettingsManager,
@@ -18,6 +21,7 @@ import {
 import type {
 	ExtensionSettingValues,
 	SkillCatalogEntry,
+	SlashArgumentCompletion,
 	SlashCommandInfo,
 } from "@thinkrail/contracts";
 import specGraphExtension, { SPEC_SECTION } from "pi-spec-graph";
@@ -25,10 +29,14 @@ import {
 	extensionSkillRoots,
 	type HostSessionServices,
 	omitDisabledRegistryExtensions,
+	omitSupersededPackages,
 	preferRegistryTools,
 	registryInlineExtensions,
+	type ServerExtensionEntry,
 	STAGED_HOST_SKILLS_ROUTE,
 	serverExtensions,
+	supersedablePackagesIn,
+	supersedingExtension,
 } from "../extensions";
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "../trash";
 import { artifactsGuard } from "./artifactsGuard";
@@ -38,6 +46,7 @@ import { oversizedImageGuard } from "./imageGuard";
 import {
 	createPiSettings,
 	disabledPackages,
+	piResourcePathKey,
 	recordLoadedExtensions,
 	setDisabledPackagesResolver,
 } from "./packages";
@@ -120,21 +129,20 @@ function relabelAliasProvenance(skill: Skill, sources: CompatibilitySkillSource[
 	};
 }
 
-let devExtensionSkillRoots: ReadonlyMap<string, readonly string[]> | undefined;
-function extensionSkillRootsByName(): ReadonlyMap<string, readonly string[]> {
+const devExtensionSkillRoots = new WeakMap<ServerExtensionEntry, readonly string[]>();
+function skillRootsOf(entry: ServerExtensionEntry): readonly string[] {
 	const skillsDir = bundled?.skillsDir;
-	if (skillsDir !== undefined) {
-		return new Map(
-			serverExtensions.map((entry) => [
-				entry.extension.name,
-				extensionSkillRoots(entry, skillsDir),
-			]),
-		);
+	if (skillsDir !== undefined) return extensionSkillRoots(entry, skillsDir);
+	let roots = devExtensionSkillRoots.get(entry);
+	if (!roots) {
+		roots = extensionSkillRoots(entry);
+		devExtensionSkillRoots.set(entry, roots);
 	}
-	devExtensionSkillRoots ??= new Map(
-		serverExtensions.map((entry) => [entry.extension.name, extensionSkillRoots(entry)]),
-	);
-	return devExtensionSkillRoots;
+	return roots;
+}
+
+function extensionSkillRootsByName(): ReadonlyMap<string, readonly string[]> {
+	return new Map(serverExtensions().map((entry) => [entry.extension.name, skillRootsOf(entry)]));
 }
 
 function extensionSkillPaths(include: (name: string) => boolean): string[] {
@@ -222,14 +230,13 @@ function resolveSkillInputs(
 	skillsOverride: ReturnType<typeof skillsGate>;
 	refreshSkillPaths: (disabled: ReadonlySet<string>) => void;
 } {
-	const roots = compatibilityRoots(cwd);
 	const additionalSkillPaths: string[] = [];
 	const refreshSkillPaths = (current: ReadonlySet<string>): void => {
 		additionalSkillPaths.splice(
 			0,
 			additionalSkillPaths.length,
 			...bundledSkillPaths(current),
-			...admittedRoots(roots, getCtx()).map((source) => source.path),
+			...admittedRoots(compatibilityRoots(cwd), getCtx()).map((source) => source.path),
 		);
 	};
 	refreshSkillPaths(disabled);
@@ -240,13 +247,44 @@ function resolveSkillInputs(
 	};
 }
 
+const ARGUMENT_COMPLETIONS: ReadonlySet<string> = new Set<SlashArgumentCompletion>([
+	"pull-request",
+]);
+const argumentCompletionCache = new Map<
+	string,
+	{ mtimeMs: number; value: SlashArgumentCompletion | null }
+>();
+
+export function skillArgumentCompletion(filePath: string): SlashArgumentCompletion | null {
+	try {
+		const { mtimeMs } = statSync(filePath);
+		const hit = argumentCompletionCache.get(filePath);
+		if (hit && hit.mtimeMs === mtimeMs) return hit.value;
+		const declared = parseFrontmatter(readFileSync(filePath, "utf8")).frontmatter[
+			"argument-completion"
+		];
+		const value =
+			typeof declared === "string" && ARGUMENT_COMPLETIONS.has(declared)
+				? (declared as SlashArgumentCompletion)
+				: null;
+		argumentCompletionCache.set(filePath, { mtimeMs, value });
+		return value;
+	} catch {
+		return null;
+	}
+}
+
 export function toSkillCommands(skills: readonly Skill[]): SlashCommandInfo[] {
-	return skills.map((skill) => ({
-		name: `skill:${skill.name}`,
-		description: skill.description,
-		source: "skill" as const,
-		sourceInfo: skill.sourceInfo,
-	}));
+	return skills.map((skill) => {
+		const argumentCompletion = skillArgumentCompletion(skill.filePath);
+		return {
+			name: `skill:${skill.name}`,
+			description: skill.description,
+			source: "skill" as const,
+			sourceInfo: skill.sourceInfo,
+			...(argumentCompletion ? { argumentCompletion } : {}),
+		};
+	});
 }
 
 const noneDisabled = (): ReadonlySet<string> => new Set();
@@ -357,10 +395,33 @@ function loaderPolicyKey(settings = extensionSettings()): string {
 	return `${packagePolicyKey()}\0${extensionSettingsKey(settings)}`;
 }
 
-/** `true` when the loader last resolved under a package policy or extension settings other than the current ones. */
+/** What a loader's last load found of the packages registry extensions supersede, and which it left out. */
+interface SupersededAtLoad {
+	present: ReadonlySet<string>;
+	omitted: string;
+}
+
+const loaderSupersedes = new WeakMap<ResourceLoader, SupersededAtLoad>();
+
+function omittedKey(present: ReadonlySet<string>, isDisabled: (name: string) => boolean): string {
+	return [...present]
+		.filter((name) => supersedingExtension(name, isDisabled) !== undefined)
+		.sort()
+		.join("\n");
+}
+
+/**
+ * `true` when the loader last resolved under a package policy or extension settings other than the
+ * current ones, or when a superseding extension's switch flipped over a package its last load found.
+ */
 export function isLoaderPolicyStale(loader: ResourceLoader): boolean {
 	const recorded = loaderPolicies.get(loader);
-	return recorded !== undefined && recorded !== loaderPolicyKey();
+	if (recorded !== undefined && recorded !== loaderPolicyKey()) return true;
+	const superseded = loaderSupersedes.get(loader);
+	return (
+		superseded !== undefined &&
+		superseded.omitted !== omittedKey(superseded.present, isExtensionDisabled)
+	);
 }
 
 let installedPackagesListener: (() => void) | null = null;
@@ -414,8 +475,30 @@ export function childExtensionFactories(workspaceId: string): InlineExtension[] 
 		headlessSearchPolicy,
 		...(specsEnabledFor(workspaceId) ? [specGraphExtension] : []),
 		skillCatalog,
-		...registryInlineExtensions("childExtensions", isExtensionDisabled),
+		...childRegistryFactories(false),
 	];
+}
+
+/** Installed extensions' child halves: `pi-delegation` loads them after every host-owned child factory. */
+export function childInstalledExtensionFactories(): InlineExtension[] {
+	return childRegistryFactories(true);
+}
+
+function childRegistryFactories(installed: boolean): InlineExtension[] {
+	return registryInlineExtensions(
+		"childExtensions",
+		isExtensionDisabled,
+		serverExtensions().filter((entry) => (entry.installed !== undefined) === installed),
+	);
+}
+
+interface LoaderInputs {
+	cwd: string;
+	settingsManager: SettingsManager;
+	getAdmission: () => SkillAdmissionContext;
+	excludedExtensionPaths: readonly string[];
+	extraFactories: InlineExtension[];
+	session: HostSessionServices | undefined;
 }
 
 export async function buildResourceLoader(
@@ -426,38 +509,152 @@ export async function buildResourceLoader(
 	extraFactories: InlineExtension[] = [],
 	session?: HostSessionServices,
 ): Promise<ResourceLoader> {
+	const inputs: LoaderInputs = {
+		cwd,
+		settingsManager,
+		getAdmission,
+		excludedExtensionPaths,
+		extraFactories,
+		session,
+	};
+	let registry = serverExtensions();
+	let inner: ResourceLoader | undefined;
+	const current = (): ResourceLoader => {
+		if (!inner) throw new Error("the resource loader has not loaded yet");
+		return inner;
+	};
+	const loader: ResourceLoader = {
+		getExtensions: () => current().getExtensions(),
+		getSkills: () => current().getSkills(),
+		getPrompts: () => current().getPrompts(),
+		getThemes: () => current().getThemes(),
+		getAgentsFiles: () => current().getAgentsFiles(),
+		getSystemPrompt: () => current().getSystemPrompt(),
+		getSystemPromptSource: () => current().getSystemPromptSource(),
+		getAppendSystemPrompt: () => current().getAppendSystemPrompt(),
+		getAppendSystemPromptSources: () => current().getAppendSystemPromptSources(),
+		extendResources: (paths) => current().extendResources(paths),
+		reload: async (options) => {
+			const latest = serverExtensions();
+			if (!inner || latest !== registry) {
+				registry = latest;
+				inner = createRegistryLoader(registry, loader, inputs);
+			}
+			await inner.reload(options);
+		},
+	};
+	await loader.reload();
+	return loader;
+}
+
+const REGISTRARS: Readonly<Record<string, string>> = {
+	registerTool: "tool",
+	registerCommand: "command",
+	registerFlag: "flag",
+};
+
+function registrationKey(method: string, args: readonly unknown[]): string | undefined {
+	const [first] = args;
+	const name = method === "registerTool" ? (first as { name?: unknown } | null)?.name : first;
+	return typeof name === "string" ? `${REGISTRARS[method]}:${name}` : undefined;
+}
+
+function registrationView(pi: ExtensionAPI, admit: (key: string) => boolean): ExtensionAPI {
+	return new Proxy(pi, {
+		get: (target, key) => {
+			const value = Reflect.get(target, key);
+			if (typeof key !== "string" || !(key in REGISTRARS) || typeof value !== "function")
+				return value;
+			return (...args: unknown[]) => {
+				const claim = registrationKey(key, args);
+				if (claim !== undefined && !admit(claim)) return;
+				return Reflect.apply(value, target, args);
+			};
+		},
+	});
+}
+
+function builtinSlotClaims(): {
+	record: (inline: InlineExtension) => InlineExtension;
+	refuse: (inline: InlineExtension) => InlineExtension;
+	reset: () => void;
+} {
+	const claimed = new Set<string>();
+	const wrap = (inline: InlineExtension, admit: (key: string) => boolean): InlineExtension => {
+		if (typeof inline === "function") return inline;
+		return { ...inline, factory: (pi) => inline.factory(registrationView(pi, admit)) };
+	};
+	return {
+		record: (inline) =>
+			typeof inline !== "function" && inline.builtin
+				? wrap(inline, (key) => {
+						claimed.add(key);
+						return true;
+					})
+				: inline,
+		refuse: (inline) => wrap(inline, (key) => !claimed.has(key)),
+		reset: () => claimed.clear(),
+	};
+}
+
+export const HOST_INLINE_FACTORIES: readonly ExtensionFactory[] = [
+	headlessSearchPolicy,
+	reviewToolExtension,
+	requestReviewExtension,
+	setTitleExtension,
+	continueInWorkspaceExtension,
+	workspaceToolsExtension,
+	oversizedImageGuard,
+	artifactsGuard,
+	skillCatalog,
+	skillCarryover,
+];
+
+function createRegistryLoader(
+	registry: readonly ServerExtensionEntry[],
+	owner: ResourceLoader,
+	{
+		cwd,
+		settingsManager,
+		getAdmission,
+		excludedExtensionPaths,
+		extraFactories,
+		session,
+	}: LoaderInputs,
+): ResourceLoader {
 	let disabledAtReload = disabledExtensions();
 	const isDisabledAtReload = (name: string): boolean => disabledAtReload.has(name);
 	let settingsAtReload = extensionSettings();
 	const settingAtReload = (extension: string, key: string): boolean | undefined =>
 		settingsAtReload[extension]?.[key];
-	const sharedFactories: InlineExtension[] = [
-		...registryInlineExtensions(
+	const builtins = registry.filter((entry) => entry.installed === undefined);
+	const registryFactories = (installed: boolean): InlineExtension[] =>
+		registryInlineExtensions(
 			"extensions",
 			isDisabledAtReload,
-			serverExtensions,
+			registry.filter((entry) => (entry.installed !== undefined) === installed),
 			session,
 			settingAtReload,
-		),
-		headlessSearchPolicy,
-		reviewToolExtension,
-		requestReviewExtension,
-		setTitleExtension,
-		continueInWorkspaceExtension,
-		workspaceToolsExtension,
-		oversizedImageGuard,
-		artifactsGuard,
-		skillCatalog,
-		skillCarryover,
+		);
+	const slots = builtinSlotClaims();
+	const hostFactories: InlineExtension[] = [
+		...(bundled?.factories ?? []),
+		...registryFactories(false),
+		...HOST_INLINE_FACTORIES,
 		...extraFactories,
 	];
-	const extensionFactories = bundled ? [...bundled.factories, ...sharedFactories] : sharedFactories;
+	const extensionFactories = [
+		...hostFactories.map(slots.record),
+		...registryFactories(true).map(slots.refuse),
+	];
 	const { refreshSkillPaths, ...skillInputs } = resolveSkillInputs(
 		cwd,
 		getAdmission,
 		disabledAtReload,
 	);
 	const agentDir = getAgentDir();
+	const superseded: SupersededAtLoad = { present: new Set(), omitted: "" };
+	loaderSupersedes.set(owner, superseded);
 	const common = {
 		cwd,
 		agentDir,
@@ -467,7 +664,16 @@ export async function buildResourceLoader(
 		extensionsOverride: (result: LoadExtensionsResult) => {
 			recordProviderOwners(result);
 			recordLoadedExtensions(result);
-			return preferRegistryTools(omitDisabledRegistryExtensions(result, isDisabledAtReload));
+			superseded.present = supersedablePackagesIn(result, builtins);
+			superseded.omitted = omittedKey(superseded.present, isDisabledAtReload);
+			return preferRegistryTools(
+				omitSupersededPackages(
+					omitDisabledRegistryExtensions(result, isDisabledAtReload, registry),
+					isDisabledAtReload,
+					builtins,
+				),
+				registry,
+			);
 		},
 	};
 	const devExtensionPaths = bundled ? [] : resolveDevPaths().extensionPaths;
@@ -477,12 +683,13 @@ export async function buildResourceLoader(
 		settingsManager,
 		builtinExtensions: builtinExtensionNames(extensionFactories),
 	});
-	const applyCurrentPolicy = (loader: ResourceLoader): void => {
+	const applyCurrentPolicy = (): void => {
+		slots.reset();
 		settingsManager.setProjectTrusted(getAdmission().piResourceTrusted);
 		disabledAtReload = disabledExtensions();
 		settingsAtReload = extensionSettings();
 		refreshSkillPaths(disabledAtReload);
-		loaderPolicies.set(loader, loaderPolicyKey(settingsAtReload));
+		loaderPolicies.set(owner, loaderPolicyKey(settingsAtReload));
 	};
 	// pi's reload installs a declared package that is missing; the packages layer learns of it here.
 	const noticingInstalls = async (reload: () => Promise<void>): Promise<void> => {
@@ -494,18 +701,16 @@ export async function buildResourceLoader(
 		}
 	};
 
-	const excluded = new Set(excludedExtensionPaths.map((path) => resolve(path)));
-	if (excluded.size === 0) {
+	if (excludedExtensionPaths.length === 0) {
 		const loader = new DefaultResourceLoader({
 			...common,
 			additionalExtensionPaths: devExtensionPaths,
 		});
 		const reloadTrusted = loader.reload.bind(loader);
 		loader.reload = async (options) => {
-			applyCurrentPolicy(loader);
+			applyCurrentPolicy();
 			await noticingInstalls(() => reloadTrusted(options));
 		};
-		await loader.reload();
 		return loader;
 	}
 
@@ -515,6 +720,7 @@ export async function buildResourceLoader(
 	const resolveExtensionPaths = async (): Promise<void> => {
 		await settingsManager.reload();
 		const resolvedResources = await packageManager.resolve();
+		const excluded = new Set(excludedExtensionPaths.map(piResourcePathKey));
 		const next: string[] = [];
 		const metadata = new Map<string, PathMetadata>();
 		for (const resource of resolvedResources.extensions) {
@@ -523,10 +729,9 @@ export async function buildResourceLoader(
 				next.push(resource.path);
 				continue;
 			}
-			const path = resolve(resource.path);
-			if (excluded.has(path)) continue;
+			if (excluded.has(piResourcePathKey(resource.path))) continue;
 			next.push(resource.path);
-			metadata.set(path, resource.metadata);
+			metadata.set(resolve(resource.path), resource.metadata);
 		}
 		additionalExtensionPaths.splice(
 			0,
@@ -543,14 +748,13 @@ export async function buildResourceLoader(
 	});
 	const reloadResolved = loader.reload.bind(loader);
 	loader.reload = async (options) => {
-		applyCurrentPolicy(loader);
+		applyCurrentPolicy();
 		await noticingInstalls(async () => {
 			await resolveExtensionPaths();
 			await reloadResolved(options);
 		});
 		relabelDiscoveredExtensions(loader, discoveredMetadata);
 	};
-	await loader.reload();
 	return loader;
 }
 

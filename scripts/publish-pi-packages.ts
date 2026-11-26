@@ -1,12 +1,12 @@
 #!/usr/bin/env bun
-// CI publish step for pi-extensions/*; see pi-extensions/SPEC.md → Release. `--dry-run` packs only.
+// CI publish step for pi-extensions/*, the extension SDK and extension-examples/*; see pi-extensions/SPEC.md → Release. `--dry-run` packs only.
 import { appendFileSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	dependenciesFirst,
 	packPiPackage,
-	publishablePiPackages,
+	publishablePackages,
 	publishedVersions,
 	repoRoot,
 	run,
@@ -34,7 +34,7 @@ if (pendingChangesets.length > 0) {
 	report(0, false);
 	process.exit(0);
 }
-const packages = dependenciesFirst(publishablePiPackages());
+const packages = dependenciesFirst(publishablePackages());
 if (packages.length === 0) {
 	console.log("publish-pi-packages: nothing to publish");
 	report(0, false);

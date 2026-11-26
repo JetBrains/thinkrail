@@ -17,6 +17,7 @@ import {
 	footKeyAction,
 	nudgeShowsOnPage,
 	openNotePatch,
+	pageKeyTarget,
 	paneOptionIndex,
 	parseQuestions,
 	type QState,
@@ -152,6 +153,36 @@ describe("keyboard interaction", () => {
 		expect(questionPageForKey("Home", 1, 2)).toBeNull();
 		expect(questionPageForKey("Home", 1, 2, true)).toBe(0);
 		expect(questionPageForKey("End", 1, 2, true)).toBe(2);
+	});
+
+	it("→ past the last question goes to Submit, or asks for a choice while Submit is disabled", () => {
+		const ready = { canSubmit: true };
+		const empty = { canSubmit: false };
+		expect(pageKeyTarget("ArrowRight", 0, 2, empty)).toEqual({ kind: "page", page: 1 });
+		expect(pageKeyTarget("ArrowLeft", 2, 2, ready)).toEqual({ kind: "page", page: 1 });
+		expect(pageKeyTarget("ArrowRight", 2, 2, ready)).toEqual({ kind: "submit" });
+		expect(pageKeyTarget("ArrowRight", 2, 2, empty)).toEqual({ kind: "needsChoice" });
+		expect(pageKeyTarget("ArrowRight", 2, 2, { edges: true, canSubmit: true })).toEqual({
+			kind: "submit",
+		});
+		expect(pageKeyTarget("End", 0, 2, { edges: true, canSubmit: true })).toEqual({
+			kind: "page",
+			page: 2,
+		});
+		expect(pageKeyTarget("End", 2, 2, { edges: true, canSubmit: true })).toEqual({
+			kind: "page",
+			page: 2,
+		});
+		expect(pageKeyTarget("ArrowDown", 2, 2, ready)).toBeNull();
+	});
+
+	it("a single question takes → to Submit and leaves ← and the edges alone", () => {
+		expect(pageKeyTarget("ArrowRight", 0, 0, { canSubmit: true })).toEqual({ kind: "submit" });
+		expect(pageKeyTarget("ArrowRight", 0, 0, { canSubmit: false })).toEqual({
+			kind: "needsChoice",
+		});
+		expect(pageKeyTarget("ArrowLeft", 0, 0, { canSubmit: true })).toBeNull();
+		expect(pageKeyTarget("Home", 0, 0, { edges: true, canSubmit: true })).toBeNull();
 	});
 
 	const key = (

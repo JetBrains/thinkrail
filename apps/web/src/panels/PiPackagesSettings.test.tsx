@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { PiLooseExtension, PiPackageSummary, PiPackagesCatalog } from "@thinkrail/contracts";
+import { applyLocale } from "@thinkrail/locales/react";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup as renderMarkup } from "react-dom/server";
@@ -173,10 +174,12 @@ test("the group shows the host's enabled state and the update-check result", () 
 test("empty, loading, failed and untrusted states", () => {
 	const empty = renderGroup({ ...CATALOG, packages: [], loose: [] });
 	expect(empty).toContain('data-testid="packages-empty"');
-	expect(empty).toContain('data-testid="packages-gallery-link"');
+	expect(empty).toContain('data-setting-id="installed-packages"');
 	expect(empty).not.toContain("packages-empty-install");
 	expect(renderGroup("loading")).not.toContain("package-row");
 	expect(renderGroup("failed")).toContain('data-testid="packages-failed"');
+	expect(renderGroup("failed")).not.toContain("packages-retry");
+	expect(renderGroup("failed", { onRetry: noop })).toContain('data-testid="packages-retry"');
 	const untrusted = renderGroup({
 		...CATALOG,
 		projectSettingsPath: "/repo/.pi/settings.json",
@@ -244,6 +247,36 @@ test("a shadowed declaration says so", () => {
 	expect(shadowed).toContain('data-testid="package-shadowed"');
 });
 
+test("a package a ThinkRail extension replaces says so, with the extension's translated title", async () => {
+	const row = (summary: PiPackageSummary) =>
+		renderToStaticMarkup(
+			<PackageRow
+				summary={summary}
+				updateAvailable={false}
+				expanded={false}
+				busy={false}
+				error={undefined}
+				onToggleExpanded={noop}
+				onAction={noop}
+			/>,
+		);
+	const superseded: PiPackageSummary = {
+		...JIRA,
+		supersededBy: { name: "session-insights", title: "Host copy" },
+	};
+	expect(row(JIRA)).not.toContain('data-testid="package-superseded"');
+	expect(row(superseded)).toContain("Replaced by Session insights while it is on.");
+	expect(row({ ...JIRA, supersededBy: { name: "retired", title: "Retired tool" } })).toContain(
+		"Replaced by Retired tool while it is on.",
+	);
+	await applyLocale("ru", {});
+	try {
+		expect(row(superseded)).toContain("Заменён на «Разбор сессий», пока оно включено.");
+	} finally {
+		await applyLocale("en", {});
+	}
+});
+
 test("a failed update check renders under the group header", () => {
 	const markup = renderGroup(CATALOG, { checkError: "Couldn't check for updates" });
 	expect(markup).toContain('data-testid="packages-check-error"');
@@ -273,4 +306,41 @@ test("a declared package missing on disk is a Not installed row with Remove only
 	expect(markup).not.toContain('data-testid="package-toggle"');
 	expect(markup).not.toContain('data-testid="package-expand"');
 	expect(markup).toContain('data-testid="package-menu"');
+});
+
+test("installed extension rows sit first in the Installed list and outlast a failed package list", () => {
+	const row = {
+		id: "extension:/ext",
+		render: () => <li key="ext" data-testid="installed-extension-row" />,
+	};
+	const empty = renderGroup({ ...CATALOG, packages: [], loose: [] }, { extensionRows: [row] });
+	expect(empty).toContain('data-testid="installed-extension-row"');
+	expect(empty).not.toContain('data-testid="packages-empty"');
+	expect(empty).toContain('data-setting-id="installed-packages"');
+	const mixed = renderGroup(CATALOG, { extensionRows: [row], extraUpdates: 1 });
+	expect(mixed.indexOf("installed-extension-row")).toBeLessThan(
+		mixed.indexOf('data-testid="package-row"'),
+	);
+	expect(mixed).toContain('data-testid="packages-update-all"');
+	expect(mixed).toContain('data-testid="package-type"');
+	expect(mixed.match(/data-focus-list="packages"/g)).toHaveLength(1);
+	const failed = renderGroup("failed", { extensionRows: [row] });
+	expect(failed).toContain('data-testid="installed-extension-row"');
+	expect(failed).toContain('data-focus-list="packages"');
+	expect(failed).toContain('data-testid="packages-failed"');
+});
+
+test("installed packages and loose files are one keyboard list: expand as the primary, then the switch and the menu", () => {
+	const markup = renderGroup(CATALOG);
+	expect(markup).toContain('data-focus-list="packages"');
+	expect(markup).toContain('data-key-scope="settings.list"');
+	expect(markup).toContain('data-setting-id="installed-packages"');
+	expect(markup).toContain('data-focus-row="user:npm:@acme/pi-jira"');
+	expect(markup).toContain(`data-focus-row="file:${GUARD.path}"`);
+	expect(markup).toMatch(/data-setting-primary=""[^>]*data-testid="package-expand"/);
+	expect(markup).toMatch(/<li[^>]*data-setting-row="packages\/[^"]+"[^>]*tabindex="-1"/);
+	expect(markup).toMatch(/tabindex="(0|-1)"[^>]*data-testid="package-menu"/);
+	expect(markup).toMatch(/tabindex="(0|-1)"[^>]*role="switch"[^>]*data-testid="package-toggle"/);
+	expect(markup).not.toContain("truncate");
+	expect(markup).not.toContain(`title="${JIRA.installedPath}"`);
 });

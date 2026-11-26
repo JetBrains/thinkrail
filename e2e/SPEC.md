@@ -18,6 +18,9 @@ explicit, authenticated, on-demand runs.
 
 ## Execution model
 
+The session-state mark-read/unread case also checks the corresponding chat tab's live attention marker
+alongside the workspace indicator, without changing tab selection.
+
 Per-test isolation is `resetState()` in `fixtures/app.ts`: it clears the host's `projects.json`,
 `workspaces.json`, every chat in `chats.json` and the `chats/` folders, turns, reviews, artifact indexes and
 kept copies, worktrees and pi
@@ -114,6 +117,11 @@ compaction to keep the request small and deterministic, restoring the settings b
 It neither changes the provider/effort selection nor proves removal of a fixed output cap; the focused
 SDK reserve-independence canary owns that assertion.
 
+The focused `outputs.live` probe also requests a report in an explicit project directory outside
+`.thinkrail/context/`, checking the actual file, its final handoff, and the absence of an artifact copy
+or publication attempt. This complements the default Outputs case and `artifacts.live`'s temporary-file
+protection; only the tagged live probes spend provider tokens.
+
 ## Repository cloning
 
 `clone-project.spec.ts` clones disposable local `file:` repositories through the Welcome and rail menus,
@@ -124,6 +132,15 @@ and cleanup are exercised separately by the projects and subprocess unit tests. 
 credentials or remote repositories are used.
 
 ## Chat resource controls
+
+`subagent-settings.spec.ts` exercises Settings → Subagents through the real host: existing global and
+workspace delegation/concurrency controls, phone containment, and global role switches. Holding the
+client's own `settings.changed` push proves a role switch renders only the authoritative push; reload
+proves persistence. One two-window test holds the peer's pushes so it switches a different role off from
+the same stale snapshot; both windows then converge with both roles off.
+A disconnected host retires the catalog controls until protocol negotiation completes again; reconnect
+restores the page. Portable extension tests separately exercise
+launch rejection and ongoing completion delivery; these no-agent browser probes make no agent calls.
 
 Resource wire coverage opens persisted chat fixtures through the real UI and checks the authoritative
 catalog's session/workspace scope, missing-output result, unavailable controls and empty stop-all.
@@ -162,7 +179,11 @@ once that chat reloads, selects it in the Resources inspector — its detail lis
 card body — and disables it for that chat from the detail header, then removes it; it opens a chat from a not-running
 server's row, reconnects that server per chat once it fails and shows its masked log, and names an
 unreadable user `mcp.json` with an edit hint; and it proves a repository-defined server flags the chat's
-attention marker, waits for Review & approve, and starts once approved. Each test removes the `mcp.json`
+attention marker, waits for Review & approve, and starts once approved. With no workspace open, it lists
+the user servers (On, no per-chat action, the project-servers line instead of that group), adds one
+through an Add dialog that offers User scope only, switches it off for every project (the entry's own
+`enabled: false` in the lane's user `mcp.json`, removed again when switched back on) and removes it
+through the Delete key's confirmation, focus landing on the remaining server. Each test removes the `mcp.json`
 it wrote (the lane's agent dir or the fixture repository's `.pi/`) in `finally`, so no later scenario
 starts servers.
 
@@ -178,7 +199,9 @@ is always measured, and a disconnected anchor fails as a remount instead of repo
 rect.
 Pierre surfaces paint plain text first and replace their rows when the worker's highlight lands, which
 is late on slower hosts such as the compiled-binary and packaged-desktop artifacts; pointer probes wait
-for highlighted tokens (`pierreHighlightedTokens`) before measuring or dragging rows.
+for highlighted tokens (`pierreHighlightedTokens`) before measuring or dragging rows. The plain pass
+already colours every token with `--code-foreground`, so a highlighted token is one coloured by any
+other `--code-` role: matching the plain pass let a probe measure a row the highlight then replaced.
 A following probe that lets actionability scroll an off-screen transcript control into view first
 waits for the chat to settle (`waitForScrollStability`: `data-scroll-moving="false"` and unchanged scroll
 geometry across frames; `clickTranscriptControl` settles, then clicks). That scroll is not reader input,
@@ -190,12 +213,32 @@ control's own content (a preview's frames or notice), and a click after a dialog
 fixed-height preview is taller than the transcript beside the default bottom terminal, so its toolbar
 sits above the fold at the latest edge, and each tool-step expansion moves the edge a following chat then
 animates to.
+An anchored extension prompt reveals itself from wherever the chat stands on its first frame. Asked while
+the chat-open placement still holds the latest edge, its growth is pinned first and a prompt taller than
+the transcript beside the default bottom terminal (an approval with a 40vh argument list) shows its
+bottom; asked once the chat has settled, it shows its question. `extension-dialogs.spec.ts` settles the
+chat before asking and again before measuring, then scrolls the list into view before reading its end.
 Entering a workspace auto-opens its latest chat, and a pending questionnaire there claims focus and reveal
 at once. Workbench shortcuts pressed afterwards are user input, and the card yields to them. Questionnaire
 attention coverage therefore closes and reopens the chat after arranging the workbench.
+Reconnect auto-open coverage (`chat-history.spec.ts`) drops the page's socket with the host running and,
+once the probe has forwarded the new connection's `session.list` answer, renames the current chat over a
+second wire. A new title on the tab means the page handled that answer, so a chat the pass opens from its
+local runtime is already placed. A chat it must read first opens only after that read, which the rename
+does not wait for, so the probe also asserts that no new `session.getMessages` for that chat went out on
+the new socket (a replayed read keeps its id): the pass sends the read while it handles the answer.
+First-entry close coverage holds the initial catalog answer after restored tabs appear, closes an inactive
+chat, and then releases the answer or reconnects. A never-placed chat with unfinished work must appear
+in the background before the probe asserts the closed chat stayed in history and the current tab kept
+focus; this positive barrier waits for the delayed passive pass without sleeps.
 Showing a side or the bottom focuses its selected tab (its edge-rail control when no tab renders) one
 animation frame after the region renders; a probe that then focuses inside the shown region first waits
 for that endpoint, or a late frame moves focus away from the probe's target.
+A keybinding override set over the host wire (`fixtures/keybindings.ts`) reaches the page as the
+`settings.changed` push on the page's own socket, and the wire's reply does not wait for the page to
+handle it, so a key pressed right after the reply can still meet the old binding. A probe sets the override
+before it opens the surface that reads it, since every later reply on the page's socket comes after the
+push, or waits for the rebound chord to show (`aria-keyshortcuts`, a key cap) before its first press.
 Monaco wheel probes reach the editor through an actionability-checked `hover()`, never a measured box:
 a box read before the editor's layout settles can be a stale one whose centre lies under the left panel's
 resize separator. Each CDP wheel event scrolls Monaco 50 px whatever its delta (one synthetic tick), so a
@@ -357,6 +400,15 @@ unchanged 40px workbench origin, the header's resolved `-webkit-app-region`, and
 and Settings all live inside the `no-drag` action cluster. In a plain browser the properties are unset, so
 the first scenario pins the zero-inset, `no-drag` baseline and the theme-token header colour.
 
+**Linux paste** (`composer-attachments.spec.ts`) has no WebKitGTK. Its stand-in for the desktop's clipboard
+bridge answers through the desktop's own `readNativeClipboard` over a modelled X clipboard (a fake `xclip`
+serving the targets a screenshot tool, a file manager or a text owner offers; a smaller image budget), so it
+answers what the real reader would. Each paste is the event WebKitGTK delivers: an emptied one for files and
+images, a real Ctrl+V from headless Chromium's own clipboard for text. Timing cases swap in a deferred
+bridge the test answers by hand, so a send or a chat switch lands while a read is still pending, or hold one
+socket method's request or reply in a `routeWebSocket` proxy (a slow `attachments.copyLocal`, a pending
+`workspace.startCreate`), releasing it after a cancel; the page's ack of a held reply marks it handled.
+
 Workbench scenarios exercise the normalized frontend-local frame rather than only the pure model: frame
 geometry/tool placement survives workspace switches while resource tabs and attention differ; closing a final
 resource retains its empty group; explicit group removal rehomes hidden-workspace resources; reload restores
@@ -396,7 +448,7 @@ on its timer, without its fade under reduced motion); then the focus chords: `Mo
 Files in the matching mode, and the palette rows with their chords, run after the palette closes.
 `focus-recovery.spec.ts` pins one site per rule of the shell's focus recovery: a deleted Files row hands
 focus to the next file in its folder, then the previous; removing an MCP server focuses the next server's
-menu and the empty state's Add inside Settings; Enter in a workspace's inline rename returns to the row;
+row and then the empty state's Add inside Settings; Enter in a workspace's inline rename returns to the row;
 Escape in Plan's add-task returns to its button and Show step focuses the step; the Markdown outline toggle
 keeps focus across its two renderings and an entry focuses its heading; One file's Next disabling at the
 last file hands focus to Prev; and the safety net lands a removed unmarked control on its region's landing
@@ -415,13 +467,18 @@ open their menu and kept diff; the Artifacts tree is one Tab stop that ↓ walks
 elsewhere show labels and the bar, and Esc / `Mod+;` leave them; typing a label presses a rail button,
 opens a Radix dropdown (whose open menu then scopes the labels) and focuses the chat input without typing;
 the first letter narrows the labels, Backspace restores them and Shift on the last letter only focuses a
-Files row; an open Settings dialog scopes the labels and survives the Esc that leaves hint mode; and
-Settings → Extensions lists Hint mode without tool chips, switching it off silences both keys and drops
+Files row; an open Settings dialog scopes the labels and survives the Esc that leaves hint mode; plain `F`
+labels Settings from a section tab, a content row and a search result, and typing a label presses it
+(nothing in Settings binds `F`); while labels show a tab's hover-only × is revealed (opacity 1, a dashed
+outline) and labelled, its label closes that tab and focus lands on the neighbouring tab, and the × hides
+again; Shift on a Resources row's revealed Stop label (a mocked running command) focuses Stop, which
+stays shown, without stopping it; and
+Settings → Extensions & skills lists Hint mode without tool chips, switching it off silences both keys and drops
 its cheatsheet rows until it is switched back on. A label is found by its position at the target's
 top-left; a target must be scrolled into view and its panel's entrance animation finished before the
 labels are taken, since they are measured once (and on scroll / resize).
 `keyboard-rebinding.spec.ts` pins Settings → Keyboard's editor against the host: a recorded `Mod+Alt+S`
-splits the group (the old chord no longer does) and shows in the palette and the cheatsheet, and Reset
+(its chord slot framed only while recording) splits the group (the old chord no longer does) and shows in the palette and the cheatsheet, and Reset
 restores `Mod+\`; Replace moves `Mod+K` to Focus chat input, which it then focuses, leaving the palette
 unbound until Reset all; a plain key, `Mod+T` and `Mod+,` show the modifier message, the browser warning
 and the desktop refusal, Esc and Tab cancel, ↑/↓ walk rows and a locked row ignores Enter; a second page
@@ -433,17 +490,95 @@ and `F` still starts hint mode. Each test resets the overrides (and re-enables h
 wire in `afterEach`.
 `keyboard-chat.spec.ts` pins the chat transcript's keyboard model on seeded chats: `Mod+↑` from the
 composer onto the newest message and Esc back with the draft and caret intact (a multi-line draft first
-takes the caret to its start), ↑/↓ with k/j and Home/End, →/← and l/h expanding an Activity and walking
+takes the caret to its start), ↑/↓ with k/j and Home/End, ↓/j scrolling a message taller than the
+feed 40 px at a time with the cursor kept until its end shows and only then stepping on (k scrolls it
+back), Shift+Space / Space / PgUp paging the feed by the viewport less a line, Shift+G / Home reaching the
+ends (the latest edge following), →/← and l/h expanding an Activity and walking
 its nested Thinking and tool steps, a keyboard expand of the newest Activity in a chat shortened by the
 bottom Terminal and focus entering an on-screen step of it leaving follow without scrolling the focused
 header or step away, C (clipboard), O (a preview tab) and the Shift+F10 item menu, Tab
 walking only the focused item's controls then leaving, PgUp/PgDn from the composer paging the transcript
 with focus kept, Latest from the keyboard and a history jump landing on the message, focus parked on the
-feed when a wheel scroll unmounts the focused row and the next key bringing it back, newest-first order,
+feed when a wheel scroll unmounts the focused row and the next key bringing it back, newest-first order
+(and, in a 200-message newest-first chat whose old messages render taller than their estimates, End
+reaching the true bottom on the oldest message and Home the top),
 the history overlay's Delete (caret at the end only) and entry menu beside its Tab zoom, the Resources
 inspector's inert transcript and the @ popup taking Escape first, Stop returning focus to the composer
 (a replayed `agent_start` on the intercepted wire keeps the chat streaming without an agent), and h/l on
 a tab strip and j/k on a side rail.
+`keyboard-escape.spec.ts` pins the Esc that leaves a text field: from the composer with a draft it parks on
+the feed with no ring (draft, caret and the region's accent line kept), where `F` shows hint labels, a
+second Esc does nothing, ↓ walks to a message and that message's Esc returns to the composer; the @ menu
+takes the first Esc; the TODO rail's input lands on its panel root, from which `F` and `Mod+1` still work;
+in Settings it takes four presses to close: Esc in the shortcut filter clears it, the next returns to the
+filter's row, the third goes to the section list, the fourth closes Settings; and the terminal's Esc reaches the shell with focus kept. It
+also pins the Esc ladder: the TODO input → its panel → the chat feed (no ring, the center's accent line),
+and a Files row, the chat's own tab and a top-bar button straight to the feed; with a file in the center,
+a Files row, the file's tab and a terminal tab land in its Monaco editor with the tab unchanged, and
+Esc in that read-only editor goes back to the file's row; a dialog's button closes the dialog and climbs no further; on Project Home the
+Projects tree lands in the main pane.
+`keyboard-reading.spec.ts` pins reading files from the keyboard: Enter on a Files row opens the file with
+focus in it (the Markdown block cursor), Esc returns to the row (reopening its folder if it was collapsed
+meanwhile), a click on a row keeps focus in the tree, and a search-palette file pick lands focus in the file
+(a CSV's table); in a Markdown preview j walks the blocks, ↓ scrolls a tall fenced block 40 px at a time
+before the cursor moves on (only once its end shows), Space / Shift+Space page and Shift+G / g reach the ends
+with the cursor on the last / first block; a parent bullet with 80 nested bullets reads as its own line —
+j steps onto child 1 without scrolling and walks the children with the view only ever moving down, Space
+from the parent puts the cursor on a child in view, k from child 1 brings the parent's line back into view,
+and a focus after a wheel lands on the first child in view, never on the parent; with `reading.bottom`
+rebound to Shift+J, Shift+J on the block cursor goes to the file's end with no range while Shift+K still
+extends one and Shift+G no longer acts; a CSV scrolls by j (40 px), Space (a page) and l / h sideways,
+Shift+G reaches the bottom and Esc returns to its row, and in a 300-row CSV whose last rows are multiline
+Shift+G still reaches the true bottom (settled) and g the top; and a read-only code file moves the caret with the view
+on j / k (no "Cannot edit" message), pages on Space, reaches its last / first line on Shift+G / g, shows hint
+labels on `F` (hint mode's Esc keeps the editor) and returns to the tree on the next Esc, and once a wheel
+scrolls away from the caret, j / ↑ step from the first / last visible line instead, so Shift+Mod+M comments on
+the text in view — also down one long wrapped line, where the caret's line is on screen but its row is not
+(j leaves the caret on the top row, ↑ near the bottom); in a 600-line code file Space / Shift+Space scroll
+the view by the viewport less 40 px from where it is, also after a wheel scrolled away from the caret, keep
+the caret while it shows and else put it on the first fully visible line (j steps from there), and Space
+near the end stops at the end with the caret kept; an HTML file opened with Enter leaves focus on its tab,
+never in the frame, so F6 / Shift+F6, the Esc ladder (toolbar, then the row), Mod+1 and Mod+Shift+E all still move it.
+`settings-keyboard.spec.ts` pins the Settings frame's keys: opening lands on the current section's tab, and
+Tab goes search → the one tab stop of the section list → the section's first row, which is the content's
+one row stop before any row is focused, after a section change too; ↑/↓, j/k and Home/End open a section
+at once with focus kept on its tab, while other letters do nothing; →, `l` and Enter enter the content on
+the row focused there last, else on its first, and ← comes back; Esc steps back — a dirty field
+reverts, then its row, then the section list, then Settings closes onto its opener; inside a section one
+↑/↓ walk lands on whole rows — a switch row, the filter row (→ reaches Search by keys, Enter enters the
+field), a tree's items and a row of buttons — without wrapping, and Home/End reach its ends; a list walks
+row by row, → reaches a row's menu button, Delete asks first and focus lands on the neighbour row, Enter
+on a row opens it, and Shift+F10 opens the row's menu; a cheap choice is entered with Enter, applies on
+each arrow, Esc returns to the row keeping it and → then reaches Reset without touching the value, while
+an expensive one keeps a pending pick until Enter applies it (back on the row) and Esc cancels it (back on
+the row), and Delete resets either; walking ↓ and ↑ through Appearance lands on whole rows and never
+changes the theme; Space on a switch row toggles it and stays; every section opens scrolled to the
+top; and, with the Windows native bridge injected, `Ctrl+,` toggles Settings from inside it (reopening the
+remembered section) while `Ctrl+W` closes it at once from a field, keeping the edit.
+`settings-search.spec.ts` pins search over individual settings: `S` and `/` start it from the section
+list, other letters do nothing and `F` starts hint mode; results name their section, ↓ walks in, Enter
+jumps to the row — focused itself — and flashes it with the query kept, and Esc walks back out (to the results, then clearing);
+j/k walk the results, ↑ on the first returns to the field, Enter in the field jumps to the first, and Space
+on a result jumps too, its flash a different fill from the focused row's; the
+palette's per-setting row opens Settings on that setting; and a **drift check** reads every entry of
+`apps/web/src/panels/settingsCatalog.ts` with its English label from `packages/locales/en.json`, searches
+for each label and jumps to it, failing on an entry the search does not offer or one that renders no
+`[data-setting-id]`. Exempt are the entries this host cannot show (Updates, the Windows shell) and the
+state-gated ones, each pinned where its state exists: signed-in providers (`provider-login`), voice files
+(`voice-input`) and a launched survey (`feedback`), offered only while that state holds. Other specs reach
+Settings through `fixtures/app.ts`' `openSettingsSection(page, id)` and leave it with `closeSettings(page)`,
+which clicks Close: a single Esc no longer closes Settings from a field or a row.
+`settings-tree.spec.ts` is the Settings drift walk (`fixtures/settingsTree.ts`' `unreachedInSection`):
+for every section in the fixture's default state, then MCP with two user servers and Templates, it walks
+with the keys alone — ↑ to the top, ↓ row by row, → along each row's buttons, Enter into a row's control,
+in a row with more controls → along them from where → leaves a control without changing it (a choice's
+last option, a vertical list, a field's caret end), and Esc back, never pressing a button — and fails on
+any tabbable in the content it never reached: by focus, or as the switch, primary or Reset its visited
+row operates (Space, Enter, Delete). A field or an option counts only when focus reached it.
+`settings-model-context.spec.ts` runs the same walk over Models with the per-model context tree open and
+Custom chosen on the shared row and a model, so both Custom fields render, and pins Enter → → on the
+shared choice reaching Custom without waiting for the 1M save, whose later reply keeps Custom chosen, and
+the next → landing in its field.
 `keyboard-review.spec.ts` pins commenting from the keyboard: Tab onto a Pierre diff lands on its cursor
 proxy (`review-cursor`: a listbox whose single selected option, its `aria-activedescendant`, names the
 line and its place among the stops, while the diff container has no role or tabindex and takes the ring's
@@ -485,7 +620,9 @@ sign out every stored credential, and fail unless at most ambient env providers 
 teardown attempts every cleanup step even when one fails. Before any fixture reset
 deletes transcript storage, it lists and disposes every live session through the public wire; disposal aborts
 and settles an unfinished provider turn first, so a test ending mid-turn cannot recreate a headerless JSONL
-behind the next scenario. Consent tests reset the choice over the real settings wire and cover on-by-default preference priming,
+behind the next scenario. The reset finds the host's port in the project's `baseURL`, not with an HTTP
+request: Playwright keeps one keep-alive socket pool per worker, and the host closes a socket idle for 8–12 s
+on its 4 s sweep, so the first request of the next test could land on a socket being closed (`read ECONNRESET`). Consent tests reset the choice over the real settings wire and cover on-by-default preference priming,
 Done/ordinary-close acceptance, immediate off refusal, persistence failures and retries, confirmed reloads,
 cross-client convergence, prompt priority, and pre-v65 fallback.
 
@@ -503,6 +640,11 @@ the lane shares one host. A test that changes one restores it before it ends; ot
 the same test under `--repeat-each`, inherit it. Host-owned `recentModels` are the exception: every explicit
 model pick appends to them and no wire call restores them, so a model-picker scenario never assumes an empty
 shortlist — it reveals the provider groups (`revealModelGroups`) and asserts only the head of the recents.
+The chat-history search index ([[submodule-server-history]]) is host memory too and revalidates lazily, so
+a scenario's `history.search` can answer with an earlier scenario's or repeat's deleted chats until it has
+read the scenario's own. A scenario that acts on a hit therefore searches for a prompt with a per-run tag,
+never a fixed text an earlier run's chat could share, unless an earlier search already returned one of its
+own chats.
 
 **GitHub review states** (`topbar-review.spec.ts`) need a real-looking PR without a network. Origin is
 `git@github.com:<repo>.git` — what both the host's configured-URL read and `git remote get-url` see — with
@@ -512,10 +654,44 @@ receive-pack from a local bare repo, so pushes, fetches, and remote-branch delet
 local path and never find a PR. The lane's fake **`gh`** (`fixtures/fakeGh.ts`, launched by a generated
 fake-bin shim under the runner's bun, since the host PATH has none) answers `pr list|view` and `repo view`
 from a test-written scenario file, applies `pr ready|merge|reopen` to it, and logs every argv so a spec
-asserts the exact mutations. Without a scenario it fails like an unauthenticated gh, so every other spec
+asserts the exact mutations. `api graphql` answers the pull-request completion's two queries from the
+same scenario: a `search(...)` honours `is:open`, `review-requested:@me`, `author:@me` (the scenario's
+`viewer`, default `me`), `author:<login>`, `draft:false` and title words, sorted by `updatedAt`, paged by
+the query's `first:` with the offset as cursor; aliased `p<N>: pullRequest(...)` fields return sizes. `pr
+view <n>` answers in any state; rows carry `title`, `author` (a login, projected as `{ login }`), size and
+`updatedAt` with defaults. `review-pull-request.spec.ts` points the lane fixture repository's own
+`origin` at that seam (the reset removes it again), so the completion and the review workspace's
+`origin/main` base resolve without a network; signed out, the lane shows the failed-with-Retry state,
+because `THINKRAIL_GH_OFFLINE` makes the host's gh setup probe answer `null`. The host keeps successful
+pull-request answers for 60 s per repository slug, and a scenario's own success fills that cache, so a
+spec that must see a fresh failure names a repository unique to the run (a timestamp and the repeat
+index); a spec that changes the remembered filter forgets it again in `finally` over the wire. Without a scenario it fails like an unauthenticated gh, so every other spec
 keeps the gh-less behaviour; `THINKRAIL_GH_OFFLINE` still keeps `pr.open` on the compare hand-off. The reset
 deletes the scenario and log and unsets the ssh config. The host caches repository merge settings per origin
 URL for the whole run, so a spec that sets its own repository settings names its own repository.
+
+**Installed extensions** (`installed-extensions.spec.ts`, `extension-browse.spec.ts`) run the real published
+sample, `extension-examples/palette`, never npm or thinkrail.ai.
+- **Built before the host.** `bun run build:e2e` builds the web app and the sample (the SDK first, through
+  turbo's `^build`); `run.ts` runs `build:extension-fixtures` instead when `THINKRAIL_E2E_SKIP_BUILD` says
+  the web is already built (CI builds only the web), `run-full.ts` and the agent plan use `build:e2e`, and the
+  binary and desktop runners build the fixtures before Playwright. Turbo caches it, so a repeat costs about
+  a second.
+- **Folder installs.** The sample installs from its repository folder (loaded in place, never modified);
+  failure-path fixtures (`fixtures/extensions/{incompatible,broken-server,throwing-card}`: an API 2.0
+  manifest whose server half would leave a marker file, a server half that throws at load, and a UI-only
+  extension with a throwing and a working card) are copied into the lane's `extension-fixtures/` per test.
+  `fixtures/installedExtensions.ts` declares them by writing the lane's `extensions.json` — the agent
+  skill's path — and polls `extension.list` until the host reconciled; the dialog specs use the real
+  Install package dialog. `resetState()` empties a non-empty `extensions.json`, and the specs' `afterEach`
+  also clears the palette's switch and setting, so no installed extension outlives its test.
+- **The catalog is a lane file.** Every host gets `THINKRAIL_EXTENSION_CATALOG_URL` = the lane's
+  `extension-catalog.json` as a `file:` URL, read even though the suite's hosts run with `PI_OFFLINE`. A spec
+  writes the file (or deletes it — the unreachable state) and forces one `extensions.browse` read, so the
+  host's cached copy matches before the page asks. Install from Browse confirms `npm:<name>` and, offline,
+  ends at the dialog's failure step; the install itself is proven by the folder specs.
+- **Live.** `extension-palette.live.spec.ts` (`@agent`) declares the sample before the chat exists (a reset
+  empties `extensions.json`), asks the agent for a `color_palette` call and asserts the rendered swatches.
 
 **Voice input** (`voice-input.spec.ts`) never reaches NVIDIA's servers or a microphone.
 - Every host gets `THINKRAIL_SPEECH_MANIFEST` pointing at the lane's `speech-fixture/manifest.json`, which
@@ -613,7 +789,7 @@ lands in the sandbox and a new detection source is pinned everywhere at once.
   `WebAssembly` from the page and its workers alike, and pins that a diff, a phone-class code file, Monaco
   and a chat fence still show their source as plain text.
 - **Consumes:** the built web artifact, the host's public boot/wire behavior, sanctioned server test-fixture
-  exports, CLI binary, the locator, ready-document poller and `within` deadline from [[module-artifact-tests]], shared
+  exports, the desktop's clipboard reader (`apps/desktop/src/nativeClipboard.ts`, with a fake helper spawner), CLI binary, the locator, ready-document poller and `within` deadline from [[module-artifact-tests]], shared
   retrying teardown helper, git, Chromium, and Playwright. Standalone native/installer smoke and shared
   artifact probes are owned by that test workspace, outside Playwright discovery.
 - **Forbidden:** fake application backends, provider fakes in production boot paths, browser imports into
@@ -654,7 +830,9 @@ word-boundary cut, found by words past the cut), an inline rename that starts fr
 from the optimistic first send; it cannot persist a sent prompt without a provider, so the live path's
 durability is the server unit test's. Palette name coverage (`search-palette.spec.ts`) seeds a named chat in
 a workspace the page never opened, finds it by a word only its title holds, renames it from a second wire
-client while the palette stays open, and pins that the page sent no `session.list` for either. Find in Files coverage (`find-in-files.spec.ts`) writes its probe
+client while the palette stays open, and pins that the page sent no `session.list` for either. Its preview-cap scenario grows `notes.txt` only once
+the palette's host search has settled (no group indexing or refreshing): a re-ask stats the grown file and
+switches the pane to too large without reading it, so the refused refresh would never be asked. Find in Files coverage (`find-in-files.spec.ts`) writes its probe
 files into the fixture repository as an untracked folder removed after every test — a binary with NUL
 bytes so `git grep -I` skips it, and a file past the host's line limit — and pins the chord, grouping
 and counts, the Monaco preview and the open-at-line selection overlay, the restored window, smart-case
@@ -680,12 +858,38 @@ interactive with scripts only, Preview switching to static frames with same-orig
 available) that survives a reload. A huge comparison opts in through Show diff anyway while an unrelated file changes every 400 ms (each
 write its own watcher frame, past the 300 ms quiet flush), so updates keep landing inside the expensive first
 mount. These regressions need no provider,
-prompt submission, route mock, or screenshot. Extension on/off coverage (`extensions-settings.spec.ts`) drives the
-real Settings → Extensions switch of every shipped extension (`visualize`, `ask-user-question`,
+prompt submission, route mock, or screenshot. `extension-editor.spec.ts` installs a real pi command package
+and exercises composer replacement, paste and a `custom()` command that catches
+`EXTENSION_UI_UNSUPPORTED`, asks through the supported input dialog, and writes the answer into its
+composer. Cancelling that fallback leaves a draft typed while the dialog was open untouched; these
+commands make no provider request. Extension on/off coverage (`extensions-settings.spec.ts`) drives the
+real Settings → Extensions & skills switch of every shipped extension (`visualize`, `ask-user-question`,
 `web-access`, and the web-only `hint-mode` row the host catalog lacks) through `settings.update`, proves it
 survives a reload, and seeds a historical `visualize` call that must still render
 its diagram and an answered `ask_user_question` call that must still render its record while the extension is
-off; each test restores every switch in `afterEach` because the shard shares one host. `environment-settings.spec.ts` drives Settings →
+off; each test restores every switch in `afterEach` because the shard shares one host. Session insights
+coverage (`session-insights.spec.ts`) seeds transcripts with recorded provider/model/usage, failing tool
+results, a $0 model and subagents whose child transcripts sit in the host's delegation folder, enters the
+Default workspace and waits for its auto-restored chat (a tab activated after the panel opened would hide
+it) before driving the panel. The tests cover: the list with pi's figures and their provenance (tooltips,
+outside-subagent spend, the all-projects grouping, whole columns at the default 1920×1080 layout, *Open
+chat*); the disabled placeholder and re-enabling through *Open Settings*; a session's trace, call
+details (with the trace's `z` zoom leaving plain `F` to hint mode) and *Open in chat* landing on the row
+that holds the call; a failed call folded into a repeat (the command passed, then failed) shown for a
+search jump to it and for the Errors filter; turn cards, the actor timeline and the
+day view; subagent waves, the plan and skill bands and errors as recovery chains (with a retry key rebound
+through `settings.update` acting in the trace and shown in its legend, reset in `afterEach`); context and
+cache — reached through the Overview's Context link, which reveals the context half once, a return to the
+section opening at its top —, cost and files; statistics (findings, usage by day, hotspots); action
+sequences, a slice comparison and a step-aligned diff of two sessions; faceted search opening a session's analysis at a hit; and labels with
+exports of a masked page, a Chrome trace and a fixture into Artifacts. The fixture writer records
+`durationMs` so the spans are pi's. The app reset leaves the delegation folder and the extension's data
+folder (`<data>/extensions/session-insights/`) alone, so the spec removes the delegation folders it wrote
+and clears the data folder before each test; every test opens the panel through one
+`openInsightsPanel(page, { rows })`, which refreshes (`fresh: true`) until the index is ready and the list
+holds exactly that test's sessions, since the host's index may still list the previous test's. Its shots
+under `e2e/screenshots/session-insights*/` are review evidence only.
+`environment-settings.spec.ts` drives Settings →
 Environment through rejected and accepted saves and a reload; the host was launched with
 `PI_CODING_AGENT_DIR`, so it also proves the launch value stays in use and is reported as set at launch. It
 clears the stored record in `afterEach` so no later restart-based spec boots with it. The provider-backed counterpart in
@@ -699,7 +903,7 @@ the single shared image strip, the collapsed JSON tree, Full output through the 
 to pi's reported authentication kind (provider identity remains visible), and the raw-text fallback for a truncated listing; its element shots under `e2e/screenshots/mcp-tool-cards/` are review evidence
 only. Questionnaire coverage uses canonical persisted tool-call/ack fixtures (submitting one exercises the
 restart-repaired response path) to pin six-question rounds beyond four, the docked sheet (stub in the
-transcript, pinned controls around a scrolling body under the 60% cap, restored page, collapse kept across
+transcript, pinned controls around a scrolling body under the 70% cap, restored page, collapse kept across
 a chat switch, stub expand-and-focus, the sheet above the composer under an open Resources inspector, the
 receipt left in the transcript after answering, the cap following *Question panel height*), coarse-pointer
 focus, tabs/question/footer at one y across paging and choosing, notes and Other growing in
@@ -711,9 +915,10 @@ stealing the press aimed at a row or Add note below it (`ask-user-question.spec.
 into the fixture repository (removed in `finally`) and pins the question preview and the option pane (HTML,
 before/after, mermaid, none) at one card height, full-screen keys that never page or skip, a file removed
 under its preview, the picked file's path in the persisted answer, and the compare overlay (flip and jump
-keys, Current never choosable, choose-and-stay, a side-by-side pair whose two frames keep one `scrollTop`
+keys, Current never choosable, Choose and Enter picking and closing it onto the chosen row in One at a time,
+Side by side and All, a side-by-side pair whose two frames keep one `scrollTop`
 in 2-up and swipe even though the mockups ask for smooth scrolling, All at 1400×900 clipping no HTML frame below its pane and opening a pane alone, keys still working after a
-pane title or Choose removed the focused control, focus back on the chosen row, the receipt's read-only reopen),
+pane title removed the focused control, the receipt's read-only reopen),
 and an interactive mockup (`sandbox="allow-scripts"`, its button changes its own page, `fetch`, a
 WebSocket to the host and `RTCPeerConnection` all blocked, leaving its page replaced by the notice until
 Reload — also when it replaces itself while still loading after forging a tokenless `loaded`, and a
@@ -724,13 +929,24 @@ preview on the plan page and its live slot taking Esc and a click answer. `ask-k
 card's keyboard pass: F6 and Mod+1 landing on the current option while Mod+L keeps the composer, Shift+Tab
 from the composer, Esc back with the question docked, a click answer parking on the receipt without a ring
 and a keyboard one in the composer, a question arriving (its seeded session reported idle, then waiting,
-through a routed wire) that announces "F6 to answer" from the transcript or a Tab-focused button and
-takes an empty composer or a button the mouse focused (Chromium only: WebKit never focuses a clicked
-button, and every WebKit `openRound` covers its History-button case), the
-Mod+L remount race, `i` into an HTML frame and Tab back, `c` into compare and Esc back, the collapsed
-chords, Skip in the ↓ ring and ←/→ on the footer, a rebound `d` and a Discuss rebound onto a Mod chord
+through a routed wire, idle from before the workspace is entered: its auto-open would otherwise show the
+question waiting and spend that chat mount's one claim) that takes focus from a walked transcript item,
+a Tab-focused button, an empty
+composer (also after Mod+L, and after a Mod+L that won over an earlier waiting call the wire names) or a
+button the mouse focused (Chromium only: WebKit never focuses a clicked button, and every WebKit
+`openRound` covers its History-button case), and that announces "F6 to answer" over a typed draft, whose
+Esc then goes to the question and back; Esc on a walked message or the parked feed going to the question;
+the Mod+L remount race, and a Mod+L question that does not claim again after a tab walk away and back;
+the Esc ladder from a Files row to the question; `i` into an HTML frame and Tab back, `c` into compare and Esc back, the collapsed
+chords, Skip in the ↓ ring and ←/→ on the footer, arrows, Home/End, a parked note and the footer keys
+scrolling a tall docked question's body just enough to show the focused control while the transcript and
+the dock stay put, an 8-question card in a narrow dock keeping the open question's tab fully in its strip
+on every page change and after a remount while the transcript and page stay put, → past the last question
+(option, last tab, card, single question) focusing Submit or asking for a choice, a rebound `d` and a Discuss rebound onto a Mod chord
 (over the host wire), a Russian-layout `d` and the card's Settings → Keyboard section; `fixtures/ask.ts` seeds the pending questions for the three card specs.
-These four specs also run in a **`webkit` Playwright project**: the macOS desktop
+These four specs, `settings-keyboard.spec.ts` (Settings' tab stops and its Esc hold, which overrides
+`defaultPrevented` for Radix alone), `settings-search.spec.ts` and `settings-tree.spec.ts` (the keys-only
+reachability walk) also run in a **`webkit` Playwright project**: the macOS desktop
 is the system WKWebView, whose Tab skips buttons without an explicit `tabindex` (the regression this lane
 exists for). CI installs WebKit with the system libraries it links, not its media plugins (`.github/SPEC.md`);
 Linux WebKit may not reproduce the macOS Tab rule,

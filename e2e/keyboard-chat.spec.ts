@@ -1,6 +1,7 @@
 import { existsSync, realpathSync, rmSync, utimesSync } from "node:fs";
 import { expect, type Locator, type Page, test, type WebSocketRoute } from "@playwright/test";
 import {
+	closeSettings,
 	enterDefaultWorkspace,
 	openFixtureProject,
 	openPersistedChat,
@@ -99,7 +100,7 @@ async function selectMessageOrder(page: Page, order: "oldest-first" | "newest-fi
 	const option = page.getByTestId(`chat-order-${order}`);
 	await option.click();
 	await expect(option).toHaveAttribute("data-active", "true");
-	await page.keyboard.press("Escape");
+	await closeSettings(page);
 }
 
 const row = (page: Page, text: string): Locator =>
@@ -332,6 +333,141 @@ test("PgUp/PgDn in the composer scroll the transcript and Latest from the keyboa
 		await page.keyboard.press("Enter");
 		await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
 		await expect(row(page, "answer 40:")).toBeFocused();
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
+function seedTallMessageChat(name: string) {
+	const tall = Array.from(
+		{ length: 70 },
+		(_, index) => `Line ${index + 1} of the tall answer keeps the reader busy.`,
+	).join("\n\n");
+	const session = seedWorkspaceSession(repoCwd(), {
+		name,
+		messages: [
+			{ role: "user", text: "Explain everything at length.", timestamp: BASE_TS },
+			{ role: "assistant", text: tall, stopReason: "stop", timestamp: BASE_TS + 1_000 },
+			{ role: "user", text: "And briefly?", timestamp: BASE_TS + 2_000 },
+			{
+				role: "assistant",
+				text: "Brief: it works.",
+				stopReason: "stop",
+				timestamp: BASE_TS + 3_000,
+			},
+		],
+	});
+	utimesSync(session.path, new Date(BASE_TS + 60_000), new Date(BASE_TS + 60_000));
+	return session;
+}
+
+async function transcriptGeometry(page: Page, rowText: string) {
+	return page.evaluate((text) => {
+		const scroller = document.querySelector<HTMLElement>(
+			'[data-testid="chat-scroll"] [data-virtuoso-scroller]',
+		);
+		const row = Array.from(document.querySelectorAll<HTMLElement>("[data-chat-row-id]")).find(
+			(candidate) => candidate.textContent?.includes(text),
+		);
+		if (!scroller || !row) throw new Error("missing transcript geometry");
+		const view = scroller.getBoundingClientRect();
+		const rect = row.getBoundingClientRect();
+		return {
+			scrollTop: scroller.scrollTop,
+			maxScrollTop: scroller.scrollHeight - scroller.clientHeight,
+			clientHeight: scroller.clientHeight,
+			top: rect.top - view.top,
+			tail: rect.bottom - (view.top + scroller.clientHeight),
+		};
+	}, rowText);
+}
+
+test("↓/j read a tall message a line at a time before stepping on, Space pages and g/G reach the ends", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const session = seedTallMessageChat("keyboard tall message");
+	try {
+		await enterDefaultWorkspace(page);
+		const chatScroll = page.getByTestId("chat-scroll");
+		await expect(row(page, "Brief: it works.")).toBeVisible();
+		await waitForScrollStability(chatScroll);
+		await enterTranscript(page);
+		await expect(row(page, "Brief: it works.")).toBeFocused();
+
+		await page.keyboard.press("g");
+		const question = row(page, "Explain everything at length.");
+		await expect(question).toBeFocused();
+		await expect.poll(async () => (await transcriptGeometry(page, "Line 1 of")).scrollTop).toBe(0);
+
+		const tall = row(page, "Line 1 of the tall answer");
+		await page.keyboard.press("ArrowDown");
+		await expect(tall).toBeFocused();
+		const entered = await transcriptGeometry(page, "Line 1 of");
+		expect(entered.scrollTop).toBe(0);
+		expect(entered.tail).toBeGreaterThan(100);
+
+		await page.keyboard.press("ArrowDown");
+		await expect.poll(async () => (await transcriptGeometry(page, "Line 1 of")).scrollTop).toBe(40);
+		await expect(tall).toBeFocused();
+		for (let press = 0; press < 3; press += 1) await page.keyboard.press("j");
+		await expect
+			.poll(async () => (await transcriptGeometry(page, "Line 1 of")).scrollTop)
+			.toBe(160);
+		await expect(tall).toBeFocused();
+
+		let tailBeforeStep = Number.POSITIVE_INFINITY;
+		for (let press = 0; press < 120; press += 1) {
+			if (!(await tall.evaluate((element) => element === document.activeElement))) break;
+			tailBeforeStep = (await transcriptGeometry(page, "Line 1 of")).tail;
+			await page.keyboard.press("j");
+		}
+		const tallIndex = Number(await tall.getAttribute("data-chat-row-index"));
+		await expect(page.locator(":focus")).toHaveAttribute(
+			"data-chat-row-index",
+			String(tallIndex + 1),
+		);
+		expect(tailBeforeStep).toBeLessThanOrEqual(1);
+
+		await page.keyboard.press("k");
+		await expect(tall).toBeFocused();
+		const back = await transcriptGeometry(page, "Line 1 of");
+		await page.keyboard.press("k");
+		await expect
+			.poll(async () => back.scrollTop - (await transcriptGeometry(page, "Line 1 of")).scrollTop)
+			.toBe(40);
+		await expect(tall).toBeFocused();
+
+		const { scrollTop: reading, clientHeight } = await transcriptGeometry(page, "Line 1 of");
+		const pageSize = clientHeight - 40;
+		const pagedUp = Math.max(0, reading - pageSize);
+		await page.keyboard.press("Shift+Space");
+		await expect
+			.poll(async () => (await transcriptGeometry(page, "Line 1 of")).scrollTop)
+			.toBe(pagedUp);
+		await expect(tall).toBeFocused();
+		await page.keyboard.press("Space");
+		await expect
+			.poll(async () => (await transcriptGeometry(page, "Line 1 of")).scrollTop)
+			.toBe(pagedUp + pageSize);
+		await page.keyboard.press("PageUp");
+		await expect
+			.poll(async () => (await transcriptGeometry(page, "Line 1 of")).scrollTop)
+			.toBe(pagedUp);
+		await expect(tall).toBeFocused();
+
+		await page.keyboard.press("Shift+G");
+		await expect(page.locator('[data-chat-row-id$=":divider"]').last()).toBeFocused();
+		await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
+		await expect
+			.poll(async () => {
+				const geometry = await readChatScrollGeometry(chatScroll);
+				return geometry.maxScrollTop - geometry.scrollTop;
+			})
+			.toBeLessThanOrEqual(1);
+		await page.keyboard.press("Home");
+		await expect(question).toBeFocused();
+		await expect.poll(async () => (await readChatScrollGeometry(chatScroll)).scrollTop).toBe(0);
 	} finally {
 		rmSync(session.path, { force: true });
 	}
@@ -695,6 +831,65 @@ test("newest-first walks down from the newest message", async ({ page }) => {
 		await expect(row(page, "Uploads fail because the client gives up")).toBeFocused();
 		await page.keyboard.press("End");
 		await expect(row(page, "Find where uploads fail.")).toBeFocused();
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
+function seedTallHistoryChat(name: string) {
+	const steps = Array.from({ length: 30 }, (_, step) => `step ${step + 1}`).join("\n");
+	const session = seedWorkspaceSession(repoCwd(), {
+		name,
+		messages: Array.from({ length: 100 }, (_, index) => [
+			{
+				role: "user" as const,
+				text: `request ${index + 1}: page through the long history${index < 50 ? `\n${steps}` : ""}`,
+				timestamp: BASE_TS + index * 2_000,
+			},
+			{
+				role: "assistant" as const,
+				text: `answer ${index + 1}: short`,
+				stopReason: "stop" as const,
+				timestamp: BASE_TS + index * 2_000 + 1_000,
+			},
+		]).flat(),
+	});
+	utimesSync(session.path, new Date(BASE_TS + 300_000), new Date(BASE_TS + 300_000));
+	return session;
+}
+
+test("End in a long newest-first chat whose old messages are taller than estimated reaches the true end", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await selectMessageOrder(page, "newest-first");
+	const session = seedTallHistoryChat("keyboard tall history");
+	try {
+		await enterDefaultWorkspace(page);
+		const chatScroll = page.getByTestId("chat-scroll");
+		const newest = row(page, "answer 100: short");
+		await expect(newest).toBeVisible();
+		await waitForScrollStability(chatScroll);
+		await enterTranscript(page);
+		await expect(newest).toBeFocused();
+		const distanceFromEnd = async () => {
+			const geometry = await readChatScrollGeometry(chatScroll);
+			return geometry.maxScrollTop - geometry.scrollTop;
+		};
+
+		await page.keyboard.press("End");
+		const oldest = row(page, "request 1: page through the long history");
+		await expect(oldest).toBeFocused();
+		await expect.poll(distanceFromEnd).toBeLessThanOrEqual(1);
+		await waitForScrollStability(chatScroll);
+		expect(await distanceFromEnd()).toBeLessThanOrEqual(1);
+		await expect(oldest).toBeInViewport();
+
+		await page.keyboard.press("Home");
+		await expect(page.locator('[data-chat-row-id$=":divider"]').first()).toBeFocused();
+		await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
+		await expect.poll(async () => (await readChatScrollGeometry(chatScroll)).scrollTop).toBe(0);
+		await expect(newest).toBeInViewport();
 	} finally {
 		rmSync(session.path, { force: true });
 	}

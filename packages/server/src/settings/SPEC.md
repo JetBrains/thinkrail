@@ -37,12 +37,12 @@ interval (`1–3600`, default 30), because those values govern host process cade
 
 ## Boundary
 
-- `worktreeDirectory` is an optional absolute path for the root of future managed worktrees. It is wire-gated by `WORKTREE_DIRECTORY_PROTOCOL_VERSION` (v125); missing or malformed stored values use the workspaces module's data-dir default; `null` clears the override. Changing it never moves existing worktrees.
+- `worktreeDirectory` is an optional absolute path for the root of future managed worktrees. It is wire-gated by `WORKTREE_DIRECTORY_PROTOCOL_VERSION` (v136); missing or malformed stored values use the workspaces module's data-dir default; `null` clears the override. Changing it never moves existing worktrees.
 - `settleIdleDays` — the Settled-shelf idle window: a positive integer number of days (clamped to 1…365) or
   `null` for never; default `7`. Validated like every other known field; a hand-edited non-number falls
   back to the default rather than disabling settling.
 - **Owns:** cached current `AppConfig`; `getConfig()`; `updateConfig(partial)` (reject a non-object or unknown key → merge → validate known fields → persist → publish the merged `AppConfig` and successful applied `AppConfigUpdate`); the font settings' shape (`interfaceFont` / `codeFont` through `isFontChoice`, `codeFontSize`, `codeLigatures`, `fontWeightOffset`), each normalized back to its own default on load — which family a choice names, and whether it renders, is the client's; line-width and resource-free custom-preset validation/normalization; custom-preset safety caps; `setSettingsPublisher`; and `resetConfigCache` for tests.
-- **Public surface (barrel):** `getConfig`, `updateConfig`, `noteRecentModel`, `setSettingsPublisher`, `SettingsPublisher`, `resetConfigCache`, plus pure custom-preset normalization used by host startup after persistence load.
+- **Public surface (barrel):** `getConfig`, `updateConfig`, `setSubagentEnabled`, `noteRecentModel`, `setSettingsPublisher`, `SettingsPublisher`, `resetConfigCache`, plus pure custom-preset normalization used by host startup after persistence load.
 - **Allowed deps:** `persistence` (`loadConfig`/`saveConfig`); `contracts` (`AppConfig`, `LayoutPreset`,
   `isTerminalWindowsShell`, `isKeybindingOverrides`); `shared` (`CodedError`).
 - **Forbidden:** host or another feature sibling; current-layout document/snapshot types; workspace ids/resources; current frame validation; owning WS channels; or importing web preset definitions.
@@ -54,7 +54,7 @@ interval (`1–3600`, default 30), because those values govern host process cade
   `isTerminalWindowsShell` guard, while a wire mutation outside the closed shell union rejects the complete
   update before cache, persistence, or broadcast changes. Settings owns validation and synchronization;
   `terminal` owns executable resolution and spawning.
-- `questionPanelHeight` defaults to 60 and accepts only whole percents from 40 through 100 (`isQuestionPanelHeight`); a malformed stored value falls back to the default and an invalid update rejects the complete mutation.
+- `questionPanelHeight` defaults to 70 and accepts only whole percents from 40 through 100 (`isQuestionPanelHeight`); a malformed stored value falls back to the default and an invalid update rejects the complete mutation. The default was 60 until 2026-11-17, and since every save writes the whole config most users had 60 stored, so a stored 60 in a config saved before then (no `configVersion`, see [[submodule-server-persistence]]) loads as 70 once; any other stored value is kept, and a 60 chosen afterwards stays 60. A 60 deliberately chosen before the change is indistinguishable and also becomes 70 (accepted by the user).
 - `chatLineWidth` defaults to 80 and `fileLineWidth` to 120 (`LINE_WIDTH_COLUMNS.default`); both accept only finite integers from 40 through 240. Every settings write persists the whole config, so a stored width keeps its value across a default change — there is no migration; their `Bounded` switches independently default to `true`. A malformed stored field falls back without discarding valid siblings; any invalid supplied field rejects the complete mutation before cache, persistence, or broadcast changes.
 - `subagentsEnabled` defaults to `true` when absent so old config preserves current behavior; a present non-boolean update is rejected before cache, persistence, or broadcast changes. Settings owns only that global default; workspace override and effective-value resolution stay outside this module.
 - `onboardingDismissed` defaults to `false` when absent or malformed on disk; a present non-boolean update is rejected like the other boolean fields. Only the web onboarding wizard reads it.
@@ -70,6 +70,11 @@ interval (`1–3600`, default 30), because those values govern host process cade
   boolean values, or the whole mutation is rejected; it is **merged per key** into the stored map, so a
   Settings switch never resets an extension's other settings. Like `disabledExtensions`, undeclared names
   and keys are kept and inert — the registry's descriptors decide what a key means.
+- `pullRequestFilters` maps a project id → the pull-request completion's last `PullRequestFilter`
+  (v133; absent means `{}`). An update must map non-blank ids to valid filters or `null`, or the whole
+  mutation is rejected; it is **merged per project** (`null` forgets one), so two windows remembering
+  filters for different projects never overwrite each other. Malformed stored entries are dropped on
+  load. A closed project's entry is kept and inert.
 - `keybindings` maps a command id to the user's chords (`[]` = unbound; absent = the command's defaults);
   absent means `{}`. Settings checks **shape and grammar only** (`contracts`' `isKeybindingOverrides`):
   non-blank ids, lists of `isKeybindingChord` strings; a malformed value rejects the whole mutation with
@@ -79,6 +84,18 @@ interval (`1–3600`, default 30), because those values govern host process cade
   rule ([[submodule-web-keybindings]]). On load, malformed chords are dropped, an entry left with none falls
   back to its defaults, and a stored `[]` stays unbound. Gated on `KEYBINDINGS_PROTOCOL_VERSION` (v123):
   an older host rejects the key, so the client sends it only above the gate (`supportsKeybindings`).
+- `disabledSubagents` lists agent definition names switched off globally; absent means `[]`. Validation,
+  dedupe and unknown-name retention are `disabledExtensions`'; `host` turns it into the agent's live
+  per-name resolver ([[submodule-server-host]]) and [[module-pi-subagents]] enforces it.
+  **`setSubagentEnabled(name, enabled)`** (the `subagent.setEnabled` write) validates a non-blank string and
+  a boolean, then adds or removes only that name against the latest cached list and calls `updateConfig`
+  synchronously: with no await between read and write, concurrent intents for different names from
+  different windows both survive without another state owner, and an invalid intent or failed write
+  changes nothing. Whole-list `settings.update` stays accepted; the UI uses the per-name write. Accepted
+  limitations: the list is global by name, so disabling a project role `deploy` in one workspace also
+  disables an unrelated `deploy` elsewhere, and a disabled name no longer listed stays disabled but is not
+  shown; with every role disabled the `Agent` tool stays registered with an empty roster — the delegation
+  switch (`subagentsEnabled` or the workspace override) is how to remove it.
 - `disabledPackages` is the same shape for installed pi packages, keyed by the package identity the
   catalog reports (`PiPackageSummary.identity`); it exists because pi has no "whole package off" setting
   and writing pi's per-resource filters would reset a user's own filters on re-enable. Validation,

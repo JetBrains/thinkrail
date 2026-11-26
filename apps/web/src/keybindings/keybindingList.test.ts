@@ -88,6 +88,27 @@ describe("the keybinding list", () => {
 		);
 	});
 
+	test("splits the suggestion keys into one rebindable global row per chip", () => {
+		const sends = list().entries.filter(({ command }) => command.startsWith("suggestions.send"));
+		expect(
+			sends.map(({ command, title, position, scope, surface }) => [
+				command,
+				title,
+				position,
+				scope,
+				surface,
+			]),
+		).toEqual(
+			Array.from({ length: 9 }, (_, index) => [
+				`suggestions.send${index + 1}`,
+				"shortcuts.suggestions.sendOne",
+				index + 1,
+				null,
+				"general",
+			]),
+		);
+	});
+
 	test("element keys are locked rows with their display labels; desktop rows only on the desktop", () => {
 		const firstLast = entry(list(), "trees.firstLast");
 		expect([firstLast?.locked, firstLast?.scope]).toEqual([true, "trees"]);
@@ -422,6 +443,7 @@ describe("local rows", () => {
 		]);
 		expect(chordHolders(list(), "arrows.up", "KeyS")).toEqual([
 			{ command: "trees.search", scope: "trees" },
+			{ command: "settings.nav.search", scope: "settings.nav" },
 		]);
 		expect(holders(list(), "trees.search", "KeyC")).toEqual([]);
 		expect(holders(list(), "transcript.copy", "KeyS")).toEqual([]);
@@ -452,6 +474,7 @@ describe("local rows", () => {
 		expect(assignChord(list(), {}, "arrows.up", "KeyS", true)).toEqual({
 			"arrows.up": ["KeyS"],
 			"trees.search": [],
+			"settings.nav.search": ["Slash"],
 		});
 	});
 

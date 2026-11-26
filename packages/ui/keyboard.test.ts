@@ -219,12 +219,14 @@ const UNGUARDED_BY_DESIGN: Record<string, string> = {
 		"its rename inputs spread workspaceActions' guarded inputProps; its own onKeyDown opens a row's context menu",
 	"apps/web/src/panels/ArtifactsPanel.tsx":
 		"its rename input spreads workspaceActions' guarded inputProps; its only onKeyDown opens a row's context menu",
+	"apps/web/src/panels/ArtifactsOutputs.tsx":
+		"its rename input spreads workspaceActions' guarded inputProps; its only onKeyDown opens a row's context menu",
 	"apps/web/src/panels/ArtifactsTree.tsx":
 		"its rename inputs spread workspaceActions' guarded inputProps; its only onKeyDown is a row's menu, Delete and F2 keys",
-	"apps/web/src/panels/FontsSettings.tsx":
-		"its only key handler is on the weight range slider; its text field spreads useSettingsDraft's guarded inputProps",
 	"packages/resource-renderers/src/renderers/VisualDiff.tsx":
 		"its only key handler is the swipe divider slider (swipeDividerValue yields to an IME); its only input is the onion opacity range",
+	"thinkrail-extensions/session-insights/web/SessionsPanel.tsx":
+		"its only key listener matches the panel's search key through useLocalKeys, whose match yields to an IME; the field itself is SearchBox's",
 };
 
 function sourceFiles(dir: string): string[] {
@@ -247,7 +249,7 @@ function handlesTextFieldKeys(source: string): boolean {
 
 describe("text-field key handlers yield to an active IME", () => {
 	const files = SOURCE_ROOTS.flatMap(sourceFiles).map((path) => ({
-		path: relative(ROOT, path),
+		path: relative(ROOT, path).replaceAll("\\", "/"),
 		source: readFileSync(path, "utf8"),
 	}));
 

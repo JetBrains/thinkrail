@@ -240,11 +240,15 @@ export interface SlashCommandSourceInfo {
 	baseDir?: string;
 }
 
+export type SlashArgumentCompletion = "pull-request";
+
 export interface SlashCommandInfo {
 	name: string;
 	description?: string;
 	source: SlashCommandSource;
 	sourceInfo: SlashCommandSourceInfo;
+	/** v133: what the argument after the command is, so a prompt can offer candidates for it. */
+	argumentCompletion?: SlashArgumentCompletion;
 }
 
 export type SkillDecision = "load" | "untrusted" | "pending-ack" | "disabled";

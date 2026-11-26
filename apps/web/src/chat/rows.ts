@@ -10,14 +10,17 @@ import {
 	type SubagentCompletionDetails,
 	type TurnChangeSet,
 	type WireUserMessage,
+	type WorkspaceArtifact,
 	type WorkspaceArtifactsSnapshot,
 } from "@thinkrail/contracts";
 import { strArg } from "@thinkrail/extension-api/web";
 import { projectRelativePath } from "../lib";
+import type { ArtifactsRoundFilter } from "../store";
 import { type AssistantFailure, assistantFailure } from "./assistantFailure";
 import type { ChatMessageOrder } from "./chatPreferences";
+import { endingSuggestionsCall } from "./composerSuggestions";
 import { pulledResult, resultKey } from "./pulledResults";
-import { resolveProminence } from "./toolRegistry";
+import { currentToolRegistry, resolveProminence, type ToolRegistry } from "./toolRegistry";
 import type { ChatTurn, CompactionState, FailureRecovery, ToolResultState } from "./types";
 
 // User-message collapse threshold (PlainUserTurn); also read by row height estimation.
@@ -168,15 +171,21 @@ export interface RoundArtifact extends DividerArtifact {
 	rounds: readonly number[];
 }
 
+function roundShows(artifact: WorkspaceArtifact, filter: ArtifactsRoundFilter): boolean {
+	if (artifact.state !== "live") return false;
+	if (filter === "published") return artifact.published === true;
+	return filter === "all" || artifact.role === "result";
+}
+
 export function sessionRoundArtifacts(
 	snapshot: WorkspaceArtifactsSnapshot | undefined,
 	sessionId: string,
-	resultsOnly: boolean,
+	filter: ArtifactsRoundFilter,
 ): RoundArtifact[] {
 	if (!snapshot) return [];
 	const prefix = `${snapshot.dir}/`;
 	return snapshot.artifacts.flatMap((artifact) => {
-		if (artifact.state !== "live" || (resultsOnly && artifact.role !== "result")) return [];
+		if (!roundShows(artifact, filter)) return [];
 		const rounds = (artifact.rounds ?? [])
 			.filter((round) => round.sessionId === sessionId)
 			.map((round) => round.startedAt);
@@ -195,6 +204,7 @@ export function deriveRows(
 	agentTurns: readonly TurnChangeSet[] = [],
 	workspaceRoot?: string,
 	roundArtifacts: readonly RoundArtifact[] = [],
+	registry: ToolRegistry = currentToolRegistry(),
 ): ChatRow[] {
 	const rows: ChatRow[] = [];
 	let run: ActivityStep[] = [];
@@ -251,7 +261,7 @@ export function deriveRows(
 								? { kind: pulled.kind, id: block.id, details: pulled.details, text: pulled.text }
 								: { kind: pulled.kind, id: block.id, details: pulled.details },
 						);
-					} else if (resolveProminence(block.name).prominence === "primary") {
+					} else if (resolveProminence(block.name, registry).prominence === "primary") {
 						flushRun();
 						rows.push({ kind: "tool", id: block.id, ...data });
 					} else {
@@ -321,7 +331,16 @@ export function deriveRows(
 		const roundEnded = !opensRound(turn) && (next ? opensRound(next) : !isStreaming);
 		if (roundEnded) {
 			flushRun();
-			const data = turnDivider(turns, i, isSpec, agentTurns, workspaceRoot, roundArtifacts);
+			const data = turnDivider(
+				turns,
+				i,
+				isSpec,
+				agentTurns,
+				workspaceRoot,
+				roundArtifacts,
+				toolResults,
+				registry,
+			);
 			if (data) rows.push({ kind: "divider", id: `${turn.id}:divider`, data });
 		}
 	}
@@ -381,6 +400,8 @@ export function turnDivider(
 	agentTurns: readonly TurnChangeSet[] = [],
 	workspaceRoot?: string,
 	roundArtifacts: readonly RoundArtifact[] = [],
+	toolResults: Readonly<Record<string, ToolResultState>> = {},
+	registry: ToolRegistry = currentToolRegistry(),
 ): TurnDividerData | null {
 	let openerIdx = -1;
 	for (let i = endIndex; i >= 0; i--) {
@@ -434,7 +455,7 @@ export function turnDivider(
 		}
 	}
 	return {
-		outcome: roundOutcome(turns, openerIdx, endIndex),
+		outcome: roundOutcome(turns, openerIdx, endIndex, toolResults, registry),
 		elapsedMs,
 		toolCount,
 		specs,
@@ -461,6 +482,8 @@ function roundOutcome(
 	turns: ChatTurn[],
 	openerIdx: number,
 	endIndex: number,
+	toolResults: Readonly<Record<string, ToolResultState>>,
+	registry: ToolRegistry,
 ): TurnDividerData["outcome"] {
 	let closer: "done" | "error" | null = null;
 	for (let i = endIndex; i > openerIdx; i--) {
@@ -469,7 +492,10 @@ function roundOutcome(
 			const { message } = turn;
 			if (assistantFailure(message)) return "error";
 			if (message.stopReason === "aborted") return "stopped";
-			return closer ?? (message.stopReason === "stop" ? "done" : null);
+			const finished =
+				message.stopReason === "stop" ||
+				endingSuggestionsCall(message, toolResults, registry) !== null;
+			return closer ?? (finished ? "done" : null);
 		}
 		if (closer) continue;
 		if (turn?.kind === "system" && turn.text === undefined) closer = "done";
@@ -480,6 +506,11 @@ function roundOutcome(
 
 export function rowIndexForTurn(rows: ChatRow[], turnId: string): number {
 	return rows.findIndex((r) => r.id === turnId || r.id.startsWith(`${turnId}:text:`));
+}
+
+/** The row that shows a tool call: its own `tool` row, or the `activity` row that groups it. */
+export function rowIndexForToolCall(rows: readonly ChatRow[], toolCallId: string): number {
+	return rows.findIndex((row) => rowsHaveToolCall([row], toolCallId));
 }
 
 function valueEqual(a: unknown, b: unknown): boolean {

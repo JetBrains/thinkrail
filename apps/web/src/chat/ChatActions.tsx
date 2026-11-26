@@ -28,7 +28,7 @@ export interface ChatActions {
 	cancelAutomaticReveal: () => void;
 	focusComposer: () => void;
 	focusToolCall: (toolCallId: string) => void;
-	mayClaimFocus: () => boolean;
+	mayClaimFocus: (toolCallId: string) => boolean;
 	landingChord: string;
 	openSubagentTranscript: (childSessionId: string) => void;
 	respondToTool: (toolCallId: string, response: unknown) => Promise<void>;
@@ -37,6 +37,7 @@ export interface ChatActions {
 	readMcpOutput?: ((toolCallId: string) => Promise<McpReadOutputResult>) | undefined;
 	openMcpSettings?: (() => void) | undefined;
 	openProviderSettings?: (() => void) | undefined;
+	disableServerFallback?: (() => Promise<void>) | undefined;
 	findModel?: ((ref: string) => WireModel | null) | undefined;
 	/** Continue in workspace: the host-owned phase of an operation, where it went, and how to ask again. */
 	continuationOf?: ((operationId: string) => ChatContinuation | undefined) | undefined;

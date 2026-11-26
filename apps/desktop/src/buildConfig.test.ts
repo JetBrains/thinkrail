@@ -57,9 +57,11 @@ test("generated server runtime threads the opener and desktop proxies explicit r
 
 test("the desktop entry installs the deep-link bootstrap before the launcher", () => {
 	const entry = readFileSync(resolve(desktopDir, "src/entry.ts"), "utf8");
+	const renderer = entry.indexOf('import "./linuxWebKitRenderer";');
 	const bootstrap = entry.indexOf('import "./deepLinkBootstrap";');
 	const launcher = entry.indexOf('import "./index";');
-	expect(bootstrap).toBeGreaterThanOrEqual(0);
+	expect(renderer).toBeGreaterThanOrEqual(0);
+	expect(bootstrap).toBeGreaterThan(renderer);
 	expect(launcher).toBeGreaterThan(bootstrap);
 });
 

@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import type {
 	Ack,
 	OpenBranchReview,
+	Project,
 	ReviewComment,
 	ReviewFixDetails,
 	ReviewSendResult,
@@ -31,6 +32,7 @@ import {
 	compactSession,
 	deleteSession,
 	disableAnthropicExtraUsageWarning,
+	disableSessionServerFallback,
 	ensureSessionAttached,
 	followUpSession,
 	getResourceHistoryPage,
@@ -51,10 +53,12 @@ import {
 	listSessions,
 	listSkillCatalog,
 	listSkillCommands,
+	listSubagentCatalog,
 	markWorkspaceRead,
 	markWorkspaceUnread,
 	notifyExtUi,
 	nudgeSession,
+	PROJECT_SKILL_ROOTS,
 	probeCustomEndpoint,
 	projectTrustSummary,
 	promptSession,
@@ -115,12 +119,23 @@ import {
 	startProxyJbcentral,
 	updateJbcentral,
 } from "../auth";
-import { providerFromRemoteUrl } from "../branch-review";
+import {
+	getPullRequest,
+	listPullRequestAuthors,
+	listPullRequests,
+	providerFromRemoteUrl,
+	pullRequestSizes,
+} from "../branch-review";
 import { forgetWorkspaceChanges, revertChange, undoChange } from "../changes";
 import { selectDirectory } from "../dialog";
-import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
+import {
+	listAvailableEditors,
+	openEditor,
+	revealInFileManager,
+	revealItemInFileManager,
+} from "../editors";
 import { hostEnvironmentStatus, updateHostEnvironment } from "../environment";
-import { listExtensionCatalog } from "../extensions";
+import { createExtensionQueries, listExtensionCatalog } from "../extensions";
 import {
 	completeSurvey,
 	confirmInAppSurvey,
@@ -141,6 +156,7 @@ import {
 	readDir,
 	readFile,
 	renameWorktreeEntry,
+	resolveWorktreeEntry,
 } from "../fs";
 import {
 	commitsAheadOf,
@@ -205,13 +221,14 @@ import {
 	sendableComments,
 	updateComment,
 } from "../reviews";
-import { getConfig, noteRecentModel, updateConfig } from "../settings";
+import { getConfig, noteRecentModel, setSubagentEnabled, updateConfig } from "../settings";
 import { evictSpecIndex, evictSpecRoot, projectHasSpecs, specGraph } from "../spec";
 import { cancelSpeechInstall, installSpeech, removeSpeech } from "../speech";
 import {
 	deleteTemplate,
 	getTemplate,
 	listTemplates,
+	PROJECT_TEMPLATE_ROOT,
 	saveTemplate,
 	templateDirs,
 } from "../templates";
@@ -260,6 +277,7 @@ import {
 	listWorkspaceRecords,
 	listWorkspaces,
 	openExistingWorktree,
+	previewRefPaths,
 	reclaimWorktree,
 	recordWorkspaceActivity,
 	renameWorkspace,
@@ -276,6 +294,7 @@ import {
 	workspaceDiffStats,
 } from "../workspaces";
 import { ackSend } from "./ackSend";
+import { copyLocalAttachment } from "./attachments";
 import { sessionProviderAnalytics } from "./authAnalytics";
 import { startChatSession } from "./chatSession";
 import {
@@ -289,6 +308,13 @@ import {
 	seesChats,
 } from "./chats";
 import { continuationStatus, startContinuation } from "./continuations";
+import { extensionHostServices } from "./extensionHost";
+import {
+	extensionsBrowse,
+	extensionsCheckUpdates,
+	extensionsRemove,
+	extensionsUpdate,
+} from "./extensions";
 import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { provisionInitialTerminal } from "./initialTerminal";
@@ -306,6 +332,7 @@ import {
 	mcpRevokeToolGrant,
 	mcpSetProjectOverride,
 	mcpSetSessionOverride,
+	mcpSetUserServer,
 	mcpShareWithRepo,
 	mcpTestConnection,
 	mcpUpdate,
@@ -339,7 +366,11 @@ import { withChangeLock, withReviewLock } from "./reviewLock";
 import { runObservation } from "./runAnalytics";
 import { hostSearch, publishSearchText } from "./search";
 import { trailingSingleFlight } from "./sessionStateList";
-import { findWorkspaceReviewOutcome, scheduleLifecyclePass } from "./settledLifecycle";
+import {
+	findWorkspaceReviewOutcome,
+	scheduleLifecyclePass,
+	stampTerminalActivity,
+} from "./settledLifecycle";
 import { taskObservation } from "./taskAnalytics";
 import {
 	claimItemFix,
@@ -351,6 +382,16 @@ import {
 } from "./todoReview";
 
 const log = logger("host");
+
+const extensionQueries = createExtensionQueries({
+	isDisabled: (name) => getConfig().disabledExtensions.includes(name),
+	services: extensionHostServices,
+});
+
+/** After a `disabledExtensions` change: stops and drops the query tables of the extensions now off. */
+export function releaseDisabledExtensionQueries(): void {
+	extensionQueries.releaseDisabled();
+}
 
 export interface RequestContext {
 	clientKey: string;
@@ -439,16 +480,28 @@ function revealDataFolder(dir: string) {
 	return { ok: true } as const;
 }
 
-function resolveTemplateReadDirs(params: TemplateReadLocation) {
+const REF_PREVIEW_ROOTS = [...PROJECT_SKILL_ROOTS, PROJECT_TEMPLATE_ROOT];
+
+function knownProject(projectId: string): Project {
+	const project = listProjects().find((candidate) => candidate.id === projectId);
+	if (!project) throw new Error(`Unknown project: ${projectId}`);
+	return project;
+}
+
+async function projectPreviewCwd(project: Project, baseRef: string | undefined): Promise<string> {
+	const ref = baseRef?.trim();
+	if (!ref) return project.path;
+	return (await previewRefPaths(project, ref, REF_PREVIEW_ROOTS)) ?? project.path;
+}
+
+async function resolveTemplateReadDirs(params: TemplateReadLocation) {
 	const { workspaceId, projectId } = params;
 	if (workspaceId !== undefined && projectId !== undefined) {
 		throw new Error("Template reads accept either workspaceId or projectId, not both");
 	}
 	if (workspaceId !== undefined) return templateDirs(getWorkspace(workspaceId).worktreePath);
 	if (projectId === undefined) return templateDirs();
-	const project = listProjects().find((candidate) => candidate.id === projectId);
-	if (!project) throw new Error(`Unknown project: ${projectId}`);
-	return templateDirs(project.path);
+	return templateDirs(await projectPreviewCwd(knownProject(projectId), params.baseRef));
 }
 
 function fireReviewPrompt(
@@ -890,6 +943,20 @@ const handlers: WsHandlers = {
 		if (moved) nudgeBaseRefWorkspaces(p.projectId, p.ref);
 		return { ok };
 	},
+	"pr.list": (params) =>
+		listPullRequests(repositoryProject(params.projectId).path, {
+			filter: params.filter,
+			...(params.query ? { query: params.query } : {}),
+			...(params.cursor ? { cursor: params.cursor } : {}),
+		}),
+	"pr.get": (params) => getPullRequest(repositoryProject(params.projectId).path, params.number),
+	"pr.authors": (params) =>
+		listPullRequestAuthors(repositoryProject(params.projectId).path, params.cursor),
+	"pr.sizes": (params) =>
+		pullRequestSizes(
+			repositoryProject(params.projectId).path,
+			Array.isArray(params.numbers) ? params.numbers : [],
+		),
 	"github.authStatus": () => githubAuthStatus(),
 	"github.refresh": () => githubRefresh(),
 	"pr.preview": (params, ctx) =>
@@ -1007,6 +1074,10 @@ const handlers: WsHandlers = {
 			notifyWorkspacePathsChanged(p.destinationWorkspaceId, moved.written);
 			return { path: moved.path };
 		});
+	},
+	"fs.reveal": (p) => {
+		revealItemInFileManager(resolveWorktreeEntry(p.workspaceId, p.path).abs);
+		return { ok: true };
 	},
 	"artifacts.list": (p) => {
 		void ensureWatch(p.workspaceId);
@@ -1185,7 +1256,7 @@ const handlers: WsHandlers = {
 	}),
 	"terminal.write": (p, ctx) => {
 		const workspaceId = writeTerminal(p.id, p.data, ctx.clientKey);
-		if (workspaceId) recordWorkspaceActivity(workspaceId);
+		stampTerminalActivity(workspaceId, p.data);
 		return { ok: true } as const;
 	},
 	"terminal.resize": (p, ctx) => {
@@ -1195,12 +1266,10 @@ const handlers: WsHandlers = {
 	"terminal.close": (p) => {
 		return closeTerminalTab(p.workspaceId, p.tabKey, p.force ?? false);
 	},
-	"skill.list": (params) => {
-		const { projectId } = params;
-		const project = listProjects().find((candidate) => candidate.id === projectId);
-		if (!project) throw new Error(`Unknown project: ${projectId}`);
+	"skill.list": async (params) => {
+		const project = knownProject(params.projectId);
 		return listSkillCommands(
-			project.path,
+			await projectPreviewCwd(project, params.baseRef),
 			admissionContextFor(project, {}, getConfig().otherAgentSkills),
 		);
 	},
@@ -1213,7 +1282,23 @@ const handlers: WsHandlers = {
 			admissionContextFor(project, ws.skillOverrides ?? {}, getConfig().otherAgentSkills),
 		);
 	},
+	"subagent.setEnabled": (p) => {
+		setSubagentEnabled(p?.name, p?.enabled);
+		return { ok: true };
+	},
+	"subagent.list": (p) => {
+		if (p.workspaceId === undefined) return listSubagentCatalog();
+		const ws = getWorkspace(p.workspaceId);
+		const project = listProjects().find((candidate) => candidate.id === ws.projectId);
+		const admission = admissionContextFor(
+			project,
+			ws.skillOverrides ?? {},
+			getConfig().otherAgentSkills,
+		);
+		return listSubagentCatalog(ws.worktreePath, admission.piResourceTrusted);
+	},
 	"extension.list": () => listExtensionCatalog(new Set(getConfig().disabledExtensions)),
+	"extension.query": (p) => extensionQueries.query(p),
 	"packages.list": (p) => packagesList(p),
 	"packages.install": (p) => packagesInstall(p),
 	"packages.remove": (p) => packagesRemove(p),
@@ -1221,11 +1306,16 @@ const handlers: WsHandlers = {
 	"packages.checkUpdates": (p) => packagesCheckUpdates(p),
 	"packages.setResourceEnabled": (p) => packagesSetResourceEnabled(p),
 	"packages.reveal": (p) => packagesReveal(p),
+	"extensions.remove": (p) => extensionsRemove(p),
+	"extensions.update": (p) => extensionsUpdate(p),
+	"extensions.checkUpdates": (p) => extensionsCheckUpdates(p),
+	"extensions.browse": (p) => extensionsBrowse(p),
 	"locales.list": () => readLocalLocales(),
 	"locales.reveal": () => revealDataFolder(localesDir()),
 	"themes.list": () => readUserThemes(),
 	"themes.reveal": () => revealDataFolder(themesDir()),
 	"fonts.list": () => readUserFonts(),
+	"attachments.copyLocal": (p) => copyLocalAttachment(p.workspaceId, p.path),
 	"fonts.installed": () => listInstalledFonts(),
 	"fonts.reveal": () => revealDataFolder(fontsDir()),
 	"speech.install": (p) => {
@@ -1367,6 +1457,7 @@ const handlers: WsHandlers = {
 		noteRecentModel(await setSessionModel(p.sessionId, p.model));
 		return { ok: true } as const;
 	},
+	"session.disableServerFallback": (p) => disableSessionServerFallback(p.sessionId),
 	"session.setThinkingLevel": (p) => {
 		setSessionThinkingLevel(p.sessionId, p.level);
 		return { ok: true } as const;
@@ -1433,6 +1524,7 @@ const handlers: WsHandlers = {
 	"mcp.setSessionOverride": (params) => mcpSetSessionOverride(params),
 	"mcp.approve": (params) => mcpApprove(params),
 	"mcp.shareWithRepo": (params) => mcpShareWithRepo(params),
+	"mcp.setUserServer": (params) => mcpSetUserServer(params),
 	"mcp.reconnect": (params) => mcpReconnect(params),
 	"mcp.login": (params, ctx) => mcpLogin(params, ctx.clientKey),
 	"mcp.logout": (params, ctx) => mcpLogout(params, ctx.clientKey),
@@ -1732,12 +1824,10 @@ const handlers: WsHandlers = {
 			return { sessions };
 		});
 	},
-	"template.list": (params) => ({
-		templates: listTemplates(resolveTemplateReadDirs(params)),
+	"template.list": async (params) => ({
+		templates: listTemplates(await resolveTemplateReadDirs(params)),
 	}),
-	"template.get": (p) => {
-		return getTemplate(resolveTemplateReadDirs(p), p.name, p.scope);
-	},
+	"template.get": async (p) => getTemplate(await resolveTemplateReadDirs(p), p.name, p.scope),
 	"template.save": (p) => {
 		const dirs = templateDirs(p.workspaceId ? getWorkspace(p.workspaceId).worktreePath : undefined);
 		return saveTemplate(dirs, p.scope, p.name, p.content);

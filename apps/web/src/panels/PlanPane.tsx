@@ -21,6 +21,7 @@ import type { ReviewComment, TodoGroupItem, TodoItem } from "@thinkrail/contract
 import { useT } from "@thinkrail/locales/react";
 import { ResourceScopeProvider } from "@thinkrail/resource-renderers";
 import { Button, buttonVariants, IconButton } from "@thinkrail/ui/button";
+import { DiffStatBadge } from "@thinkrail/ui/diff-stat-badge";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -65,8 +66,9 @@ import {
 	sessionGlance,
 } from "../chat/planView";
 import { StatusIcon } from "../chat/TodoList";
+import { ToolRendererBoundary } from "../chat/ToolRendererBoundary";
 import { useToolInteraction } from "../chat/toolInteraction";
-import { getToolRenderer } from "../chat/toolRegistry";
+import { DefaultToolRenderer, useToolRegistry, useToolRenderer } from "../chat/toolRegistry";
 import { hydrateSessionRuntime, useChatTodos } from "../chat/useChatTodos";
 import { copyText } from "../lib";
 import {
@@ -78,7 +80,6 @@ import {
 	useAppStore,
 } from "../store";
 import { errorText, getTransport, respondToTool, supportsPlanReview } from "../transport";
-import { DiffStatBadge } from "./DiffStatBadge";
 import { openChatInTab } from "./openChat";
 import { openDiffInTab, openFileInTab } from "./openTabs";
 import { PlanCommitsMenu } from "./PlanCommitsMenu";
@@ -392,6 +393,7 @@ function ItemBlock({
 								variant="primary"
 								size="m"
 								data-testid="plan-start-review"
+								data-hint-reveal
 								disabled={startDisabled}
 								tooltip={startDisabled ? t("plan.item.reviewBusy") : undefined}
 								onClick={() => onStartReview(item.id)}
@@ -638,6 +640,7 @@ function PlanComposer({
 						e.preventDefault();
 						void submit();
 					} else if (e.key === "Escape" && onClose) {
+						e.preventDefault();
 						onClose();
 					}
 				}}
@@ -682,20 +685,29 @@ function PlanInteractionCard({
 	pending: PendingInteraction;
 }) {
 	const interaction = useToolInteraction(pending.toolCallId, pending.toolName);
-	const Renderer = getToolRenderer(pending.toolName);
+	const Renderer = useToolRenderer(pending.toolName);
 	const scope = useMemo(() => ({ workspaceId, sessionId }), [workspaceId, sessionId]);
+	const props = {
+		toolCallId: pending.toolCallId,
+		toolName: pending.toolName,
+		args: pending.args,
+		result: pending.result,
+		status: pending.status,
+		streaming: pending.streaming,
+		interaction,
+		onOpenFile: (path: string) => void openFileInTab(workspaceId, path, "preview"),
+	};
 	return (
 		<ResourceScopeProvider value={scope}>
-			<Renderer
+			<ToolRendererBoundary
+				renderer={Renderer}
 				toolCallId={pending.toolCallId}
-				toolName={pending.toolName}
-				args={pending.args}
-				result={pending.result}
 				status={pending.status}
 				streaming={pending.streaming}
-				interaction={interaction}
-				onOpenFile={(path) => void openFileInTab(workspaceId, path, "preview")}
-			/>
+				fallback={<DefaultToolRenderer {...props} />}
+			>
+				<Renderer {...props} />
+			</ToolRendererBoundary>
 		</ResourceScopeProvider>
 	);
 }
@@ -756,14 +768,20 @@ function PlanSessionLiveBody({
 			revealChatElement: () => {},
 		};
 	}, [landingChord, sessionId, slotRef]);
+	const registry = useToolRegistry();
 	const interactionStates = useMemo(
 		() =>
 			runtime
-				? deriveInteractionStates(runtime.turns, runtime.toolResponses, runtime.toolResults)
+				? deriveInteractionStates(
+						runtime.turns,
+						runtime.toolResponses,
+						runtime.toolResults,
+						registry,
+					)
 				: {},
-		[runtime],
+		[runtime, registry],
 	);
-	const pending = runtime ? pendingInteraction(runtime) : undefined;
+	const pending = runtime ? pendingInteraction(runtime, registry) : undefined;
 	if (pending) {
 		return (
 			<ChatActionsContext.Provider value={actions}>
@@ -954,9 +972,10 @@ export default function PlanPane({
 	const requestToolView = useAppStore((s) => s.requestToolView);
 	const workspace = useAppStore((s) => selectWorkspaceById(s, workspaceId));
 	const chat = workspace !== null && isChatWorkspace(workspace);
+	const toolRegistry = useToolRegistry();
 	const glance = useAppStore((s): PlanGlance => {
 		const rt = s.sessions[sessionId];
-		return rt ? sessionGlance(rt) : "waiting";
+		return rt ? sessionGlance(rt, toolRegistry) : "waiting";
 	});
 	const connection = useAppStore((s) => s.status);
 	const hasRuntime = useAppStore((s) => s.sessions[sessionId] !== undefined);

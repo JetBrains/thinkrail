@@ -5,13 +5,13 @@ status: active
 title: "agent/packages — pi packages: read-only catalog, identity, mutations"
 parent: submodule-server-agent
 depends-on: [module-contracts]
-references: [pi-compatibility]
+references: [pi-compatibility, submodule-server-extensions-installed]
 tags: [pi, extensions]
 ---
 
 ## Responsibility
 
-What ThinkRail owns around pi's package manager so Settings → Extensions can list and manage the pi
+What ThinkRail owns around pi's package manager so Settings → Extensions & skills can list and manage the pi
 packages, loose extension files and built-ins a chat loads: a **read-only catalog** that never installs
 and never runs extension code, the **settings views** every pi loader in the host goes through, pi's
 **package identity rule** for the host-wide package switch, and the install / remove / update / toggle
@@ -49,7 +49,9 @@ this module never spawns npm or git itself.
   set closed over pi's equivalence: when any declaration of a pi identity is switched off, every alias
   is — hiding one must never let pi load the package through another; the `enabled` view and the
   catalog's `enabled` both use it), `resolveLocalSource` (pi's private `resolvePath` for a local
-  source: trim, `~`, `file://`, then the base dir), `settingsBaseDir`, `isOfflineMode` (`PI_OFFLINE`).
+  source: trim, `~`, `file://`, then the base dir), `piResourcePathKey` (pi's private `getResourcePathKey`:
+  synthetic paths as-is, files by realpath, case-folded on Windows — the path identity of agent's Central
+  exclusion), `settingsBaseDir`, `isOfflineMode` (`PI_OFFLINE`).
 - `settingsView.ts` — `createPiSettings(cwd, agentDir, { projectTrusted?, packages })` and the
   `disabledPackages` resolver the host sets from its config. `enabled` hides the switched-off
   declarations from `getGlobalSettings` / `getProjectSettings`, re-evaluated per read; `none` hides all.
@@ -80,8 +82,8 @@ this module never spawns npm or git itself.
   its resources land on the user row with their override state. `resolve(async () => "skip")` then
   attaches each resource (`origin: "package"` → its declaration, by source and scope, falling back to the
   same identity), yields loose files (`origin: "top-level"`, `source: "auto"` for a discovered file,
-  `"local"` for an explicit `extensions[]` entry) and the host-supplied built-ins, and excludes the Central
-  artifact path like the session loader does. Human-readable metadata comes only from a package's
+  `"local"` for an explicit `extensions[]` entry) and the host-supplied built-ins, and applies agent's
+  Central exclusion ([[submodule-server-agent]]) to the extensions. Human-readable metadata comes only from a package's
   `package.json` (a loaded `Extension` has no name). The result cache is long-lived because every change
   path calls `invalidatePiPackageCatalog()`; a file dropped into a scanned folder by hand is the one change
   no path sees, so the Extensions page's opening read (`packages.list` with `force`) drops the cache first. `listPiPackageRevealTargets` validates a reveal path from
@@ -92,10 +94,14 @@ this module never spawns npm or git itself.
   scope's load error blocks, drained so another scope's is not reported as this write's), and ends in
   `flush()` + `drainErrors()` → `PACKAGE_SETTINGS_WRITE_FAILED`, then `onPersisted(settingsPath)` so the
   packages layer primes its watcher before any disk work.
-  - `installPiPackage`: `parsePiPackageInput` ([[module-contracts]], the same function the dialog echoes
+  - `resolvePiInstallSource` is the first half, shared with the façade's kind rule:
+    `parsePiPackageInput` ([[module-contracts]], the same function the dialog echoes
     with) → a bare name that is also a folder or file next to the workspace installs that path, as
-    `pi install name` would → a relative local source resolves against the workspace (else the agent dir)
-    and must exist → npm/git refused offline → `install()` → fresh trust re-check → `settings.reload()`
+    `pi install name` would → an unwritable scope is refused → a relative local source resolves against
+    the workspace (else the agent dir) and must exist.
+  - `installPiPackage`: `resolvePiInstallSource` → npm/git refused offline → `install()` → fresh trust re-check
+    → the optional `isForeign` hook on the installed path (§ Kind detection: a ThinkRail extension stops
+    here, undeclared, its install undone unless pi's root held it before) → `settings.reload()`
     (an npm install can take minutes; an outside edit must survive) → `addSourceToSettings()` → persist.
     Not `installAndPersist`, which persists before anything can be re-checked. The façade then requires
     the new row to carry `installedPath` (a Not installed row is not a success) before it probes it.
@@ -113,9 +119,16 @@ this module never spawns npm or git itself.
     discovered) or `±builtin:<name>` in the scope that
     decides the built-in; a resource inside a package is refused with `PACKAGE_SOURCE_INVALID`.
   - Error codes: `PACKAGE_SOURCE_INVALID`, `PACKAGE_OFFLINE`, `PACKAGE_UNTRUSTED`, `PACKAGE_UNKNOWN`,
-    `PACKAGE_INSTALL_FAILED`, `PACKAGE_REMOVE_FAILED`, `PACKAGE_UPDATE_FAILED`,
+    `PACKAGE_INSTALL_FAILED` / `PACKAGE_NOT_FOUND` / `PACKAGE_REGISTRY_UNREACHABLE`, `PACKAGE_REMOVE_FAILED`, `PACKAGE_UPDATE_FAILED`,
     `PACKAGE_SETTINGS_WRITE_FAILED`; `PACKAGE_INSTALLED_UNLISTED` is the façade's (declaration persisted,
     row not produced). Messages carry pi's text and never reach analytics.
+  - **An install captures npm's output.** `installPiPackage` opens its package manager with pi's
+    `commandOutput: "capture"`, so npm and git write nothing to the host's terminal, never prompt, and a
+    failure's message ends with the output's tail. `packageInstallError` (`@thinkrail/shared`) reads that
+    text once into `PACKAGE_NOT_FOUND` (npm `E404`), `PACKAGE_REGISTRY_UNREACHABLE` (`ENOTFOUND`,
+    `ECONNREFUSED`, `ETIMEDOUT`, …) or `PACKAGE_INSTALL_FAILED`, so the install dialog can say what happened
+    without parsing text. Update, remove and update checks keep pi's default `inherit` and their short
+    messages (deferred: their rows would show the whole tail).
 
 ## Deferred
 
@@ -135,6 +148,27 @@ row lists each resource read-only with pi's `enabled` state and the package swit
   instead.
 - A separate "installing" row or any per-workspace state: installing is the dialog's request; a
   declaration is on wherever it loads.
+
+## Kind detection
+
+`packages.install` holds pi packages and ThinkRail extensions in one flow; the fetched `package.json`
+decides ([[module-thinkrail-extensions]] § Installed extensions). `agent/piPackages.ts`'s
+`piPackagesInstall` resolves the source with `resolvePiInstallSource`. An **npm/git source goes through
+`installPiPackage` exactly as before extensions existed** — the offline refusal, pi's own install, the
+trust re-check — with one hook between the install and the declaration: `isForeign(installedPath)`, the
+installed-extension runtime's `isExtensionAt` ([[submodule-server-extensions-installed]]). A plain pi
+package is then declared as always, **fetched once** and its install scripts run once. A package with a
+`thinkrail` key (even beside a `pi` manifest) is never declared in pi's settings; pi's `remove` undoes the
+install unless pi's root already held that package before (it may serve a declared package), and the
+result is `undefined`. The caller then refuses a repository-scope request with
+`EXTENSION_SCOPE_UNSUPPORTED` (nothing is declared anywhere), or `stage`s the source into ThinkRail's own
+install root — the extension's second fetch, the only one the kind rule costs — and `adopt`s it into
+`extensions.json`: `{ installed: "extension", record }`. A fetched source whose staged copy turns
+out not to be an extension after all is refused as `PACKAGE_SOURCE_INVALID` ("no longer a ThinkRail
+extension"), so the dialog shows that sentence rather than a generic install failure. A folder source is fetched by nobody: the
+runtime reads it in place first, and a folder that is not an extension continues as the pi package
+install (`{ installed: "package", identity, summary }`). Its pi resources reach sessions only through its
+server half. Nothing here spawns npm or git: both installs are pi's `DefaultPackageManager`.
 
 ## Consumers
 

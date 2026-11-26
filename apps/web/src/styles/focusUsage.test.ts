@@ -69,6 +69,25 @@ const SUPPRESSION_DRAWN_ELSEWHERE: Record<string, { match: string; reason: strin
 	"shell/ProjectHome.tsx": [
 		{ match: "flex min-h-0 flex-1 flex-col", reason: "tabIndex=-1 programmatic target" },
 	],
+	"shell/layout/workbenchCenter.tsx": [
+		{
+			match: "relative flex h-full min-h-0 min-w-0 flex-col bg-container-content-bg",
+			reason: "region root: the active region's accent line marks it",
+		},
+	],
+	"shell/layout/workbenchBottom.tsx": [
+		{
+			match:
+				"relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-container-sidebar-bg",
+			reason: "region root: the active region's accent line marks it",
+		},
+	],
+	"shell/layout/workbenchSide.tsx": [
+		{
+			match: "relative flex h-full min-h-0 flex-col overflow-hidden bg-container-sidebar-bg",
+			reason: "region root: the active region's accent line marks it",
+		},
+	],
 	"shell/layout/workbenchTabs.tsx": [
 		{
 			match: "relative flex min-w-0 flex-1 items-center gap-4 self-stretch",
@@ -103,6 +122,12 @@ const SUPPRESSION_DRAWN_ELSEWHERE: Record<string, { match: string; reason: strin
 		{
 			match: "z-50 overflow-hidden rounded-md",
 			reason: "popover content: programmatic focus target",
+		},
+	],
+	"thinkrail-extensions/session-insights/web/search/SearchBox.tsx": [
+		{
+			match: "h-full min-w-0 flex-1 bg-transparent tr-text-metadata",
+			reason: "the search frame draws has-[input:focus-visible]:focus-ring",
 		},
 	],
 	"thinkrail-extensions/ask-user-question/web/controls.tsx": [
