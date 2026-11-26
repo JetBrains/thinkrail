@@ -232,7 +232,7 @@ export function usePullRequestCompletion(
 		[pages, sizes, projectId],
 	);
 
-	const authors = usePullRequestAuthors(enabled ? projectId : null, filter.author);
+	const authors = usePullRequestAuthors(enabled ? projectId : null, filter.author, attempt);
 
 	if (!enabled) return null;
 	const found = lookup?.kind === "found" ? lookup.pullRequest : null;
@@ -261,50 +261,51 @@ export function usePullRequestCompletion(
 	};
 }
 
+type AuthorState = {
+	key: string | null;
+	pages: string[][];
+	next: string | null | undefined;
+};
+
 function usePullRequestAuthors(
 	projectId: string | null,
 	current: string | undefined,
+	attempt: number,
 ): PullRequestAuthors {
-	const [state, setState] = useState<{
-		projectId: string | null;
-		pages: string[][];
-		next: string | null | undefined;
-	}>({ projectId, pages: [], next: undefined });
+	const key = projectId ? `${projectId}\u0000${attempt}` : null;
+	const [state, setState] = useState<AuthorState>({ key, pages: [], next: undefined });
+	if (state.key !== key) setState({ key, pages: [], next: undefined });
+	const own: AuthorState = state.key === key ? state : { key, pages: [], next: undefined };
 	const [loading, setLoading] = useState(false);
 	const inFlight = useRef<string | null>(null);
-	const own = state.projectId === projectId ? state : { projectId, pages: [], next: undefined };
 
 	const request = useCallback(() => {
-		if (!projectId || own.next === null) return;
+		if (!projectId || !key || own.next === null) return;
 		const cursor = own.next;
-		const key = `${projectId}\u0000${cursor ?? ""}`;
-		if (inFlight.current === key) return;
-		inFlight.current = key;
+		const requestKey = `${key}\u0000${cursor ?? ""}`;
+		if (inFlight.current === requestKey) return;
+		inFlight.current = requestKey;
 		setLoading(true);
+		const settle = (apply: (base: AuthorState) => AuthorState) =>
+			setState((previous) =>
+				previous.key !== key || previous.next !== cursor ? previous : apply(previous),
+			);
 		void getTransport()
 			.request("pr.authors", { projectId, ...(cursor ? { cursor } : {}) })
 			.then(
-				(page) => {
-					setState((previous) => {
-						const base =
-							previous.projectId === projectId
-								? previous
-								: { projectId, pages: [], next: undefined };
-						if (base.next !== cursor) return base;
-						return {
-							projectId,
-							pages: [...base.pages, page.authors],
-							next: page.nextCursor ?? null,
-						};
-					});
-				},
-				() => {},
+				(page) =>
+					settle((base) => ({
+						key,
+						pages: [...base.pages, page.authors],
+						next: page.nextCursor ?? null,
+					})),
+				() => settle((base) => ({ ...base, next: null })),
 			)
 			.finally(() => {
-				if (inFlight.current === key) inFlight.current = null;
+				if (inFlight.current === requestKey) inFlight.current = null;
 				setLoading(false);
 			});
-	}, [projectId, own.next]);
+	}, [projectId, key, own.next]);
 
 	const names = useMemo(() => mergeAuthors(own.pages, current), [own.pages, current]);
 	return { names, loading, hasMore: own.next !== null, request };

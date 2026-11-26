@@ -1240,7 +1240,9 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   ←/→ move, Tab or Escape returns. The Author list holds everyone with an open pull request
   (`pr.authors`, 100 pull requests a page, most recently active first), not only the loaded rows' authors: it
   opens on a name search ranked like the slash menu, ↑/↓ walk the search and the names, scrolling to its
-  end loads the next page, and it keeps loading while a search shows fewer than 30 names; a change is remembered per project on the host
+  end loads the next page, and it keeps loading while a search shows fewer than 30 names; the loaded authors live only while the
+  completion is open — closing it or a Retry starts over, so an empty or failed listing never sticks —
+  and a rejected page stops further loading until then; a change is remembered per project on the host
   (`rememberPullRequestFilter`) and seeds the next opening. Enter inserts the PR's link and a space; the
   argument then counts as complete and the menu stays closed for a focus note. The chat's menu carries a
   one-line notice that a workspace with work of its own reviews elsewhere (the skill hands off). Shift+Enter
