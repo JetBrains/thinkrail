@@ -23,13 +23,19 @@ geometry, and submit actions; this module makes those inputs behave the same onc
   the template-pick controller that refuses to overwrite a draft changed after selection.
 - **Public surface:** `index.ts` is the only import path and re-exports the command-completion, argument-completion,
   template-text, template-pick, template-slot, and caret/selection-restoration (`usePendingSelection`) APIs.
-- **Allowed deps:** `contracts` types, React, `@thinkrail/locales` (UI strings), `@thinkrail/ui/utils` (`cn`), and `@thinkrail/ui/button` (`TemplateSlotHint` is a shared `Button`).
+- **Allowed deps:** `contracts` types and its shared tiered matcher (`matchFields` / `parseMatchTerms`), React, `@thinkrail/locales` (UI strings), `@thinkrail/ui/utils` (`cn`), and `@thinkrail/ui/button` (`TemplateSlotHint` is a shared `Button`).
 - **Forbidden:** store or transport access; workspace/session/project lookup; deciding which commands exist in a
   lifecycle; sending a prompt; importing `chat` or `panels`.
 
 ## Behavior
 
-A slash token is active only at the beginning of the draft and before its first whitespace. Up/Down wrap the
+A slash token is active only at the beginning of the draft and before its first whitespace. Matches
+are ranked with the shared tiered matcher the search palette uses — exact, starts-with, word-start,
+contains, then letters in order — on the command's name without its `skill:` prefix (the full name is a
+secondary field, so `/skill:rev` still works); ties keep catalog order, and the menu shows the best
+eight. Plain containment in catalog order hid a skill whose name starts with the query behind eight
+earlier commands that merely contained it — a user with many personal skills could not see
+`/skill:reviewing-a-pr` after typing `/re`, because the host lists bundled skills last. Up/Down wrap the
 visible matches; Enter/Tab selects; Escape dismisses; IME-owned key events take precedence in the consuming
 input. Catalog merge is deterministic and lets the caller's more-specific later source replace a same-named
 earlier source.
