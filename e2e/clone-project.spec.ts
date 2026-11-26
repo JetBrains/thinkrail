@@ -10,7 +10,12 @@ import {
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
-import { PROJECT_CLONE_PROTOCOL_VERSION, type WsParams } from "@thinkrail/contracts";
+import {
+	DEFAULT_PROJECTS_FOLDER,
+	PROJECT_CLONE_PROTOCOL_VERSION,
+	PROJECTS_FOLDER_PROTOCOL_VERSION,
+	type WsParams,
+} from "@thinkrail/contracts";
 import { openAppFresh } from "./fixtures/app";
 import { commitFile, git, gitText } from "./fixtures/git";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO, E2E_PICK_DIR_POINTER } from "./fixtures/paths";
@@ -74,7 +79,7 @@ test("Welcome clones a local repository at depth 1 and opens Project Home withou
 		});
 	});
 	const dialog = await openCloneDialog(page, "welcome");
-	await expect(dialog.getByTestId("clone-project-parent")).toHaveValue("~");
+	await expect(dialog.getByTestId("clone-project-parent")).toHaveValue(DEFAULT_PROJECTS_FOLDER);
 	await expect(dialog.getByTestId("clone-project-submit")).toBeDisabled();
 	await dialog.getByTestId("clone-project-url").fill(fixture.url);
 	await expect(dialog.getByTestId("clone-project-name")).toHaveValue("source");
@@ -104,6 +109,50 @@ test("Welcome clones a local repository at depth 1 and opens Project Home withou
 	expect(gitText(destination, "rev-list", "--count", "HEAD").trim()).toBe("1");
 	expect(gitText(destination, "rev-parse", "--is-shallow-repository").trim()).toBe("true");
 	expect(gitText(fixture.source, "rev-list", "--count", "HEAD").trim()).toBe("3");
+});
+
+test("a parent folder that does not exist yet previews cleanly and is created by the clone", async ({
+	page,
+}) => {
+	const fixture = seedRepository(root);
+	const parent = join(root, "not-yet", "projects");
+	const dialog = await openCloneDialog(page);
+	await dialog.getByTestId("clone-project-url").fill(fixture.url);
+	await dialog.getByTestId("clone-project-parent").fill(parent);
+	const destination = join(parent, "source");
+	await expect(dialog.getByTestId("clone-project-path")).toHaveText(destination);
+	expect(existsSync(parent)).toBe(false);
+	await dialog.getByTestId("clone-project-submit").click();
+	await expect(dialog).toHaveCount(0);
+	await expect(page.getByTestId("welcome-title")).toHaveText("source");
+	expect(gitText(destination, "rev-parse", "HEAD").trim()).toBe(fixture.head);
+});
+
+test("hosts before the projects folder keep the clone parent at the home folder", async ({
+	page,
+}) => {
+	await page.routeWebSocket(/\/ws(?:\?|$)/, (browser) => {
+		const server = browser.connectToServer();
+		browser.onMessage((message) => server.send(message));
+		server.onMessage((message) => {
+			const frame = parseFrame(message);
+			if (frame.channel === "server.welcome") {
+				browser.send(
+					JSON.stringify({
+						...frame,
+						data: {
+							...(frame.data as Record<string, unknown>),
+							protocolVersion: PROJECTS_FOLDER_PROTOCOL_VERSION - 1,
+						},
+					}),
+				);
+			} else {
+				browser.send(message);
+			}
+		});
+	});
+	const dialog = await openCloneDialog(page);
+	await expect(dialog.getByTestId("clone-project-parent")).toHaveValue("~");
 });
 
 test("an existing destination is rejected without deleting its files", async ({ page }) => {
