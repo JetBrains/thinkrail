@@ -1,5 +1,6 @@
 import type {
 	GhSetupProblem,
+	PullRequestAuthorPage,
 	PullRequestFilter,
 	PullRequestPage,
 	PullRequestSize,
@@ -267,6 +268,57 @@ export async function listPullRequests(
 		return page;
 	} catch {
 		return unavailable("failed");
+	}
+}
+
+export const PULL_REQUEST_AUTHOR_PAGE_SIZE = 100;
+const AUTHORS_QUERY = `query($q: String!, $after: String) {
+  search(query: $q, type: ISSUE, first: ${PULL_REQUEST_AUTHOR_PAGE_SIZE}, after: $after) {
+    pageInfo { hasNextPage endCursor }
+    nodes { ... on PullRequest { author { login } } }
+  }
+}`;
+const authorCache = new Map<string, { at: number; value: PullRequestAuthorPage }>();
+
+export async function listPullRequestAuthors(
+	cwd: string,
+	cursor: string | undefined,
+	deps: PullRequestDeps = {},
+): Promise<PullRequestAuthorPage> {
+	const now = deps.now ?? Date.now;
+	const run = deps.run ?? runProviderCommand;
+	const left = deadline(now);
+	try {
+		const remote = await githubRemote(cwd, left);
+		if (remote === null || remote === "failed") return { authors: [] };
+		const key = `${remote.slug}\u0000${cursor ?? ""}`;
+		const hit = authorCache.get(key);
+		if (hit && now() - hit.at < PULL_REQUEST_CACHE_TTL_MS) return hit.value;
+		const q = `repo:${remote.slug} is:pr is:open sort:updated-desc`;
+		const command = ["gh", "api", "graphql", "-f", `query=${AUTHORS_QUERY}`, "-f", `q=${q}`];
+		if (cursor) command.push("-f", `after=${cursor}`);
+		const result = await run(cwd, command, left());
+		const search = result.ok ? record(record(record(parseJson(result.out))?.data)?.search) : null;
+		const nodes = search?.nodes;
+		if (!search || !Array.isArray(nodes)) return { authors: [] };
+		const authors = [
+			...new Set(
+				nodes
+					.map((node) => text(record(record(node)?.author)?.login))
+					.filter((login) => login.length > 0),
+			),
+		];
+		const pageInfo = record(search.pageInfo);
+		const next = text(pageInfo?.endCursor);
+		const value: PullRequestAuthorPage = {
+			authors,
+			...(pageInfo?.hasNextPage === true && next ? { nextCursor: next } : {}),
+		};
+		pruneExpired(authorCache, now());
+		authorCache.set(key, { at: now(), value });
+		return value;
+	} catch {
+		return { authors: [] };
 	}
 }
 

@@ -326,6 +326,12 @@ export interface PullRequestSizeEntry extends PullRequestSize {
 	number: number;
 }
 
+export interface PullRequestAuthorPage {
+	/** Logins of open pull requests' authors on this page, each once, in GitHub's order. */
+	authors: string[];
+	nextCursor?: string;
+}
+
 export interface PrDraft {
 	title: string;
 	body: string;

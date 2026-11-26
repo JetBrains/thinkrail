@@ -1016,7 +1016,9 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   first, each a `PullRequestSummary` with `baseRef` already resolved on the local remote and
   `reviewRequested` for the signed-in `gh` user, **without `size`**; when it cannot list, an empty page
   with the reason — `missing` / `unauthenticated` (the `GhSetupProblem` pair), `not-github`, or
-  `failed`), **`pr.sizes`** (`{ projectId, numbers }` → `PullRequestSizeEntry[]`, the diff stats of the
+  `failed`), **`pr.authors`** (`{ projectId, cursor? }` → `PullRequestAuthorPage { authors, nextCursor? }`,
+  the logins of the open pull requests' authors, 100 pull requests a page, each login once per page —
+  the client merges pages; an empty page when it cannot read), **`pr.sizes`** (`{ projectId, numbers }` → `PullRequestSizeEntry[]`, the diff stats of the
   rows on screen, leaving out any it could not read) and **`pr.get`** (`{ projectId, number }` →
   `PullRequestSummary | null` with `size`, in any state, `null` when it does not exist or cannot be
   read; `reviewRequested` is always `false` there) /

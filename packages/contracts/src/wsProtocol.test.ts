@@ -448,6 +448,7 @@ test("pull request review methods are pinned to v133", () => {
 	expect(WS_METHODS.prList).toBe("pr.list");
 	expect(WS_METHODS.prGet).toBe("pr.get");
 	expect(WS_METHODS.prSizes).toBe("pr.sizes");
+	expect(WS_METHODS.prAuthors).toBe("pr.authors");
 });
 
 test("turning off server-side fallback is pinned to v126", () => {

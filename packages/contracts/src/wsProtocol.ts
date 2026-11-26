@@ -56,6 +56,7 @@ import type {
 	ProviderStatusReport,
 	ProviderWarning,
 	PrPreview,
+	PullRequestAuthorPage,
 	PullRequestFilter,
 	PullRequestPage,
 	PullRequestSizeEntry,
@@ -476,6 +477,7 @@ export const WS_METHODS = {
 	prList: "pr.list",
 	prGet: "pr.get",
 	prSizes: "pr.sizes",
+	prAuthors: "pr.authors",
 	fsReadDir: "fs.readDir",
 	fsReadFile: "fs.readFile",
 	fsCopy: "fs.copy",
@@ -1163,6 +1165,10 @@ export interface WsMethodMap {
 		result: PullRequestPage;
 	};
 	"pr.get": { params: { projectId: string; number: number }; result: PullRequestSummary | null };
+	"pr.authors": {
+		params: { projectId: string; cursor?: string };
+		result: PullRequestAuthorPage;
+	};
 	"pr.sizes": {
 		params: { projectId: string; numbers: number[] };
 		result: PullRequestSizeEntry[];

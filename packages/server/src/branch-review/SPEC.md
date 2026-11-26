@@ -28,7 +28,7 @@ consumer that only understood open reviews reads a merged/closed row as a live P
 contracts spec pins `state` to `WORKSPACE_SETTLE_PROTOCOL_VERSION` and the host answers such a client's
 `workspace.openReview` with `null` for a merged or closed review.
 
-It also answers the prompts' pull-request completion (`pr.list` / `pr.sizes` / `pr.get`, v133,
+It also answers the prompts' pull-request completion (`pr.list` / `pr.sizes` / `pr.authors` / `pr.get`, v133,
 `pullRequests.ts`): pages of a project's open GitHub pull requests for a filter, their diff stats, and
 one pull request by number in any state, as `PullRequestSummary` rows. Not keyed by a branch.
 
@@ -49,7 +49,9 @@ one pull request by number in any state, as `PullRequestSummary` rows. Not keyed
 - **Rows come without sizes; `pr.sizes` adds them.** Diff stats are most of GitHub's answer time
   (measured on 46 PRs: ~0.7 s without, 1–3 s with), so the page returns first and one aliased query
   (`p<N>: pullRequest(number: N)`, 50 numbers at most) fills in the shown rows. `pr.get` reads one PR
-  with its size through `gh pr view`.
+  with its size through `gh pr view`. `pr.authors` pages the same open-PR search 100 at a time
+  asking only for `author { login }`, so the Author filter lists everyone with an open PR — not only the
+  authors of the rows already loaded — and is cached like a page.
 - **Successful answers are kept 60 s** — pages per (worktree, search, cursor), sizes per (repository,
   number) — so reopening the completion or paging back is instant. Failures are never kept, and
   expired entries are pruned whenever a new one is stored, so per-keystroke queries never accumulate.
@@ -59,7 +61,7 @@ one pull request by number in any state, as `PullRequestSummary` rows. Not keyed
   then, as `pr.open` does — for `missing` / `unauthenticated`; anything else (a usable `gh` that
   failed, a malformed answer, a probe that did not answer in time, or the `THINKRAIL_GH_OFFLINE` seam,
   where the probe reports `null` by design) is `failed`, which the completion offers to retry.
-  `pr.sizes` leaves out what it could not read; `pr.get` degrades every failure to `null`.
+  `pr.sizes` leaves out what it could not read, and `pr.authors` answers an empty page; `pr.get` degrades every failure to `null`.
 
 ## Boundary
 
@@ -89,6 +91,7 @@ one pull request by number in any state, as `PullRequestSummary` rows. Not keyed
   when such a PR exists and cached per origin URL for 10 minutes (successes only); a failed read leaves
   them out without failing the lookup.
 - **Public surface:** `listPullRequests(cwd, { filter, query?, cursor? })` / `pullRequestSizes(cwd, numbers)` /
+  `listPullRequestAuthors(cwd, cursor?)` /
   `getPullRequest(cwd, number)` (above);
   `findBranchReviewOutcome(cwd, branch, { fresh? })` → `{ value, reliable }` — `reliable`
   is the cacheable bit surfaced, so a host that *persists* the answer can tell "the provider says there is

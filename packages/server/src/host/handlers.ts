@@ -119,6 +119,7 @@ import {
 } from "../auth";
 import {
 	getPullRequest,
+	listPullRequestAuthors,
 	listPullRequests,
 	providerFromRemoteUrl,
 	pullRequestSizes,
@@ -927,6 +928,8 @@ const handlers: WsHandlers = {
 			...(params.cursor ? { cursor: params.cursor } : {}),
 		}),
 	"pr.get": (params) => getPullRequest(repositoryProject(params.projectId).path, params.number),
+	"pr.authors": (params) =>
+		listPullRequestAuthors(repositoryProject(params.projectId).path, params.cursor),
 	"pr.sizes": (params) =>
 		pullRequestSizes(
 			repositoryProject(params.projectId).path,

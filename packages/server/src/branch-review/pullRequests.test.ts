@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { PullRequestFilter } from "@thinkrail/contracts";
 import {
 	getPullRequest,
+	listPullRequestAuthors,
 	listPullRequests,
 	PULL_REQUEST_CACHE_TTL_MS,
 	type PullRequestRunner,
@@ -303,4 +304,45 @@ test("gets one pull request in any state by number, with its size, or null", asy
 	expect(await getPullRequest(cwd, 13, { run })).toBeNull();
 	expect(await getPullRequest(cwd, 0, { run })).toBeNull();
 	expect(await getPullRequest(repo({}), 12, { run })).toBeNull();
+});
+
+test("authors of every open pull request come a hundred at a time, once each, with a cursor", async () => {
+	const cwd = repo({ origin: "git@github.com:acme/app.git" });
+	const { calls, run } = runner((command) => ({
+		ok: true,
+		out: JSON.stringify({
+			data: {
+				search: {
+					pageInfo: { hasNextPage: flag(command, "after") === undefined, endCursor: "C2" },
+					nodes: [
+						{ author: { login: "ada" } },
+						{ author: { login: "zed" } },
+						{ author: { login: "ada" } },
+						{ author: null },
+						{},
+					],
+				},
+			},
+		}),
+	}));
+	const first = await listPullRequestAuthors(cwd, undefined, { run });
+	expect(first).toEqual({ authors: ["ada", "zed"], nextCursor: "C2" });
+	expect(flag(calls[0], "q")).toBe("repo:acme/app is:pr is:open sort:updated-desc");
+	expect(flag(calls[0], "query")).toContain("first: 100");
+	const second = await listPullRequestAuthors(cwd, "C2", { run });
+	expect(flag(calls[1], "after")).toBe("C2");
+	expect(second.nextCursor).toBeUndefined();
+	await listPullRequestAuthors(cwd, undefined, { run });
+	expect(calls).toHaveLength(2);
+});
+
+test("authors degrade to an empty page without a GitHub remote or on failure", async () => {
+	const { calls, run } = runner(() => ({ ok: false, out: "" }));
+	expect(await listPullRequestAuthors(repo({}), undefined, { run })).toEqual({ authors: [] });
+	expect(calls).toEqual([]);
+	expect(
+		await listPullRequestAuthors(repo({ origin: "git@github.com:acme/fail.git" }), undefined, {
+			run,
+		}),
+	).toEqual({ authors: [] });
 });
