@@ -697,13 +697,21 @@ a project picker, the prompt hero, and the reused
   runnable by the held model by asking the host for pi's clamp (**`model.clampThinking`**) rather than
   deciding locally, so an explicit switch and a refresh that shrank a model's set resolve the same way
   pi would. `model.default` needs no adjustment: the host already returns a self-consistent pair.
-  On open and project-picker changes, the dialog reads **`skill.list({projectId})`**; whenever a leading
-  slash token becomes active it also reads **`template.list({projectId})`**. It feeds both into the shared
-  `prompt` module, so Create Workspace and live chat use the same filtering, menu, keyboard navigation,
-  race-safe template pick, and Tab-through placeholder state machine. Skills come from the selected project's
-  **current checkout** plus personal/bundled sources; templates merge global + current-checkout project scope
-  with project precedence. Selecting a skill inserts `/skill:<name> `; selecting a template reads
-  `template.get({projectId, name})`, replaces the complete draft with its body, and activates its placeholders.
+  On open and on project-picker, target and base-branch changes, the dialog reads **`skill.list({projectId,
+  baseRef?})`**; whenever a leading slash token becomes active it also reads **`template.list({projectId,
+  baseRef?})`**. It feeds both into the shared `prompt` module, so Create Workspace and live chat use the same
+  filtering, menu, keyboard navigation, race-safe template pick, and Tab-through placeholder state machine.
+  In **New worktree** mode on a v135+ host (`REF_RESOURCE_PREVIEW_PROTOCOL_VERSION`) `baseRef` is the selected
+  base branch, so project skills and templates are the ones the created worktree will hold — a stale or
+  untracked checkout neither hides nor adds any; both reads repeat after that base's `git.prefetch` succeeds
+  (a moved tracking ref can bring new skills) and after a trust grant, through one refresh counter the
+  cancellation-safe effects depend on, so a late answer for a previous ref is dropped. Until the branch list
+  names that base (or fails), worktree mode reads nothing, so a pick can't start on the checkout catalog and
+  then be invalidated when the ref arrives. Work in project folder
+  and older hosts omit `baseRef` and preview the **current checkout**. Personal/bundled skills and global
+  templates join either way, project templates taking precedence. Selecting a skill inserts `/skill:<name> `;
+  selecting a template reads `template.get({projectId, baseRef?, name})` (the picker's context key includes
+  the ref), replaces the complete draft with its body, and activates its placeholders.
   Up/Down navigate, Enter/Tab select, Escape dismisses the menu; outside an open menu Tab/Shift+Tab cycle active
   template slots and Escape ends that session. Submission mirrors edited repeated slots and removes untouched
   markers before the finalized text becomes the first prompt. While a selected template body is loading,
@@ -711,8 +719,10 @@ a project picker, the prompt hero, and the reused
   invalidates an in-flight pick, so a response from the previous checkout cannot populate the next project's
   prompt. The first prompt is snapshotted before asynchronous workspace creation begins.
   Listing/get failures preserve the draft and degrade to whichever source remains available. Extension commands and `/compact` stay absent because no live
-  session exists. A caption under the prompt marks the catalog as **from the current checkout** (the created
-  worktree's session is authoritative if the selected base branch differs). When the selected project ships anything
+  session exists. A caption under the prompt names the catalog's source: **`from <baseRef>, the branch this
+  workspace starts from`** when `baseRef` travels, else **from the current checkout** (the created
+  workspace's session is authoritative). The trust notice below still counts the **current checkout's** gated resources
+  — a base branch that adds the repo's first gated skill is previewed without it until trust is granted. When the selected project ships anything
   still **untrusted** (the same `useProjectTrustSummary` + `deriveProjectTrustNotice` pair as the Welcome
   notice — counts and kinds, never names), a **trust notice** shows a *Trust project* button — the repo's
   skills and pi resources stay withheld until granted (`project.setTrust` from the same `trustGrantParams`,

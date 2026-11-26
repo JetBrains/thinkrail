@@ -1263,6 +1263,7 @@
 	"panels.newWorkspace.promptPlaceholder": "What do you want to work on?",
 	"panels.newWorkspace.searchProjects": "Search projects…",
 	"panels.newWorkspace.slashHint": "Type <0>/</0> for skills and prompt templates — previewed from the current checkout; the created workspace's session is authoritative.",
+	"panels.newWorkspace.slashHintRef": "Type <0>/</0> for skills and prompt templates from <1>{{ref}}</1>, the branch this workspace starts from.",
 	"panels.newWorkspace.start": "Start",
 	"panels.newWorkspace.starting": "Starting…",
 	"panels.newWorkspace.targetChat": "Chat without a project",

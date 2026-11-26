@@ -17,6 +17,7 @@ import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type {
 	AppConfig,
 	Project,
+	SlashCommandInfo,
 	SubagentCatalogEntry,
 	Template,
 	TemplateInfo,
@@ -758,6 +759,59 @@ test("template reads resolve a project's current checkout and reject ambiguous l
 		if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
 		else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
 	}
+});
+
+test("skill and template previews read the selected base branch instead of the checkout", async () => {
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([
+			{
+				id: "p1",
+				name: "repo",
+				path: repo,
+				slug: "repo",
+				lastOpened: 1,
+				trusted: true,
+				piResourceTrust: "granted",
+			},
+		]),
+	);
+	git(repo, "switch", "-c", "next");
+	mkdirSync(join(repo, ".agents", "skills", "upgrade"), { recursive: true });
+	writeFileSync(
+		join(repo, ".agents", "skills", "upgrade", "SKILL.md"),
+		"---\nname: upgrade\ndescription: Upgrade a core dependency.\n---\nBody\n",
+	);
+	mkdirSync(join(repo, ".pi", "prompts"), { recursive: true });
+	writeFileSync(join(repo, ".pi", "prompts", "kickoff.md"), "branch body");
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "resources");
+	git(repo, "switch", "main");
+
+	const names = (commands: unknown) => (commands as SlashCommandInfo[]).map((c) => c.name);
+	expect(names(await handleRequest("skill.list", { projectId: "p1" }, CTX))).not.toContain(
+		"skill:upgrade",
+	);
+	expect(
+		names(await handleRequest("skill.list", { projectId: "p1", baseRef: "next" }, CTX)),
+	).toContain("skill:upgrade");
+	const listed = (await handleRequest(
+		"template.list",
+		{ projectId: "p1", baseRef: "next" },
+		CTX,
+	)) as { templates: TemplateInfo[] };
+	expect(listed.templates).toContainEqual(
+		expect.objectContaining({ name: "kickoff", scope: "project" }),
+	);
+	const template = (await handleRequest(
+		"template.get",
+		{ projectId: "p1", baseRef: "next", name: "kickoff" },
+		CTX,
+	)) as Template;
+	expect(template.content).toBe("branch body");
+	expect(
+		names(await handleRequest("skill.list", { projectId: "p1", baseRef: "gone" }, CTX)),
+	).not.toContain("skill:upgrade");
 });
 
 test("a background create hands the finished workspace a terminal and the held chat", async () => {

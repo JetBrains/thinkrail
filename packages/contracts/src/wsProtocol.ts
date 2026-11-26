@@ -148,11 +148,12 @@ export interface TerminalTabsPush {
 }
 
 export type TemplateReadLocation =
-	| { workspaceId: string; projectId?: never }
-	| { projectId: string; workspaceId?: never }
-	| { workspaceId?: never; projectId?: never };
+	| { workspaceId: string; projectId?: never; baseRef?: never }
+	| { projectId: string; workspaceId?: never; baseRef?: string }
+	| { workspaceId?: never; projectId?: never; baseRef?: never };
 
-export const PROTOCOL_VERSION = 134;
+export const PROTOCOL_VERSION = 135;
+export const REF_RESOURCE_PREVIEW_PROTOCOL_VERSION = 135;
 export const FS_REVEAL_PROTOCOL_VERSION = 134;
 export const PULL_REQUEST_REVIEW_PROTOCOL_VERSION = 133;
 export const EXTENSION_BROWSE_PROTOCOL_VERSION = 132;
@@ -1309,7 +1310,7 @@ export interface WsMethodMap {
 		result: { closed: boolean; busy: boolean };
 	};
 	"dialog.selectDirectory": { params: Record<string, never>; result: { path: string | null } };
-	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };
+	"skill.list": { params: { projectId: string; baseRef?: string }; result: SlashCommandInfo[] };
 	"skills.state": { params: { workspaceId: string }; result: SkillCatalogEntry[] };
 	"extension.list": { params: Record<string, never>; result: ExtensionCatalogEntry[] };
 	"extension.query": { params: ExtensionQueryParams; result: unknown };

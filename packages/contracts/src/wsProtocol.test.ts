@@ -79,6 +79,7 @@ import {
 	PROVIDER_WARNINGS_PROTOCOL_VERSION,
 	PULL_REQUEST_REVIEW_PROTOCOL_VERSION,
 	QUESTION_PANEL_PROTOCOL_VERSION,
+	REF_RESOURCE_PREVIEW_PROTOCOL_VERSION,
 	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	RESOURCE_META_PROTOCOL_VERSION,
 	REVIEW_ACTIONS_PROTOCOL_VERSION,
@@ -392,10 +393,15 @@ test("host search and its previews are pinned to v106", () => {
 });
 
 test("revealing a worktree entry in the OS file manager is pinned to v134", () => {
-	expect(PROTOCOL_VERSION).toBe(134);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FS_REVEAL_PROTOCOL_VERSION);
 	expect(FS_REVEAL_PROTOCOL_VERSION).toBe(134);
 	expect(FS_REVEAL_PROTOCOL_VERSION).toBeGreaterThan(PULL_REQUEST_REVIEW_PROTOCOL_VERSION);
 	expect(WS_METHODS.fsReveal).toBe("fs.reveal");
+});
+
+test("base-branch skill and template previews are pinned to v135", () => {
+	expect(PROTOCOL_VERSION).toBe(135);
+	expect(REF_RESOURCE_PREVIEW_PROTOCOL_VERSION).toBe(135);
 });
 
 test("the community catalog is pinned to v132", () => {
