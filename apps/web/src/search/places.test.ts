@@ -8,6 +8,14 @@ const chat = (id: string, sessionId: string) => ({
 	sessionId,
 });
 
+const idle = { needsInput: null, completionUnread: false, completion: null, execution: "idle" };
+
+const record = (sessionId: string, fields: { title?: string; firstPrompt?: string } = {}) => ({
+	sessionId,
+	state: idle,
+	...fields,
+});
+
 const inWorkspace = (selected: string) =>
 	({
 		activeWorkspaceId: "w1",
@@ -22,7 +30,8 @@ const inWorkspace = (selected: string) =>
 			},
 		},
 		workspaces: { p1: [{ id: "w1", projectId: "p1" }] },
-		sessionStateByWorkspace: {},
+		sessionStateByWorkspace: { w1: { a: record("a", { firstPrompt: "fix the build" }) } },
+		closedChatsByWorkspace: {},
 		layoutAttentionByWorkspace: {
 			w1: {
 				selectedByGroup: { center: selected },
@@ -43,12 +52,25 @@ describe("currentPlaceIds", () => {
 			...inWorkspace("t-term"),
 			activeWorkspaceId: "c1",
 			workspaces: { chats: [{ id: "c1", projectId: "chats", kind: "chat" }] },
-			sessionStateByWorkspace: { c1: { "s-c1": {} } },
+			sessionStateByWorkspace: { c1: { "s-c1": record("s-c1", { title: "Release notes" }) } },
 		} as unknown as PlaceState;
 		expect(currentPlaceIds(chatFolder)).toEqual(["chat:s-c1", "workspace:c1"]);
 		expect(
 			currentPlaceIds({ ...chatFolder, sessionStateByWorkspace: {} } as unknown as PlaceState),
 		).toEqual(["workspace:c1"]);
+	});
+
+	test("a chat the palette does not list yet leaves its workspace as the place", () => {
+		const empty = (fields: { title?: string; firstPrompt?: string }) =>
+			({
+				...inWorkspace("t-a"),
+				sessionStateByWorkspace: { w1: { a: record("a", fields) } },
+			}) as unknown as PlaceState;
+		expect(currentPlaceIds(empty({ title: "" }))).toEqual(["workspace:w1"]);
+		expect(
+			currentPlaceIds({ ...inWorkspace("t-a"), sessionStateByWorkspace: {} } as PlaceState),
+		).toEqual(["workspace:w1"]);
+		expect(currentPlaceIds(empty({ title: "Named" }))).toEqual(["chat:a", "workspace:w1"]);
 	});
 
 	test("a workspace showing another tab, Project Home and the main screen", () => {

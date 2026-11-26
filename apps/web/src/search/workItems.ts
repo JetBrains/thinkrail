@@ -125,6 +125,15 @@ function located(
 	return spans.length > 0 ? { subtitle: text, subtitleEmphasis: spans } : { subtitle: text };
 }
 
+/** Whether the palette lists a chat: it has a name, a first prompt, or something to show the user. */
+export function chatHasRow(
+	knownTitle: string | null,
+	firstPrompt: string | undefined,
+	attention: SessionAttention | null,
+): boolean {
+	return Boolean(knownTitle || firstPrompt || attention);
+}
+
 const REVIEW_STATE_LABELS: Record<BranchReviewState, MessageKey> = {
 	open: "search.preview.reviewOpen",
 	merged: "search.preview.reviewMerged",
@@ -191,7 +200,7 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 			attention = strongest(attention, recordAttention);
 			const knownTitle = selectKnownChatTitle(state, workspaceId, record.sessionId);
 			const firstPrompt = input.firstPrompts[record.sessionId];
-			if (!knownTitle && !firstPrompt && !recordAttention) continue;
+			if (!chatHasRow(knownTitle, firstPrompt, recordAttention)) continue;
 			const projectName = projectNames.get(record.projectId);
 			if (projectName === undefined) continue;
 			const label = chatLabel(t, knownTitle, firstPrompt);
