@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import type {
 	Ack,
 	OpenBranchReview,
+	Project,
 	ReviewComment,
 	ReviewFixDetails,
 	ReviewSendResult,
@@ -57,6 +58,7 @@ import {
 	markWorkspaceUnread,
 	notifyExtUi,
 	nudgeSession,
+	PROJECT_SKILL_ROOTS,
 	probeCustomEndpoint,
 	projectTrustSummary,
 	promptSession,
@@ -226,6 +228,7 @@ import {
 	deleteTemplate,
 	getTemplate,
 	listTemplates,
+	PROJECT_TEMPLATE_ROOT,
 	saveTemplate,
 	templateDirs,
 } from "../templates";
@@ -274,6 +277,7 @@ import {
 	listWorkspaceRecords,
 	listWorkspaces,
 	openExistingWorktree,
+	previewRefPaths,
 	reclaimWorktree,
 	recordWorkspaceActivity,
 	renameWorkspace,
@@ -476,16 +480,28 @@ function revealDataFolder(dir: string) {
 	return { ok: true } as const;
 }
 
-function resolveTemplateReadDirs(params: TemplateReadLocation) {
+const REF_PREVIEW_ROOTS = [...PROJECT_SKILL_ROOTS, PROJECT_TEMPLATE_ROOT];
+
+function knownProject(projectId: string): Project {
+	const project = listProjects().find((candidate) => candidate.id === projectId);
+	if (!project) throw new Error(`Unknown project: ${projectId}`);
+	return project;
+}
+
+async function projectPreviewCwd(project: Project, baseRef: string | undefined): Promise<string> {
+	const ref = baseRef?.trim();
+	if (!ref) return project.path;
+	return (await previewRefPaths(project, ref, REF_PREVIEW_ROOTS)) ?? project.path;
+}
+
+async function resolveTemplateReadDirs(params: TemplateReadLocation) {
 	const { workspaceId, projectId } = params;
 	if (workspaceId !== undefined && projectId !== undefined) {
 		throw new Error("Template reads accept either workspaceId or projectId, not both");
 	}
 	if (workspaceId !== undefined) return templateDirs(getWorkspace(workspaceId).worktreePath);
 	if (projectId === undefined) return templateDirs();
-	const project = listProjects().find((candidate) => candidate.id === projectId);
-	if (!project) throw new Error(`Unknown project: ${projectId}`);
-	return templateDirs(project.path);
+	return templateDirs(await projectPreviewCwd(knownProject(projectId), params.baseRef));
 }
 
 function fireReviewPrompt(
@@ -1250,12 +1266,10 @@ const handlers: WsHandlers = {
 	"terminal.close": (p) => {
 		return closeTerminalTab(p.workspaceId, p.tabKey, p.force ?? false);
 	},
-	"skill.list": (params) => {
-		const { projectId } = params;
-		const project = listProjects().find((candidate) => candidate.id === projectId);
-		if (!project) throw new Error(`Unknown project: ${projectId}`);
+	"skill.list": async (params) => {
+		const project = knownProject(params.projectId);
 		return listSkillCommands(
-			project.path,
+			await projectPreviewCwd(project, params.baseRef),
 			admissionContextFor(project, {}, getConfig().otherAgentSkills),
 		);
 	},
@@ -1810,12 +1824,10 @@ const handlers: WsHandlers = {
 			return { sessions };
 		});
 	},
-	"template.list": (params) => ({
-		templates: listTemplates(resolveTemplateReadDirs(params)),
+	"template.list": async (params) => ({
+		templates: listTemplates(await resolveTemplateReadDirs(params)),
 	}),
-	"template.get": (p) => {
-		return getTemplate(resolveTemplateReadDirs(p), p.name, p.scope);
-	},
+	"template.get": async (p) => getTemplate(await resolveTemplateReadDirs(p), p.name, p.scope),
 	"template.save": (p) => {
 		const dirs = templateDirs(p.workspaceId ? getWorkspace(p.workspaceId).worktreePath : undefined);
 		return saveTemplate(dirs, p.scope, p.name, p.content);

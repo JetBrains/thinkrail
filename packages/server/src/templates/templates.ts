@@ -25,10 +25,12 @@ export interface TemplateDirs {
 	projectDir?: string;
 }
 
+export const PROJECT_TEMPLATE_ROOT = `${CONFIG_DIR_NAME}/prompts`;
+
 export function templateDirs(cwd?: string, agentDir: string = getAgentDir()): TemplateDirs {
 	return {
 		globalDir: join(agentDir, "prompts"),
-		...(cwd ? { projectDir: join(cwd, CONFIG_DIR_NAME, "prompts") } : {}),
+		...(cwd ? { projectDir: join(cwd, PROJECT_TEMPLATE_ROOT) } : {}),
 	};
 }
 
