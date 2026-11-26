@@ -243,6 +243,8 @@ test("a folder in the Tree offers no Delete and renames from the keyboard, its a
 	await folderRow(page, "mockups/onboarding").click({ button: "right" });
 	const menu = page.getByTestId("artifact-actions");
 	await expect(menu.getByTestId("artifact-mention")).toBeVisible();
+	await expect(menu.getByTestId("artifact-reveal-os")).toBeVisible();
+	await expect(menu.getByTestId("artifact-reveal")).toBeVisible();
 	await expect(menu.getByTestId("artifact-rename")).toBeVisible();
 	await expect(menu.getByTestId("artifact-delete")).toHaveCount(0);
 	await expect(menu.getByTestId("artifact-menu-restore")).toHaveCount(0);
