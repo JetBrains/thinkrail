@@ -77,7 +77,10 @@ What ThinkRail does, at product level; the linked spec owns the detail.
 - **Projects → workspaces** — a git repo is a project; a workspace is a git worktree, plus the built-in
   Default workspace (the project folder itself) and existing worktrees attached in place
   ([[submodule-server-workspaces]]). A Git repository URL can be cloned into a chosen new host folder and
-  opened as a project, with optional shallow history and cancellation ([[submodule-server-projects]]).
+  opened as a project, with optional shallow history and cancellation ([[submodule-server-projects]]);
+  new projects and clones start in one host-wide projects folder (default `~/thinkrail`). An agent can
+  open a repository itself — reusing a known project, or cloning one only after the user approves — and
+  then start a workspace in it ([[submodule-server-agent]]).
 - **Voice input** — local dictation into every text field, extensions' included and with no work on
   their part (the code editor and the terminal excepted), through a mic on the focused field (always shown on the chat composer) or ⌘⇧Space /
   Ctrl+Shift+Space. Text lands at the cursor and is never auto-sent. NVIDIA's Nemotron streaming model runs on the host after
