@@ -1,7 +1,7 @@
 import type { GitFileChange } from "@thinkrail/contracts";
+import { DiffStatBadge } from "@thinkrail/ui/diff-stat-badge";
 import { statusLetter } from "../chat/planView";
 import { statusNameClass } from "./changesModel";
-import { DiffStatBadge } from "./DiffStatBadge";
 
 function FileStatusLetter({ status }: { status: GitFileChange["status"] }) {
 	return (

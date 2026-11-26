@@ -17,6 +17,7 @@ import {
 	refreshSubagentConcurrency,
 } from "../agent";
 import { delegationServiceFor, removeWorkspaceDelegation } from "../agent/delegation";
+import { disabledPackages } from "../agent/packages";
 import {
 	getAdditionalAnalyticsCapture,
 	initializeAnalytics,
@@ -439,6 +440,22 @@ test("boot applies the stored environment before serving, and launch variables w
 		if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
 		else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
 	}
+});
+
+test("the persisted package switch is in force before boot prepares the first runtime", async () => {
+	const dir = process.env.THINKRAIL_DATA_DIR;
+	if (!dir) throw new Error("missing fixture data directory");
+	writeFileSync(
+		join(dir, "config.json"),
+		JSON.stringify({ disabledPackages: ["npm:@fixture/switched-off"] }),
+	);
+	const seen: string[][] = [];
+	configurePiRuntimeFactory(async () => {
+		seen.push([...disabledPackages()]);
+		return testRuntime;
+	});
+	await boot({ port: 0, host: "127.0.0.1", portMode: "exact" });
+	expect(seen[0]).toEqual(["npm:@fixture/switched-off"]);
 });
 
 test('portMode "exact" binds the requested port', async () => {

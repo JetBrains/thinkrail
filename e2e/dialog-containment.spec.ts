@@ -24,6 +24,15 @@ for (const size of [
 	});
 }
 
+test("the Create workspace dialog sits on whole pixels in an odd window", async ({ page }) => {
+	await page.setViewportSize({ width: 1281, height: 800 });
+	await openFixtureProject(page);
+	await page.getByTestId("add-workspace").first().click();
+	const box = await page.getByTestId("new-workspace-dialog").boundingBox();
+	expect(box?.x).toBe(Math.round(box?.x ?? 0.5));
+	expect(box?.y).toBe(Math.round(box?.y ?? 0.5));
+});
+
 test("the Create workspace slash menu opens above the prompt and stays in the window", async ({
 	page,
 }) => {

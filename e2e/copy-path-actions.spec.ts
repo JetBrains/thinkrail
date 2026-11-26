@@ -31,6 +31,7 @@ test("Copy path actions on a Files tree row copy that row without opening it", a
 	await expect(readme).toBeVisible();
 
 	await readme.click({ button: "right" });
+	await expect(page.getByTestId("file-tree-reveal-os")).toBeVisible();
 	await expect(page.getByTestId("file-copy-relative-path")).toBeVisible();
 	await page.getByTestId("file-copy-path").click();
 	await expectClipboard(page, join(workspace.worktreePath, "README.md"));

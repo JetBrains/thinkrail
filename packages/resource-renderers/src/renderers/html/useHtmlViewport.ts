@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { useResourceEnvironment } from "../../host";
 import { type HtmlViewport, htmlViewport } from "./viewport";
 
 export function useHtmlViewport(
 	viewState: unknown,
 	onViewState: ((state: unknown) => void) | undefined,
 ): readonly [HtmlViewport, (viewport: HtmlViewport) => void] {
+	const fixed = useResourceEnvironment().htmlViewport;
 	const incoming = htmlViewport(viewState);
 	const [state, setState] = useState({ incoming, viewport: incoming });
 	let viewport = state.viewport;
@@ -16,5 +18,5 @@ export function useHtmlViewport(
 		setState({ incoming, viewport: next });
 		onViewState?.({ viewport: next });
 	};
-	return [viewport, select];
+	return [fixed ?? viewport, select];
 }

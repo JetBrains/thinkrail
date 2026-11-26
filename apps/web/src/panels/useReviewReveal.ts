@@ -1,5 +1,5 @@
 import type { GitFileChange, GitStatus } from "@thinkrail/contracts";
-import { focusFirstControl } from "@thinkrail/ui/focus";
+import { focusReviewCard } from "@thinkrail/resource-renderers";
 import {
 	type RefObject,
 	useCallback,
@@ -137,7 +137,7 @@ export function useReviewReveal({
 		card.scrollIntoView({ block: "center" });
 		if (settling.current?.focus) {
 			settling.current = { ...settling.current, focus: false };
-			focusFirstControl(card);
+			focusReviewCard(card);
 		}
 		return true;
 	}, []);

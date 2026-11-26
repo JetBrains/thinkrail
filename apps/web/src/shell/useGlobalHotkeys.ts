@@ -1,16 +1,48 @@
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { useEffect, useInsertionEffect, useRef } from "react";
-import { type KeybindingId, matchKeybinding } from "../keybindings";
+import {
+	runSuggestion,
+	type SuggestionKeyAction,
+	type SuggestionTarget,
+	suggestionAt,
+	suggestionKeyAction,
+	suggestionTargetFor,
+} from "../chat/suggestionTargets";
+import type { RegisteredPanel } from "../extensions";
+import {
+	type KeybindingId,
+	type KeyChord,
+	matchKeybinding,
+	matchLocal,
+	pressesChord,
+	type ResolvedKeybindings,
+	type SuggestionKeybindingId,
+} from "../keybindings";
+import { isTextEntryTarget } from "../lib";
 import { createDoubleShiftDetector } from "../search";
-import { useAppStore } from "../store";
+import { selectHistoryTarget, useAppStore } from "../store";
 import { openChatHistory } from "./chordActions";
-import { hasLayer, isInEditorFind, isInTerminal, MODAL_LAYER_SELECTOR } from "./shortcutLayers";
+import { deliverExtensionCommand, extensionHotkey, keyboardClaimed } from "./extensionCommands";
+import { openExtensionPanelHere, railCommandPanel } from "./extensionPanelHost";
+import { currentKeybindings } from "./keybindingState";
+import { matchShortcut, type ShortcutPlatform } from "./shortcutCommands";
+import {
+	hasLayer,
+	isInCodeEditor,
+	isInEditorFind,
+	isInTerminal,
+	MODAL_LAYER_SELECTOR,
+} from "./shortcutLayers";
+import { localScopesOf } from "./shortcutSurface";
+import { nativeShortcutPlatform } from "./useAppShortcuts";
 
-type ChordHandler = (binding: KeybindingId) => void;
+type ChordHandler = (binding: KeybindingId, event: KeyboardEvent) => void;
 
 type GlobalHotkeyActions = {
 	onProjects: ChordHandler;
 	onWorkspace?: ChordHandler;
 	onBottom?: ChordHandler;
+	onAllPanels?: ChordHandler;
 	onNewWorkspace?: ChordHandler;
 	onSearch?: ChordHandler;
 	onFindInFiles?: ChordHandler;
@@ -26,12 +58,14 @@ type GlobalHotkeyActions = {
 	onSplitRight?: ChordHandler;
 	onMoveTab?: ChordHandler;
 	onShortcuts?: ChordHandler;
+	onRecentWorkspace?: ChordHandler;
 };
 
 const CHORD_ACTIONS = {
 	"view.toggleLeft": "onProjects",
 	"view.toggleRight": "onWorkspace",
 	"view.toggleBottom": "onBottom",
+	"view.toggleAllPanels": "onAllPanels",
 	"view.files": "onFiles",
 	"view.changes": "onChanges",
 	"workspace.new": "onNewWorkspace",
@@ -56,7 +90,12 @@ const CHORD_ACTIONS = {
 	"tab.moveToPreviousGroup": "onMoveTab",
 	"tab.moveToNextGroup": "onMoveTab",
 	"shortcuts.open": "onShortcuts",
-} as const satisfies Record<Exclude<KeybindingId, "chat.history">, keyof GlobalHotkeyActions>;
+	"workspace.recentNext": "onRecentWorkspace",
+	"workspace.recentPrevious": "onRecentWorkspace",
+} as const satisfies Record<
+	Exclude<KeybindingId, "chat.history" | SuggestionKeybindingId>,
+	keyof GlobalHotkeyActions
+>;
 
 type GlobalHotkeyCommand = keyof typeof CHORD_ACTIONS;
 
@@ -66,26 +105,125 @@ type GlobalHotkeyEvent = Pick<
 > &
 	Partial<Pick<KeyboardEvent, "getModifierState">>;
 
-const SHELL_CTRL_CHORDS: ReadonlySet<KeybindingId> = new Set([
-	"focus.composer",
-	"group.splitRight",
-]);
+const CTRL_R: KeyChord = { code: "KeyR", key: "R", ctrl: true };
+
+const TERMINAL_KEYS: readonly KeyChord[] = [
+	{ code: "KeyL", key: "L", ctrl: true },
+	{ code: "Backslash", key: "\\", ctrl: true },
+	CTRL_R,
+];
+
+const EDITOR_FIND_KEYS: readonly KeyChord[] = [
+	{ code: "KeyW", key: "W", mod: true, alt: true, platform: "apple" },
+];
+
+function isGlobalHotkeyCommand(id: string | null): id is GlobalHotkeyCommand {
+	return id !== null && Object.hasOwn(CHORD_ACTIONS, id);
+}
+
+function elementKeeps(
+	event: GlobalHotkeyEvent,
+	platform: string,
+	inTerminal: boolean,
+	inEditorFind: boolean,
+): boolean {
+	return (
+		(inTerminal && pressesChord(event, TERMINAL_KEYS, platform)) ||
+		(inEditorFind && pressesChord(event, EDITOR_FIND_KEYS, platform))
+	);
+}
 
 export function globalHotkeyCommand(
 	event: GlobalHotkeyEvent,
 	actions: GlobalHotkeyActions,
 	modalOpen: boolean,
-	platform?: string,
+	keybindings: ResolvedKeybindings,
 	inTerminal = false,
 	inEditorFind = false,
 ): GlobalHotkeyCommand | null {
-	if (event.isComposing) return null;
-	const id = matchKeybinding(event, platform);
-	if (id === null || id === "chat.history") return null;
+	if (event.isComposing || elementKeeps(event, keybindings.platform, inTerminal, inEditorFind)) {
+		return null;
+	}
+	const id = matchKeybinding(keybindings, event);
+	if (!isGlobalHotkeyCommand(id)) return null;
 	if (modalOpen && id !== "tab.close") return null;
-	if (SHELL_CTRL_CHORDS.has(id) && inTerminal && event.ctrlKey) return null;
-	if (id === "tab.close" && inEditorFind && event.metaKey) return null;
 	return actions[CHORD_ACTIONS[id]] ? id : null;
+}
+
+interface HotkeyContext {
+	readonly keybindings: ResolvedKeybindings;
+	readonly desktop: ShortcutPlatform;
+	readonly modalOpen: boolean;
+	readonly textEntry: boolean;
+	readonly localScopes: readonly string[];
+	readonly inTerminal: boolean;
+	readonly inEditorFind: boolean;
+	readonly inCodeEditor: boolean;
+	readonly hasSuggestion: (index: number) => boolean;
+	readonly railPanel?: (extension: string, id: string) => RegisteredPanel | null | undefined;
+}
+
+type HotkeyRoute =
+	| { readonly kind: "extension"; readonly extension: string; readonly id: string }
+	| { readonly kind: "panel"; readonly panel: RegisteredPanel }
+	| { readonly kind: "command"; readonly id: GlobalHotkeyCommand }
+	| ({ readonly kind: "suggestion" } & SuggestionKeyAction)
+	| { readonly kind: "history" };
+
+function suggestionHotkey(
+	event: GlobalHotkeyEvent & Pick<KeyboardEvent, "keyCode">,
+	context: HotkeyContext,
+): SuggestionKeyAction | null {
+	if (isImeComposing(event) || context.modalOpen || context.inTerminal || context.inCodeEditor) {
+		return null;
+	}
+	const action = suggestionKeyAction(matchKeybinding(context.keybindings, event));
+	return action !== null && context.hasSuggestion(action.index) ? action : null;
+}
+
+export function routeHotkey(
+	event: GlobalHotkeyEvent & Pick<KeyboardEvent, "keyCode">,
+	actions: GlobalHotkeyActions,
+	context: HotkeyContext,
+): HotkeyRoute | null {
+	const { keybindings, inTerminal, inEditorFind } = context;
+	if (matchShortcut(event, context.desktop, () => inTerminal) !== null) return null;
+	const { textEntry } = context;
+	if (matchLocal(keybindings, context.localScopes, event, { textEntry }) !== null) return null;
+	const extension = extensionHotkey(event, keybindings, textEntry);
+	if (extension) {
+		const panel = context.railPanel?.(extension.extension, extension.id);
+		if (panel === undefined) return { kind: "extension", ...extension };
+		return panel && !context.modalOpen ? { kind: "panel", panel } : null;
+	}
+	const id = globalHotkeyCommand(
+		event,
+		actions,
+		context.modalOpen,
+		keybindings,
+		inTerminal,
+		inEditorFind,
+	);
+	if (id) return { kind: "command", id };
+	const suggestion = suggestionHotkey(event, context);
+	if (suggestion) return { kind: "suggestion", ...suggestion };
+	if (matchKeybinding(keybindings, event) !== "chat.history") return null;
+	if (elementKeeps(event, keybindings.platform, inTerminal, inEditorFind)) return null;
+	if (isImeComposing(event) && !pressesChord(event, [CTRL_R], keybindings.platform)) return null;
+	return { kind: "history" };
+}
+
+function chipsFor(target: EventTarget | null): () => SuggestionTarget | null {
+	let resolved: SuggestionTarget | null | undefined;
+	return () => {
+		if (resolved === undefined) {
+			resolved = suggestionTargetFor(
+				target instanceof Node ? target : null,
+				selectHistoryTarget(useAppStore.getState())?.sessionId ?? null,
+			);
+		}
+		return resolved;
+	};
 }
 
 function hasOpenModal(): boolean {
@@ -110,33 +248,48 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 	});
 
 	useEffect(() => {
+		const desktop = nativeShortcutPlatform();
 		const onKeyDown = (event: KeyboardEvent) => {
+			if (keyboardClaimed()) return;
+			const target = event.composedPath()[0] ?? event.target;
 			const current = actionsRef.current;
-			const command = globalHotkeyCommand(
-				event,
-				current,
-				hasOpenModal(),
-				undefined,
-				isInTerminal(event.target),
-				isInEditorFind(event.target),
-			);
-			if (command) {
-				event.preventDefault();
-				event.stopPropagation();
-				if (!event.repeat) current[CHORD_ACTIONS[command]]?.(command);
+			const chips = chipsFor(event.target);
+			const route = routeHotkey(event, current, {
+				keybindings: currentKeybindings(),
+				desktop,
+				modalOpen: hasOpenModal(),
+				textEntry: isTextEntryTarget(target),
+				localScopes: localScopesOf(target instanceof Element ? target : null),
+				inTerminal: isInTerminal(event.target),
+				inEditorFind: isInEditorFind(event.target),
+				inCodeEditor: isInCodeEditor(event.target),
+				hasSuggestion: (index) => suggestionAt(chips(), index) !== undefined,
+				railPanel: railCommandPanel,
+			});
+			if (route === null) return;
+			event.preventDefault();
+			if (route.kind === "extension") {
+				event.stopImmediatePropagation();
+				if (!event.repeat) deliverExtensionCommand(route.extension, route.id);
 				return;
 			}
-
-			if (matchKeybinding(event) !== "chat.history") return;
-			if (isInTerminal(event.target)) return;
-			event.preventDefault();
 			event.stopPropagation();
-			if (!useAppStore.getState().searchOpen) openChatHistory();
+			if (route.kind === "panel") {
+				if (!event.repeat) openExtensionPanelHere(route.panel);
+			} else if (route.kind === "command") {
+				if (!event.repeat) current[CHORD_ACTIONS[route.id]]?.(route.id, event);
+			} else if (route.kind === "suggestion") {
+				const owner = chips();
+				if (!event.repeat && owner) runSuggestion(owner, route);
+			} else if (!useAppStore.getState().searchOpen) openChatHistory();
 		};
 		const detector = createDoubleShiftDetector();
-		const onDoubleShiftKeyDown = (event: KeyboardEvent) => detector.keydown(event);
+		const onDoubleShiftKeyDown = (event: KeyboardEvent) => {
+			if (keyboardClaimed()) detector.reset();
+			else detector.keydown(event);
+		};
 		const onDoubleShiftKeyUp = (event: KeyboardEvent) => {
-			if (!detector.keyup(event)) return;
+			if (!detector.keyup(event) || keyboardClaimed()) return;
 			const state = useAppStore.getState();
 			if (!state.doubleShiftSearch || hasModalOtherThanSearch()) return;
 			if (state.searchOpen) state.closeSearch();

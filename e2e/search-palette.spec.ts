@@ -9,15 +9,19 @@ import {
 	WS_CHANNELS,
 	type WsClientMessage,
 	type WsParams,
+	type WsResult,
 } from "@thinkrail/contracts";
 import type { AskUserQuestionArgs } from "@thinkrail/pi-ask-user-question/core";
 import {
+	closeSettings,
 	createWorkspaceViaDialog,
 	defaultWorkspaceRow,
 	enterDefaultWorkspace,
 	openFixtureProject,
 	pressPlatformShortcut,
+	worktreeRow,
 } from "./fixtures/app";
+import { resetKeybindings, setKeybindings } from "./fixtures/keybindings";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 import { E2eWire } from "./fixtures/wire";
@@ -204,6 +208,20 @@ test("a chat without a project waits labelled No project, and a chat opened from
 	} finally {
 		for (const s of [...seeded, chatSession]) rmSync(s.path, { force: true });
 	}
+});
+
+test("a workspace visited while its chat is still empty is Recent", async ({ page }) => {
+	await openFixtureProject(page);
+	const first = await createWorkspaceViaDialog(page);
+	const second = await createWorkspaceViaDialog(page);
+	await worktreeRow(page, first.name).click();
+	await expect(worktreeRow(page, first.name)).toHaveAttribute("data-active", "true");
+	await worktreeRow(page, second.name).click();
+	await expect(worktreeRow(page, second.name)).toHaveAttribute("data-active", "true");
+	await openPalette(page);
+	const recent = page.locator('[data-testid="search-section"][data-section="recent"]');
+	await expect(recent.locator(`[data-item-id="workspace:${first.id}"]`)).toBeVisible();
+	await expect(recent.locator(`[data-item-id="workspace:${second.id}"]`)).toHaveCount(0);
 });
 
 test("typing finds chats by title, a paste is cut to the host's query length, and Escape clears before it closes", async ({
@@ -448,7 +466,7 @@ test("double Shift toggles the palette and can be turned off in the Keyboard set
 	await expect(toggle).toHaveAttribute("aria-checked", "true");
 	await toggle.click();
 	await expect(toggle).toHaveAttribute("aria-checked", "false");
-	await settings.getByRole("button", { name: "Close" }).click();
+	await settings.getByRole("button", { name: "Close", exact: true }).click();
 	await expect(settings).toBeHidden();
 
 	await doubleShift(page);
@@ -485,7 +503,29 @@ test("the double-Shift row opens the Keyboard settings, and Ctrl+R stays inert u
 	await expect(palette(page)).toBeHidden();
 	await expect(page.getByTestId("settings-dialog")).toBeVisible();
 	await expect(page.getByTestId("settings-nav-keyboard")).toHaveAttribute("data-active", "true");
-	await expect(page.getByTestId("settings-double-shift")).toBeVisible();
+	const setting = page.locator('[data-setting-id="double-shift"]');
+	await expect(setting).toBeFocused();
+	await expect(setting).toHaveAttribute("data-setting-flash", "");
+});
+
+test("a setting's own palette row opens Settings on that setting, focused and flashed", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await openPalette(page);
+	await page.getByTestId("search-input").fill(">chat line width");
+	const row = page.locator('[data-testid="search-row"][data-item-id="setting:chat-line-width"]');
+	await expect(row).toBeVisible();
+	await expect(row).toContainText("Settings › Text & fonts");
+	await row.click();
+	await expect(palette(page)).toBeHidden();
+	await expect(page.getByTestId("settings-nav-text")).toHaveAttribute("data-active", "true");
+	const setting = page.locator('[data-setting-id="chat-line-width"]');
+	await expect(setting).toBeFocused();
+	await expect(setting).toHaveAttribute("data-setting-flash", "");
+	await page.keyboard.press("Enter");
+	await expect(page.getByTestId("chat-line-width-input")).toBeFocused();
+	await closeSettings(page);
 });
 
 test("an active IME owns Escape, arrows, Tab and Enter in the palette input", async ({ page }) => {
@@ -570,6 +610,56 @@ test("Tab, Alt+digit and the chips switch the scope and write its prefix", async
 	await page.keyboard.press("ControlOrMeta+Alt+KeyI");
 	await pressPlatformShortcut(page, "i");
 	await expect(preview).toHaveAttribute("aria-pressed", "false");
+});
+
+test.describe("rebound palette keys", () => {
+	test.afterEach(async ({ page }) => resetKeybindings(page));
+
+	test("a rebound preview chord toggles the preview, shows on its button, and Mod+I no longer does", async ({
+		page,
+	}) => {
+		await openFixtureProject(page);
+		await setKeybindings(page, { "palette.preview": ["Alt+KeyP"] });
+		await openPalette(page);
+		const preview = page.getByTestId("search-preview-toggle");
+		await expect(preview.locator("kbd")).toHaveText(["Alt", "P"]);
+		const initial = await preview.getAttribute("aria-pressed");
+		const flipped = initial === "true" ? "false" : "true";
+
+		await page.keyboard.press("Alt+KeyP");
+		await expect(preview).toHaveAttribute("aria-pressed", flipped);
+		await pressPlatformShortcut(page, "i");
+		await page.keyboard.press("Alt+KeyP");
+		await expect(preview).toHaveAttribute("aria-pressed", initial ?? "false");
+	});
+
+	test("a preview rebound onto Alt+Tab and Alt+Esc toggles it instead of changing scope or closing", async ({
+		page,
+	}) => {
+		await openFixtureProject(page);
+		await setKeybindings(page, { "palette.preview": ["Alt+Tab", "Alt+Escape"] });
+		await openPalette(page);
+		const input = page.getByTestId("search-input");
+		await input.fill("auth");
+		const preview = page.getByTestId("search-preview-toggle");
+		const initial = (await preview.getAttribute("aria-pressed")) ?? "false";
+		const flipped = initial === "true" ? "false" : "true";
+
+		await page.keyboard.press("Alt+Tab");
+		await expect(preview).toHaveAttribute("aria-pressed", flipped);
+		await expect(chip(page, "all")).toHaveAttribute("aria-pressed", "true");
+		await expect(input).toHaveValue("auth");
+
+		await page.keyboard.press("Alt+Escape");
+		await expect(palette(page)).toBeVisible();
+		await expect(preview).toHaveAttribute("aria-pressed", initial);
+		await expect(input).toHaveValue("auth");
+
+		await page.keyboard.press("Tab");
+		await expect(chip(page, "work")).toHaveAttribute("aria-pressed", "true");
+		await page.keyboard.press("Escape");
+		await expect(input).toHaveValue("");
+	});
 });
 
 test("host search: a file by name opens as a tab, a spec section by its words opens in the Specs tool", async ({
@@ -887,11 +977,17 @@ test("the preview pane reads a file only under its cap, and a refresh after it g
 	const original = readFileSync(notes);
 	const reads: { maxBytes?: number | undefined; refused: boolean; grown: boolean }[] = [];
 	let grown = false;
+	let searchSettled = false;
 	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
 		const server = socket.connectToServer();
 		const asked = new Map<string, { maxBytes?: number | undefined; grown: boolean }>();
+		const searching = new Set<string>();
 		socket.onMessage((message) => {
 			const frame = JSON.parse(String(message)) as WsClientMessage;
+			if ("method" in frame && frame.method === "search.query") {
+				searching.add(frame.id);
+				searchSettled = false;
+			}
 			if ("method" in frame && frame.method === "fs.readFile") {
 				const params = frame.params as WsParams<"fs.readFile">;
 				if (params.path === "notes.txt") asked.set(frame.id, { maxBytes: params.maxBytes, grown });
@@ -899,7 +995,17 @@ test("the preview pane reads a file only under its cap, and a refresh after it g
 			server.send(message);
 		});
 		server.onMessage((message) => {
-			const frame = JSON.parse(String(message)) as { id?: string; errorCode?: string };
+			const frame = JSON.parse(String(message)) as {
+				id?: string;
+				errorCode?: string;
+				result?: unknown;
+			};
+			if (frame.id && searching.delete(frame.id)) {
+				const groups = (frame.result as WsResult<"search.query"> | undefined)?.groups ?? [];
+				searchSettled =
+					searching.size === 0 &&
+					groups.every((group) => group.state !== "indexing" && group.state !== "refreshing");
+			}
 			const read = frame.id ? asked.get(frame.id) : undefined;
 			if (frame.id && read) {
 				reads.push({ ...read, refused: frame.errorCode === "FILE_TOO_LARGE" });
@@ -919,6 +1025,7 @@ test("the preview pane reads a file only under its cap, and a refresh after it g
 		await pressPlatformShortcut(page, "i");
 		const preview = page.getByTestId("search-file-preview");
 		await expect(preview).toContainText("plain-text-fixture");
+		await expect.poll(() => searchSettled, { timeout: 15_000 }).toBe(true);
 		grown = true;
 		writeFileSync(notes, "x".repeat(MAX_SEARCH_PREVIEW_BYTES + 1));
 		await expect

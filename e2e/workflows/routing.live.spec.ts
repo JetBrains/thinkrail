@@ -10,6 +10,7 @@ const DIRECT_WORK_FORBIDDEN_SKILLS = [
 	"brainstorming",
 	"setting-up-a-project",
 	"shipping-a-pr",
+	"reviewing-a-pr",
 	"spec-graph",
 	"todos",
 	...SETUP_WORKERS,
@@ -129,6 +130,26 @@ workflowTest(
 		judge: {
 			rubric: [
 				"The agent treated checking an existing PR as PR lifecycle work and routed to shipping-a-pr.",
+			],
+		},
+	}),
+);
+
+workflowTest(
+	defineScenario({
+		name: "root router: reviewing someone else's PR routes to reviewing-a-pr",
+		skill: "choosing-a-workflow",
+		workspace: "code-only",
+		entry: { prompt: "Review PR 123 for me." },
+		stopWhen: [signals.skillRead("reviewing-a-pr")],
+		forbid: [signals.skillRead("shipping-a-pr"), signals.skillRead("brainstorming")],
+		expect: [
+			checks.expectSkillRead("choosing-a-workflow"),
+			checks.expectOrdering("choosing-a-workflow", "reviewing-a-pr"),
+		],
+		judge: {
+			rubric: [
+				"The agent treated reviewing a pull request it is not shipping as its own route and read reviewing-a-pr, not shipping-a-pr.",
 			],
 		},
 	}),

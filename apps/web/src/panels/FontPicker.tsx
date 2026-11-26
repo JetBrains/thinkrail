@@ -27,6 +27,12 @@ import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { type FontProbe, previewStack } from "@/fonts";
 import {
+	focusUnitStop,
+	SETTINGS_TAG,
+	SettingsNotice,
+	useSettingsDialogContainer,
+} from "@/settingsKit";
+import {
 	choiceKey,
 	displayFamily,
 	type FontOption,
@@ -34,9 +40,6 @@ import {
 	type InstalledFonts,
 	isRoleDefault,
 } from "./fontCatalog";
-import { SETTINGS_TAG } from "./SettingsGroup";
-import { SettingsNotice } from "./SettingsNotice";
-import { useSettingsDialogContainer } from "./settingsDialogContainer";
 
 const WarningIcon = withIconClass(Alert, "text-feedback-warning");
 
@@ -83,7 +86,7 @@ function InstalledStatus({ state, onRetry }: { state: InstalledFonts; onRetry: (
 					variant="warning"
 					testId="font-installed-failed"
 					action={
-						<Button variant="outline" size="m" onClick={onRetry}>
+						<Button variant="outline" size="m" tabIndex={0} onClick={onRetry}>
 							{t("settings.appearance.fonts.picker.retry")}
 						</Button>
 					}
@@ -264,22 +267,27 @@ export function FontPicker({
 }) {
 	const container = useSettingsDialogContainer();
 	const [open, setOpen] = useState(false);
+	const trigger = useRef<HTMLButtonElement>(null);
+	const pointerLeft = useRef(false);
 	return (
 		<Popover
 			open={open}
 			onOpenChange={(next) => {
+				if (next && shared.disabled) return;
 				setOpen(next);
 				if (next) shared.onOpen();
 			}}
 		>
 			<PopoverTrigger asChild>
 				<Button
+					ref={trigger}
 					variant="outline"
 					size="l"
 					iconRight={ChevronDown}
 					{...(unavailable ? { iconLeft: WarningIcon } : {})}
 					aria-label={label}
-					disabled={shared.disabled}
+					aria-disabled={shared.disabled || undefined}
+					tabIndex={0}
 					data-testid={`${shared.testId}-trigger`}
 					data-font-family={family}
 					className="w-240"
@@ -300,6 +308,16 @@ export function FontPicker({
 				collisionBoundary={container}
 				collisionPadding={8}
 				className={PICKER_POPOVER}
+				onInteractOutside={() => {
+					pointerLeft.current = true;
+				}}
+				onCloseAutoFocus={(event) => {
+					const left = pointerLeft.current;
+					pointerLeft.current = false;
+					if (left || !trigger.current) return;
+					event.preventDefault();
+					focusUnitStop<HTMLElement>(trigger.current);
+				}}
 			>
 				<FontList
 					{...shared}
@@ -351,8 +369,11 @@ export function FallbackChips({
 							})}
 							size="s"
 							variant="ghost"
-							disabled={shared.disabled}
-							onClick={() => onChange(values.filter((_, other) => other !== index))}
+							tabIndex={0}
+							aria-disabled={shared.disabled || undefined}
+							onClick={() => {
+								if (!shared.disabled) onChange(values.filter((_, other) => other !== index));
+							}}
 						/>
 					</span>
 				);
@@ -361,6 +382,7 @@ export function FallbackChips({
 				<Popover
 					open={open}
 					onOpenChange={(next) => {
+						if (next && shared.disabled) return;
 						setOpen(next);
 						if (next) shared.onOpen();
 					}}
@@ -371,7 +393,8 @@ export function FallbackChips({
 							size="m"
 							iconLeft={Add}
 							aria-label={addLabel}
-							disabled={shared.disabled}
+							aria-disabled={shared.disabled || undefined}
+							tabIndex={0}
 							data-testid={`${shared.testId}-add`}
 						>
 							{values.length === 0

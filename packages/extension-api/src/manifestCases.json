@@ -1,0 +1,583 @@
+[
+	{
+		"label": "the documented manifest",
+		"packageJson": {
+			"name": "thinkrail-ext-weather",
+			"version": "1.2.0",
+			"description": "Forecasts in chat.",
+			"author": {
+				"name": "Jane Doe"
+			},
+			"keywords": ["thinkrail-extension"],
+			"thinkrail": {
+				"api": "1.0",
+				"server": "./server/index.ts",
+				"web": "./dist/web.js",
+				"styles": "./dist/web.css",
+				"title": "Weather",
+				"image": "https://example.com/preview.png"
+			}
+		},
+		"valid": true
+	},
+	{
+		"label": "a server half alone",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"server": "server/index.ts"
+			}
+		},
+		"valid": true
+	},
+	{
+		"label": "a web half alone, as .mjs",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"web": "./dist/web.mjs"
+			}
+		},
+		"valid": true
+	},
+	{
+		"label": "a scoped package name",
+		"packageJson": {
+			"name": "@jane/thinkrail-weather",
+			"thinkrail": {
+				"api": "1.0",
+				"web": "dist/web.js"
+			}
+		},
+		"valid": true
+	},
+	{
+		"label": "a JavaScript server half",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"server": "./server/index.mjs"
+			}
+		},
+		"valid": true
+	},
+	{
+		"label": "an older minor",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.1",
+				"server": "server/index.ts"
+			}
+		},
+		"valid": true
+	},
+	{
+		"label": "another major",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "2.13",
+				"server": "server/index.ts"
+			}
+		},
+		"valid": true
+	},
+	{
+		"label": "an api with leading zeros",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "01.00",
+				"server": "server/index.ts"
+			}
+		},
+		"valid": true
+	},
+	{
+		"label": "a path with empty and dot segments",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"web": "./dist//./web.js"
+			}
+		},
+		"valid": true
+	},
+	{
+		"label": "a path with a trailing slash",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"web": "dist/web.js/"
+			}
+		},
+		"valid": true
+	},
+	{
+		"label": "an unknown manifest key",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"server": "server/index.ts",
+				"tools": ["x"]
+			}
+		},
+		"valid": true
+	},
+	{
+		"label": "a title with surrounding spaces",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"server": "server/index.ts",
+				"title": " Weather "
+			}
+		},
+		"valid": true
+	},
+	{
+		"label": "an image with surrounding spaces",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"server": "server/index.ts",
+				"image": " https://example.com/preview.png "
+			}
+		},
+		"valid": true
+	},
+	{
+		"label": "a package.json that is not an object",
+		"packageJson": null,
+		"valid": false
+	},
+	{
+		"label": "a package.json that is an array",
+		"packageJson": [],
+		"valid": false
+	},
+	{
+		"label": "no package name",
+		"packageJson": {
+			"thinkrail": {
+				"api": "1.0",
+				"server": "server/index.ts"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "an empty package name",
+		"packageJson": {
+			"name": "",
+			"thinkrail": {
+				"api": "1.0",
+				"server": "server/index.ts"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "a package name npm refuses",
+		"packageJson": {
+			"name": "Bad Name",
+			"thinkrail": {
+				"api": "1.0",
+				"server": "server/index.ts"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "no manifest",
+		"packageJson": {
+			"name": "thinkrail-ext-x"
+		},
+		"valid": false
+	},
+	{
+		"label": "a manifest that is a string",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": "yes"
+		},
+		"valid": false
+	},
+	{
+		"label": "a manifest that is an array",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": ["1.0"]
+		},
+		"valid": false
+	},
+	{
+		"label": "no api",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"server": "server/index.ts"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "a numeric api",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": 1,
+				"server": "server/index.ts"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "an api without a minor",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1",
+				"server": "server/index.ts"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "an api with a patch",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0.0",
+				"server": "server/index.ts"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "an api with a prefix",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "v1.0",
+				"server": "server/index.ts"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "an api with a space",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": " 1.0",
+				"server": "server/index.ts"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "no half",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "only a title",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"title": "Only a title"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "styles without a web half",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"server": "server/index.ts",
+				"styles": "dist/web.css"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "an absolute path",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"server": "/etc/x.ts"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "a path that escapes the package",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"server": "../x.ts"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "a path with a .. segment that stays inside",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"web": "dist/../dist/web.js"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "a path with a backslash",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"web": "dist\\web.js"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "a Windows drive path",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"web": "C:/dist/web.js"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "a file URL",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"web": "file:///dist/web.js"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "an https URL as a path",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"web": "dist/web.js",
+				"styles": "https://cdn.example/web.css"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "a path with a NUL byte",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"web": "dist/web\u0000.js"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "an empty path",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"server": ""
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "a path naming the package root",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"web": "./"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "a numeric path",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"server": 1
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "a web half that is a stylesheet",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"web": "dist/web.css"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "a web half that is TypeScript source",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"web": "web/index.ts"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "styles that are not .css",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"web": "dist/web.js",
+				"styles": "dist/web.scss"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "a server half that is not a module",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"server": "server/index.json"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "a server half without an extension",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"server": "server/index"
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "an empty title",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"server": "server/index.ts",
+				"title": ""
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "a blank title",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"server": "server/index.ts",
+				"title": "  "
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "a numeric title",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"server": "server/index.ts",
+				"title": 5
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "an image that is an object",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"server": "server/index.ts",
+				"image": {}
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "an empty image",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"server": "server/index.ts",
+				"image": ""
+			}
+		},
+		"valid": false
+	},
+	{
+		"label": "an http image, which no catalog shows",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"server": "server/index.ts",
+				"image": "http://example.com/preview.png"
+			}
+		},
+		"valid": true
+	},
+	{
+		"label": "an image that is not a URL, which no catalog shows",
+		"packageJson": {
+			"name": "thinkrail-ext-x",
+			"thinkrail": {
+				"api": "1.0",
+				"server": "server/index.ts",
+				"image": "preview.png"
+			}
+		},
+		"valid": true
+	}
+]

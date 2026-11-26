@@ -32,6 +32,36 @@ describe("slash command matching", () => {
 		expect(matchSlashCommands("/skill arg", commands)).toEqual([]);
 	});
 
+	it("ranks a name that starts with the query above one that only contains it, ties in catalog order", () => {
+		const commands = [
+			"skill:cloudflare-one-migrations",
+			"skill:comprehensive-review",
+			"skill:cross-review",
+			"skill:release-socials",
+			"skill:research",
+			"skill:reflection",
+			"skill:technical-premortem",
+			"skill:cloudflare",
+			"skill:zen-review",
+			"skill:reviewing-a-pr",
+			"review",
+		].map(command);
+		const names = (query: string) => matchSlashCommands(query, commands).map((item) => item.name);
+		expect(names("/re")).toHaveLength(8);
+		expect(names("/re").slice(0, 5)).toEqual(
+			expect.arrayContaining(["skill:reviewing-a-pr", "review", "skill:research"]),
+		);
+		expect(names("/re")).not.toContain("skill:cloudflare-one-migrations");
+		expect(names("/review")[0]).toBe("review");
+		expect(names("/review")).toContain("skill:reviewing-a-pr");
+		expect(names("/review").indexOf("skill:reviewing-a-pr")).toBeLessThan(
+			names("/review").indexOf("skill:comprehensive-review"),
+		);
+		expect(names("/skill:rev")[0]).toBe("skill:reviewing-a-pr");
+		expect(names("/rvwng")[0]).toBe("skill:reviewing-a-pr");
+		expect(names("/").map((name) => name)).toEqual(commands.slice(0, 8).map((item) => item.name));
+	});
+
 	it("uses one insertion format for every caller", () => {
 		expect(selectedSlashCommandValue(command("skill:review"))).toBe("/skill:review ");
 	});

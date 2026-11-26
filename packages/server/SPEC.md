@@ -50,7 +50,7 @@ e2e).
   deliberate second entry that avoids evaluating `host` (Bun-only: `Bun.serve`, `bun-pty`) under the
   node-run e2e worker. Not for `apps/*` use — the web/CLI boundary rules are unchanged.
 - **Allowed deps:** `contracts` (types + WS constants), `shared` (`shellEnv` and the Central adapter), `bun-pty`,
-  `@earendil-works/pi-coding-agent` + `@earendil-works/pi-ai` (runtime), `extension-api` (`./server` types)
+  `@earendil-works/pi-coding-agent` + `@earendil-works/pi-ai` (runtime), `extension-api` (`./server` types; `./installed`, the manifest reader, from `extensions/installed` only)
   + every `thinkrail-extensions/*` **server subpath only** (the registry's composition edge; the host no
   longer depends directly on a pi package an extension owns), `pino` + its pretty/rolling
   destinations (host diagnostics), `jsonc-parser` (targeted shared Pi configuration edits), Bun/Node.
@@ -83,7 +83,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `git` | the `git(cwd, args)` runner + worktree status/diff vs base + branch list | [git/SPEC.md](src/git/SPEC.md) |
 | `subprocess` | `runBounded(argv, …)`: one child, one budget, killed by process group on expiry | [subprocess/SPEC.md](src/subprocess/SPEC.md) |
 | `github` | read-only local `gh` auth status (shell-out) for the New-Workspace surface | [github/SPEC.md](src/github/SPEC.md) |
-| `branch-review` | best-effort GitHub PR / GitLab MR for a workspace branch, with an open PR's checks, review decision, and merge state | [branch-review/SPEC.md](src/branch-review/SPEC.md) |
+| `branch-review` | best-effort GitHub PR / GitLab MR for a workspace branch, with an open PR's checks, review decision, and merge state; a project's open GitHub PRs for the New Workspace picker | [branch-review/SPEC.md](src/branch-review/SPEC.md) |
 | `pr` | `pr.open` / `workspace.push`: push the workspace branch + open/update its GitHub PR, body from the plan, commits, or a template; ready / merge / reopen it and delete its remote branch | [pr/SPEC.md](src/pr/SPEC.md) |
 | `fs` | read dirs/files inside a worktree (path-contained), the Files tree's copy, rename, move + delete-to-trash, and the one byte classification (text/mime/sha-256) | [fs/SPEC.md](src/fs/SPEC.md) |
 | `changes` | host-owned revert of a hunk or a file's whole change in the worktree, with undo receipts | [changes/SPEC.md](src/changes/SPEC.md) |
@@ -98,7 +98,8 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `terminal` | workspace-scoped `bun-pty` terminals | [terminal/SPEC.md](src/terminal/SPEC.md) |
 | `agent` | in-process pi sessions + current/retained runtime generations + one-shot completions | [agent/SPEC.md](src/agent/SPEC.md) |
 | `images` | image bytes off the WebSocket: `ImageContent` → `WireImage` reference projection, the bounded reference cache, and `GET /images/…` | [images/SPEC.md](src/images/SPEC.md) |
-| `extensions` | the server registry of ThinkRail extensions (`@thinkrail/ext-*/server`): ordered descriptors + public specifiers, inline flattening, owner-scoped skill resolution | [extensions/SPEC.md](src/extensions/SPEC.md) |
+| `extensions` | the server registry of ThinkRail extensions — built in (`@thinkrail/ext-*/server`) and installed at runtime (`installed/`: `extensions.json`, install root, descriptor loader, web-half assets): the runtime list, inline flattening, owner-scoped skill resolution | [extensions/SPEC.md](src/extensions/SPEC.md) |
+| `extension-catalog` | the community extension catalog (`catalog.json`) fetched, validated and cached for in-app Browse (`extensions.browse`) | [extension-catalog/SPEC.md](src/extension-catalog/SPEC.md) |
 | `auth` | provider status/login plus native JetBrains Central lifecycle and quota orchestration | [auth/SPEC.md](src/auth/SPEC.md) |
 | `assist` | ad-hoc one-shot tasks (plan summaries, PR descriptions) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
 | `analytics` | always-on basic events + sanitized error reports, and preference-controlled optional insights → PostHog sink (privacy contract in its spec) | [analytics/SPEC.md](src/analytics/SPEC.md) |
@@ -117,10 +118,10 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `fonts`, `speech`, `history`, `search`, `templates`, `analytics`, `feedback`, `artifacts`, `trash` (a chat's folder), `log`, `persistence` (`dataDir`, for the crash report), `images` (the `/images` route, its source seam, and forgetting a deleted chat)
+- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `fonts`, `speech`, `history`, `search`, `templates`, `analytics`, `feedback`, `artifacts`, `extension-catalog`, `trash` (a chat's folder), `log`, `persistence` (`dataDir`, for the crash report), `images` (the `/images` route, its source seam, and forgetting a deleted chat)
 - `search` → `contracts`, `git` (`gitAsyncStream` for `ls-files` and `grep`), `log`; `history`, `spec` and `todos` for types only — `host/search.ts` injects every reader (projects, workspace records, the history index's `sessions()`, spec snapshots, stored plans, the file check `fs.readableFileSize` and the text check `fs.classifyBytes`), the Default provisioning (`workspaces.listWorkspaces`) and the root watch (`watch.ensureWatch`, prewarm); it opens no file itself but the bounded text search's direct read of a chat folder's walked files (`git grep` reads a repository's) — files and specs preview client-side over `fs.readFile`
 - `workspaces` → `projects`, `git`, `persistence`
-- `branch-review` → `git`, `subprocess`
+- `branch-review` → `git`, `subprocess`, `github` (`ghSetupProblem` — the named reason a pull-request listing failed)
 - `pr` → `workspaces`, `git`, `todos`, `branch-review` (provider detection + gh-output parsing + the shared CLI runner), `github` (`ghSetupProblem` — the named compare-fallback reason)
 - `projects` → `git` (shared runner), `persistence`
 - `git` → `subprocess` (every child that talks to a network or another CLI), `fs` (`resourceMeta`/`decodeText` — a diff side's content classification is the same one `fs.readFile` reports)
@@ -150,13 +151,18 @@ the host from env via `bootHost` for dev/e2e.
 - `agent` → `log`, `persistence` (`dataDir` for delegation plus session lifecycle/receipt load-save operations),
   `trash` (a chat delete's recoverable transcript move), `resourceHistory` (records its owners' lifecycle and reads
   what they no longer hold), `extensions` (the registry's flattened parent and
-  child inline extensions plus, in unbundled dev, its skill roots), `history` (`displayTranscript` — the
+  child inline extensions plus, in unbundled dev, its skill roots; the install-time kind rule and the
+  shared jiti env lock), `history` (`displayTranscript` — the
   JSONL display projection `getMessages` shares with search so compaction keeps pre-cut turns reviewable),
   `images` (projects every host→page image at its wire seams, and `imageDimensions` for the oversized-image
   guard) — otherwise the pi runtime alone; auth
   passes desired opaque Central paths through its public generation seam
-- `extensions` → `@thinkrail/ext-*/server` + `@thinkrail/extension-api/server` (external); `buildSupport.ts`
-  (build-only) also reads it to stage the extensions' skill roots
+- `extensions` → `@thinkrail/ext-*/server` + `@thinkrail/extension-api/server` (external), `log`; its
+  `installed/` sub-module also → `@thinkrail/extension-api/installed` (the manifest reader), `@earendil-works/pi-coding-agent` values (installer, public loader) and
+  `typebox` (external); the data dir arrives as a parameter from `host`, so there is no `persistence`
+  edge; `buildSupport.ts` (build-only) reads only the built-ins to stage their skill roots
+- `extension-catalog` → `contracts` (types), `@thinkrail/shared/codedError`; a leaf whose only outbound request is
+  the catalog URL — `host/extensions.ts` passes it the installed names from `extensions`, so it imports neither
 - `resourceHistory` → `persistence` (`dataDir`), `log`
 - `artifacts` → `persistence` (`dataDir`, workspace records), `git` (`gitAsync` — the ignored-root listing), `trash` (a discarded kept copy), `log`; it never imports `agent` or `watch` — `host` feeds it session events and change nudges, the same composition as `turns`
 - `persistence`, `dialog`, `history`, `templates`, `subprocess`, `trash`, `images` → (leaves)

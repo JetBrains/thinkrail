@@ -23,9 +23,20 @@ import {
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { Switch } from "@thinkrail/ui/switch";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { formatContext } from "@/chat/modelPicker";
+import {
+	SETTINGS_LIST_PRIMARY,
+	SETTINGS_LIST_ROW,
+	SettingsGroup,
+	SettingsLine,
+	SettingsList,
+	SettingsRow,
+	useSettingsDraft,
+	useSettingsListRow,
+} from "@/settingsKit";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -51,9 +62,7 @@ import {
 	tokenRange,
 	useModelContextSettings,
 } from "./ModelContextSettings";
-import { SettingsGroup } from "./SettingsGroup";
-import { SettingsSwitch } from "./SettingsSwitch";
-import { keepSettingsDraftOnEscape, useSettingsDraft } from "./settingsDraft";
+import { SETTING, settingProps } from "./settingsCatalog";
 
 const INPUT_CLASS =
 	"h-32 w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg px-8 tr-text-ui text-text-default transition-colors placeholder:text-text-muted focus:border-control-border-active focus-visible:focus-ring disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text";
@@ -61,6 +70,10 @@ const INPUT_CLASS =
 const MODEL_PAGE = 50;
 
 type Status = { tone: "ok" | "error"; text: string } | null;
+
+function keepDirtyDraftOnEscape(event: { preventDefault: () => void }): void {
+	if (document.activeElement?.hasAttribute("data-draft-dirty")) event.preventDefault();
+}
 
 function supported(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= CUSTOM_ENDPOINTS_PROTOCOL_VERSION;
@@ -132,7 +145,7 @@ export function EndpointModelItem({
 	const errorId = useId();
 	const limits = CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS;
 	const override = context?.setting?.override ?? null;
-	const { invalid, submit, inputProps } = useSettingsDraft({
+	const { invalid, dirty, submit, inputProps } = useSettingsDraft({
 		saved: override === null ? "" : String(override),
 		isValid: (draft) => draft.trim() === "" || isContextWindowText(draft.trim(), limits),
 		commit: (draft) =>
@@ -175,6 +188,7 @@ export function EndpointModelItem({
 							inputMode="numeric"
 							data-testid="custom-endpoints-context"
 							{...inputProps}
+							data-draft-dirty={dirty || undefined}
 							disabled={locked}
 							aria-label={t("settings.modelContext.controlLabel", { name: model.id })}
 							aria-describedby={invalid ? errorId : undefined}
@@ -197,12 +211,12 @@ export function EndpointModelItem({
 						/>
 					</span>
 				) : null}
-				<SettingsSwitch
+				<Switch
 					checked={model.selected}
 					disabled={busy}
 					label={t("settings.customEndpoints.use", { name: model.id })}
 					testId="custom-endpoints-use"
-					onChange={onSelect}
+					onCheckedChange={onSelect}
 				/>
 			</div>
 			{context && invalid ? (
@@ -307,7 +321,7 @@ function EndpointDialog({
 			<DialogContent
 				data-testid="custom-endpoints-dialog"
 				className="max-w-[36rem]"
-				onEscapeKeyDown={keepSettingsDraftOnEscape}
+				onEscapeKeyDown={keepDirtyDraftOnEscape}
 			>
 				<DialogHeader>
 					<DialogTitle>
@@ -570,6 +584,55 @@ export function useCustomEndpoints(): CustomEndpointsState | null {
 	return { endpoints, failed, load, replace };
 }
 
+function EndpointRow({
+	endpoint,
+	onEdit,
+	onRemove,
+}: {
+	endpoint: CustomEndpoint;
+	onEdit: () => void;
+	onRemove: () => void;
+}) {
+	const t = useT();
+	const { rowProps, primaryProps, sideProps } = useSettingsListRow(endpoint.id);
+	return (
+		<li
+			{...rowProps}
+			data-testid="custom-endpoints-endpoint"
+			data-endpoint={endpoint.id}
+			className={SETTINGS_LIST_ROW}
+		>
+			<button
+				type="button"
+				{...primaryProps}
+				data-testid="custom-endpoints-edit"
+				aria-label={t("settings.customEndpoints.editLabel", { name: endpoint.name })}
+				onClick={onEdit}
+				className={SETTINGS_LIST_PRIMARY}
+			>
+				<span className="tr-text-ui text-text-default">{endpoint.name}</span>
+				<span className="break-all tr-text-metadata text-text-muted">
+					{t("settings.customEndpoints.endpointSummary", {
+						url: endpoint.baseUrl,
+						count: endpoint.models.length,
+					})}
+				</span>
+			</button>
+			<Button
+				variant="ghost"
+				size="m"
+				iconLeft={Trash2}
+				{...sideProps}
+				data-testid="custom-endpoints-remove"
+				aria-label={t("settings.customEndpoints.removeLabel", { name: endpoint.name })}
+				onClick={onRemove}
+			>
+				{t("common.remove")}
+			</Button>
+		</li>
+	);
+}
+
 export function CustomEndpointsSettings({
 	state: { endpoints, failed, load, replace },
 }: {
@@ -578,6 +641,8 @@ export function CustomEndpointsSettings({
 	const t = useT();
 	const [dialog, setDialog] = useState<EndpointDraft | null>(null);
 	const [removing, setRemoving] = useState<CustomEndpoint | null>(null);
+	const row = settingProps(t, SETTING.customServers);
+	const list = endpoints ?? [];
 
 	const remove = async (endpoint: CustomEndpoint) => {
 		try {
@@ -587,66 +652,83 @@ export function CustomEndpointsSettings({
 		}
 	};
 
+	const addButton = (fallback: boolean) => (
+		<Button
+			variant="outline"
+			size="m"
+			iconLeft={Plus}
+			tabIndex={0}
+			data-testid="custom-endpoints-add"
+			data-focus-fallback={fallback ? row.settingId : undefined}
+			onClick={() => setDialog(newEndpointDraft())}
+		>
+			{t("settings.customEndpoints.add")}
+		</Button>
+	);
+
 	return (
 		<SettingsGroup
-			title={t("settings.customEndpoints.title")}
-			description={t("settings.customEndpoints.description")}
+			title={row.label}
+			description={row.description}
 			testId="settings-custom-endpoints"
 		>
 			{failed ? (
-				<div className="flex items-center gap-8 border-border-muted border-b py-12" role="alert">
-					<p className="tr-text-ui text-text-muted">{t("settings.customEndpoints.loadFailed")}</p>
-					<Button variant="ghost" size="m" onClick={() => void load()}>
-						{t("common.retry")}
-					</Button>
-				</div>
-			) : (
-				(endpoints ?? []).map((endpoint) => (
-					<div
-						key={endpoint.id}
-						data-row
-						data-testid="custom-endpoints-endpoint"
-						data-endpoint={endpoint.id}
-						className="flex items-center gap-8 border-border-muted border-b py-12"
-					>
-						<div className="flex min-w-0 flex-1 flex-col gap-2">
-							<span className="truncate tr-text-ui text-text-default">{endpoint.name}</span>
-							<span className="truncate tr-text-metadata text-text-muted" title={endpoint.baseUrl}>
-								{t("settings.customEndpoints.endpointSummary", {
-									url: endpoint.baseUrl,
-									count: endpoint.models.length,
-								})}
-							</span>
-						</div>
+				<SettingsRow
+					{...row}
+					description={t("settings.customEndpoints.loadFailed")}
+					control={
 						<Button
-							variant="ghost"
+							variant="outline"
 							size="m"
-							data-testid="custom-endpoints-edit"
-							aria-label={t("settings.customEndpoints.editLabel", { name: endpoint.name })}
-							onClick={() => setDialog(editEndpointDraft(endpoint))}
+							tabIndex={0}
+							data-testid="custom-endpoints-retry"
+							onClick={() => void load()}
 						>
-							{t("common.edit")}
+							{t("common.retry")}
 						</Button>
-						<IconButton
-							icon={Trash2}
-							label={t("settings.customEndpoints.removeLabel", { name: endpoint.name })}
-							data-testid="custom-endpoints-remove"
-							onClick={() => setRemoving(endpoint)}
-						/>
-					</div>
-				))
-			)}
-			<div className="py-12">
-				<Button
-					variant="outline"
-					size="m"
-					iconLeft={Plus}
-					data-testid="custom-endpoints-add"
-					onClick={() => setDialog(newEndpointDraft())}
+					}
+				/>
+			) : endpoints === null ? null : list.length === 0 ? (
+				<SettingsLine
+					rowId={row.settingId}
+					settingId={row.settingId}
+					testId="custom-endpoints-empty"
+					framed
+					className="my-8 flex flex-wrap items-center gap-12 rounded-sm border border-border-default border-dashed p-12"
 				>
-					{t("settings.customEndpoints.add")}
-				</Button>
-			</div>
+					<span className="flex min-w-160 flex-1 flex-col gap-2">
+						<span className="tr-text-ui text-text-default">
+							{t("settings.customEndpoints.empty")}
+						</span>
+						<span className="tr-text-metadata text-text-muted">
+							{t("settings.customEndpoints.dialogDescription")}
+						</span>
+					</span>
+					{addButton(true)}
+				</SettingsLine>
+			) : (
+				<>
+					<SettingsList
+						focusList={row.settingId}
+						label={row.label}
+						rowIds={list.map((endpoint) => endpoint.id)}
+						settingId={row.settingId}
+						onRemove={(id) => setRemoving(list.find((endpoint) => endpoint.id === id) ?? null)}
+					>
+						{list.map((endpoint) => (
+							<EndpointRow
+								key={endpoint.id}
+								endpoint={endpoint}
+								onEdit={() => setDialog(editEndpointDraft(endpoint))}
+								onRemove={() => setRemoving(endpoint)}
+							/>
+						))}
+					</SettingsList>
+					<SettingsLine rowId="custom-servers-add" className="py-12">
+						{addButton(false)}
+					</SettingsLine>
+				</>
+			)}
 			{dialog ? (
 				<EndpointDialog initial={dialog} onClose={() => setDialog(null)} onSaved={replace} />
 			) : null}

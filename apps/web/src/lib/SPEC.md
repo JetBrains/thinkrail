@@ -15,7 +15,8 @@ not this module; the theme-aware highlighter remains app-local.
 
 - **Owns:** `utils.ts` → `cssColorToHex()` (canonicalize
   a CSS color to hex — minified CSS serves `#fff`/`gray`-style equivalents, which strict consumers like
-  Monaco and xterm reject; `""` when unparseable). Plus the primitives that more than one module needs and
+  Monaco and xterm reject; `""` when unparseable; implemented in `@thinkrail/ui/theme` so extension canvases
+  share it, and re-exported here for the app's call sites). Plus the primitives that more than one module needs and
   none should re-state: **`normalizePath()`** / **`isAbsolutePath()`** / **`fileName()`** (a path from a pi tool call or the
   host may use either separator and may be relative or absolute — every path predicate in the app starts
   from these, so `chat`'s display helpers and `store`'s worktree matcher share one definition;
@@ -38,6 +39,9 @@ not this module; the theme-aware highlighter remains app-local.
   anchored browser-side mirror of Pi's canonical expanded `<skill>` user-message grammar, shared by
   `chat`'s compact renderer and `store`'s optimistic-echo reconciliation; malformed/quoted blocks fail
   closed),
+  **`resolveTreeMove()`** (`treeMove.ts`: the one ↑/↓, Home/End, →/← move rule over levelled rows —
+  expand, else enter the first child; collapse, else go to the parent — shared by `panels`' sidebar trees
+  and `chat`'s transcript, which may not import `panels`),
   **`relativeTime(t, ms, now)`** (`just now` / `5m ago` / `2d ago` against an explicit `now`, never `Date.now`
   — shared by chat history, the tab strip's closed chats, and the Changes scope menu's commit rows; it lives
   here because `chat/` may not import from `panels/`, which is what let three private twins of it
@@ -75,7 +79,11 @@ not this module; the theme-aware highlighter remains app-local.
   (the text helpers here take the caller's translator first, so render output follows a language change),
   and the `isMcpAttentionState` (needs sign-in, failed, pending approval) / `isMcpActiveState` (connected,
   starting) predicates — shared by `store`'s selectors, Settings, and the props-only chat Resources rows,
-  which may import nothing else in common), and the
+  which may import nothing else in common), **`chatActions.ts`** (the `ChatAction` / `ChatActionTarget`
+  shapes, types only: something the shell offers for one chat, such as an extension panel opened for it,
+  that `chat`, `panels` and the shell's own surfaces render and run without resolving it — they may not
+  import `shell`, [[submodule-web-shell]] § Extension panels; `pane` marks one that opens beside its
+  chat, which the chat's header shows as a toggle), and the
   **`LayoutAttention`** device-local overlay shared by store, shell, and the headless layout child, with
   own-property-safe `readLayoutSelection()` / `readLayoutNavigationClock()`
   accessors for untrusted tuple-keyed maps and the key-order-independent `sameLayoutAttention()` equality
@@ -114,6 +122,11 @@ not this module; the theme-aware highlighter remains app-local.
   **`tupleKey()`** length-prefixes independent strings, **`parseTupleKey()`** reads only its requested
   namespace, and **`layoutResourceIdentity()`** gives every frontend-local placement/cache alias one
   semantic resource key, so delimiters and stable noncanonical placement ids cannot split or alias identities.
+  An `extension` tab's identity is its extension, panel and **`extensionParamsKey(params)`** (the params
+  sorted by key and length-prefixed like `tupleKey`, so neither their order nor a delimiter inside a value
+  splits or aliases it). **`isMessageKey(key)`** guards a persisted string as a `MessageKey` of the bundled
+  English catalog (a plural family by its base key), so a stored panel title key is translated only while
+  this build still has it.
   **`nullProto<T>(...sources)`** builds every prototype-free dictionary (id-keyed maps whose keys may be
   `__proto__` or `constructor`): it merges sources onto `Object.create(null)` and type-checks each source
   against `T`, so no call site casts an `any` result. TS widens a union-typed computed key (`{ [area]: v }`)
@@ -142,13 +155,17 @@ not this module; the theme-aware highlighter remains app-local.
   `MCP_STATE_KEY`, `mcpStateLabel`, `mcpStateTone`, `mcpStatusLabel`, `mcpToolCountLabel`, `isMcpAttentionState`,
   `isMcpActiveState`, the `McpStateTone` type,
   `DOUBLE_CLICK_SETTLE_MS`, `firstClickOnly`, `doubleClickPendingMs`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,
+  `extensionParamsKey`, `isMessageKey`,
   `readLayoutSelection`, `readLayoutNavigationClock`, `sameLayoutAttention`, `nullProto`, the `LayoutAttention`
   type, and the keyboard gate shared by the shell's chords and the panels' plain-letter review
   shortcuts: `MODAL_LAYER_SELECTOR` + `hasLayer` (an open modal/dialog/alertdialog owns the keyboard)
-  and `isTextEntryTarget` (inputs, textareas, selects and contenteditable keep their letters) —
-  duck-typed on the target so it holds in DOM-less tests.
+  and `isTextEntryTarget` (inputs, textareas, selects, contenteditable, Monaco and xterm keep their
+  letters — except inside `READ_ONLY_TEXT_SELECTOR`, `[data-text-entry="false"]`, which a read-only
+  editor sets while its text has focus, so reading keys and hint mode's `F` reach it) — duck-typed on
+  the target so it holds in DOM-less tests.
 - **Allowed deps:** React (the viewport subscription hook only); `@thinkrail/locales` (the relative-time,
-  compact-age and MCP state labels, resolved in the active locale at call time);
+  compact-age and MCP state labels, resolved in the active locale at call time, and the bundled `EN`
+  catalog `isMessageKey` checks against);
   `@thinkrail/contracts` (types only for canonical messages, `McpServerState`, and the `GitDiffScope` the
   default tab names read; the layout-resource identity input is a local structural type); `@pierre/highlights` (the per-file highlighting modules only — never reachable
   through the barrel).

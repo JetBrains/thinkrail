@@ -6,14 +6,16 @@ import {
 } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
+import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
-import { RAIL_KEYS } from "../../keybindings";
+import { LOCAL_KEY_DEFAULTS } from "../../keybindings";
 import { type LayoutAttention, tupleKey } from "../../lib";
 import {
 	AuxiliaryRail,
 	type AuxiliaryRailControlProps,
+	type AuxiliaryRailFooterItem,
 	RAIL_ENTRY_BUTTON_CLASS,
 	RAIL_ICON,
 	railEntryButtonProps,
@@ -212,9 +214,10 @@ export function AuxiliaryRegionRail({
 	shared: SharedGroupProps;
 	attention: LayoutAttention;
 	trailing?: ReactNode;
-	footer?: ((control: AuxiliaryRailControlProps) => ReactNode) | undefined;
+	footer?: readonly AuxiliaryRailFooterItem[] | undefined;
 }) {
 	const t = useT();
+	const keys = useLocalKeys("rails", LOCAL_KEY_DEFAULTS.rails);
 	const entries = projectAuxiliaryRail(shared.document, attention, region);
 	const groups = shared.document[region].groups;
 	const draggedAuxiliary =
@@ -355,27 +358,18 @@ export function AuxiliaryRegionRail({
 									panelId={groupPanelId(location)}
 									onKeyDown={(event) => {
 										if (!entry.tab) return;
-										if (
-											event.key === RAIL_KEYS.remove.key &&
-											!event.altKey &&
-											!event.ctrlKey &&
-											!event.metaKey
-										) {
+										const local = keys.match(event.nativeEvent);
+										if (local === "rails.remove") {
 											event.preventDefault();
 											shared.onClose(entry.tab);
 											return;
 										}
-										if (!event.altKey || !event.shiftKey) return;
 										const [before, after] =
 											region === "bottom"
-												? [RAIL_KEYS.moveLeft, RAIL_KEYS.moveRight]
-												: [RAIL_KEYS.moveUp, RAIL_KEYS.moveDown];
+												? ["rails.moveLeft", "rails.moveRight"]
+												: ["rails.moveUp", "rails.moveDown"];
 										const target =
-											event.key === before.key
-												? previousIndex
-												: event.key === after.key
-													? nextIndex
-													: undefined;
+											local === before ? previousIndex : local === after ? nextIndex : undefined;
 										if (target === undefined) return;
 										event.preventDefault();
 										const moved = moveTabToGroup(shared.document, entry.tab, location, target);

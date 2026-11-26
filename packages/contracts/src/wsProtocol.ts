@@ -1,3 +1,4 @@
+import type { ChatAttachmentResult } from "./attachments";
 import type {
 	AppConfig,
 	AppConfigUpdate,
@@ -13,7 +14,9 @@ import type {
 	DiffStats,
 	EditorInfo,
 	ExistingWorktreeCandidate,
+	ExtensionBrowseResult,
 	ExtensionCatalogEntry,
+	ExtensionQueryParams,
 	FileNode,
 	GitCommit,
 	GitDiffScope,
@@ -42,9 +45,9 @@ import type {
 	MergePrResult,
 	OpenBranchReview,
 	OpenPrResult,
+	PackageInstallResult,
 	PiPackageResourceType,
 	PiPackageScope,
-	PiPackageSummary,
 	PiPackagesCatalog,
 	PrBodySource,
 	Project,
@@ -53,6 +56,11 @@ import type {
 	ProviderStatusReport,
 	ProviderWarning,
 	PrPreview,
+	PullRequestAuthorPage,
+	PullRequestFilter,
+	PullRequestPage,
+	PullRequestSizeEntry,
+	PullRequestSummary,
 	ResourceHistoryCursor,
 	ResourceHistoryPage,
 	ResourceKind,
@@ -72,6 +80,7 @@ import type {
 	SessionResources,
 	SessionStateRecord,
 	SpecGraphSnapshot,
+	SubagentCatalogEntry,
 	SubagentCompletionDetails,
 	SubagentOverride,
 	SurveyInvitationResponse,
@@ -89,7 +98,7 @@ import type {
 	WorkspaceArtifactsSnapshot,
 	WorkspacePathMatch,
 } from "./domain";
-import { isDelegationRunDetails } from "./domain";
+import { isControlMessage, isDelegationRunDetails } from "./domain";
 import type {
 	ExtUiResponse,
 	ImageContent,
@@ -139,11 +148,25 @@ export interface TerminalTabsPush {
 }
 
 export type TemplateReadLocation =
-	| { workspaceId: string; projectId?: never }
-	| { projectId: string; workspaceId?: never }
-	| { workspaceId?: never; projectId?: never };
+	| { workspaceId: string; projectId?: never; baseRef?: never }
+	| { projectId: string; workspaceId?: never; baseRef?: string }
+	| { workspaceId?: never; projectId?: never; baseRef?: never };
 
-export const PROTOCOL_VERSION = 121;
+export const PROTOCOL_VERSION = 135;
+export const REF_RESOURCE_PREVIEW_PROTOCOL_VERSION = 135;
+export const FS_REVEAL_PROTOCOL_VERSION = 134;
+export const PULL_REQUEST_REVIEW_PROTOCOL_VERSION = 133;
+export const EXTENSION_BROWSE_PROTOCOL_VERSION = 132;
+export const INSTALLED_EXTENSIONS_PROTOCOL_VERSION = 131;
+export const EXTENSION_QUERY_PROTOCOL_VERSION = 130;
+export const CHAT_ATTACHMENTS_PROTOCOL_VERSION = 129;
+export const ARTIFACT_OUTPUTS_PROTOCOL_VERSION = 128;
+export const SUBAGENT_CATALOG_PROTOCOL_VERSION = 127;
+export const SERVER_FALLBACK_PROTOCOL_VERSION = 126;
+export const MCP_USER_SERVERS_PROTOCOL_VERSION = 125;
+export const ARTIFACT_ROLES_PROTOCOL_VERSION = 124;
+export const KEYBINDINGS_PROTOCOL_VERSION = 123;
+export const BROWSER_VIEW_PROTOCOL_VERSION = 122;
 export const ARTIFACTS_PROTOCOL_VERSION = 121;
 export const IMAGE_REFS_PROTOCOL_VERSION = 120;
 export const IMAGES_ROUTE = "/images/";
@@ -453,12 +476,17 @@ export const WS_METHODS = {
 	prReady: "pr.ready",
 	prMerge: "pr.merge",
 	prReopen: "pr.reopen",
+	prList: "pr.list",
+	prGet: "pr.get",
+	prSizes: "pr.sizes",
+	prAuthors: "pr.authors",
 	fsReadDir: "fs.readDir",
 	fsReadFile: "fs.readFile",
 	fsCopy: "fs.copy",
 	fsDelete: "fs.delete",
 	fsRename: "fs.rename",
 	fsMove: "fs.move",
+	fsReveal: "fs.reveal",
 	artifactsList: "artifacts.list",
 	artifactsRestore: "artifacts.restore",
 	artifactsDiscard: "artifacts.discard",
@@ -488,6 +516,7 @@ export const WS_METHODS = {
 	skillList: "skill.list",
 	skillsState: "skills.state",
 	extensionList: "extension.list",
+	extensionQuery: "extension.query",
 	packagesList: "packages.list",
 	packagesInstall: "packages.install",
 	packagesRemove: "packages.remove",
@@ -495,11 +524,16 @@ export const WS_METHODS = {
 	packagesCheckUpdates: "packages.checkUpdates",
 	packagesSetResourceEnabled: "packages.setResourceEnabled",
 	packagesReveal: "packages.reveal",
+	extensionsRemove: "extensions.remove",
+	extensionsUpdate: "extensions.update",
+	extensionsCheckUpdates: "extensions.checkUpdates",
+	extensionsBrowse: "extensions.browse",
 	localesList: "locales.list",
 	localesReveal: "locales.reveal",
 	themesList: "themes.list",
 	themesReveal: "themes.reveal",
 	fontsList: "fonts.list",
+	attachmentsCopyLocal: "attachments.copyLocal",
 	fontsInstalled: "fonts.installed",
 	fontsReveal: "fonts.reveal",
 	speechInstall: "speech.install",
@@ -516,6 +550,7 @@ export const WS_METHODS = {
 	sessionDelete: "session.delete",
 	sessionRename: "session.rename",
 	sessionSetModel: "session.setModel",
+	sessionDisableServerFallback: "session.disableServerFallback",
 	sessionSetThinkingLevel: "session.setThinkingLevel",
 	sessionCompact: "session.compact",
 	sessionGetStats: "session.getStats",
@@ -530,6 +565,8 @@ export const WS_METHODS = {
 	sessionNudge: "session.nudge",
 	sessionActivityList: "session.activityList",
 	sessionGetMessages: "session.getMessages",
+	subagentList: "subagent.list",
+	subagentSetEnabled: "subagent.setEnabled",
 	subagentGetTranscript: "subagent.getTranscript",
 	sessionResources: "session.resources",
 	sessionResourceHistory: "session.resourceHistory",
@@ -595,6 +632,7 @@ export const WS_METHODS = {
 	mcpApprove: "mcp.approve",
 	mcpRevokeToolGrant: "mcp.revokeToolGrant",
 	mcpShareWithRepo: "mcp.shareWithRepo",
+	mcpSetUserServer: "mcp.setUserServer",
 	mcpLogin: "mcp.login",
 	mcpLogout: "mcp.logout",
 	mcpTestConnection: "mcp.testConnection",
@@ -638,6 +676,7 @@ export const WS_CHANNELS = {
 	localesChanged: "locales.changed",
 	themesChanged: "themes.changed",
 	packagesChanged: "packages.changed",
+	extensionsChanged: "extensions.changed",
 	fontsChanged: "fonts.changed",
 	speechChanged: "speech.changed",
 } as const;
@@ -764,6 +803,36 @@ export function isBackgroundCommandCompletionMessage(
 	return !!d.output && typeof d.output.text === "string" && typeof d.output.truncated === "boolean";
 }
 
+function plainText(content: unknown): string {
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+	return content
+		.map((block: unknown) =>
+			block &&
+			typeof block === "object" &&
+			"type" in block &&
+			block.type === "text" &&
+			"text" in block &&
+			typeof block.text === "string"
+				? block.text
+				: "",
+		)
+		.join("");
+}
+
+export function opensChatRound(message: unknown): boolean {
+	if (!message || typeof message !== "object") return false;
+	const { role, content } = message as { role?: unknown; content?: unknown };
+	if (role === "user") return !isControlMessage(plainText(content));
+	if (isBackgroundCommandCompletionMessage(message) || isSubagentCompletionMessage(message))
+		return completionDelivery(message.details) !== "run";
+	return (
+		isTodoReviewFixMessage(message) ||
+		isContinueInWorkspaceRequestMessage(message) ||
+		isChatHandoffMessage(message)
+	);
+}
+
 export function customMessageText(content: WireCustomMessage["content"]): string {
 	if (typeof content === "string") return content;
 	return content
@@ -832,6 +901,9 @@ export interface ModelContextSetting
 /** Pi's `cacheWarming` setting: `off`, `streaming` (only while a run is active) or `idle` (also between runs). */
 export const CACHE_WARMING_MODES = ["off", "streaming", "idle"] as const;
 export type CacheWarmingMode = (typeof CACHE_WARMING_MODES)[number];
+
+/** ThinkRail's mode while pi's `settings.json` names none. */
+export const DEFAULT_CACHE_WARMING_MODE: CacheWarmingMode = "streaming";
 
 export function isCacheWarmingMode(value: unknown): value is CacheWarmingMode {
 	return typeof value === "string" && (CACHE_WARMING_MODES as readonly string[]).includes(value);
@@ -924,6 +996,14 @@ export interface McpRenderedTarget {
 	scope: McpServerScope;
 	expectedFingerprint: string;
 }
+
+/**
+ * Whose configuration a request edits: a workspace's (its `.pi/mcp.json` at project scope, the global
+ * `mcp.json` at user scope), or with no workspace the global file alone.
+ */
+export type McpScopeTarget =
+	| { workspaceId: string; scope: McpServerScope }
+	| { workspaceId?: never; scope: "user" };
 
 export interface WsMethodMap {
 	"project.open": { params: { path: string }; result: Project };
@@ -1083,6 +1163,19 @@ export interface WsMethodMap {
 		params: { workspaceId: string; branch: string; number: number };
 		result: Ack;
 	};
+	"pr.list": {
+		params: { projectId: string; filter: PullRequestFilter; query?: string; cursor?: string };
+		result: PullRequestPage;
+	};
+	"pr.get": { params: { projectId: string; number: number }; result: PullRequestSummary | null };
+	"pr.authors": {
+		params: { projectId: string; cursor?: string };
+		result: PullRequestAuthorPage;
+	};
+	"pr.sizes": {
+		params: { projectId: string; numbers: number[] };
+		result: PullRequestSizeEntry[];
+	};
 	"pr.open": {
 		params: {
 			workspaceId: string;
@@ -1124,6 +1217,7 @@ export interface WsMethodMap {
 		};
 		result: { path: string };
 	};
+	"fs.reveal": { params: { workspaceId: string; path: string }; result: Ack };
 	"artifacts.list": { params: { workspaceId: string }; result: WorkspaceArtifactsSnapshot };
 	"artifacts.restore": { params: { workspaceId: string; path: string }; result: Ack };
 	"artifacts.discard": { params: { workspaceId: string; path: string }; result: Ack };
@@ -1216,13 +1310,14 @@ export interface WsMethodMap {
 		result: { closed: boolean; busy: boolean };
 	};
 	"dialog.selectDirectory": { params: Record<string, never>; result: { path: string | null } };
-	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };
+	"skill.list": { params: { projectId: string; baseRef?: string }; result: SlashCommandInfo[] };
 	"skills.state": { params: { workspaceId: string }; result: SkillCatalogEntry[] };
 	"extension.list": { params: Record<string, never>; result: ExtensionCatalogEntry[] };
+	"extension.query": { params: ExtensionQueryParams; result: unknown };
 	"packages.list": { params: { workspaceId?: string; force?: boolean }; result: PiPackagesCatalog };
 	"packages.install": {
 		params: { source: string; scope: PiPackageScope; workspaceId?: string };
-		result: PiPackageSummary;
+		result: PackageInstallResult;
 	};
 	"packages.remove": {
 		params: { source: string; scope: PiPackageScope; workspaceId?: string };
@@ -1247,11 +1342,19 @@ export interface WsMethodMap {
 		result: Ack;
 	};
 	"packages.reveal": { params: { path: string; workspaceId?: string }; result: Ack };
+	"extensions.remove": { params: { source: string }; result: Ack };
+	"extensions.update": { params: { source: string }; result: Ack };
+	"extensions.checkUpdates": { params: { force?: boolean }; result: { source: string }[] };
+	"extensions.browse": { params: { force?: boolean }; result: ExtensionBrowseResult };
 	"locales.list": { params: Record<string, never>; result: LocalLocalesSnapshot };
 	"locales.reveal": { params: Record<string, never>; result: Ack };
 	"themes.list": { params: Record<string, never>; result: UserThemesSnapshot };
 	"themes.reveal": { params: Record<string, never>; result: Ack };
 	"fonts.list": { params: Record<string, never>; result: UserFontsSnapshot };
+	"attachments.copyLocal": {
+		params: { workspaceId?: string; path: string };
+		result: ChatAttachmentResult;
+	};
 	"fonts.installed": { params: Record<string, never>; result: InstalledFontsResult };
 	"fonts.reveal": { params: Record<string, never>; result: Ack };
 	"speech.install": { params: { model: SpeechModel }; result: Ack };
@@ -1292,6 +1395,7 @@ export interface WsMethodMap {
 		result: Ack;
 	};
 	"session.setModel": { params: { sessionId: string; model: WireModel }; result: Ack };
+	"session.disableServerFallback": { params: { sessionId: string }; result: WireModel };
 	"session.setThinkingLevel": { params: { sessionId: string; level: ThinkingLevel }; result: Ack };
 	"session.compact": { params: { sessionId: string; instructions?: string }; result: Ack };
 	"session.getStats": { params: { sessionId: string }; result: SessionStats };
@@ -1350,6 +1454,14 @@ export interface WsMethodMap {
 	"subagent.stopAll": {
 		params: { workspaceId: string; parentSessionId: string };
 		result: Ack & { targeted: number };
+	};
+	"subagent.setEnabled": {
+		params: { name: string; enabled: boolean };
+		result: Ack;
+	};
+	"subagent.list": {
+		params: { workspaceId?: string };
+		result: SubagentCatalogEntry[];
 	};
 	"subagent.getTranscript": {
 		params: { workspaceId: string; parentSessionId: string; childSessionId: string };
@@ -1486,22 +1598,26 @@ export interface WsMethodMap {
 		params: { workspaceId?: string; scope: TemplateScope; name: string };
 		result: Ack;
 	};
-	"mcp.list": { params: { workspaceId: string }; result: McpListResult };
+	"mcp.list": { params: { workspaceId?: string }; result: McpListResult };
 	"mcp.add": {
-		params: {
-			workspaceId: string;
-			scope: McpServerScope;
-			name: string;
-			entry: McpServerEntryInput;
-		};
+		params: McpScopeTarget & { name: string; entry: McpServerEntryInput };
 		result: McpListResult;
 	};
 	"mcp.update": {
-		params: { workspaceId: string; name: string; entry: McpServerEntryInput } & McpRenderedTarget;
+		params: McpScopeTarget & McpRenderedTarget & { name: string; entry: McpServerEntryInput };
 		result: McpListResult;
 	};
 	"mcp.remove": {
-		params: { workspaceId: string; name: string } & McpRenderedTarget;
+		params: McpScopeTarget & McpRenderedTarget & { name: string };
+		result: McpListResult;
+	};
+	"mcp.setUserServer": {
+		params: {
+			name: string;
+			expectedFingerprint: string;
+			enabled?: boolean;
+			exposure?: Exclude<McpExposure, "codemode">;
+		};
 		result: McpListResult;
 	};
 	"mcp.setProjectOverride": {
@@ -1526,10 +1642,10 @@ export interface WsMethodMap {
 		result: McpListResult;
 	};
 	"mcp.shareWithRepo": { params: { workspaceId: string; name: string }; result: McpListResult };
-	"mcp.login": { params: { workspaceId: string; name: string }; result: { loginId: string } };
-	"mcp.logout": { params: { workspaceId: string; name: string }; result: Ack };
+	"mcp.login": { params: { workspaceId?: string; name: string }; result: { loginId: string } };
+	"mcp.logout": { params: { workspaceId?: string; name: string }; result: Ack };
 	"mcp.testConnection": {
-		params: { workspaceId: string; name: string };
+		params: { workspaceId?: string; name: string };
 		result: { loginId: string };
 	};
 	"mcp.reconnect": {
@@ -1540,7 +1656,7 @@ export interface WsMethodMap {
 		params: { workspaceId: string; sessionId: string; toolCallId: string };
 		result: McpReadOutputResult;
 	};
-	"mcp.readLog": { params: { workspaceId: string; name: string }; result: McpServerLog };
+	"mcp.readLog": { params: { workspaceId?: string; name: string }; result: McpServerLog };
 }
 
 /** Payload of the `mcp.status` channel: one per-session snapshot per publish. */
@@ -1601,10 +1717,19 @@ export type WsErrorCode =
 	| "PACKAGE_UNTRUSTED"
 	| "PACKAGE_UNKNOWN"
 	| "PACKAGE_INSTALL_FAILED"
+	| "PACKAGE_NOT_FOUND"
+	| "PACKAGE_REGISTRY_UNREACHABLE"
 	| "PACKAGE_INSTALLED_UNLISTED"
 	| "PACKAGE_REMOVE_FAILED"
 	| "PACKAGE_UPDATE_FAILED"
 	| "PACKAGE_SETTINGS_WRITE_FAILED"
+	| "EXTENSION_SCOPE_UNSUPPORTED"
+	| "EXTENSION_UI_UNSUPPORTED"
+	| "EXTENSION_UNKNOWN"
+	| "EXTENSIONS_FILE_INVALID"
+	| "EXTENSION_CATALOG_OFFLINE"
+	| "EXTENSION_CATALOG_UNREACHABLE"
+	| "EXTENSION_CATALOG_INVALID"
 	| "CACHE_WARMING_WRITE_FAILED"
 	| "REQUEST_REPLAY_OVERFLOW"
 	| "INSTALLED_FONTS_UNAVAILABLE"
@@ -1631,6 +1756,11 @@ export type WsErrorCode =
 	| "TEXT_SEARCH_TIMEOUT"
 	| "TEXT_SEARCH_FAILED"
 	| "FRAME_TOO_LARGE"
+	| "KEYBINDINGS_INVALID"
+	| "SERVER_FALLBACK_NOT_USED"
+	| "SERVER_FALLBACK_STILL_ON"
+	| "EXTENSION_DISABLED"
+	| "UNKNOWN_EXTENSION_QUERY"
 	| SpeechErrorCode;
 
 export interface WsResponse {

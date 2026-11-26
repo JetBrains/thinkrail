@@ -4,7 +4,7 @@ type: submodule-design
 status: active
 title: updates — optional application update capability
 parent: module-web
-depends-on: [module-contracts]
+depends-on: [module-contracts, submodule-web-settingskit]
 tags: [ui, updates]
 ---
 
@@ -19,8 +19,10 @@ and one durable status affordance without teaching the UI which launcher is runn
 - **Public surface (`index.ts`):** `useUpdates`, `UpdateSettings`, `UpdateReadyButton`, and
   `UpdateInstallSurfaces`.
 - **External deps:** React, Remix Icon, `@thinkrail/contracts` types, the sibling store barrel (host notice,
-  toasts), `@thinkrail/ui` `button`/`dialog`/`utils`, and `@thinkrail/locales/react` for every user-visible string.
-- **Forbidden:** Electron/Electrobun imports; server/shared/transport imports; launcher-name checks;
+  toasts), the sibling `settingsKit` barrel (the Settings page, group, row and notice blocks),
+  `@thinkrail/ui` `button`/`dialog`/`utils`, and `@thinkrail/locales/react` for every user-visible string.
+- **Forbidden:** `panels` imports (the Settings catalog, defaults and saving stay there); Electron/Electrobun
+  imports; server/shared/transport imports; launcher-name checks;
   renderer-selected feed URLs; update check/download/install logic; browser-supplied shell commands, paths,
   channels, versions, or URLs; draft saving, input protection, renderer preparation, or any second native
   restart-consent step.
@@ -41,6 +43,19 @@ Older hosts retain fixed `thinkrail update` guidance. No command text or arbitra
 A present native bridge always wins over host state, including while its capability is resolving or disabled.
 With neither usable capability, the Updates settings section and affordance are absent. The topbar remains a path
 back to Settings throughout actionable native and host phases, not only after a package is ready.
+
+## Settings section
+
+`UpdateSettings` is the Updates section Shell injects into Settings, built from [[submodule-web-settingskit]]
+blocks like every other section: a page titled with its nav name (the native or host description under it), a
+**Software updates** group, and one row whose id is the literal `software-updates` — the catalog entry in
+`panels/settingsCatalog.ts` it must match, so Settings search and the palette jump to it (this module never
+imports `panels`; the Settings search drift check keeps the two in step). The row's label is the status title;
+its description holds the detail, the progress bar and label, the inline error (`role=alert`), the version
+line and, when ready, the deferral note. Its actions are size-`m` buttons in phase order, each with an
+explicit `tabIndex`: the row itself is the walk's stop and they are its buttons (→ walks them; Enter presses
+the only one, else lands on the first — [[submodule-web-settingskit]], *The walk*). The last-install
+failure callout, the fixed host guidance and the host restart guidance follow the row as notices.
 
 ## Native install journey
 

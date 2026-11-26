@@ -1,3 +1,15 @@
+export type * from "./attachments";
+export {
+	attachmentImageType,
+	CHAT_ATTACHMENT_ERROR_CODES,
+	CHAT_ATTACHMENT_MAX_BYTES,
+	CHAT_ATTACHMENT_UPLOAD_HEADER,
+	CHAT_ATTACHMENT_WORKSPACE_PARAM,
+	CHAT_ATTACHMENTS_ROUTE,
+	copiedFilePaths,
+	isChatAttachmentResult,
+	withAttachedFiles,
+} from "./attachments";
 export type * from "./domain";
 export {
 	ACCEPTED_IMAGE_TYPES,
@@ -8,7 +20,9 @@ export {
 	compareProjectRank,
 	compareResourceHistory,
 	DEFAULT_CONFIG,
+	DEFAULT_PULL_REQUEST_FILTER,
 	DEFAULT_WORKSPACE_NAME,
+	EXTENSION_ASSETS_ROUTE,
 	FIRST_PROMPT_MAX_LENGTH,
 	FONT_FALLBACKS_MAX,
 	FONT_FAMILY_NAME_MAX_LENGTH,
@@ -35,6 +49,7 @@ export {
 	isLiveResource,
 	isLocalePreference,
 	isPlanReviewResult,
+	isPullRequestFilter,
 	isQuestionPanelHeight,
 	isRetriedAttempt,
 	isSettleIdleDays,
@@ -86,7 +101,16 @@ export {
 	USER_FONT_EXTENSIONS,
 	USER_FONT_UPLOAD_HEADER,
 	USER_FONTS_ROUTE,
+	WORKSPACE_MOCKUP_DIR,
+	WORKSPACE_VIEW_ROUTE,
 } from "./domain";
+export type { KeybindingModifier, KeybindingOverrides } from "./keybindingChord";
+export {
+	isKeybindingChord,
+	isKeybindingOverrides,
+	isModifierKeyCode,
+	KEYBINDING_MODIFIERS,
+} from "./keybindingChord";
 export type {
 	ContentMatch,
 	FieldMatch,

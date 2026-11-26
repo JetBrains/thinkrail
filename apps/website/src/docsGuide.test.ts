@@ -1,0 +1,760 @@
+import { describe, expect, test } from "bun:test";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { catalogKeyword } from "./extensionCatalog";
+import { packagePath, parseExtensionManifest } from "./extensionManifest";
+
+const repo = new URL("../../../", import.meta.url);
+const read = (path: string) => readFileSync(new URL(path, repo), "utf8");
+const readJson = <T>(path: string) => JSON.parse(read(path)) as T;
+const roots = {
+	palette: "extension-examples/palette/",
+	sdk: "packages/extension-sdk/",
+} as const;
+
+interface SamplePackage {
+	name: string;
+	keywords: string[];
+	scripts: Record<string, string>;
+	dependencies?: Record<string, string>;
+	devDependencies: Record<string, string>;
+	peerDependencies: Record<string, string>;
+	publishConfig: { access: string; provenance?: boolean };
+	thinkrail: { api: string; server: string; web: string; styles: string; title: string };
+}
+
+const sample = readJson<SamplePackage>(`${roots.palette}package.json`);
+const catalog = readJson<{ workspaces: { catalog: Record<string, string> } }>("package.json")
+	.workspaces.catalog;
+const sharedModules = readJson<{ api: string; modules: Record<string, string[]> }>(
+	`${roots.sdk}assets/shared-modules.json`,
+);
+const apiVersion = /^export const EXTENSION_API_VERSION = "([^"]+)";$/m.exec(
+	read("packages/extension-api/src/manifest.ts"),
+)?.[1];
+const snapshot = read(`${roots.sdk}api/${apiVersion}.api.md`);
+const snapshotExports = JSON.parse(
+	/## Runtime exports\n\n```json\n([\s\S]*?)\n```/.exec(snapshot)?.[1] ?? "null",
+) as Record<string, string[]>;
+
+const pages = ["build-an-extension", "extension-reference"].map((name) => ({
+	name,
+	text: readFileSync(new URL(`../content/docs/${name}/index.md`, import.meta.url), "utf8"),
+}));
+const [guide, reference] = pages as [(typeof pages)[number], (typeof pages)[number]];
+
+interface Fence {
+	page: string;
+	lang: string;
+	body: string;
+	guard: string | undefined;
+}
+
+const guardLine = /^<!-- guard: (.+) -->$/;
+
+function fences(page: (typeof pages)[number]): Fence[] {
+	const lines = page.text.split("\n");
+	const found: Fence[] = [];
+	for (let index = 0; index < lines.length; index++) {
+		const open = /^\s*(`{3,}|~{3,})(.*)$/.exec(lines[index] as string);
+		if (!open) continue;
+		const [, marker, info] = open as unknown as [string, string, string];
+		if (!/^\w*$/.test(info.trim())) {
+			throw new Error(`${page.name}: unexpected info string "${info}" at line ${index + 1}`);
+		}
+		const end = lines.findIndex((line, at) => at > index && line.trim() === marker);
+		if (end < 0) throw new Error(`${page.name}: unclosed code block at line ${index + 1}`);
+		found.push({
+			page: page.name,
+			lang: info.trim(),
+			body: lines.slice(index + 1, end).join("\n"),
+			guard: guardLine.exec((lines[index - 1] ?? "").trim())?.[1],
+		});
+		index = end;
+	}
+	return found;
+}
+
+const allFences = pages.flatMap(fences);
+
+function guarded(kind: string): Fence[] {
+	return allFences.filter((fence) => fence.guard?.split(" ")[0] === kind);
+}
+
+function guardedLines(page: (typeof pages)[number], guard: string): string[] {
+	const lines = page.text.split("\n");
+	const start = lines.indexOf(`<!-- guard: ${guard} -->`);
+	if (start < 0) throw new Error(`${page.name} has no "${guard}" guard`);
+	const end = lines.indexOf("", start);
+	return lines.slice(start + 1, end < 0 ? undefined : end);
+}
+
+function tableRows(page: (typeof pages)[number], guard: string): string[][] {
+	return guardedLines(page, guard)
+		.slice(2)
+		.map((row) =>
+			row
+				.replace(/^\||\|$/g, "")
+				.split("|")
+				.map((cell) => cell.trim()),
+		);
+}
+
+const numberWords = [
+	"no",
+	"one",
+	"two",
+	"three",
+	"four",
+	"five",
+	"six",
+	"seven",
+	"eight",
+	"nine",
+	"ten",
+];
+
+const flat = (text: string) => text.replace(/\s+/g, " ");
+
+const codeSpans = (text: string) =>
+	[...text.matchAll(/`([^`]+)`/g)].map((match) => match[1] as string);
+
+function declaredKeys(name: string): string[] {
+	const body = new RegExp(
+		`^(?:export )?interface ${name}(?:<[^>]*>)? \\{\\n([\\s\\S]*?)\\n\\}`,
+		"m",
+	).exec(snapshot)?.[1];
+	if (body === undefined)
+		throw new Error(`the API ${apiVersion} snapshot has no interface ${name}`);
+	return [...body.matchAll(/^ {2}(\w+)\??[:(]/gm)].map((match) => match[1] as string);
+}
+
+function sourcePath(guard: string): string {
+	const [root, ...rest] = guard.split("/");
+	if (root !== "palette" && root !== "sdk") throw new Error(`unknown guard root in "${guard}"`);
+	return `${roots[root]}${rest.join("/")}`;
+}
+
+function dedent(lines: string[]): string[] {
+	const indents = lines
+		.filter((line) => line.trim() !== "")
+		.map((line) => (/^\s*/.exec(line) as RegExpExecArray)[0].length);
+	const cut = Math.min(...indents);
+	return lines.map((line) => line.slice(cut));
+}
+
+function isContiguousSlice(excerpt: string, file: string): boolean {
+	const wanted = excerpt.split("\n");
+	const lines = file.replace(/\n$/, "").split("\n");
+	for (let start = 0; start + wanted.length <= lines.length; start++) {
+		if (dedent(lines.slice(start, start + wanted.length)).join("\n") === wanted.join("\n")) {
+			return true;
+		}
+	}
+	return false;
+}
+
+const cliOptions = (() => {
+	const block = /options: \{\n([\s\S]*?)\n\t\t\},/.exec(read(`${roots.sdk}src/cli.ts`))?.[1];
+	if (block === undefined) throw new Error("src/cli.ts has no parseArgs options block");
+	const entries = [...block.matchAll(/^\t{3}(\w+): \{([\s\S]*?)\},?$/gm)];
+	const declared = block.match(/^\t{3}\w+:/gm)?.length ?? 0;
+	if (entries.length === 0 || entries.length !== declared) {
+		throw new Error(`read ${entries.length} of the ${declared} CLI options in src/cli.ts`);
+	}
+	const flags = new Set<string>();
+	for (const [, name, spec] of entries as unknown as [string, string, string][]) {
+		flags.add(/default: true/.test(spec) ? `--no-${name}` : `--${name}`);
+		const short = /short: "(\w)"/.exec(spec)?.[1];
+		if (short) flags.add(`-${short}`);
+	}
+	return flags;
+})();
+
+function commandFlags(text: string): string[] {
+	return [...text.matchAll(/thinkrail-extension build([^`\n]*)/g)].flatMap((match) =>
+		[...(match[1] as string).matchAll(/(?:^|\s)\[?(-{1,2}[a-z-]+)/g)].map(
+			(flag) => flag[1] as string,
+		),
+	);
+}
+
+describe("the docs' code blocks", () => {
+	test("every code block names the source that guards it", () => {
+		const unguarded = allFences.filter((fence) => fence.guard === undefined);
+		expect(unguarded.map((fence) => `${fence.page}: ${fence.body.split("\n")[0]}`)).toEqual([]);
+		const kinds = new Set([
+			"file",
+			"excerpt",
+			"package-json",
+			"tree",
+			"shell",
+			"extensions-json",
+			"manifest-cases",
+		]);
+		for (const fence of allFences) expect(kinds).toContain(fence.guard?.split(" ")[0] as string);
+	});
+
+	test.each(guarded("file").map((fence) => [fence.guard as string, fence] as const))(
+		"%s shows the whole file",
+		(guard, fence) => {
+			const file = read(sourcePath(guard.split(" ")[1] as string));
+			expect(fence.body).toBe(file.replace(/\n$/, ""));
+		},
+	);
+
+	test.each(
+		guarded("excerpt").map((fence, index) => [`${fence.guard} #${index + 1}`, fence] as const),
+	)("%s is a contiguous slice of the file", (_label, fence) => {
+		const file = read(sourcePath((fence.guard as string).split(" ")[1] as string));
+		expect(fence.body.split("\n").length).toBeGreaterThan(1);
+		expect(isContiguousSlice(fence.body, file)).toBe(true);
+	});
+
+	test("the package.json is the sample's with versions npm can install, and a valid manifest", () => {
+		const [fence] = guarded("package-json");
+		expect(fence?.guard).toBe("package-json palette/package.json");
+		const shown = JSON.parse(fence?.body ?? "") as Record<string, unknown>;
+		expect(fence?.body).toBe(JSON.stringify(shown, null, "\t"));
+		expect(Object.keys(shown)).toEqual(Object.keys(sample));
+		const ranged = new Set(["dependencies", "devDependencies", "publishConfig"]);
+		for (const key of Object.keys(sample).filter((key) => !ranged.has(key))) {
+			expect([key, shown[key]]).toEqual([key, sample[key as keyof SamplePackage]]);
+		}
+		expect(shown.publishConfig).toEqual(
+			Object.fromEntries(
+				Object.entries(sample.publishConfig).filter(([key]) => key !== "provenance"),
+			),
+		);
+		const sdk = readJson<{ name: string; version: string }>(`${roots.sdk}package.json`);
+		const portable = (ranges: Record<string, string> | undefined) =>
+			ranges &&
+			Object.fromEntries(
+				Object.entries(ranges).map(([name, range]) => {
+					if (range === "catalog:") return [name, catalog[name]];
+					if (range.startsWith("workspace:")) {
+						expect(name).toBe(sdk.name);
+						return [name, `~${apiVersion}.0`];
+					}
+					return [name, range];
+				}),
+			);
+		expect(shown.dependencies).toEqual(portable(sample.dependencies));
+		expect(shown.devDependencies).toEqual(portable(sample.devDependencies));
+		expect(shown.peerDependencies).toEqual(sample.peerDependencies);
+		expect(fence?.body).not.toMatch(/"(?:workspace|catalog):/);
+		expect(sdk.version === "0.0.0" || sdk.version.startsWith(`${apiVersion}.`)).toBe(true);
+		expect(parseExtensionManifest(shown).ok).toBe(true);
+		expect(sample.keywords).toContain(catalogKeyword);
+		expect(sample.thinkrail.api).toBe(apiVersion as string);
+		expect(guide.text).toContain(`"api": "${apiVersion}"`);
+	});
+
+	test("the package tree lists the sample's sources and the build outputs", () => {
+		const [fence] = guarded("tree");
+		const lines = (fence?.body ?? "").split("\n");
+		expect(lines[0]).toBe("palette/");
+		const stack: string[] = [];
+		const leaves: string[] = [];
+		for (const line of lines.slice(1)) {
+			const match = /^((?:│ {3}| {4})*)[├└]── (\S+)/.exec(line);
+			if (!match) throw new Error(`not a tree row: ${line}`);
+			const depth = (match[1] as string).length / 4;
+			stack.length = depth;
+			stack.push(match[2] as string);
+			if (!(match[2] as string).endsWith("/")) leaves.push(stack.join(""));
+		}
+		const built = [sample.thinkrail.web, sample.thinkrail.styles].map((path) => packagePath(path));
+		for (const leaf of leaves) {
+			if (leaf.startsWith("dist/")) expect(built).toContain(leaf);
+			else expect(existsSync(new URL(`${roots.palette}${leaf}`, repo))).toBe(true);
+		}
+		for (const path of built) expect(leaves).toContain(path as string);
+		for (const folder of ["server", "web"]) {
+			for (const file of readdirSync(new URL(`${roots.palette}${folder}/`, repo))) {
+				if (!file.endsWith(".test.ts")) expect(leaves).toContain(`${folder}/${file}`);
+			}
+		}
+		expect(packagePath(sample.thinkrail.server)).toBe("server/index.ts");
+	});
+
+	test("shell commands use the sample's scripts and packages and the build command's real options", () => {
+		for (const fence of guarded("shell")) {
+			for (const line of fence.body.split("\n")) {
+				const words = line.trim().split(/\s+/);
+				if (words[0] === "npm" && words[1] === "run") {
+					expect(Object.keys(sample.scripts)).toContain(words[2] as string);
+				} else if (words[0] === "npm" && words[1] === "install") {
+					const dev = words.includes("--save-dev");
+					const declared = (dev ? sample.devDependencies : sample.dependencies) ?? {};
+					for (const name of words.slice(2).filter((word) => !word.startsWith("-"))) {
+						expect(Object.keys(declared)).toContain(name);
+					}
+				} else if (words[0] === "npm" && words[1] === "publish") {
+					expect(words.slice(2)).toEqual(["--access", sample.publishConfig.access]);
+				} else if (words[0] !== "thinkrail-extension") {
+					throw new Error(`unguarded command in ${fence.page}: ${line}`);
+				}
+			}
+		}
+	});
+
+	test("every thinkrail-extension build option the docs name exists in the CLI", () => {
+		const flags = pages.flatMap((page) => commandFlags(page.text));
+		expect(flags.length).toBeGreaterThan(0);
+		for (const flag of flags) expect(cliOptions).toContain(flag);
+		expect(guide.text).toContain(sample.scripts.build as string);
+		for (const page of pages) {
+			for (const flag of page.text.matchAll(/`(--[a-z-]+)(?: <\w+>)?`/g)) {
+				expect(cliOptions).toContain(flag[1] as string);
+			}
+		}
+	});
+
+	test("the extensions.json examples are absolute folders or npm sources in a lone extensions list", () => {
+		const blocks = guarded("extensions-json");
+		expect(blocks.length).toBeGreaterThan(0);
+		for (const fence of blocks) {
+			const parsed = JSON.parse(fence.body) as Record<string, unknown>;
+			expect(Object.keys(parsed)).toEqual(["extensions"]);
+			for (const source of parsed.extensions as unknown[]) {
+				expect(typeof source).toBe("string");
+				expect(/^(?:npm:.+|\/.+|~\/.+)$/.test(source as string)).toBe(true);
+			}
+		}
+		const declarations = read("packages/server/src/extensions/installed/runtime.ts");
+		expect(declarations).toContain('join(options.dataDir, "extensions.json")');
+	});
+
+	test("the manifest cases follow the host's table and hold under the site's validator", () => {
+		const hostCases = readJson<Record<string, unknown>[]>(
+			"packages/extension-api/src/manifestCases.json",
+		);
+		const shape = Object.keys(hostCases[0] ?? {}).sort();
+		for (const entry of hostCases) expect(Object.keys(entry).sort()).toEqual(shape);
+		const [fence] = guarded("manifest-cases");
+		const cases = JSON.parse(fence?.body ?? "") as {
+			label: string;
+			packageJson: unknown;
+			valid: boolean;
+		}[];
+		expect(cases.some((entry) => entry.valid)).toBe(true);
+		expect(cases.some((entry) => !entry.valid)).toBe(true);
+		for (const entry of cases) {
+			expect(Object.keys(entry).sort()).toEqual(shape);
+			expect([entry.label, parseExtensionManifest(entry.packageJson).ok]).toEqual([
+				entry.label,
+				entry.valid,
+			]);
+		}
+	});
+});
+
+describe("the docs' reference tables", () => {
+	const firstColumn = (guard: string) =>
+		tableRows(reference, guard).map((row) => codeSpans(row[0] as string));
+
+	test("the manifest fields are the build's manifest keys", () => {
+		const keys = /const MANIFEST_KEYS = \[([^\]]+)\]/.exec(
+			read(`${roots.sdk}src/builder/manifest.ts`),
+		)?.[1];
+		const expected = [...(keys ?? "").matchAll(/"(\w+)"/g)].map((match) => match[1]);
+		expect(firstColumn("manifest-fields").map((spans) => spans[0])).toEqual(expected);
+	});
+
+	test("the server descriptor and session services match the frozen API snapshot", () => {
+		expect(firstColumn("server-descriptor").map((spans) => spans[0])).toEqual(
+			declaredKeys("ServerExtension"),
+		);
+		const services = firstColumn("session-services").map((spans) =>
+			(spans[0] as string).replace(/\(.*$/, ""),
+		);
+		expect(services.sort()).toEqual(declaredKeys("ExtensionSessionServices").sort());
+	});
+
+	test("the web descriptor, render props and registration options match the frozen API snapshot", () => {
+		expect(firstColumn("render-props").map((spans) => spans[0])).toEqual(
+			declaredKeys("ToolRenderProps"),
+		);
+		expect(firstColumn("registration-options").map((spans) => spans[0])).toEqual(
+			declaredKeys("ToolRegistrationOptions"),
+		);
+		const shapes = codeSpans(guardedLines(reference, "web-descriptor").join(" ")).filter((span) =>
+			span.startsWith("{"),
+		);
+		expect(shapes).toHaveLength(1);
+		const [shape] = shapes;
+		const fields = /^\{ (.+) \}$/.exec(shape ?? "")?.[1]?.split(", ");
+		expect(fields).toEqual(declaredKeys("WebExtension"));
+		const options = declaredKeys("ToolRegistrationOptions");
+		expect(reference.text).toContain(`reads only these ${numberWords[options.length]} options`);
+		expect(guide.text).toContain(`lists all ${numberWords[options.length]}`);
+	});
+
+	test("the shared modules are the frozen allow-list, in order, with every export name", () => {
+		const items = guardedLines(reference, "shared-modules").map((line) => {
+			const match = /^- `([^`]+)`: (.+)$/.exec(line);
+			if (!match) throw new Error(`not a shared-module item: ${line}`);
+			return [match[1] as string, codeSpans(match[2] as string)] as const;
+		});
+		expect(Object.fromEntries(items)).toEqual(snapshotExports);
+		expect(items.map(([specifier]) => specifier)).toEqual(Object.keys(snapshotExports));
+		expect(sharedModules.modules).toEqual(snapshotExports);
+		expect(Object.keys(sharedModules.modules)).toEqual(Object.keys(snapshotExports));
+		expect(sharedModules.api).toBe(apiVersion as string);
+	});
+
+	test("the guide's summary of the shared modules names exactly those modules and real exports", () => {
+		const spans = codeSpans(guardedLines(guide, "shared-modules-summary").join("\n"));
+		const uiPrefix = "@thinkrail/extension-sdk/ui/<module>";
+		const uiAt = spans.indexOf(uiPrefix);
+		expect(uiAt).toBeGreaterThan(-1);
+		const modules = Object.keys(snapshotExports);
+		const exports = new Set(Object.values(snapshotExports).flat());
+		const named = new Set<string>();
+		for (const [index, span] of spans.entries()) {
+			if (span === uiPrefix) continue;
+			if (/^(?:react|@thinkrail\/)/.test(span)) named.add(span);
+			else if (index > uiAt && modules.includes(`@thinkrail/extension-sdk/ui/${span}`)) {
+				named.add(`@thinkrail/extension-sdk/ui/${span}`);
+			} else expect([span, exports.has(span)]).toEqual([span, true]);
+		}
+		expect([...named].sort()).toEqual([...modules].sort());
+	});
+
+	test("the build options are exactly the CLI's options, with its default entries", () => {
+		const rows = tableRows(reference, "build-options");
+		const flags = rows.flatMap((row) =>
+			codeSpans(row[0] as string).map((span) => span.replace(/ <\w+>$/, "")),
+		);
+		expect(new Set(flags)).toEqual(cliOptions);
+		const defaults = /export const DEFAULT_ENTRIES = \[([^\]]+)\]/.exec(
+			read(`${roots.sdk}src/builder/index.ts`),
+		)?.[1];
+		const entries = [...(defaults ?? "").matchAll(/"([^"]+)"/g)].map((entry) => entry[1] as string);
+		expect(entries.length).toBeGreaterThan(0);
+		const entryRow = rows.find((row) => (row[0] as string).includes("--entry"));
+		for (const entry of entries) expect(codeSpans(entryRow?.[1] as string)).toContain(entry);
+	});
+});
+
+describe("the guide's facts about the sample and the SDK", () => {
+	test("links the sample's source folder, which exists", () => {
+		expect(guide.text).toContain(
+			"https://github.com/JetBrains/thinkrail/tree/main/extension-examples/palette",
+		);
+		expect(guide.text).toContain(`npm:${sample.name}`);
+	});
+
+	test("lists exactly the package names the host reserves, on both pages", () => {
+		const builtins = readdirSync(new URL("thinkrail-extensions/", repo), { withFileTypes: true })
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => entry.name);
+		expect(builtins.length).toBeGreaterThan(0);
+		for (const name of builtins) {
+			const half = ["server/index.ts", "web/index.ts", "web/index.tsx"]
+				.map((file) => `thinkrail-extensions/${name}/${file}`)
+				.find((path) => existsSync(new URL(path, repo)));
+			expect([name, half && read(half).includes(`\tname: "${name}",`)]).toEqual([name, true]);
+		}
+		const slots = /export const HOST_BUILTIN_EXTENSION_NAMES = \[([^\]]+)\]/.exec(
+			read("packages/server/src/agent/mcp/engine.ts"),
+		)?.[1];
+		const hostNames = [...(slots ?? "").matchAll(/"([^"]+)"/g)].map((match) => match[1] as string);
+		expect(hostNames.length).toBeGreaterThan(0);
+		expect(read("packages/server/src/extensions/installedHost.ts")).toContain(
+			"reservedNames: () => [...builtinExtensionNames(), ...(options.hostExtensionNames ?? [])]",
+		);
+		for (const page of pages) {
+			const listed = codeSpans(guardedLines(page, "reserved-names").join(" "));
+			expect([page.name, listed.sort()]).toEqual([page.name, [...builtins, ...hostNames].sort()]);
+		}
+	});
+
+	test("names only tools the host really registers as host-owned", () => {
+		const sources = [
+			"packages/server/src/agent/titleTool.ts",
+			"packages/server/src/agent/requestReviewTool.ts",
+			"packages/server/src/agent/mcp/engine.ts",
+			"packages/pi-subagents/src/mapping.ts",
+			"pi-extensions/ask-user-question/src/core.ts",
+		].map(read);
+		const tools = codeSpans(guardedLines(guide, "host-tools").join(" "));
+		expect(tools.length).toBeGreaterThan(0);
+		for (const tool of tools) {
+			const declared = sources.some((source) => new RegExp(`= \\[?"${tool}"`).test(source));
+			expect([tool, declared]).toEqual([tool, true]);
+		}
+	});
+
+	test("states which card draws a call, as the app's tool registry decides", () => {
+		const registry = read("apps/web/src/chat/toolRegistry.tsx");
+		expect(registry).toContain(
+			"if (exact.has(name) || (served?.has(name) && prefixed(name))) continue;",
+		);
+		expect(registry).toContain(
+			"for (const [name, registration] of state.builtIn) exact.set(name, registration);",
+		);
+		expect(read("apps/web/src/extensions/loader.ts")).toContain(
+			"([tool]) => !descriptor.shadowed?.includes(tool),",
+		);
+		expect(read("apps/web/src/chat/tools/mcp/mcpResult.ts")).toContain(
+			'export const MCP_TOOL_PREFIX = "mcp__";',
+		);
+		expect(read("apps/web/src/chat/tools/mcp/register.ts")).toContain(
+			"registerToolRendererPrefix(MCP_TOOL_PREFIX,",
+		);
+		expect(read("packages/server/src/agent/titleTool.ts")).toContain(
+			'export const SET_TITLE_TOOL_NAME = "set_title";',
+		);
+		const cardSources = [
+			...readdirSync(new URL("apps/web/src/chat/tools/", repo), { recursive: true })
+				.map(String)
+				.filter((file) => file.endsWith("register.ts"))
+				.map((file) => `apps/web/src/chat/tools/${file}`),
+			...readdirSync(new URL("thinkrail-extensions/", repo), { withFileTypes: true })
+				.filter((entry) => entry.isDirectory())
+				.flatMap((entry) =>
+					["web/index.ts", "web/index.tsx"].map(
+						(file) => `thinkrail-extensions/${entry.name}/${file}`,
+					),
+				)
+				.filter((path) => existsSync(new URL(path, repo))),
+		].map(read);
+		expect(cardSources.length).toBeGreaterThan(2);
+		for (const source of cardSources) {
+			expect(source).not.toMatch(
+				/registerToolRenderer\("set_title"|\bset_title: \{|SET_TITLE_TOOL_NAME/,
+			);
+		}
+		for (const page of pages) {
+			const text = guardedLines(page, "card-precedence").join(" ");
+			for (const span of ["set_title", "mcp__"]) {
+				expect([page.name, text.includes(`\`${span}`)]).toEqual([page.name, true]);
+			}
+		}
+		expect(flat(reference.text)).toContain("lists under the extension's `shadowed`");
+	});
+
+	test("names the descriptor fields an installed server half may not declare, and the loader's messages", () => {
+		const loader = read("packages/server/src/extensions/installed/loader.ts");
+		const fields = /const BUILT_IN_ONLY_FIELDS = \[([^\]]+)\]/.exec(loader)?.[1];
+		const names = [...(fields ?? "").matchAll(/"(\w+)"/g)].map((match) => match[1] as string);
+		expect(names.length).toBeGreaterThan(0);
+		const listed = codeSpans(guardedLines(reference, "built-in-only-fields").join(" "));
+		for (const name of names) {
+			expect(listed).toContain(name);
+			expect(declaredKeys("ServerExtension")).not.toContain(name);
+		}
+		expect(loader).toMatch(
+			/return `"\$\{key\}" is not part of extension API 1\.0: only a built-in extension declares it`;/,
+		);
+		expect(flat(reference.text)).toContain(
+			`"\\"${names[0]}\\" is not part of extension API 1.0: only a built-in extension declares it"`,
+		);
+		const notADescriptor = /const notADescriptor = "([^"]+)";/.exec(loader)?.[1];
+		expect(notADescriptor).toBe("its default export is not a defineServerExtension descriptor");
+		for (const page of pages) expect(flat(page.text)).toContain(`"${notADescriptor}"`);
+		expect(flat(guardedLines(guide, "load-failures").join(" "))).toContain(
+			"a descriptor field only ThinkRail's built-in extensions declare",
+		);
+	});
+
+	test("loads childExtensions after ThinkRail's own child factories, in subagents that load extensions", () => {
+		expect(read("packages/pi-delegation/src/service.ts")).toContain(
+			"...(options.extensions === true ? factories : []),\n\t\t\t...(options.extensions === true ? (bindings.childInstalledExtensionFactories ?? []) : []),",
+		);
+		expect(read("packages/server/src/agent/delegation.ts")).toContain(
+			"childInstalledExtensionFactories: childInstalledExtensionFactories(),",
+		);
+		expect(read("packages/pi-subagents/src/definitions.ts")).toContain("extensions?: boolean;");
+		const row = tableRows(reference, "server-descriptor").find((cells) =>
+			(cells[0] as string).includes("`childExtensions`"),
+		);
+		expect(row?.[1]).toContain("`extensions: true`");
+		expect(row?.[1]).toContain("after ThinkRail's own child factories");
+	});
+
+	test("states how sources install, update and go offline as the host has it", () => {
+		const runtime = read("packages/server/src/extensions/installed/runtime.ts");
+		expect(runtime).toContain(
+			'const value = process.env.PI_OFFLINE?.toLowerCase();\n\treturn value === "1" || value === "true" || value === "yes";',
+		);
+		expect(flat(reference.text)).toContain("With `PI_OFFLINE` set to `1`, `true` or `yes`");
+		expect(read("packages/server/src/extensions/installed/installer.ts")).toContain(
+			"...(command && command.length > 0 ? { npmCommand: command } : {}),",
+		);
+		expect(flat(reference.text)).toContain("installed with the npm command configured for pi");
+		const mutations = read("packages/server/src/agent/packages/mutations.ts");
+		expect(mutations).toContain("const base = ctx.cwd ?? ctx.agentDir;");
+		expect(mutations).toContain(
+			'const source = kind === "local" ? resolveLocalSource(raw, base) : raw;',
+		);
+		expect(flat(reference.text)).toContain(
+			"a folder relative to the open project (or to pi's folder without one), which it saves as an absolute path",
+		);
+		expect(read("packages/server/src/extensions/installed/installer.ts")).toContain(
+			"return (await manager.checkForAvailableUpdates()).length > 0;",
+		);
+		const pi = "node_modules/@earendil-works/pi-coding-agent/dist/";
+		expect(read(`${pi}core/package-manager.js`)).toContain(
+			'if (parsed.type === "local" || parsed.pinned) {',
+		);
+		expect(read(`${pi}core/package-manager.js`)).toContain("pinned: isExactNpmVersion(version),");
+		expect(read(`${pi}utils/git.js`)).toContain("pinned: Boolean(args.ref),");
+		expect(flat(guide.text)).toContain(
+			"an npm source pinned to a version (`npm:<name>@<version>`) and a git source pinned to a ref (`…@<ref>`) are not checked",
+		);
+		expect(read("packages/server/src/extensions/installed/SPEC.md")).toContain(
+			"**A CommonJS entry cannot use the host's pi or typebox.**",
+		);
+		expect(reference.text).toContain("a CommonJS entry cannot use ThinkRail's pi and typebox");
+	});
+
+	test("states the server load timeout and its message as the host has them", () => {
+		const loader = read("packages/server/src/extensions/installed/loader.ts");
+		const ms = Number(
+			/export const EXTENSION_LOAD_TIMEOUT_MS = ([\d_]+);/.exec(loader)?.[1]?.replace(/_/g, ""),
+		);
+		expect(ms).toBeGreaterThan(0);
+		const seconds = ms / 1000;
+		const message =
+			/new Error\(`(the server entry did not finish loading within) \$\{timeoutMs \/ 1000\} s`\)/.exec(
+				loader,
+			)?.[1];
+		expect(message).toBeDefined();
+		expect(read("packages/server/src/extensions/inline.ts")).toMatch(
+			/did not finish loading within \$\{EXTENSION_LOAD_TIMEOUT_MS \/ 1000\} s/,
+		);
+		for (const page of pages) {
+			expect(flat(page.text)).toContain(`"${message} ${seconds} s"`);
+			for (const match of page.text.matchAll(/(\d+) seconds/g)) {
+				expect(Number(match[1])).toBe(seconds);
+			}
+		}
+	});
+
+	test("states the build's exit codes and what counts as a usage error", () => {
+		const cli = read(`${roots.sdk}src/cli.ts`);
+		expect(cli).toMatch(
+			/function usageError\(message: string\): number \{\n[^\n]*\n\treturn 2;\n\}/,
+		);
+		expect(cli).toContain(
+			"if (error instanceof ExtensionUsageError) {\n\t\t\tprocess.exitCode = usageError(error.message);",
+		);
+		expect(cli).toMatch(/console\.error\(error\);\n\t\tprocess\.exitCode = 1;/);
+		expect(read(`${roots.sdk}src/builder/paths.ts`)).toContain("throw new ExtensionUsageError(");
+		const text = guardedLines(reference, "exit-codes").join(" ");
+		expect(text).toContain(
+			"with 0 after a build or `--help`, with 1 when the build fails, and with 2 on a usage error",
+		);
+		expect(flat(guide.text)).toContain(
+			"exits with 1 when the build fails and with 2 on a usage error",
+		);
+	});
+
+	test("asks for the SDK as a tilde range of the API version", () => {
+		expect(guide.text).toContain(`\`~${apiVersion}.0\``);
+		expect(guide.text).toContain("never with a caret");
+		for (const page of pages) {
+			for (const match of page.text.matchAll(/\^\d+\.\d+\.\d+/g)) {
+				const line = page.text.slice(
+					page.text.lastIndexOf("\n", match.index) + 1,
+					page.text.indexOf("\n", match.index),
+				);
+				expect([page.name, line]).toEqual([
+					page.name,
+					expect.stringContaining("would let npm install"),
+				]);
+			}
+		}
+	});
+
+	test("mentions a manifest image only where the manifest fields are described", () => {
+		const within = (page: (typeof pages)[number], from: string, to: string) => {
+			const start = page.text.indexOf(from);
+			const end = page.text.indexOf(to, start);
+			expect(start).toBeGreaterThan(-1);
+			expect(end).toBeGreaterThan(start);
+			for (const match of page.text.matchAll(/\bimages?\b/gi)) {
+				expect([page.name, match.index > start && match.index < end]).toEqual([page.name, true]);
+			}
+		};
+		within(guide, "The `thinkrail` manifest:", "The description, author and version");
+		within(reference, "## The thinkrail manifest", "### What the build adds");
+	});
+
+	test("quotes utilities, classes, the tool and the setting the sample really uses", () => {
+		const web = ["web/index.tsx", "web/PaletteCard.tsx"]
+			.map((file) => read(`${roots.palette}${file}`))
+			.join("\n");
+		const server = read(`${roots.palette}server/index.ts`);
+		for (const span of codeSpans(guide.text)) {
+			if (/^palette:[\w-]+$/.test(span) || /^tr-[\w-]+$/.test(span)) expect(web).toContain(span);
+		}
+		expect(server).toContain('export const PALETTE_TOOL = "color_palette";');
+		expect(web).toContain("color_palette: {");
+		expect(server).toContain('title: "Rate contrast"');
+		expect(guide.text).toContain("**Rate contrast**");
+	});
+
+	test("keeps the SDK a dev dependency with a type-only server import, as the sample does", () => {
+		const sdkName = readJson<{ name: string }>(`${roots.sdk}package.json`).name;
+		expect(Object.keys(sample.devDependencies)).toContain(sdkName);
+		expect(Object.keys(sample.dependencies ?? {})).not.toContain(sdkName);
+		const server = read(`${roots.palette}server/index.ts`);
+		expect(server).toContain(
+			`import type { ExtensionSessionServices, ServerExtension } from "${sdkName}/server";`,
+		);
+		expect(server).toMatch(/^\} satisfies ServerExtension;$/m);
+		expect(server).not.toMatch(new RegExp(`^import \\{[^}]*\\} from "${sdkName}`, "m"));
+		expect(read(`${roots.sdk}src/server.ts`)).toContain(
+			"export function defineServerExtension<T extends ServerExtension>(extension: T): T {\n\treturn extension;\n}",
+		);
+		const manifest = read(`${roots.sdk}src/builder/manifest.ts`);
+		expect(manifest).not.toContain("pkg.dependencies?.[SDK_PACKAGE]");
+		expect(manifest).toContain('warnings.push(\'"image" is not used');
+		expect(flat(guide.text)).toContain("satisfies ServerExtension");
+		expect(flat(guide.text)).toContain(
+			"about a missing `thinkrail-extension` keyword and an unknown manifest field",
+		);
+		expect(flat(reference.text)).toContain(
+			"It does not ask for the SDK in `dependencies`: an extension keeps it in `devDependencies`.",
+		);
+		for (const page of pages) {
+			expect([page.name, /extension-sdk` is an ordinary dependency/.test(page.text)]).toEqual([
+				page.name,
+				false,
+			]);
+		}
+	});
+
+	test("states the SDK's Node floor", () => {
+		const engines = readJson<{ engines: { node: string } }>(`${roots.sdk}package.json`).engines;
+		expect(engines.node).toBe(">=22.19");
+		expect(guide.text).toContain("Node 22.19 or newer");
+	});
+});
+
+describe("the docs' links between sections", () => {
+	const slug = (heading: string) =>
+		heading
+			.toLowerCase()
+			.replace(/[^a-z0-9 -]/g, "")
+			.replace(/ /g, "-");
+	const anchors = new Map(
+		pages.map((page) => [
+			page.name,
+			new Set([...page.text.matchAll(/^#{2,4} (.+)$/gm)].map((match) => slug(match[1] as string))),
+		]),
+	);
+
+	test.each(pages.map((page) => [page.name, page] as const))(
+		"%s links only to headings that exist",
+		(_name, page) => {
+			for (const match of page.text.matchAll(/\]\((\/docs\/([a-z-]+)\/)?#([a-z0-9-]+)\)/g)) {
+				const target = match[2] ?? page.name;
+				expect([target, anchors.get(target)?.has(match[3] as string)]).toEqual([target, true]);
+			}
+		},
+	);
+});

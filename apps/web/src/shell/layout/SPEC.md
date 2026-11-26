@@ -15,8 +15,8 @@ The shell-owned, headless workbench engine: the normalized frontend-local frame 
 ## Boundary
 
 - **Owns:** web-local `WorkbenchFrame`/`WorkspaceViewState` types; frame-plus-view projection; pure topology, placement, attention, and policy operations; semantic minimum and independent group-limit checks; one-result drag previews; center/side/bottom renderers; alignment-owned nested composition and side-width projection; tab-strip overflow; ARIA tab/separator behavior; and the terminal visibility gate.
-- **Public surface (`index.ts`):** all current-layout types; workbench renderer/controller; the edge-chrome primitives (`AuxiliaryRail`, `AuxiliaryRailToolButton`, `AuxiliaryRailActionButton`, `AuxiliaryPaneHeader`, `AuxiliaryPaneHideButton`); pure mutations, projection, and validation helpers; the tab-action list (`tabActions`, `TabAction`) and the `WorkbenchTabCommands` provider contract; built-in preset definitions plus instantiate/apply/capture operations and `frameMatchesPreset` (geometry equality ignoring generated ids, which Settings uses to mark the applied preset); attention fallback helpers; and unavailable-reason results. Callers inject resource renderers, the workspace worktree path for file-tab copy actions, the left rail's footer (`renderLeftRailFooter`) and the key caps of the chords that repeat a chrome control (`chromeShortcuts`), and commit complete pure results rather than splicing arrays.
-- **External deps:** `@thinkrail/contracts` for the resource-free custom-preset DTO and git diff-scope type only; shell-neutral `lib` attention/id primitives plus `copyText` / `joinWorkspacePath` for file-tab copy actions; React; `@thinkrail/ui/*` (including `@thinkrail/ui/resizable`); `@dnd-kit/core`; the `keybindings` catalog's `TAB_KEYS` / `RAIL_KEYS` (the keys the tab strip and rails compare, listed by the cheatsheet — never a chord's meaning, which the shell injects).
+- **Public surface (`index.ts`):** all current-layout types; workbench renderer/controller; the edge-chrome primitives (`AuxiliaryRail`, `AuxiliaryRailToolButton`, `AuxiliaryRailActionButton`, `AuxiliaryPaneHeader`, `AuxiliaryPaneHideButton`); pure mutations, projection, and validation helpers; the tab-action list (`tabActions`, `TabAction`), the injected chat actions' shape (`ChatTabAction`, `ChatTabActions`) and the `WorkbenchTabCommands` provider contract; built-in preset definitions plus instantiate/apply/capture operations and `frameMatchesPreset` (geometry equality ignoring generated ids, which Settings uses to mark the applied preset); attention fallback helpers; and unavailable-reason results. Callers inject resource renderers, the workspace worktree path for file-tab copy actions, the left rail's footer items (`leftRailFooter`, `AuxiliaryRailFooterItem`s), the chat tabs' extra actions (`chatActions`) and the key caps of the chords that repeat a chrome control (`chromeShortcuts`), and commit complete pure results rather than splicing arrays.
+- **External deps:** `@thinkrail/contracts` for the resource-free custom-preset DTO and git diff-scope type only; shell-neutral `lib` attention/id primitives plus `copyText` / `joinWorkspacePath` for file-tab copy actions; React; `@thinkrail/ui/*` (including `@thinkrail/ui/resizable`); `@dnd-kit/core`; the `keybindings` module's `LOCAL_KEY_DEFAULTS` for scopes `tabs` / `rails`, matched through `@thinkrail/ui/local-keys`' `useLocalKeys` (reading the shell-provided keymap context keeps the layout props-pure: never a chord's meaning, which the shell injects).
 - **Forbidden:** server/shared/pi imports; domain-resource lifetime; browser persistence or WS calls; feature-panel internals; a mutable third-party docking model; inline component styles; or non-semantic colour values.
 
 ## State contract
@@ -26,7 +26,11 @@ One `WorkbenchFrame` belongs to a frontend surface, not a workspace. It carries 
 A `WorkspaceViewState` is keyed by workspace and references frame group ids. It carries
 file/diff/changes/chat/document/terminal membership and order plus center preview identity (a `changes`
 tab is the per-scope review surface defined in the store spec; its layout record is kind + id + name +
-scope, nothing cached, and it is preview-eligible like file and diff tabs). The separate
+scope, nothing cached, and it is preview-eligible like file and diff tabs) and `extension` tabs. An
+`extension` tab hosts an extension's panel ([[submodule-web-shell]] § Extension panels); its record is kind +
+id + name + extension + panel + the panel's `titleKey` + flat string `params`, nothing cached. It lives
+in the center only, is never preview-eligible, opens once per (extension, panel, params) per workspace,
+and shows a generic tab icon — layout never reads the extension registry. The separate
 `LayoutAttention` overlay carries selection per group, last focus for center/each auxiliary region, and
 per-group navigation clocks. Attention is keyed per workspace, but a selected singleton tool is shared
 across the window's views (a resource selection is not); the pure adoption rule lives here and its
@@ -43,7 +47,8 @@ resolved when the operation runs, never persisted. Helpers evaluated during rend
 `describeLayoutGroup`, `removeLayoutGroup`, `separatePanesReason`, `layoutPresetName`) take the caller's
 translator as their first argument, so a language change recomputes them. `layoutTabName` words every
 default name at render from the tab's kind (tool, untitled chat, default terminal, Changes / diff scope,
-plan document) through `lib`'s default-name helpers, and shows a name set by the user or agent verbatim.
+plan document, extension panel by its persisted `titleKey` when it is a key of this build, else the panel
+id) through `lib`'s default-name helpers, and shows a name set by the user or agent verbatim.
 Its optional third argument, the Workbench's **`chatFirstPrompts`** prop (`ChatFirstPrompts`, first prompt by
 session id, injected by the shell beside `onRenameChat`), labels an unnamed chat tab — and a plan
 document whose stored chat name is empty, by `sourceId` — by the chat's first prompt through `lib`'s
@@ -57,7 +62,11 @@ promotes that same placement in place. A keep that arrives while the read is sti
 into one final keep that carries the leading preview-slot claim. Only two open paths wait the shared
 250 ms settle window: a single click (or keyboard activation) on the active preview tab, so a double click
 is not read as two keeps, and the Changes review-tab preview, which waits even when code rather than a
-click opens it. Outside the open paths, the legacy-selection Review reveal waits out what is left of a
+click opens it. The tab click's settled keep commits without a focus request: the click already placed
+focus, and within the window the reader may have moved it. A focus request there ran a frame later and
+took focus back to the tab from wherever it had gone, even from `body` in the frame after a review
+composer's save disabled its field and before focus recovery ran, so the composer no longer returned
+focus to its block cursor. Outside the open paths, the legacy-selection Review reveal waits out what is left of a
 browse row's window. `isToolShowing` and `showingAuxiliaryKey` read which auxiliary tools are selected in
 an expanded pane, so the shell can tell whether Review shows and whether the user changed tools since.
 Pointer/resize drafts and viewport compression remain runtime-only.
@@ -99,10 +108,25 @@ holds nothing but terminals, `selectedByGroup` is the whole recall and the forme
 singleton-tool fan-out. Activating the already displayed entry folds only its group; restoring an entry
 reveals/unfolds/selects in one transition. An empty bottom entry reveals a process-free creation surface, not a terminal reservation.
 
-`AuxiliaryRail` is a props-driven toolbar, owning only roving DOM focus. An optional `footer` renders
-pinned to the rail's far end (the left rail's keyboard-shortcuts icon, an `AuxiliaryRailActionButton`
-with the rail-entry skin) and joins the roving order after the last entry: arrows, Home and End reach
-it, and it is the tab stop only after it was focused last. The workbench adapts
+**Hiding every pane** (*Hide all panels*, [[submodule-web-shell]] *Global chords*). One visibility rule
+serves the side and bottom toggles and this command: a region shows while it is visible and not every
+group is folded (`isAuxiliaryRegionShown`, `shownAuxiliaryRegions`). `hideAuxiliaryPanels(document,
+attention, remembered)` hides every shown region in one result with the center recovery focus a side hide
+uses, and returns the restore memory `panelsToRestore` (what it hid plus what was remembered), or `null`
+when nothing shows. `toggleAuxiliaryPanels` is that hide, else it shows the remembered regions — left and
+right when none are — through `showSide` / `showBottom` in left, right, bottom order, with an empty memory
+and, instead of a focus target, the tabs those shows would focus as `select` (attention only).
+`keptPanelsToRestore(memory, frame)` is the clearing rule: a committed frame in which any region shows keeps
+no memory, so every way of opening a pane clears it without knowing the command. The memory is not frame
+state: it is runtime-only store state that `layoutState` installs with the frame
+([[submodule-web-shell-layout-state]]).
+
+`AuxiliaryRail` is a props-driven toolbar, owning only roving DOM focus. An optional `footer` — a list
+of keyed items, each an `AuxiliaryRailActionButton` with the rail-entry skin (the left rail's extension
+icons above its keyboard-shortcuts icon, [[submodule-web-shell]] § Extension panels) — renders pinned to
+the rail's far end and joins the roving order after the last entry: arrows, Home and End reach each item
+(End the last), and an item is the tab stop only after it was focused last; one that leaves the rail
+hands the stop back to the entries. The workbench adapts
 placed tools through the existing `WorkbenchTab` menu/drag controller; terminal-group entries navigate
 rather than dragging or closing a representative session. The selected tool gets a plain pane header
 whose title is a drag handle for that tool — the same drag data as its rail entry, so a user who looks at
@@ -211,12 +235,12 @@ directional edge hints at drag start and fill the true resulting half on hover. 
 clears on pointer leave; all hints clear on drop or cancel; decorative layers never alter hit-testing or the
 committed result.
 
-Creating or deleting a group is visibly a frame command and therefore affects every workspace in this window. Moving a resource among existing groups affects only its workspace view. Moving a singleton tool changes frame placement globally within this window. Uncommitted drag/resize drafts stay runtime-local and commit once on drop/pointer-up; no host revision can cancel them. A local projection epoch and required workspace identity fence gestures and delayed focus/preview-settle work without remounting the workbench. A workspace switch cancels an active gesture even when a singleton placement or deterministic terminal id also exists in the new view; stale focus requests are not replayed on return. A focus request marked `onlyIfFocusLost` runs only when DOM focus is absent, on `body`, disconnected, or no longer rendered; the check happens when the request executes, after the arrangement commits. A tab focus request also yields when DOM focus already rests inside the panel that its selected tab controls: the content claimed focus first (a palette pick's composer focus, a terminal restoring its own), and moving it to the tab button would undo that. `hideSide`/`hideBottom` mark their center focus target `focusOnlyIfLost`, and every path that applies them honors it: the global chords, header and menu hide, and collapsing a region by dragging its separator to zero. Tab removal also cancels its drag. Invalidating a resize restores the live panel group's committed
+Creating or deleting a group is visibly a frame command and therefore affects every workspace in this window. Moving a resource among existing groups affects only its workspace view. Moving a singleton tool changes frame placement globally within this window. Uncommitted drag/resize drafts stay runtime-local and commit once on drop/pointer-up; no host revision can cancel them. A local projection epoch and required workspace identity fence gestures and delayed focus/preview-settle work without remounting the workbench. A workspace switch cancels an active gesture even when a singleton placement or deterministic terminal id also exists in the new view; stale focus requests are not replayed on return. A focus request marked `onlyIfFocusLost` runs only when DOM focus is absent, on `body`, disconnected, or no longer rendered; the check happens when the request executes, after the arrangement commits. A tab focus request also yields when DOM focus already rests inside the panel that its selected tab controls: the content claimed focus first (a palette pick's composer focus, a terminal restoring its own), and moving it to the tab button would undo that. A request marked `content` (a keyboard open, [[submodule-web-shell]]) focuses the panel's `[data-focus-default]` target instead (`defaultFocusTarget`, the regions' rule, [[module-ui]]), retrying each frame for a bounded budget while the view loads; it gives up once focus moves from where the request found it to anything but `<body>` (the reader went on), and falls back to the tab button when nothing renders in time; a newer request cancels the wait. `hideSide`/`hideBottom` mark their center focus target `focusOnlyIfLost`, and every path that applies them honors it: the global chords, header and menu hide, and collapsing a region by dragging its separator to zero. Tab removal also cancels its drag. Invalidating a resize restores the live panel group's committed
 projection before paint and rejects the remainder of that gesture until release, not merely its pending
 persistence. The same recovery applies to outer/aligned sides, bottom height, auxiliary stacks, and
 recursive center splits without keying the workbench by workspace. The canceled-drag announcement is reserved for a pointer/keyboard gesture in progress when its base or workspace is replaced, or a tab drag whose tab left the document: `@thinkrail/ui/resizable` reports layout on every group mount and ordinary resize, so a group that merely lived through earlier local transitions announces nothing.
 
-Pointer is never the sole arrangement path. Keyboard controls, shadcn menus (opened from the keyboard too) and the palette's active-tab commands cover group/tab focus, select/close/keep/reorder/move, directional center splits, absolute and adjacent auxiliary-group creation, explicit group remove/merge, fold/show/hide/tool restore, bottom alignment, and keyboard separator resize, always with an unavailable reason. A tab can reproduce every interior pointer placement through move plus New group. The optional chat-rename menu item replaces the tab label with an inline editor and commits through a shell-injected callback: layout identifies the chat tab and owns the transient edit interaction but never imports transport/store or performs the domain mutation. Resource strips implement WAI-ARIA tabs and visible roving focus. Rails are named toolbars of pressed buttons: arrows move focus, Enter/Space activates, and `aria-controls` links each existing group. Tool bodies are named regions and terminal bodies are tabpanels. A folded auxiliary group retains a linked native-hidden region while unmounting the body; its selected edge-rail control is the focus endpoint when no tab renders. A local fold moves focus to that control and expansion returns it to the selected tab. Separators expose orientation and current/min/max values. `Ctrl+F6` visits upper-row groups in visual order, then visible bottom groups left-to-right.
+Pointer is never the sole arrangement path. Keyboard controls, shadcn menus (opened from the keyboard too) and the palette's active-tab commands cover group/tab focus, select/close/keep/reorder/move, directional center splits, absolute and adjacent auxiliary-group creation, explicit group remove/merge, fold/show/hide/tool restore, bottom alignment, and keyboard separator resize, always with an unavailable reason. A tab can reproduce every interior pointer placement through move plus New group. The optional chat-rename menu item replaces the tab label with an inline editor and commits through a shell-injected callback: layout identifies the chat tab and owns the transient edit interaction but never imports transport/store or performs the domain mutation. Resource strips implement WAI-ARIA tabs and visible roving focus. Rails are named toolbars of pressed buttons: arrows move focus, Enter/Space activates, and `aria-controls` links each existing group. The arrow twins (h/l by default) repeat ←/→ on a tab strip (wrap included) and on the bottom rail, and j/k repeat ↓/↑ on the side rails; they, a tab's `Delete` close and `Alt+Shift+←/→` move (`tabs.*`) and a rail entry's `Delete` remove and `Alt+Shift+arrow` moves (`rails.*`) are rebindable local keys matched by physical `code` through `useLocalKeys` (IME-safe), and every tab and rail entry's `aria-keyshortcuts` lists the locked keys plus that hook's `aria` for them, so a rebind is announced. Other letters are free there, unlike the sidebar trees, which take hjkl too, `S` for search and swallow the rest. Tool bodies are named regions and terminal bodies are tabpanels. A folded auxiliary group retains a linked native-hidden region while unmounting the body; its selected edge-rail control is the focus endpoint when no tab renders. A local fold moves focus to that control and expansion returns it to the selected tab. Separators expose orientation and current/min/max values. `Ctrl+F6` visits upper-row groups in visual order, then visible bottom groups left-to-right.
 
 **Regions.** Every rendered group section is a keyboard region: it carries `data-region` (its group id)
 and `data-region-kind` (`left` | `center` | `right` | `bottom`), beside the shell's top bar (`topbar`)
@@ -224,19 +248,27 @@ and Project Home projects pane (`home`). The shell's tracker marks the one holdi
 `data-region-active` (its accent line) and flashes a frame on a region a keyboard move enters
 ([[submodule-web-shell]], *Global chords*; [COLOR.md](../../styles/COLOR.md), *Active region*); a region
 root is positioned and isolates its stacking, so both stay inside it, under portals and resize handles. Folded groups and hidden sides render no section and are no region. `F6` and the focus chords land in a
-region by one rule: the element last focused inside it, if still rendered and focusable there (the root
+region by one rule: a focusable `[data-focus-claim]` first — a surface waiting on the user, today the
+docked question's current option ([[module-ext-ask-user-question]]); else the element last focused inside
+it, if still rendered and focusable there (the root
 itself is never remembered, nor a treeitem or tab that has since stopped being its roving container's tab
-stop — a row selected while focus was elsewhere, or another selected tab, takes the landing over); else a
+stop, nor a chat transcript item that is no longer the cursor (`data-transcript-item` without
+`data-transcript-current`) — a row selected while focus was elsewhere, another
+selected tab, or the transcript's moved cursor takes the landing over); else a
 `[data-focus-default]`, innermost markers first (a tool body may hold a more specific default, as Files
 marks its tree or changes list below its mode toolbar, and Artifacts its list below its chat filter) — or,
 when that
 marker is not itself focusable, its first tabbable descendant; else the selected tab; else the root (sections are
-`tabIndex=-1`) or its first tabbable. The defaults are the chat composer's textarea, a terminal's xterm
+`tabIndex=-1`, with no ring: a focused root shows only its accent line) or its first tabbable. The defaults
+are the chat composer's textarea, a terminal's xterm
 host (its helper textarea), the Monaco editor container (its input), the Project Home projects tree
 and the body of a selected auxiliary
 tool, which the panel section marks `data-focus-default` with `data-tool-body=<tool>` — so entering a tool
 group lands in the tool rather than on its rail button. The same landing is the focus-recovery safety net
 for a focused control that disappears with no better neighbour ([[submodule-web-shell]], *Focus recovery*).
+A center group's body is its section's direct `role="tabpanel"` child, so the shell's Esc ladder can tell
+the tab strip from the content and land inside the content ([[submodule-web-shell]], *Esc climbs to the
+main area*).
 
 Center resource strips and auxiliary terminal-session strips have bounded readable tab widths and no fixed previous/next controls: wheel, trackpad, touch,
 roving-keyboard navigation, active reveal, and the searchable keyboard overflow list scroll the same list.
@@ -262,7 +294,9 @@ a tab's menu lists only commands that can ever apply to it: tools carry no cente
 preview, the four splits) and auxiliary terminals carry no splits. File and diff tabs add **Copy path**
 and **Copy relative path** in a separate group; other kinds omit them. Copying identifies the clicked
 tab and does not select or keep it. The shell injects the workspace worktree path so the layout can join
-it with the tab's file path without importing store or transport.
+it with the tab's file path without importing store or transport. A chat tab adds, right after *Rename
+chat*, each action the shell injects for its session (`chatActions`, by session id: a label and a bound
+`run`, such as an extension's *Analyze session*); like rename, the layout never learns what it opens.
 
 ## Tab actions
 
@@ -271,7 +305,7 @@ document, the group limits and the group's measured split geometry, the pure `ta
 command the tab's context menu shows — with its stable id, label, menu section, and an `unavailable`
 label/reason where it applies but cannot run now — and its effect (a lazily computed `model.ts` result,
 or a select / rename / focus-group / copy / hide / reveal / close request that `performTabAction` hands
-to injected handlers). The context menu renders from it (sections become separators; computed only when
+to injected handlers, or an injected chat action's own `run`). The context menu renders from it (sections become separators; computed only when
 the menu opens); the shell's palette lists from it through the provider below. Neither keeps an inline
 availability rule, so they cannot drift. Each action names its `surface`: *Focus tab*, the in-strip
 reorders, *Show <tool>* and *Remove tool from group* are menu-only; *Move to previous / next group* is

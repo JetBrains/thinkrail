@@ -6,6 +6,7 @@ import { useResourceHost } from "../../host";
 import { anchorLabel, type ResourceViewProps, type ReviewThread } from "../../registry";
 import { ReviewComposer } from "../../support/ReviewComposer";
 import { ReviewThreadCard } from "../../support/ReviewThreadCard";
+import { READING_SURFACE_CLASS, useReadingSurface } from "../../support/readingSurface";
 import { commentCard, revealReviewCard } from "../../support/revealFocus";
 import { useScrollViewState } from "../../support/useScrollViewState";
 import { contentStamp, useStampedComposer } from "../reviewComposerState";
@@ -30,6 +31,7 @@ export default function NotebookView({
 	onViewState,
 }: ResourceViewProps) {
 	const t = useT();
+	const reading = useReadingSurface({ label: resource.path });
 	const text = content.kind === "text" ? content.text : "";
 	const { languageId } = useResourceHost().code;
 	const document = useMemo(() => parseNotebook(text, languageId), [text, languageId]);
@@ -85,7 +87,8 @@ export default function NotebookView({
 		<div
 			ref={attachScroller}
 			data-testid="notebook-view"
-			className="h-full overflow-auto bg-container-workspace-bg p-12"
+			{...reading}
+			className={`h-full overflow-auto bg-container-workspace-bg p-12 ${READING_SURFACE_CLASS}`}
 		>
 			<div className="mx-auto flex max-w-[1100px] flex-col gap-12">
 				{document.cells.map((cell) => {

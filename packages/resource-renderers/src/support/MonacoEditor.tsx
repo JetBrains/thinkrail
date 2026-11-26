@@ -3,6 +3,7 @@ import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { onFontsChange } from "@thinkrail/ui/fonts";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { readingCommand } from "@thinkrail/ui/reading";
 import type { editor } from "monaco-editor/editor/editor.api.js";
 import {
 	useEffect,
@@ -23,10 +24,12 @@ import {
 	editorFont,
 	ensureMonaco,
 	fileEditorOptions,
+	readCode,
 	remeasureEditorFonts,
 	revealLineNow,
 	syncFileModel,
 } from "./monacoSetup";
+import { READER_SCOPE, useReaderKeys } from "./readingSurface";
 import { focusCommentCardWhenRendered } from "./revealFocus";
 import {
 	applyReviewDecorations,
@@ -47,6 +50,8 @@ function focusLine(review: SurfaceReview): number | null {
 	return range?.kind === "lineRange" ? range.startLine : null;
 }
 
+const NATIVE_READING_KEYS = new Set(["PageUp", "PageDown", "ArrowLeft", "ArrowRight"]);
+
 function isEditorViewState(value: unknown): value is editor.ICodeEditorViewState {
 	if (typeof value !== "object" || value === null) return false;
 	return Array.isArray(Reflect.get(value, "cursorState")) && Reflect.has(value, "viewState");
@@ -66,12 +71,16 @@ export default function MonacoEditor({
 	onRevealHandled,
 }: ResourceViewProps) {
 	const t = useT();
+	const readerKeys = useReaderKeys();
 	const { fileLineWidth, fileLineWidthBounded } = useResourcePreferences();
 	ensureMonaco(useResourceHost().code);
 	const scope = useId().replace(/[^\w-]/g, "");
 	const path = resource.path;
 	const text = content.kind === "text" ? content.text : "";
-	const commentLabel = t("review.widget.commentOnSelection");
+	const commentLabels = {
+		selection: t("review.widget.commentOnSelection"),
+		line: t("viewer.code.commentOnLine"),
+	};
 	const font = useSyncExternalStore(onFontsChange, editorFont);
 	const options = fileEditorOptions(t, fileLineWidth, fileLineWidthBounded, resource.path, font);
 	const containerRef = useRef<HTMLDivElement | null>(null);
@@ -86,10 +95,11 @@ export default function MonacoEditor({
 		path,
 		text,
 		options,
-		commentLabel,
+		commentLabels,
 		viewState,
 		review,
 		onViewState,
+		readerKeys,
 	});
 	const [reviewZones, setReviewZones] = useState<MonacoReviewZoneState>({
 		threads: [],
@@ -107,10 +117,11 @@ export default function MonacoEditor({
 			path,
 			text,
 			options,
-			commentLabel,
+			commentLabels,
 			viewState,
 			review,
 			onViewState,
+			readerKeys,
 		};
 	});
 
@@ -136,11 +147,31 @@ export default function MonacoEditor({
 		if (isEditorViewState(mount.viewState)) codeEditor.restoreViewState(mount.viewState);
 		const threads = mount.review ? attachReviewThreads(codeEditor, setReviewZones) : null;
 		const commenting = threads
-			? attachReviewCommenting(codeEditor, threads, mount.commentLabel)
+			? attachReviewCommenting(codeEditor, threads, mount.commentLabels)
 			: null;
 		threadsRef.current = threads;
 		commentingRef.current = commenting;
+		const reading = () => codeEditor.getRawOptions().readOnly === true;
+		const textFocus = codeEditor.onDidFocusEditorText(() => {
+			if (reading()) container.setAttribute("data-text-entry", "false");
+		});
+		const textBlur = codeEditor.onDidBlurEditorText(() => {
+			container.removeAttribute("data-text-entry");
+		});
+		const readingKeys = codeEditor.onKeyDown((event) => {
+			const press = event.browserEvent;
+			if (!reading() || !codeEditor.hasTextFocus() || NATIVE_READING_KEYS.has(press.key)) return;
+			const keys = latestRef.current.readerKeys;
+			const command = readingCommand(press, keys, keys.match(press, { textEntry: false }));
+			if (!command) return;
+			event.preventDefault();
+			event.stopPropagation();
+			readCode(codeEditor, command);
+		});
 		return () => {
+			readingKeys.dispose();
+			textFocus.dispose();
+			textBlur.dispose();
 			const saved = codeEditor.saveViewState();
 			if (saved) latestRef.current.onViewState?.(saved);
 			focusListener.dispose();
@@ -173,8 +204,8 @@ export default function MonacoEditor({
 	}, [scope, path, text]);
 
 	useLayoutEffect(() => {
-		commentingRef.current?.setLabel(commentLabel);
-	}, [commentLabel]);
+		commentingRef.current?.setLabels(commentLabels);
+	}, [commentLabels]);
 
 	useLayoutEffect(() => {
 		const codeEditor = editorRef.current;
@@ -199,7 +230,12 @@ export default function MonacoEditor({
 				: t("viewer.vim.mode.visual");
 	const submitSearch = () => vimControllerRef.current?.submitSearch(searchQuery);
 	const cancelSearch = () => vimControllerRef.current?.cancelSearch();
-
+	const returnFocus = (line?: number) => {
+		const codeEditor = editorRef.current;
+		if (!codeEditor) return;
+		if (line !== undefined) codeEditor.setPosition({ lineNumber: line, column: 1 });
+		codeEditor.focus();
+	};
 	const layoutReviewZones = () => threadsRef.current?.layout();
 
 	useLayoutEffect(() => {
@@ -246,7 +282,12 @@ export default function MonacoEditor({
 			className="relative h-full w-full text-left"
 			onFocusCapture={() => activeVimToggleRef.current?.activate()}
 		>
-			<div ref={containerRef} data-focus-default className="h-full w-full" />
+			<div
+				ref={containerRef}
+				data-focus-default
+				data-key-scope={READER_SCOPE}
+				className="h-full w-full"
+			/>
 			<Button
 				variant="ghost"
 				size="s"
@@ -291,6 +332,7 @@ export default function MonacoEditor({
 				zones={reviewZones}
 				review={review}
 				onCloseComposer={closeComposer}
+				onReturnFocus={returnFocus}
 				onRendered={layoutReviewZones}
 			/>
 		</div>

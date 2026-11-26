@@ -1,10 +1,26 @@
+import { DEFAULT_CONFIG } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
-import { selectAnalyticsConsentSupported, toast, useAppStore } from "@/store";
-import { getTransport } from "@/transport";
-import { AnalyticsDescription, AnalyticsPreferences } from "./AnalyticsPreferences";
-import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
-import { SettingsSwitch } from "./SettingsSwitch";
+import { Switch } from "@thinkrail/ui/switch";
+import type { ReactNode } from "react";
+import { SettingsGroup, SettingsPage, SettingsRow } from "@/settingsKit";
+import { selectAnalyticsConsentSupported, useAppStore } from "@/store";
+import { saveSettings } from "./saveSettings";
+import { isConfigDefault } from "./settingDefaults";
+import { SETTING, settingProps } from "./settingsCatalog";
 import { useAnalyticsConsent } from "./useAnalyticsConsent";
+
+function PrivacyPage({ children }: { children: ReactNode }) {
+	const t = useT();
+	return (
+		<SettingsPage
+			title={t("settings.nav.privacy")}
+			description={t("panels.analytics.description")}
+			testId="settings-privacy"
+		>
+			<SettingsGroup title={t("settings.privacy.title")}>{children}</SettingsGroup>
+		</SettingsPage>
+	);
+}
 
 export function PrivacySettings() {
 	const t = useT();
@@ -12,14 +28,12 @@ export function PrivacySettings() {
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	if (protocolVersion === null) {
 		return (
-			<div data-testid="settings-privacy" className={SETTINGS_ROWS_CONTAINER}>
-				<div className="flex items-center justify-between gap-12 border-border-muted border-b py-12">
-					<span className="tr-text-ui text-text-default">{t("settings.privacy.title")}</span>
-					<span className="text-text-muted tr-text-metadata">
-						{t("settings.privacy.connectToManage")}
-					</span>
-				</div>
-			</div>
+			<PrivacyPage>
+				<SettingsRow
+					{...settingProps(t, SETTING.usageAnalytics)}
+					description={t("settings.privacy.connectToManage")}
+				/>
+			</PrivacyPage>
 		);
 	}
 	return supported ? <AdditionalAnalyticsSettings /> : <LegacyPrivacySettings />;
@@ -31,52 +45,65 @@ function AdditionalAnalyticsSettings() {
 	const { pending, error, save } = useAnalyticsConsent();
 
 	return (
-		<div data-testid="settings-privacy" className={SETTINGS_ROWS_CONTAINER}>
-			<div className="flex flex-col gap-2 pb-8">
-				<h3 className="tr-title-section text-text-default">{t("settings.privacy.title")}</h3>
-				<p className="tr-text-metadata text-text-muted">
-					<AnalyticsDescription />
-				</p>
-			</div>
-			<AnalyticsPreferences enabled={enabled} disabled={pending} onChange={save} />
-			{error && (
-				<p role="alert" className="tr-text-metadata text-feedback-error py-12">
+		<PrivacyPage>
+			<SettingsRow
+				{...settingProps(t, SETTING.usageAnalytics)}
+				reset={{
+					changed: !isConfigDefault("analyticsEnabled", enabled),
+					onReset: () => void save(DEFAULT_CONFIG.analyticsEnabled),
+					disabled: pending,
+				}}
+				control={
+					<Switch
+						checked={enabled}
+						disabled={pending}
+						label={t(SETTING.usageAnalytics.label)}
+						testId="analytics-toggle"
+						tabIndex={0}
+						onCheckedChange={(next) => void save(next)}
+					/>
+				}
+			/>
+			<p className="py-12 text-text-muted tr-text-metadata">
+				{t("panels.analytics.reportDetails")}
+			</p>
+			{error ? (
+				<p role="alert" className="pb-12 text-feedback-error tr-text-metadata">
 					{error}
 				</p>
-			)}
-		</div>
+			) : null}
+		</PrivacyPage>
 	);
 }
 
 function LegacyPrivacySettings() {
 	const t = useT();
 	const enabled = useAppStore((s) => s.analyticsEnabled);
+	const label = t("settings.privacy.share");
 
 	const setEnabled = (analyticsEnabled: boolean) => {
-		getTransport()
-			.request("settings.update", { config: { analyticsEnabled } })
-			.catch(() => toast.error(t("settings.privacy.changeFailed")));
+		void saveSettings({ analyticsEnabled }, t("settings.privacy.changeFailed"));
 	};
 
 	return (
-		<div data-testid="settings-privacy" className={SETTINGS_ROWS_CONTAINER}>
-			<div className="flex flex-col gap-2 pb-8">
-				<h3 className="tr-title-section text-text-default">{t("settings.privacy.title")}</h3>
-				<p className="tr-text-metadata text-text-muted">
-					<AnalyticsDescription />
-				</p>
-			</div>
+		<PrivacyPage>
 			<SettingsRow
-				label={t("settings.privacy.share")}
+				settingId={SETTING.usageAnalytics.id}
+				label={label}
+				reset={{
+					changed: !isConfigDefault("analyticsEnabled", enabled),
+					onReset: () => setEnabled(DEFAULT_CONFIG.analyticsEnabled),
+				}}
 				control={
-					<SettingsSwitch
+					<Switch
 						checked={enabled}
-						label={t("settings.privacy.share")}
+						label={label}
 						testId="analytics-toggle"
-						onChange={setEnabled}
+						tabIndex={0}
+						onCheckedChange={setEnabled}
 					/>
 				}
 			/>
-		</div>
+		</PrivacyPage>
 	);
 }

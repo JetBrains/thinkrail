@@ -18,12 +18,13 @@ import {
 	ContextMenuTrigger,
 	openContextMenuFromKeyboard,
 } from "@thinkrail/ui/context-menu";
-import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { isImeComposing, twinArrow } from "@thinkrail/ui/keyboard";
+import { type LocalKeys, useLocalKeys } from "@thinkrail/ui/local-keys";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { Fragment, memo, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { TAB_KEYS } from "../../keybindings";
+import { LOCAL_KEY_DEFAULTS } from "../../keybindings";
 import { chatLabel, DOUBLE_CLICK_SETTLE_MS, type LayoutAttention, tupleKey } from "../../lib";
 import {
 	type AuxiliaryRailControlProps,
@@ -54,7 +55,13 @@ import type {
 	LayoutToolId,
 	WorkspaceLayoutDocument,
 } from "./types";
-import type { DragData, DropTarget, RegisterChatRename, WorkbenchProps } from "./workbenchShared";
+import type {
+	DragData,
+	DropTarget,
+	RegisterChatRename,
+	TabSelectOptions,
+	WorkbenchProps,
+} from "./workbenchShared";
 import {
 	canInsertDraggedTab,
 	DropZone,
@@ -65,6 +72,32 @@ import {
 	tabSearchKeywords,
 	useHorizontalOverflow,
 } from "./workbenchShared";
+
+const GROUP_SHORTCUTS = "Control+F6 Control+Shift+F6 Shift+F10 ContextMenu";
+
+function tabKeyShortcuts(keys: LocalKeys, rail: WorkbenchTabProps["rail"]): string {
+	const [locked, local] = !rail
+		? [
+				"Home End ArrowLeft ArrowRight",
+				keys.aria("tabs.close", "arrows.left", "arrows.right", "tabs.moveBefore", "tabs.moveAfter"),
+			]
+		: rail.vertical
+			? [
+					"Enter Space Home End ArrowUp ArrowDown",
+					keys.aria("rails.remove", "arrows.up", "arrows.down", "rails.moveUp", "rails.moveDown"),
+				]
+			: [
+					"Enter Space Home End ArrowLeft ArrowRight",
+					keys.aria(
+						"rails.remove",
+						"arrows.left",
+						"arrows.right",
+						"rails.moveLeft",
+						"rails.moveRight",
+					),
+				];
+	return [locked, local, GROUP_SHORTCUTS].filter(Boolean).join(" ");
+}
 
 export interface TabStripProps {
 	document: WorkspaceLayoutDocument;
@@ -77,7 +110,7 @@ export interface TabStripProps {
 	maxSideGroups: number;
 	maxBottomGroups: number;
 	draggingTab: LayoutTab | null;
-	onSelect: (tabId: string, keep?: boolean) => void;
+	onSelect: (tabId: string, options?: TabSelectOptions) => void;
 	onClose: (tab: LayoutTab) => void;
 	onApply: (result: LayoutMutationResult) => void;
 	onFocusAdjacentGroup: (delta: -1 | 1, fromGroupId?: string) => void;
@@ -86,6 +119,7 @@ export interface TabStripProps {
 	onRenameChat: WorkbenchProps["onRenameChat"];
 	registerChatRename?: RegisterChatRename | undefined;
 	chatFirstPrompts?: WorkbenchProps["chatFirstPrompts"];
+	chatActions?: WorkbenchProps["chatActions"];
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
 	splitGeometry?: CenterSplitGeometry;
@@ -120,6 +154,7 @@ export const TabStrip = memo(function TabStrip({
 	onRenameChat,
 	registerChatRename,
 	chatFirstPrompts,
+	chatActions,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
 	splitGeometry,
@@ -127,15 +162,16 @@ export const TabStrip = memo(function TabStrip({
 	worktreePath,
 }: TabStripProps) {
 	const t = useT();
+	const keys = useLocalKeys("tabs", LOCAL_KEY_DEFAULTS.tabs);
 	const scroller = useRef<HTMLDivElement>(null);
 	const scrollOverflow = useHorizontalOverflow(scroller);
 	const tabRefs = useRef(new Map<string, HTMLElement>());
 	const overflowFocusTarget = useRef<string | null>(null);
 	const [overflowOpen, setOverflowOpen] = useState(false);
 	const overflowing = scrollOverflow.before || scrollOverflow.after;
-	const selectTab = (tabId: string, keep?: boolean) => {
+	const selectTab = (tabId: string, options?: TabSelectOptions) => {
 		selectionEpochRef.current += 1;
-		onSelect(tabId, keep);
+		onSelect(tabId, options);
 	};
 	const applyResult = (result: LayoutMutationResult) => {
 		selectionEpochRef.current += 1;
@@ -193,6 +229,7 @@ export const TabStrip = memo(function TabStrip({
 				<div
 					ref={scroller}
 					role="tablist"
+					data-key-scope="tabs"
 					aria-label={t(GROUP_TABS_LABELS[location.area])}
 					className="flex h-full w-full min-w-0 items-stretch overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
 					onWheel={(event) => {
@@ -230,6 +267,7 @@ export const TabStrip = memo(function TabStrip({
 							onRenameChat={onRenameChat}
 							registerChatRename={registerChatRename}
 							{...(chatFirstPrompts ? { chatFirstPrompts } : {})}
+							{...(chatActions ? { chatActions } : {})}
 							canFocusAdjacentGroup={canFocusAdjacentGroup}
 							renderTabAdornment={renderTabAdornment}
 							worktreePath={worktreePath}
@@ -237,33 +275,37 @@ export const TabStrip = memo(function TabStrip({
 							panelId={panelId}
 							{...(splitGeometry ? { splitGeometry } : {})}
 							onKeyDown={(event) => {
-								if (event.altKey && event.shiftKey && event.key === TAB_KEYS.moveBefore.key) {
+								const local = keys.match(event.nativeEvent);
+								const twin = twinArrow(local);
+								const plain = !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+								const key = twin ?? (local === null && plain ? event.key : null);
+								if (local === "tabs.moveBefore") {
 									event.preventDefault();
 									if (index > 0) {
 										const moved = moveTabToGroup(document, tab, location, index - 1);
 										if (!isLayoutUnavailable(moved)) applyResult(moved);
 									}
-								} else if (event.altKey && event.shiftKey && event.key === TAB_KEYS.moveAfter.key) {
+								} else if (local === "tabs.moveAfter") {
 									event.preventDefault();
 									if (index < tabs.length - 1) {
 										const moved = moveTabToGroup(document, tab, location, index + 1);
 										if (!isLayoutUnavailable(moved)) applyResult(moved);
 									}
-								} else if (event.key === "ArrowLeft") {
-									event.preventDefault();
-									selectAt(index === 0 ? tabs.length - 1 : index - 1);
-								} else if (event.key === "ArrowRight") {
-									event.preventDefault();
-									selectAt(index === tabs.length - 1 ? 0 : index + 1);
-								} else if (event.key === "Home") {
-									event.preventDefault();
-									selectAt(0);
-								} else if (event.key === "End") {
-									event.preventDefault();
-									selectAt(tabs.length - 1);
-								} else if (event.key === TAB_KEYS.close.key) {
+								} else if (local === "tabs.close") {
 									event.preventDefault();
 									closeTab(tab);
+								} else if (key === "ArrowLeft") {
+									event.preventDefault();
+									selectAt(index === 0 ? tabs.length - 1 : index - 1);
+								} else if (key === "ArrowRight") {
+									event.preventDefault();
+									selectAt(index === tabs.length - 1 ? 0 : index + 1);
+								} else if (key === "Home") {
+									event.preventDefault();
+									selectAt(0);
+								} else if (key === "End") {
+									event.preventDefault();
+									selectAt(tabs.length - 1);
 								}
 							}}
 						/>
@@ -372,7 +414,7 @@ export interface WorkbenchTabProps {
 	maxSideGroups: number;
 	maxBottomGroups: number;
 	register: (node: HTMLElement | null) => void;
-	onSelect: (tabId: string, keep?: boolean) => void;
+	onSelect: (tabId: string, options?: TabSelectOptions) => void;
 	onClose: () => void;
 	onApply: (result: LayoutMutationResult) => void;
 	onFocusAdjacentGroup: (delta: -1 | 1, fromGroupId?: string) => void;
@@ -381,6 +423,7 @@ export interface WorkbenchTabProps {
 	onRenameChat: WorkbenchProps["onRenameChat"];
 	registerChatRename?: RegisterChatRename | undefined;
 	chatFirstPrompts?: WorkbenchProps["chatFirstPrompts"];
+	chatActions?: WorkbenchProps["chatActions"];
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
 	worktreePath: string;
@@ -413,6 +456,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 	onRenameChat,
 	registerChatRename,
 	chatFirstPrompts,
+	chatActions,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
 	worktreePath,
@@ -422,6 +466,10 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 	onKeyDown,
 }: WorkbenchTabProps) {
 	const t = useT();
+	const keys = useLocalKeys(
+		rail ? "rails" : "tabs",
+		rail ? LOCAL_KEY_DEFAULTS.rails : LOCAL_KEY_DEFAULTS.tabs,
+	);
 	const {
 		setNodeRef: setDragRef,
 		isDragging,
@@ -515,13 +563,13 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 			) {
 				return;
 			}
-			onSelect(tab.id, true);
+			onSelect(tab.id, { keep: true, moveFocus: false });
 		}, DOUBLE_CLICK_SETTLE_MS);
 	};
 	const selectFromDoubleClick = () => {
 		if (pendingPreviewKeep.current) clearTimeout(pendingPreviewKeep.current);
 		pendingPreviewKeep.current = null;
-		onSelect(tab.id, true);
+		onSelect(tab.id, { keep: true });
 	};
 	const beforeIndex = rail?.beforeIndex ?? index;
 	const afterIndex = rail?.afterIndex ?? index + 1;
@@ -553,7 +601,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 	const chatTitle =
 		tab.kind === "chat" ? chatLabel(t, tab.name, chatFirstPrompts?.[tab.sessionId]) : undefined;
 	const focusTab = (keep: boolean) => {
-		onSelect(tab.id, keep);
+		onSelect(tab.id, { keep });
 		focusControl();
 	};
 
@@ -565,13 +613,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 			{...(rail
 				? { "aria-label": name, "aria-pressed": active, ...railEntryButtonProps(active) }
 				: { role: "tab", "aria-selected": active })}
-			aria-keyshortcuts={
-				rail
-					? rail.vertical
-						? "Enter Space Delete Home End ArrowUp ArrowDown Alt+Shift+ArrowUp Alt+Shift+ArrowDown Control+F6 Control+Shift+F6 Shift+F10 ContextMenu"
-						: "Enter Space Delete Home End ArrowLeft ArrowRight Alt+Shift+ArrowLeft Alt+Shift+ArrowRight Control+F6 Control+Shift+F6 Shift+F10 ContextMenu"
-					: "Delete Home End ArrowLeft ArrowRight Alt+Shift+ArrowLeft Alt+Shift+ArrowRight Control+F6 Control+Shift+F6 Shift+F10 ContextMenu"
-			}
+			aria-keyshortcuts={tabKeyShortcuts(keys, rail)}
 			aria-controls={panelId}
 			data-testid={rail && tab.kind === "tool" ? `tool-rail-${tab.tool}` : undefined}
 			data-rail-entry={rail?.entryKey}
@@ -693,6 +735,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 							icon={X}
 							label={t("workbench.tab.closeNamed", { name })}
 							tabIndex={-1}
+							data-hint-reveal
 							data-testid={tab.kind === "terminal" ? "terminal-tab-close" : "editor-tab-close"}
 							onClick={onClose}
 							className="mr-4 shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
@@ -721,6 +764,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 						canRenameChat: onRenameChat !== undefined,
 						worktreePath,
 						chatFirstPrompts,
+						chatActions,
 					}}
 					handlers={{
 						apply: onApply,

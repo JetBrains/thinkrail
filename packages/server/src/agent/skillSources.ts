@@ -4,7 +4,11 @@ import { join, resolve } from "node:path";
 
 export type CompatibilitySkillProvider = "claude" | "codex" | "github-copilot" | "gemini";
 
-const PROJECT_SKILL_ALIASES = "claude|github|gemini|pi|agents";
+const PROJECT_SKILL_DIRS = ["claude", "github", "gemini", "pi", "agents"] as const;
+const PROJECT_SKILL_ALIASES = PROJECT_SKILL_DIRS.join("|");
+export const PROJECT_SKILL_ROOTS: readonly string[] = PROJECT_SKILL_DIRS.map(
+	(dir) => `.${dir}/skills`,
+);
 const PROJECT_SKILL_PATH = new RegExp(`^\\.(${PROJECT_SKILL_ALIASES})/skills(?:/|$)`);
 const PROJECT_SKILL_FOLDER = new RegExp(
 	`^\\.(${PROJECT_SKILL_ALIASES})(?:/skills(?:/[^./][^/]*)*)?$`,

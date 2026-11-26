@@ -1,16 +1,9 @@
 import {
-	RiCheckLine as Check,
-	RiPencilLine as Pencil,
 	RiAddLine as Plus,
-	RiArrowDownSLine,
-	RiArrowRightSLine,
 	RiDashboardLine,
 	RiFocusLine,
 	RiLayoutLine,
 	RiLayoutRightLine,
-	RiQuestionLine,
-	RiDeleteBin6Line as Trash2,
-	RiCloseLine as X,
 } from "@remixicon/react";
 import {
 	ARTIFACTS_PROTOCOL_VERSION,
@@ -20,17 +13,38 @@ import {
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { t as translate, useT } from "@thinkrail/locales/react";
-import { Button, IconButton } from "@thinkrail/ui/button";
+import { Button } from "@thinkrail/ui/button";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { cn } from "@thinkrail/ui/utils";
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { randomId } from "../lib";
 import { ConfirmDialog } from "../panels/ConfirmDialog";
-import { SettingsGroup } from "../panels/SettingsGroup";
-import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "../panels/SettingsRow";
-import { SETTINGS_INPUT, useSettingsDraft } from "../panels/settingsDraft";
-import { toast, useAppStore } from "../store";
+import {
+	type LayoutLimitKey,
+	useClientPreferenceReset,
+	useLayoutLimitReset,
+} from "../panels/settingDefaults";
+import { SETTING, settingProps } from "../panels/settingsCatalog";
+import {
+	SETTINGS_INPUT,
+	SETTINGS_LIST_PRIMARY,
+	SETTINGS_LIST_ROW,
+	SETTINGS_ROWS,
+	SETTINGS_TAG,
+	SettingsChoice,
+	type SettingsChoiceOption,
+	SettingsDisclosure,
+	SettingsGroup,
+	SettingsList,
+	SettingsNumberField,
+	SettingsPage,
+	SettingsRow,
+	SettingsSubheading,
+	useSettingsDialogContainer,
+	useSettingsListRow,
+} from "../settingsKit";
+import { type MarkdownOutlineSide, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import {
 	BUILTIN_LAYOUT_PRESETS,
@@ -49,6 +63,7 @@ const BUILTIN_PRESET_IDS = new Set(BUILTIN_LAYOUT_PRESETS.map((preset) => preset
 const MAX_CUSTOM_PRESETS = 32;
 const GROUP_LIMIT_MIN = 1;
 const GROUP_LIMIT_MAX = 32;
+const PRESETS_LIST = "layout-presets";
 
 const PRESET_DESCRIPTIONS: Readonly<Record<string, MessageKey>> = {
 	balanced: "workbench.layoutSettings.balancedDescription",
@@ -75,6 +90,10 @@ const NEWER_HOST_TOOLS: readonly { tool: LayoutToolId; since: number; message: M
 	},
 ];
 
+const DEFAULT_CHIP = "rounded-full bg-primary-subtle px-8 py-2 tr-text-label-pill text-primary";
+
+const focusOnMount = (node: HTMLInputElement | null) => node?.focus();
+
 async function updateCustomPresets(customLayoutPresets: LayoutPreset[]): Promise<boolean> {
 	const protocolVersion = useAppStore.getState().protocolVersion ?? 0;
 	const tooNew = NEWER_HOST_TOOLS.find(
@@ -97,100 +116,389 @@ async function updateCustomPresets(customLayoutPresets: LayoutPreset[]): Promise
 	}
 }
 
-type GroupLimitKey = "maxSideGroups" | "maxBottomGroups";
-
-function commitGroupLimit(key: GroupLimitKey, value: number): void {
+function commitGroupLimit(key: LayoutLimitKey, value: number): undefined {
 	const state = useAppStore.getState();
 	if (state.localLayoutPreferences[key] === value) return;
 	state.setLocalLayoutPreferences({ ...state.localLayoutPreferences, [key]: value });
 }
 
-function parseGroupLimit(draft: string): number | null {
-	if (!/^\d+$/.test(draft)) return null;
-	const value = Number(draft);
-	return value >= GROUP_LIMIT_MIN && value <= GROUP_LIMIT_MAX ? value : null;
+function setDefaultPreset(preset: LayoutPreset): void {
+	const state = useAppStore.getState();
+	const preferences = state.localLayoutPreferences;
+	state.setLocalLayoutPreferences({
+		...preferences,
+		defaultPresetId: preset.id,
+		maxSideGroups: Math.max(preferences.maxSideGroups, minimumSideGroupLimit(preset)),
+		maxBottomGroups: Math.max(preferences.maxBottomGroups, minimumBottomGroupLimit(preset)),
+	});
 }
 
-function GroupLimitInput({
-	id,
-	label,
-	limitKey,
-}: {
-	id: string;
-	label: string;
-	limitKey: GroupLimitKey;
-}) {
-	const t = useT();
-	const saved = useAppStore((state) => state.localLayoutPreferences[limitKey]);
-	const { invalid, inputProps } = useSettingsDraft({
-		saved: String(saved),
-		isValid: (draft) => parseGroupLimit(draft) !== null,
-		commit: (draft) => {
-			const parsed = parseGroupLimit(draft);
-			if (parsed !== null) commitGroupLimit(limitKey, parsed);
-			return undefined;
-		},
-	});
-	const errorId = `${id}-error`;
+export function deletablePreset(
+	customs: readonly LayoutPreset[],
+	presetId: string,
+): LayoutPreset | null {
+	return customs.find((preset) => preset.id === presetId) ?? null;
+}
 
+function forgetDefault(presetId: string): void {
+	const state = useAppStore.getState();
+	if (state.localLayoutPreferences.defaultPresetId !== presetId) return;
+	state.setLocalLayoutPreferences({
+		...state.localLayoutPreferences,
+		defaultPresetId: DEFAULT_LAYOUT_PRESET_ID,
+	});
+}
+
+function GroupLimitRow({
+	limitKey,
+	rowId,
+	label,
+	fieldLabel,
+}: {
+	limitKey: LayoutLimitKey;
+	rowId: string;
+	label: string;
+	fieldLabel: string;
+}) {
+	const saved = useAppStore((state) => state.localLayoutPreferences[limitKey]);
+	const reset = useLayoutLimitReset(limitKey);
 	return (
-		<span className="flex flex-col items-end gap-2">
-			<input
-				id={id}
-				type="number"
-				min={GROUP_LIMIT_MIN}
-				max={GROUP_LIMIT_MAX}
-				step={1}
-				inputMode="numeric"
-				{...inputProps}
-				aria-label={label}
-				aria-describedby={invalid ? errorId : undefined}
-				className={cn(
-					SETTINGS_INPUT,
-					"w-64 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
-				)}
-			/>
-			{invalid ? (
-				<span id={errorId} className="text-feedback-error tr-text-metadata">
-					{t("workbench.layoutSettings.limitRange", { min: GROUP_LIMIT_MIN, max: GROUP_LIMIT_MAX })}
-				</span>
-			) : null}
-		</span>
+		<SettingsRow
+			rowId={rowId}
+			label={label}
+			reset={reset}
+			control={
+				<SettingsNumberField
+					label={fieldLabel}
+					value={saved}
+					min={GROUP_LIMIT_MIN}
+					max={GROUP_LIMIT_MAX}
+					onCommit={(value) => commitGroupLimit(limitKey, value)}
+				/>
+			}
+		/>
 	);
 }
 
-export function LayoutSettings() {
+interface Renaming {
+	readonly id: string;
+	readonly name: string;
+}
+
+export function PresetRow({
+	preset,
+	custom,
+	storedDefault,
+	effectiveDefault,
+	applied,
+	canApply,
+	saving,
+	renaming,
+	onApply,
+	onRename,
+	onRenameCommit,
+	onDelete,
+}: {
+	preset: LayoutPreset;
+	custom: boolean;
+	storedDefault: boolean;
+	effectiveDefault: boolean;
+	applied: boolean;
+	canApply: boolean;
+	saving: boolean;
+	renaming: Renaming | null;
+	onApply: () => void;
+	onRename: (next: Renaming | null) => void;
+	onRenameCommit: () => void;
+	onDelete: () => void;
+}) {
+	const t = useT();
+	const { rowProps, primaryProps, sideProps } = useSettingsListRow(preset.id);
+	const name = layoutPresetName(t, preset);
+	const description = PRESET_DESCRIPTIONS[preset.id];
+	const Icon = PRESET_ICONS[preset.id] ?? RiLayoutLine;
+	const appliable = canApply && !applied;
+	return (
+		<li
+			{...rowProps}
+			data-testid="layout-preset"
+			data-default={effectiveDefault}
+			data-applied={applied}
+			className={cn(SETTINGS_LIST_ROW, "flex-wrap")}
+		>
+			{renaming ? (
+				<input
+					ref={focusOnMount}
+					{...primaryProps}
+					value={renaming.name}
+					onChange={(event) => onRename({ id: preset.id, name: event.target.value })}
+					onKeyDown={(event) => {
+						if (isImeComposing(event.nativeEvent)) return;
+						if (event.key === "Enter") {
+							event.preventDefault();
+							onRenameCommit();
+						} else if (event.key === "Escape") {
+							event.preventDefault();
+							onRename(null);
+						}
+					}}
+					aria-label={t("workbench.layoutSettings.renameNamed", { name })}
+					maxLength={200}
+					className={cn(SETTINGS_INPUT, "min-w-160 flex-1")}
+				/>
+			) : (
+				<button
+					type="button"
+					{...primaryProps}
+					data-testid="layout-preset-apply"
+					aria-disabled={appliable ? undefined : true}
+					onClick={() => {
+						if (appliable) onApply();
+					}}
+					className={SETTINGS_LIST_PRIMARY}
+				>
+					<span className="flex flex-wrap items-center gap-8">
+						<Icon aria-hidden className="size-16 shrink-0 text-text-muted" />
+						<span className="tr-text-ui text-text-default">{name}</span>
+						{effectiveDefault ? (
+							<span className={DEFAULT_CHIP}>
+								{storedDefault ? t("common.default") : t("workbench.layoutSettings.fallback")}
+							</span>
+						) : null}
+						{applied ? (
+							<span className={cn(SETTINGS_TAG, "text-text-muted")}>
+								{t("workbench.layoutSettings.current")}
+							</span>
+						) : null}
+						{custom ? (
+							<span className={cn(SETTINGS_TAG, "text-text-muted")}>
+								{t("workbench.layoutSettings.custom")}
+							</span>
+						) : null}
+					</span>
+					<span className="tr-text-metadata text-text-muted">
+						{description
+							? t(description)
+							: t("workbench.layoutSettings.groupCounts", {
+									left: preset.left.groups.length,
+									right: preset.right.groups.length,
+									bottom: preset.bottom.groups.length,
+								})}
+					</span>
+					{effectiveDefault ? (
+						<span data-testid="layout-default-hint" className="tr-text-metadata text-text-muted">
+							{storedDefault
+								? t("workbench.layoutSettings.defaultHint")
+								: t("workbench.layoutSettings.fallbackHint")}
+						</span>
+					) : null}
+				</button>
+			)}
+			<span className="flex shrink-0 flex-wrap items-center justify-end gap-4">
+				{renaming ? (
+					<>
+						<Button
+							variant="soft-primary"
+							size="s"
+							{...sideProps}
+							aria-label={t("workbench.layoutSettings.saveName", { name })}
+							disabled={!renaming.name.trim() || saving}
+							onClick={onRenameCommit}
+						>
+							{t("common.save")}
+						</Button>
+						<Button
+							variant="ghost"
+							size="s"
+							{...sideProps}
+							aria-label={t("workbench.layoutSettings.cancelRename", { name })}
+							onClick={() => onRename(null)}
+						>
+							{t("common.cancel")}
+						</Button>
+					</>
+				) : (
+					<>
+						{storedDefault ? null : (
+							<Button
+								variant="outline"
+								size="s"
+								{...sideProps}
+								disabled={saving}
+								onClick={() => setDefaultPreset(preset)}
+							>
+								{t("workbench.layoutSettings.setDefault")}
+							</Button>
+						)}
+						{custom ? (
+							<>
+								<Button
+									variant="ghost"
+									size="s"
+									{...sideProps}
+									aria-label={t("workbench.layoutSettings.renameNamed", { name })}
+									disabled={saving}
+									onClick={() => onRename({ id: preset.id, name: preset.name })}
+								>
+									{t("workbench.layoutSettings.rename")}
+								</Button>
+								<Button
+									variant="ghost"
+									size="s"
+									{...sideProps}
+									aria-label={t("workbench.layoutSettings.deleteNamed", { name })}
+									data-testid="layout-preset-delete"
+									disabled={saving}
+									onClick={onDelete}
+								>
+									{t("workbench.layoutSettings.delete")}
+								</Button>
+							</>
+						) : null}
+					</>
+				)}
+			</span>
+		</li>
+	);
+}
+
+function AddLayoutRow({
+	saving,
+	onSave,
+}: {
+	saving: boolean;
+	onSave: (name: string) => Promise<boolean>;
+}) {
+	const t = useT();
+	const container = useSettingsDialogContainer();
+	const frame = useAppStore((state) => state.workbenchFrame);
+	const used = useAppStore(
+		(state) =>
+			state.customLayoutPresets.filter((preset) => !BUILTIN_PRESET_IDS.has(preset.id)).length,
+	);
+	const [open, setOpen] = useState(false);
+	const [name, setName] = useState("");
+	const input = useRef<HTMLInputElement>(null);
+	const props = settingProps(t, SETTING.layoutAdd);
+	return (
+		<SettingsRow
+			{...props}
+			description={
+				<>
+					{props.description}
+					<span data-testid="layout-custom-limit" className="block">
+						{t("workbench.layoutSettings.customLimitUsed", {
+							limit: MAX_CUSTOM_PRESETS,
+							count: used,
+						})}
+					</span>
+				</>
+			}
+			control={
+				<Popover
+					open={open}
+					onOpenChange={(next) => {
+						setOpen(next);
+						if (next) setName("");
+					}}
+				>
+					<PopoverTrigger asChild>
+						<Button
+							variant="outline"
+							size="m"
+							iconLeft={Plus}
+							tabIndex={0}
+							data-testid="layout-add-new"
+							disabled={!frame || used >= MAX_CUSTOM_PRESETS || saving}
+						>
+							{t("workbench.layoutSettings.addLayout")}
+						</Button>
+					</PopoverTrigger>
+					<PopoverContent
+						align="end"
+						container={container}
+						className="w-280 p-12"
+						onOpenAutoFocus={(event) => {
+							event.preventDefault();
+							input.current?.focus();
+						}}
+					>
+						<form
+							data-testid="layout-preset-save-row"
+							onSubmit={(event) => {
+								event.preventDefault();
+								if (!name.trim() || saving) return;
+								void onSave(name.trim()).then((saved) => {
+									if (saved) {
+										setName("");
+										setOpen(false);
+									}
+								});
+							}}
+							className="flex flex-col gap-12"
+						>
+							<input
+								ref={input}
+								value={name}
+								tabIndex={0}
+								onChange={(event) => setName(event.target.value)}
+								placeholder={t("workbench.layoutSettings.namePlaceholder")}
+								aria-label={t("workbench.layoutSettings.nameLabel")}
+								maxLength={200}
+								className={cn(SETTINGS_INPUT, "w-full")}
+							/>
+							<div className="flex justify-end gap-8">
+								<Button
+									type="button"
+									variant="ghost"
+									size="m"
+									tabIndex={0}
+									onClick={() => setOpen(false)}
+								>
+									{t("common.cancel")}
+								</Button>
+								<Button
+									type="submit"
+									variant="primary"
+									size="m"
+									tabIndex={0}
+									aria-label={t("workbench.layoutSettings.savePreset")}
+									disabled={!name.trim() || saving}
+								>
+									{t("common.save")}
+								</Button>
+							</div>
+						</form>
+					</PopoverContent>
+				</Popover>
+			}
+		/>
+	);
+}
+
+function PresetsGroup() {
 	const t = useT();
 	const customLayoutPresets = useAppStore((state) => state.customLayoutPresets);
 	const preferences = useAppStore((state) => state.localLayoutPreferences);
 	const frame = useAppStore((state) => state.workbenchFrame);
 	const activeWorkspaceId = useAppStore((state) => state.activeWorkspaceId);
-	const [name, setName] = useState("");
-	const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
+	const [renaming, setRenaming] = useState<Renaming | null>(null);
 	const [applying, setApplying] = useState<LayoutPreset | null>(null);
+	const [deleting, setDeleting] = useState<LayoutPreset | null>(null);
 	const [saving, setSaving] = useState(false);
-	const [advancedOpen, setAdvancedOpen] = useState(false);
-	const [addLayoutOpen, setAddLayoutOpen] = useState(false);
-	const addLayoutInputRef = useRef<HTMLInputElement>(null);
 
-	const presets = useMemo(
-		() => [
-			...BUILTIN_LAYOUT_PRESETS,
-			...customLayoutPresets.filter((preset) => !BUILTIN_PRESET_IDS.has(preset.id)),
-		],
-		[customLayoutPresets],
-	);
+	const customs = customLayoutPresets.filter((preset) => !BUILTIN_PRESET_IDS.has(preset.id));
+	const presets = [...BUILTIN_LAYOUT_PRESETS, ...customs];
 	const selected = resolveLayoutPreset(preferences.defaultPresetId, customLayoutPresets);
-	const canApply = !saving && activeWorkspaceId !== null && frame !== null;
+	const hasWorkbench = activeWorkspaceId !== null && frame !== null;
+	const canApply = !saving && hasWorkbench;
+	const appliedPresetId = frame
+		? (presets.find((preset) => frameMatchesPreset(frame, preset))?.id ?? null)
+		: null;
 
-	const appliedPresetId = useMemo(() => {
-		if (!frame) return null;
-		return presets.find((preset) => frameMatchesPreset(frame, preset))?.id ?? null;
-	}, [frame, presets]);
-
-	const saveCustomPresets = (customPresets: LayoutPreset[]): Promise<boolean> => {
+	const saveCustomPresets = (next: LayoutPreset[]): Promise<boolean> => {
 		setSaving(true);
-		return updateCustomPresets(customPresets).finally(() => setSaving(false));
+		return updateCustomPresets(next).finally(() => setSaving(false));
 	};
 
 	const apply = (preset: LayoutPreset) => {
@@ -203,274 +511,82 @@ export function LayoutSettings() {
 		}
 	};
 
-	const commitRename = (presetId: string) => {
-		if (saving) return;
-		const nextName = renaming?.id === presetId ? renaming.name.trim() : "";
-		if (!nextName) return;
+	const commitRename = () => {
+		const nextName = renaming?.name.trim() ?? "";
+		if (saving || renaming === null || !nextName) return;
+		const { id } = renaming;
 		void saveCustomPresets(
 			customLayoutPresets.map((preset) =>
-				preset.id === presetId ? { ...preset, name: nextName } : preset,
+				preset.id === id ? { ...preset, name: nextName } : preset,
 			),
 		).then((saved) => {
 			if (saved) setRenaming(null);
 		});
 	};
 
+	const remove = (preset: LayoutPreset) => {
+		void saveCustomPresets(
+			customLayoutPresets.filter((candidate) => candidate.id !== preset.id),
+		).then((saved) => {
+			if (saved) forgetDefault(preset.id);
+		});
+	};
+
+	const askDelete = (presetId: string) => {
+		const preset = deletablePreset(customs, presetId);
+		if (preset && !saving) setDeleting(preset);
+	};
+
 	return (
-		<div data-testid="settings-layout" className={SETTINGS_ROWS_CONTAINER}>
-			<div className="grid gap-8 sm:grid-cols-2">
-				{presets.map((preset) => {
-					const isStoredDefault = preset.id === preferences.defaultPresetId;
-					const isEffectiveDefault = preset.id === selected.id;
-					const isCurrentlyApplied = preset.id === appliedPresetId;
-					const custom =
-						!BUILTIN_PRESET_IDS.has(preset.id) &&
-						customLayoutPresets.some((candidate) => candidate.id === preset.id);
-					const Icon = PRESET_ICONS[preset.id] ?? RiLayoutLine;
-					const presetName = layoutPresetName(t, preset);
-					const description = PRESET_DESCRIPTIONS[preset.id];
-
-					return (
-						<div
-							key={preset.id}
-							data-testid="layout-preset"
-							data-default={isEffectiveDefault}
-							data-applied={isCurrentlyApplied}
-							className={`relative flex flex-col rounded-sm p-12 ${
-								isCurrentlyApplied ? "bg-control-bg-selected" : "bg-control-bg"
-							}`}
-						>
-							{isEffectiveDefault && (
-								<div className="absolute top-12 right-12 flex items-center gap-4">
-									<span className="rounded-full bg-primary-subtle px-8 py-2 tr-text-label-pill text-primary">
-										{isStoredDefault ? t("common.default") : t("workbench.layoutSettings.fallback")}
-									</span>
-									<IconButton
-										variant="ghost"
-										size="s"
-										icon={RiQuestionLine}
-										label={t("workbench.layoutSettings.aboutDefault")}
-										tooltip={
-											isStoredDefault
-												? t("workbench.layoutSettings.defaultHint")
-												: t("workbench.layoutSettings.fallbackHint")
-										}
-									/>
-								</div>
-							)}
-
-							<Icon className="size-24 text-text-muted" />
-
-							<div className="mt-8 flex items-center gap-4">
-								{renaming?.id === preset.id ? (
-									<input
-										value={renaming.name}
-										onChange={(event) => setRenaming({ id: preset.id, name: event.target.value })}
-										onKeyDown={(event) => {
-											if (isImeComposing(event.nativeEvent)) return;
-											if (event.key === "Enter") commitRename(preset.id);
-											if (event.key === "Escape") setRenaming(null);
-										}}
-										aria-label={t("workbench.layoutSettings.renameNamed", { name: presetName })}
-										data-settings-draft-input
-										maxLength={200}
-										className="min-w-0 flex-1 rounded-sm border border-control-border-default bg-control-bg px-4 py-2 tr-text-ui text-text-default focus:border-control-border-active focus-visible:focus-ring"
-									/>
-								) : (
-									<span className="truncate tr-text-ui text-text-default">{presetName}</span>
-								)}
-							</div>
-
-							<p className="mt-2 tr-text-metadata text-text-muted">
-								{description
-									? t(description)
-									: t("workbench.layoutSettings.groupCounts", {
-											left: preset.left.groups.length,
-											right: preset.right.groups.length,
-											bottom: preset.bottom.groups.length,
-										})}
-							</p>
-
-							<div className="mt-auto flex flex-wrap items-center justify-end gap-4 pt-12">
-								{custom && (
-									<div className="mr-auto flex items-center gap-2">
-										{renaming?.id === preset.id ? (
-											<>
-												<IconButton
-													variant="soft-primary"
-													size="s"
-													icon={Check}
-													label={t("workbench.layoutSettings.saveName", { name: presetName })}
-													disabled={!renaming.name.trim() || saving}
-													onClick={() => commitRename(preset.id)}
-												/>
-												<IconButton
-													variant="ghost"
-													size="s"
-													icon={X}
-													label={t("workbench.layoutSettings.cancelRename", {
-														name: presetName,
-													})}
-													onClick={() => setRenaming(null)}
-												/>
-											</>
-										) : (
-											<IconButton
-												variant="ghost"
-												size="s"
-												icon={Pencil}
-												label={t("workbench.layoutSettings.renameNamed", { name: presetName })}
-												disabled={saving}
-												onClick={() => setRenaming({ id: preset.id, name: preset.name })}
-											/>
-										)}
-										<button
-											type="button"
-											aria-label={t("workbench.layoutSettings.deleteNamed", { name: presetName })}
-											disabled={saving}
-											onClick={() => {
-												const customPresets = customLayoutPresets.filter(
-													(candidate) => candidate.id !== preset.id,
-												);
-												void saveCustomPresets(customPresets).then((saved) => {
-													if (!saved) return;
-													const state = useAppStore.getState();
-													if (state.localLayoutPreferences.defaultPresetId !== preset.id) return;
-													state.setLocalLayoutPreferences({
-														...state.localLayoutPreferences,
-														defaultPresetId: DEFAULT_LAYOUT_PRESET_ID,
-													});
-												});
-											}}
-											className="rounded-sm p-4 text-text-muted hover:bg-feedback-error-subtle hover:text-feedback-error disabled:text-control-disabled-text focus-visible:focus-ring"
-										>
-											<Trash2 className="size-14" />
-										</button>
-									</div>
-								)}
-								{!isStoredDefault && (
-									<Button
-										variant="outline"
-										size="m"
-										disabled={saving}
-										onClick={() =>
-											useAppStore.getState().setLocalLayoutPreferences({
-												...preferences,
-												defaultPresetId: preset.id,
-												maxSideGroups: Math.max(
-													preferences.maxSideGroups,
-													minimumSideGroupLimit(preset),
-												),
-												maxBottomGroups: Math.max(
-													preferences.maxBottomGroups,
-													minimumBottomGroupLimit(preset),
-												),
-											})
-										}
-									>
-										{t("workbench.layoutSettings.setDefault")}
-									</Button>
-								)}
-								<Button
-									variant="primary"
-									size="m"
-									disabled={!canApply || isCurrentlyApplied}
-									onClick={() => setApplying(preset)}
-								>
-									{t("workbench.layoutSettings.applyNow")}
-								</Button>
-							</div>
-						</div>
-					);
-				})}
-
-				<Popover
-					open={addLayoutOpen}
-					onOpenChange={(open) => {
-						setAddLayoutOpen(open);
-						if (open) setName("");
-					}}
+		<SettingsGroup
+			title={t("workbench.layoutSettings.presets")}
+			description={
+				hasWorkbench
+					? t("workbench.layoutSettings.presetsDescription")
+					: t("workbench.layoutSettings.presetsNoWorkspace")
+			}
+		>
+			<div className="border-border-muted border-b py-4">
+				<SettingsList
+					focusList={PRESETS_LIST}
+					label={t(SETTING.layoutPresets.label)}
+					rowIds={presets.map((preset) => preset.id)}
+					settingId={SETTING.layoutPresets.id}
+					testId="layout-presets"
+					onRemove={askDelete}
 				>
-					<PopoverTrigger asChild>
-						<button
-							type="button"
-							data-testid="layout-add-new"
-							disabled={!frame || customLayoutPresets.length >= MAX_CUSTOM_PRESETS || saving}
-							title={
-								customLayoutPresets.length >= MAX_CUSTOM_PRESETS
-									? t("workbench.layoutSettings.customLimit", { limit: MAX_CUSTOM_PRESETS })
-									: undefined
-							}
-							className="group flex flex-col rounded-sm bg-control-bg p-12 text-left transition-colors hover:bg-control-bg-hovered disabled:cursor-not-allowed disabled:bg-control-disabled-bg focus-visible:focus-ring"
-						>
-							<Plus className="size-24 text-text-muted group-disabled:text-control-disabled-text" />
-							<p className="mt-8 tr-text-ui text-text-default group-disabled:text-control-disabled-text">
-								{t("workbench.layoutSettings.addNew")}
-							</p>
-							<p className="mt-2 tr-text-metadata text-text-muted group-disabled:text-control-disabled-text">
-								{t("workbench.layoutSettings.addNewDescription")}
-							</p>
-						</button>
-					</PopoverTrigger>
-					<PopoverContent
-						align="start"
-						className="w-280 p-12"
-						onOpenAutoFocus={(event) => {
-							event.preventDefault();
-							addLayoutInputRef.current?.focus();
-						}}
-					>
-						<form
-							data-testid="layout-preset-save-row"
-							onSubmit={(event) => {
-								event.preventDefault();
-								if (!frame || !name.trim() || saving) return;
-								const preset = captureWorkbenchPreset(frame, randomId("preset"), name.trim());
-								void saveCustomPresets([...customLayoutPresets, preset]).then((saved) => {
-									if (saved) {
-										setName("");
-										setAddLayoutOpen(false);
-									}
-								});
-							}}
-							className="flex flex-col gap-12"
-						>
-							<input
-								ref={addLayoutInputRef}
-								value={name}
-								onChange={(event) => setName(event.target.value)}
-								placeholder={t("workbench.layoutSettings.namePlaceholder")}
-								aria-label={t("workbench.layoutSettings.nameLabel")}
-								maxLength={200}
-								className="w-full rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default placeholder:text-text-subtle focus:border-control-border-active focus-visible:focus-ring"
-							/>
-							<div className="flex justify-end gap-8">
-								<Button
-									type="button"
-									variant="ghost"
-									size="m"
-									onClick={() => setAddLayoutOpen(false)}
-								>
-									{t("common.cancel")}
-								</Button>
-								<Button
-									type="submit"
-									variant="primary"
-									size="m"
-									aria-label={t("workbench.layoutSettings.savePreset")}
-									disabled={!name.trim() || saving}
-								>
-									{t("common.save")}
-								</Button>
-							</div>
-						</form>
-					</PopoverContent>
-				</Popover>
+					{presets.map((preset) => (
+						<PresetRow
+							key={preset.id}
+							preset={preset}
+							custom={customs.includes(preset)}
+							storedDefault={preset.id === preferences.defaultPresetId}
+							effectiveDefault={preset.id === selected.id}
+							applied={preset.id === appliedPresetId}
+							canApply={canApply}
+							saving={saving}
+							renaming={renaming?.id === preset.id ? renaming : null}
+							onApply={() => setApplying(preset)}
+							onRename={setRenaming}
+							onRenameCommit={commitRename}
+							onDelete={() => askDelete(preset.id)}
+						/>
+					))}
+				</SettingsList>
 			</div>
-
+			<AddLayoutRow
+				saving={saving}
+				onSave={(name) =>
+					frame
+						? saveCustomPresets([
+								...customLayoutPresets,
+								captureWorkbenchPreset(frame, randomId("preset"), name),
+							])
+						: Promise.resolve(false)
+				}
+			/>
 			<SettingsRow
-				className="mt-24"
-				label={t("workbench.layoutSettings.resetToDefault")}
+				{...settingProps(t, SETTING.layoutReset)}
 				description={t("workbench.layoutSettings.resetDescription", {
 					name: layoutPresetName(t, selected),
 				})}
@@ -478,6 +594,7 @@ export function LayoutSettings() {
 					<Button
 						variant="outline"
 						size="m"
+						tabIndex={0}
 						data-testid="layout-reset-default"
 						disabled={!canApply}
 						onClick={() => setApplying(selected)}
@@ -486,58 +603,35 @@ export function LayoutSettings() {
 					</Button>
 				}
 			/>
-
-			<div className="flex flex-col">
-				<button
-					type="button"
-					onClick={() => setAdvancedOpen((v) => !v)}
-					aria-expanded={advancedOpen}
-					data-testid="layout-advanced-toggle"
-					className="flex w-full items-start gap-8 rounded-sm py-12 text-left transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring-inset"
+			<SettingsDisclosure
+				rowId="layout-advanced"
+				label={t("workbench.layoutSettings.advanced")}
+				settingIds={[SETTING.layoutGroupLimits.id]}
+				testId="layout-advanced-toggle"
+			>
+				<div
+					data-setting-id={SETTING.layoutGroupLimits.id}
+					data-testid="layout-group-limits"
+					className={SETTINGS_ROWS}
 				>
-					<span className="mt-2 shrink-0">
-						{advancedOpen ? (
-							<RiArrowDownSLine className="size-16 text-text-muted" aria-hidden="true" />
-						) : (
-							<RiArrowRightSLine className="size-16 text-text-muted" aria-hidden="true" />
-						)}
-					</span>
-					<span className="tr-text-ui text-text-default">
-						{t("workbench.layoutSettings.advanced")}
-					</span>
-				</button>
-				{advancedOpen && (
-					<div className="pb-12">
-						<SettingsGroup
-							title={t("workbench.layoutSettings.groupLimits")}
-							description={t("workbench.layoutSettings.groupLimitsDescription")}
-							testId="layout-group-limits"
-						>
-							<SettingsRow
-								label={t("workbench.layoutSettings.sideGroups")}
-								control={
-									<GroupLimitInput
-										id="layout-side-group-limit"
-										label={t("workbench.layoutSettings.maxSideGroups")}
-										limitKey="maxSideGroups"
-									/>
-								}
-							/>
-							<SettingsRow
-								label={t("workbench.layoutSettings.bottomGroups")}
-								control={
-									<GroupLimitInput
-										id="layout-bottom-group-limit"
-										label={t("workbench.layoutSettings.maxBottomGroups")}
-										limitKey="maxBottomGroups"
-									/>
-								}
-							/>
-						</SettingsGroup>
-					</div>
-				)}
-			</div>
-
+					<SettingsSubheading
+						title={t(SETTING.layoutGroupLimits.label)}
+						description={t(SETTING.layoutGroupLimits.description)}
+					/>
+					<GroupLimitRow
+						limitKey="maxSideGroups"
+						rowId="layout-side-groups"
+						label={t("workbench.layoutSettings.sideGroups")}
+						fieldLabel={t("workbench.layoutSettings.maxSideGroups")}
+					/>
+					<GroupLimitRow
+						limitKey="maxBottomGroups"
+						rowId="layout-bottom-groups"
+						label={t("workbench.layoutSettings.bottomGroups")}
+						fieldLabel={t("workbench.layoutSettings.maxBottomGroups")}
+					/>
+				</div>
+			</SettingsDisclosure>
 			<ConfirmDialog
 				open={applying !== null}
 				onOpenChange={(open) => {
@@ -552,6 +646,65 @@ export function LayoutSettings() {
 					setApplying(null);
 				}}
 			/>
-		</div>
+			<ConfirmDialog
+				open={deleting !== null}
+				onOpenChange={(open) => {
+					if (!open) setDeleting(null);
+				}}
+				title={t("workbench.layoutSettings.deleteTitle", {
+					name: deleting ? layoutPresetName(t, deleting) : "",
+				})}
+				description={t("workbench.layoutSettings.deleteDescription")}
+				confirmLabel={t("workbench.layoutSettings.deleteConfirm")}
+				destructive
+				confirmTestId="layout-delete-confirm"
+				onConfirm={() => {
+					if (deleting) remove(deleting);
+					setDeleting(null);
+				}}
+			/>
+		</SettingsGroup>
+	);
+}
+
+function DocumentsGroup() {
+	const t = useT();
+	const side = useAppStore((state) => state.markdownOutlineSide);
+	const reset = useClientPreferenceReset("markdownOutlineSide");
+	const options: SettingsChoiceOption<MarkdownOutlineSide>[] = [
+		{ id: "left", label: t("settings.appearance.markdownOutlineSide.left") },
+		{ id: "right", label: t("settings.appearance.markdownOutlineSide.right") },
+	];
+	return (
+		<SettingsGroup title={t("workbench.layoutSettings.documents")} scope="device">
+			<SettingsRow
+				{...settingProps(t, SETTING.markdownOutline)}
+				control={
+					<SettingsChoice
+						label={t(SETTING.markdownOutline.label)}
+						options={options}
+						value={side}
+						cost="cheap"
+						testId="markdown-outline-side-control"
+						onSelect={(next) => useAppStore.getState().setMarkdownOutlineSide(next)}
+					/>
+				}
+				reset={reset}
+			/>
+		</SettingsGroup>
+	);
+}
+
+export function LayoutSettings() {
+	const t = useT();
+	return (
+		<SettingsPage
+			testId="settings-layout"
+			title={t("settings.nav.layout")}
+			description={t("workbench.layoutSettings.description")}
+		>
+			<PresetsGroup key="presets" />
+			<DocumentsGroup key="documents" />
+		</SettingsPage>
 	);
 }

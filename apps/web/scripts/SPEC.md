@@ -24,7 +24,7 @@ they are *generators*: they use `node:fs` and `node:path`, which must never reac
 | `typography.ts` | the library: load → validate → render CSS. The **only** place CSS custom-property names, semantic class names and prose root class names are derived — including the user-adjustable tokens the web `fonts` runtime overrides (`--tr-font-family-<id>` over its `-default`, `--tr-font-size-code` / `-dense`, `--tr-font-weight-offset`, `--tr-font-ligatures-<id>`). |
 | `generate-typography.ts` | CLI. Writes `src/styles/generated/typography.css` and `src/styles/generated/fonts.css` (the `@import`s for the self-hosted faces); `--check` fails instead of writing when a committed file is stale. |
 | `validate-typography.ts` | CLI. Validates `src/styles/typography.json` and prints a summary. The enforced gate. |
-| `colors.ts` | the library: load → validate → render. The **only** place a colour derivation (a palette alias or an alpha step) is written. |
+| `colors.ts` | the library: load → validate → render. The **only** place a colour derivation (a palette alias or an alpha step) is written. A role's source is a `THEME_COLOR_KEYS` entry, or a manifest syntax / ANSI entry spelled `syntax.<key>` / `ansi.<key>` (read from `schema.ts`'s `SYNTAX_COLOR_KEYS` / `ANSI_COLOR_KEYS`, mapped to the runtime's `--code-*` / `--ansi-*` variables). |
 | `generate-colors.ts` | CLI. Writes `src/styles/generated/colors.css` — the roles, their dark-appearance `darkAlpha` overrides, the appearance-level effects, and the Tailwind map; `--check` fails when it is stale. |
 | `spacing.ts` | the library: load → validate → render. It enforces step identity and is the only place the generated spacing-CSS shape and `--spacing: 1px` (number = px) base are derived; the step lengths live only in `spacing.json`. |
 | `spacing.test.ts` | Pins the spacing source validator's closed root/metadata shapes and value types against the schema. |
@@ -41,7 +41,12 @@ they are *generators*: they use `node:fs` and `node:path`, which must never reac
 
 `designSources.ts` owns the shared adoption-guard and compiler-census source scan: app source, `packages/ui`, and every
 `thinkrail-extensions/*/web` source tree, excluding tests, generated output, and installed dependencies.
-The same SDK/extension roots are explicit Tailwind `@source` directives in the app stylesheet. Extension
+The same SDK/extension roots are explicit Tailwind `@source` directives in the app stylesheet, which turns
+automatic source detection off (`@import "tailwindcss" source(none)`) and scans `src/` and `index.html`
+explicitly, excluding `src/extensions/fixtures`: automatic detection scans every non-ignored file under
+`apps/web` — stray build folders, `public/`, docs — so a staged installed-extension bundle would leak its
+classes into the app sheet and hide its own missing stylesheet. Installed extensions ship their own
+prefixed sheet and are never app sources. Extension
 sources name recursive file globs: a wildcard directory ending in `*/web` alone does not discover the
 nested files, silently dropping extension-only classes such as fullscreen zoom. The browser zoom probe
 checks rendered dimensions, not just the zoom label, to pin actual CSS generation. Each token `*:check`

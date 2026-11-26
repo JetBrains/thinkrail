@@ -29,12 +29,15 @@ result in pi's terminal UI. It knows nothing about ThinkRail. ThinkRail composes
   `node:`-free. `scratchDir` names where the prompt guideline sends mockups. `saveVisualization:
   ({ params, markdown, cwd }) => path | undefined` (sync or async) is the persistence seam, for the same
   reason: after a diagram or comparison validates, the host may store its markdown and return where; the
-  model-facing result then ends with `` Saved to `path`. ``. It is best effort — a throw or `undefined`
-  leaves the result as it was — and never called for `type: "file"`, which is already a file.
+  model-facing result then ends with `` Saved to `path`. `` and `details` carries it as `savedPath`. It is
+  best effort — a throw or `undefined` leaves the result as it was — and never called for `type: "file"`,
+  which is already a file.
 - **The tool contract** renderers key on: the name `"visualize"`, its argument shape
   (`type: "diagram" | "comparison" | "file"`, `title?`, `mermaid?`, `options?[]`, `path?`, `before?`),
-  and `details` = the validated params. Changing this shape is a breaking change for every renderer,
-  including ThinkRail's.
+  and `details` = the validated params (plus `savedPath` when a save happened). Changing this shape is a
+  breaking change for every renderer, including ThinkRail's.
+- `visualizedPaths(args, details)` lists the files a call put in front of the user — a `file` call's
+  `path` and `before`, and the saved copy — for a host that tracks what was shown.
 
 ## Decisions
 

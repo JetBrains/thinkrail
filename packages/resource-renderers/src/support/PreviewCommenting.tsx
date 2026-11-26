@@ -2,23 +2,70 @@ import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
 import {
+	type ReadingCommand,
+	scrollBeforeStep,
+	scrollReading,
+	spansOverlap,
+	stepRevealDelta,
+} from "@thinkrail/ui/reading";
+import { cn } from "@thinkrail/ui/utils";
+import {
+	type FocusEvent,
+	type KeyboardEvent,
 	type ReactNode,
 	type RefCallback,
 	type RefObject,
 	useEffect,
+	useLayoutEffect,
 	useRef,
 	useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { useFocusHome } from "../host";
 import type { ReviewThread, SurfaceReview } from "../registry";
+import {
+	type BlockCursorState,
+	blockCursorCommand,
+	blockIndexAt,
+	blockRange,
+	blockRangeLines,
+	blockSpan,
+	blockText,
+	type CursorBlock,
+	cursorBlockElements,
+	cursorBlocksOf,
+	firstVisibleBlock,
+} from "./blockCursor";
+import { CURSOR_PROXY_HOST, type CursorOption, CursorProxy } from "./CursorProxy";
+import { readingCursorKey, useReviewSurfaceKeys } from "./cursorKeys";
 import { mapPreviewSelection } from "./previewAnchor";
 import { ReviewComposer } from "./ReviewComposer";
+import { READER_SCOPE, useReaderKeys, viewportSpan } from "./readingSurface";
 import { revealReviewCard } from "./revealFocus";
 import { markReviewRegions, type SourceLineRange, stampedSelectionLines } from "./sourceLines";
+
+const BLOCK_CURSOR = "data-review-block-cursor";
+const BLOCK_RANGE = "data-review-block-range";
+
+export type PreviewReturnFocus = (line: number | undefined) => void;
 
 export interface ComposerInsert {
 	line: number;
 	node: ReactNode;
+}
+
+function sameOption(left: CursorOption | null, right: CursorOption | null): boolean {
+	return (
+		left === right ||
+		(left !== null &&
+			right !== null &&
+			left.key === right.key &&
+			left.place === right.place &&
+			left.text === right.text &&
+			left.extent === right.extent &&
+			left.position === right.position &&
+			left.size === right.size)
+	);
 }
 
 function threadLineRange(thread: ReviewThread): SourceLineRange | null {
@@ -45,15 +92,68 @@ export function PreviewCommenting({
 	canCommentSelection?: (selection: Selection, scroller: HTMLElement) => boolean;
 	scrollerRef: RefObject<HTMLDivElement | null>;
 	attachScroller: RefCallback<HTMLDivElement>;
-	children: (composer: ComposerInsert | null) => ReactNode;
+	children: (composer: ComposerInsert | null, returnFocus: PreviewReturnFocus) => ReactNode;
 }) {
 	const t = useT();
+	const keys = useReviewSurfaceKeys();
+	const readerKeys = useReaderKeys();
+	const home = useFocusHome();
 	const iconRef = useRef<HTMLButtonElement>(null);
 	const draggingRef = useRef(false);
 	const [selection, setSelection] = useState<SourceLineRange | null>(null);
 	const [composing, setComposing] = useState(false);
 	const selectedTextRef = useRef("");
+	const [proxy, setProxy] = useState<HTMLDivElement | null>(null);
+	const [blockCursor, setBlockCursor] = useState<BlockCursorState | null>(null);
+	const [cursorShown, setCursorShown] = useState(false);
+	const [cursorOption, setCursorOption] = useState<CursorOption | null>(null);
 	const { commenting, threads } = review;
+
+	const linesLabel = (lines: SourceLineRange) =>
+		lines.startLine === lines.endLine
+			? t("panels.reviewZones.line", { line: lines.startLine })
+			: t("panels.reviewZones.lines", { start: lines.startLine, end: lines.endLine });
+
+	const blockOption = (
+		elements: readonly HTMLElement[],
+		blocks: readonly CursorBlock[],
+		at: BlockCursorState,
+	): CursorOption | null => {
+		const index = blockIndexAt(blocks, at.line);
+		const block = blocks[index];
+		const element = elements[index];
+		if (!block || !element) return null;
+		const { from, to } = blockRange(blocks, at);
+		const range = from === to ? null : blockRangeLines(blocks, at);
+		return {
+			key: `${block.start}${range ? `-${at.anchor}` : ""}`,
+			place: linesLabel({ startLine: block.start, endLine: block.end }),
+			text: blockText(element),
+			extent: range ? linesLabel(range) : null,
+			position: index + 1,
+			size: blocks.length,
+		};
+	};
+
+	useLayoutEffect(() => {
+		const scroller = scrollerRef.current;
+		if (!scroller) return;
+		for (const element of scroller.querySelectorAll(`[${BLOCK_CURSOR}], [${BLOCK_RANGE}]`)) {
+			element.removeAttribute(BLOCK_CURSOR);
+			element.removeAttribute(BLOCK_RANGE);
+		}
+		const elements = cursorBlockElements(scroller);
+		const blocks = cursorBlocksOf(elements);
+		const at = blockCursor ?? firstVisibleBlock(elements, scroller);
+		const option = at ? blockOption(elements, blocks, at) : null;
+		setCursorOption((current) => (sameOption(current, option) ? current : option));
+		if (!cursorShown || !blockCursor) return;
+		if (blockCursor.anchor !== null) {
+			const { from, to } = blockRange(blocks, blockCursor);
+			for (const element of elements.slice(from, to + 1)) element.setAttribute(BLOCK_RANGE, "");
+		}
+		elements[blockIndexAt(blocks, blockCursor.line)]?.setAttribute(BLOCK_CURSOR, "");
+	});
 
 	const focusId = review.focus?.id ?? null;
 	useEffect(() => {
@@ -155,6 +255,7 @@ export function PreviewCommenting({
 		}
 		const resolved =
 			stampedSelectionLines(scroller) ?? mapPreviewSelection(source, selectedTextRef.current);
+		if (resolved) setBlockCursor({ line: resolved.startLine, anchor: null });
 		setSelection(resolved);
 		setComposing(true);
 	};
@@ -164,11 +265,104 @@ export function PreviewCommenting({
 		setSelection(null);
 	};
 
-	const label = selection
-		? selection.startLine === selection.endLine
-			? t("panels.reviewZones.line", { line: selection.startLine })
-			: t("panels.reviewZones.lines", { start: selection.startLine, end: selection.endLine })
-		: t("panels.previewCommenting.wholeFile");
+	const returnFocus: PreviewReturnFocus = (line) => {
+		if (line !== undefined) setBlockCursor({ line, anchor: null });
+		proxy?.focus({ preventScroll: true });
+		const shown = line ?? blockCursor?.line;
+		const scroller = proxy?.parentElement;
+		if (shown === undefined || !scroller) return;
+		const elements = cursorBlockElements(scroller);
+		elements[blockIndexAt(cursorBlocksOf(elements), shown)]?.scrollIntoView({ block: "nearest" });
+	};
+
+	const placeCursor = (line: number | undefined) => {
+		if (line !== undefined) setBlockCursor({ line, anchor: null });
+		setCursorShown(true);
+	};
+
+	const readBlocks = (
+		command: ReadingCommand,
+		scroller: HTMLElement,
+		elements: readonly HTMLElement[],
+		blocks: readonly CursorBlock[],
+		at: number,
+	) => {
+		const view = viewportSpan(scroller);
+		const shownAt = (index: number) => {
+			const span = blockSpan(elements, index);
+			return span !== null && spansOverlap(span, view);
+		};
+		if (command.kind === "page" || command.kind === "edge") {
+			scrollReading(scroller, command);
+			if (command.kind === "edge") {
+				placeCursor((command.direction < 0 ? blocks[0] : blocks.at(-1))?.start);
+			} else if (shownAt(at)) placeCursor(undefined);
+			else placeCursor(blocks[elements.findIndex((_element, index) => shownAt(index))]?.start);
+			return;
+		}
+		const current = blockSpan(elements, at);
+		if (command.kind !== "line" || !current) return;
+		if (!spansOverlap(current, view)) {
+			const visible = elements.flatMap((_element, index) => (shownAt(index) ? [index] : []));
+			placeCursor(blocks[(command.direction > 0 ? visible[0] : visible.at(-1)) ?? at]?.start);
+			return;
+		}
+		const before = scroller.scrollTop;
+		scroller.scrollTop += scrollBeforeStep(view, current, command.direction);
+		if (scroller.scrollTop !== before) {
+			placeCursor(undefined);
+			return;
+		}
+		const next = blockSpan(elements, at + command.direction);
+		const block = blocks[at + command.direction];
+		if (!next || !block) return;
+		scroller.scrollTop += stepRevealDelta(view, next);
+		placeCursor(block.start);
+	};
+
+	const onCursorKey = (event: KeyboardEvent<HTMLDivElement>) => {
+		const scroller = scrollerRef.current;
+		if (!scroller) return;
+		const key = readingCursorKey(event.nativeEvent, keys, readerKeys);
+		if (!key) return;
+		const elements = cursorBlockElements(scroller);
+		const blocks = cursorBlocksOf(elements);
+		const start = blockCursor ?? firstVisibleBlock(elements, scroller);
+		if (key.kind === "reading") {
+			if (key.command.kind === "side") return;
+			event.preventDefault();
+			if (start) {
+				readBlocks(key.command, scroller, elements, blocks, blockIndexAt(blocks, start.line));
+			}
+			return;
+		}
+		const outcome = start ? blockCursorCommand(blocks, start, key.command) : null;
+		if (!outcome) return;
+		event.preventDefault();
+		if (outcome.kind === "comment") {
+			setBlockCursor({ line: start?.line ?? outcome.lines.startLine, anchor: null });
+			setSelection(outcome.lines);
+			setComposing(true);
+			return;
+		}
+		setBlockCursor(outcome.state);
+		setCursorShown(true);
+		const target = blockSpan(elements, blockIndexAt(blocks, outcome.state.line));
+		if (target) scroller.scrollTop += stepRevealDelta(viewportSpan(scroller), target);
+	};
+
+	const onCursorFocus = (event: FocusEvent<HTMLDivElement>) => {
+		const scroller = scrollerRef.current;
+		const visible = event.currentTarget.matches(":focus-visible");
+		setCursorShown(visible);
+		if (visible && !blockCursor && scroller) {
+			setBlockCursor(firstVisibleBlock(cursorBlockElements(scroller), scroller));
+		}
+	};
+
+	const onCursorBlur = () => setCursorShown(false);
+
+	const label = selection ? linesLabel(selection) : t("panels.previewCommenting.wholeFile");
 
 	const draft = selection
 		? {
@@ -189,6 +383,7 @@ export function PreviewCommenting({
 						label={label}
 						commenting={commenting}
 						onClose={close}
+						onReturnFocus={() => returnFocus(undefined)}
 						className="review-composer-flow"
 					/>
 				),
@@ -196,8 +391,28 @@ export function PreviewCommenting({
 		: null;
 
 	return (
-		<div ref={attachScroller} data-testid={testid} className={surfaceClassName}>
-			{children(composerInsert)}
+		<div
+			ref={attachScroller}
+			data-testid={testid}
+			data-key-scope={READER_SCOPE}
+			className={cn(
+				surfaceClassName,
+				CURSOR_PROXY_HOST,
+				"[&_[data-review-block-cursor]]:focus-ring [&_tr[data-review-block-cursor]]:bg-primary-subtle [&_[data-review-block-range]]:bg-primary-subtle",
+			)}
+		>
+			{cursorOption ? (
+				<CursorProxy
+					ref={setProxy}
+					focusDefault={home}
+					label={t("viewer.markdown.blocks")}
+					option={cursorOption}
+					onKeyDown={onCursorKey}
+					onFocus={onCursorFocus}
+					onBlur={onCursorBlur}
+				/>
+			) : null}
+			{children(composerInsert, returnFocus)}
 			{createPortal(
 				<IconButton
 					ref={iconRef}

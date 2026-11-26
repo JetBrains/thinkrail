@@ -4,9 +4,11 @@ import type {
 	ChatContinuation,
 	ExtUiRequest,
 	HostUpdateNotice,
+	KeybindingOverrides,
 	LoginPush,
 	McpStatusPayload,
 	Project,
+	PullRequestFilter,
 	ReviewChangedPayload,
 	ServerWelcome,
 	SessionCreatedPayload,
@@ -26,14 +28,19 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
+	EXTENSION_CATALOG_PROTOCOL_VERSION,
+	EXTENSION_QUERY_PROTOCOL_VERSION,
 	EXTENSION_SETTINGS_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
+	INSTALLED_EXTENSIONS_PROTOCOL_VERSION,
+	KEYBINDINGS_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
+	PULL_REQUEST_REVIEW_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
@@ -62,6 +69,32 @@ export function supportsUserThemes(protocolVersion: number | null): boolean {
 
 export function supportsExtensionSettings(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= EXTENSION_SETTINGS_PROTOCOL_VERSION;
+}
+
+export function supportsPullRequestReview(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= PULL_REQUEST_REVIEW_PROTOCOL_VERSION;
+}
+
+export function rememberPullRequestFilter(projectId: string, filter: PullRequestFilter): void {
+	if (!supportsPullRequestReview(useAppStore.getState().protocolVersion)) return;
+	getTransport()
+		.request("settings.update", { config: { pullRequestFilters: { [projectId]: filter } } })
+		.catch(() => {});
+}
+
+export function supportsKeybindings(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= KEYBINDINGS_PROTOCOL_VERSION;
+}
+
+export function updateKeybindings(keybindings: KeybindingOverrides): Promise<boolean> {
+	if (!supportsKeybindings(useAppStore.getState().protocolVersion)) return Promise.resolve(false);
+	return getTransport()
+		.request("settings.update", { config: { keybindings } })
+		.then(() => true);
+}
+
+export function supportsExtensionQuery(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= EXTENSION_QUERY_PROTOCOL_VERSION;
 }
 
 export function supportsPiPackages(protocolVersion: number | null): boolean {
@@ -247,6 +280,31 @@ function refreshUserFonts(connectionGeneration: number): void {
 	);
 }
 
+let extensionCatalogRequest = 0;
+
+export function refreshExtensionCatalog(
+	connectionGeneration: number = useAppStore.getState().connectionGeneration,
+): Promise<void> {
+	const store = useAppStore.getState();
+	if (
+		store.protocolVersion === null ||
+		store.protocolVersion < EXTENSION_CATALOG_PROTOCOL_VERSION
+	) {
+		return Promise.resolve();
+	}
+	const request = ++extensionCatalogRequest;
+	const current = () => {
+		const state = useAppStore.getState();
+		return request === extensionCatalogRequest && isConnectedGeneration(state, connectionGeneration)
+			? state
+			: null;
+	};
+	return getTransport()
+		.request("extension.list", {})
+		.then((entries) => current()?.installExtensionCatalog(entries))
+		.catch(() => current()?.installExtensionCatalog("failed"));
+}
+
 function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
 	const snapshot = useAppStore.getState();
 	const openProjectIds = new Set(snapshot.projects.map((project) => project.id));
@@ -366,6 +424,8 @@ export function initTransport(): WsTransport {
 		refreshLocalLocales(connectionGeneration);
 		refreshUserThemes(connectionGeneration);
 		refreshUserFonts(connectionGeneration);
+		if (welcome.protocolVersion >= INSTALLED_EXTENSIONS_PROTOCOL_VERSION)
+			void refreshExtensionCatalog(connectionGeneration);
 		if (welcome.protocolVersion >= WORKSPACE_CREATION_PROTOCOL_VERSION)
 			refreshWorkspaceCreations(connectionGeneration);
 		else useAppStore.getState().setWorkspaceCreations([]);
@@ -431,7 +491,8 @@ export function initTransport(): WsTransport {
 	transport.subscribe(WS_CHANNELS.providerLogin, (data) => {
 		const push = data as LoginPush;
 		const state = useAppStore.getState();
-		if (push.target && state.removedWorkspaceIds[push.target.workspaceId]) {
+		const workspaceId = push.target?.workspaceId;
+		if (workspaceId !== undefined && state.removedWorkspaceIds[workspaceId]) {
 			void getTransport()
 				.request("provider.loginCancel", { loginId: push.loginId })
 				.catch(() => {});
@@ -463,6 +524,10 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.packagesChanged, () => {
 		useAppStore.getState().bumpPackagesVersion();
+	});
+
+	transport.subscribe(WS_CHANNELS.extensionsChanged, () => {
+		void refreshExtensionCatalog();
 	});
 
 	transport.subscribe(WS_CHANNELS.fontsChanged, () => {

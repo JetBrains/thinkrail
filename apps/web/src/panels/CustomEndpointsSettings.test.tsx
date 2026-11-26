@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test";
-import type { ModelContextSetting, ModelContextTarget } from "@thinkrail/contracts";
+import type { CustomEndpoint, ModelContextSetting, ModelContextTarget } from "@thinkrail/contracts";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+	CustomEndpointsSettings,
+	type CustomEndpointsState,
 	EndpointModelItem,
 	type ModelRowContext,
 	modelRowContext,
@@ -67,7 +69,7 @@ test("a saved model without an override offers an empty field over the detected 
 	expect(input).toContain('placeholder="Detected"');
 	expect(input).toContain('aria-label="Context window for relay/glm"');
 	expect(input).toContain("1,024–10,000,000");
-	expect(input).toContain("data-settings-draft-input");
+	expect(input).not.toContain("data-draft-dirty");
 	expect(input).not.toContain('disabled=""');
 	expect(render()).not.toContain("custom-endpoints-context-reset");
 	expect(contextInput(render({ model: { ...row, contextWindow: null } }))).toContain(
@@ -142,4 +144,72 @@ test("a row targets its own endpoint's model and an unsaved endpoint sends nothi
 	expect(unsaved.setting).toBeUndefined();
 	expect(await unsaved.change(131_072)).toBe(false);
 	expect(calls).toHaveLength(2);
+});
+
+const gateway: CustomEndpoint = {
+	id: "custom-gw",
+	name: "Gateway",
+	baseUrl: "https://llm.example.com/v1",
+	hasApiKey: false,
+	models: [
+		{
+			id: "relay/glm",
+			contextWindow: 65_536,
+			maxTokens: null,
+			reasoning: null,
+			vision: null,
+			tools: null,
+			chatTemplateThinking: null,
+		},
+	],
+};
+
+function servers(endpoints: CustomEndpoint[] | null, failed = false): string {
+	const state: CustomEndpointsState = {
+		endpoints,
+		failed,
+		load: () => Promise.resolve(),
+		replace: () => {},
+	};
+	return renderToStaticMarkup(<CustomEndpointsSettings state={state} />);
+}
+
+test("no servers yet shows an empty state whose Add server catches focus after the last removal", () => {
+	const html = servers([]);
+	expect(html).toContain('data-testid="custom-endpoints-empty"');
+	expect(html).toContain('data-setting-id="custom-servers"');
+	expect(html).toContain("No custom servers yet.");
+	expect(html).toContain("Any OpenAI-compatible server");
+	const add = html.match(/<button[^>]*data-testid="custom-endpoints-add"[^>]*>/)?.[0] ?? "";
+	expect(add).toContain('data-focus-fallback="custom-servers"');
+	expect(add).toContain('tabindex="0"');
+	expect(html).not.toContain('data-key-scope="settings.list"');
+});
+
+test("servers are a keyboard list: Enter edits, Remove is a side, and the address is visible text", () => {
+	const html = servers([gateway, { ...gateway, id: "custom-lab", name: "Lab", models: [] }]);
+	const list = html.match(/<ul[^>]*>/)?.[0] ?? "";
+	expect(list).toContain('data-key-scope="settings.list"');
+	expect(list).toContain('data-focus-list="custom-servers"');
+	expect(list).toContain('data-setting-id="custom-servers"');
+	const edits = html.match(/<button[^>]*data-testid="custom-endpoints-edit"[^>]*>/g) ?? [];
+	expect(edits).toHaveLength(2);
+	expect(edits[0]).toContain("data-setting-primary");
+	expect(edits[0]).toContain('tabindex="0"');
+	expect(edits[1]).toContain('tabindex="-1"');
+	expect(edits[0]).toContain('aria-label="Edit Gateway"');
+	const removes = html.match(/<button[^>]*data-testid="custom-endpoints-remove"[^>]*>/g) ?? [];
+	expect(removes[0]).toContain('tabindex="0"');
+	expect(removes[0]).toContain('aria-label="Remove Gateway"');
+	expect(html).toContain("https://llm.example.com/v1 · 1 model");
+	expect(html).not.toContain('title="https://llm.example.com/v1"');
+	expect(html).not.toContain("custom-endpoints-empty");
+	expect(html.match(/data-testid="custom-endpoints-add"/g)).toHaveLength(1);
+});
+
+test("a failed server list offers Retry instead of an empty state", () => {
+	const html = servers(null, true);
+	expect(html).toContain("Couldn&#x27;t load custom servers.");
+	expect(html).toMatch(/<button[^>]*tabindex="0"[^>]*data-testid="custom-endpoints-retry"/);
+	expect(html).not.toContain("custom-endpoints-empty");
 });

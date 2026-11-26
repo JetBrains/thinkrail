@@ -5,8 +5,9 @@ import type {
 	ExtensionUIDialogOptions,
 } from "@earendil-works/pi-coding-agent";
 import type { ExtUiRequest, ExtUiResponse, ProviderWarning } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
+import { plainText, stripAnsi } from "@thinkrail/shared/stripAnsi";
 import { plainTextTheme } from "./plainTextTheme";
-import { plainText, stripAnsi } from "./stripAnsi";
 
 /** Clients whose protocol version is below `belowProtocol`; absent means every client. */
 export interface ExtUiAudience {
@@ -273,7 +274,12 @@ export function createWebUiContext(
 		setHiddenThinkingLabel: () => {},
 		setFooter: () => {},
 		setHeader: () => {},
-		custom: (() => Promise.resolve(undefined)) as ExtensionUIContext["custom"],
+		async custom() {
+			throw new CodedError(
+				"EXTENSION_UI_UNSUPPORTED",
+				"ctx.ui.custom() requires a terminal UI. In ThinkRail, use ui.select(), ui.confirm(), ui.input(), or ui.editor() instead.",
+			);
+		},
 		getEditorText: () => "",
 		addAutocompleteProvider: () => {},
 		setEditorComponent: () => {},

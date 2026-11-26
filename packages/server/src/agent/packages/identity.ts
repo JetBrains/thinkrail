@@ -1,6 +1,6 @@
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, posix, relative, resolve, sep, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { PackageSource } from "@earendil-works/pi-coding-agent";
 import type { PiPackageScope, PiPackageSourceKind } from "@thinkrail/contracts";
@@ -27,6 +27,18 @@ export function resolveLocalSource(input: string, baseDir: string): string {
 	if (trimmed === "~") return homedir();
 	if (trimmed.startsWith("~/")) return resolve(homedir(), trimmed.slice(2));
 	return resolve(baseDir, trimmed);
+}
+
+/** pi's private `getResourcePathKey`: synthetic paths as-is, files by realpath (else as given), case-folded on Windows. */
+export function piResourcePathKey(path: string): string {
+	if (path.startsWith(BUILTIN_PREFIX) || path.startsWith("<")) return path;
+	let canonical = path;
+	try {
+		canonical = realpathSync(path);
+	} catch {}
+	return process.platform === "win32"
+		? win32.resolve(canonical).toLowerCase()
+		: posix.resolve(canonical);
 }
 
 /** pi's offline switch (`PI_OFFLINE` ∈ 1 | true | yes), which pi does not export. */

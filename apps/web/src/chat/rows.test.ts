@@ -1,10 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import type { AssistantMessage, TurnChangeSet } from "@thinkrail/contracts";
+import type {
+	AssistantMessage,
+	TurnChangeSet,
+	WorkspaceArtifactsSnapshot,
+} from "@thinkrail/contracts";
 import {
 	type ChatRow,
 	deriveRows,
 	matchTurnReceipt,
 	projectRows,
+	sessionRoundArtifacts,
 	stabilizeRows,
 	turnDivider,
 } from "./rows";
@@ -13,6 +18,7 @@ import type { ChatTurn, ToolResultState } from "./types";
 
 registerToolRenderer("primary-tool", () => null, { prominence: "primary" });
 registerToolRenderer("bare-tool", () => null, { chrome: "bare" });
+registerToolRenderer("suggest-tool", () => null, { composerSuggestions: () => ["Next"] });
 
 type Block =
 	| { type: "text"; text: string }
@@ -438,6 +444,21 @@ describe("deriveRows dividers", () => {
 		expect(kinds(rows)).toEqual(["user", "system", "markdown", "divider"]);
 	});
 
+	test("a round a suggestions call ended is done after a reload too, with no closer to read", () => {
+		const outcomes = (turns: ChatTurn[], results: Record<string, ToolResultState>) =>
+			deriveRows(turns, results, false).flatMap((row) =>
+				row.kind === "divider" ? [row.data.outcome] : [],
+			);
+		const suggested = assistant("a1", [text("Fixed."), tc("s1", "suggest-tool")], {
+			stopReason: "toolUse",
+		});
+		const ok: ToolResultState = { status: "done", raw: {} };
+		expect(outcomes([user("u1"), suggested], { s1: ok })).toEqual(["done"]);
+		expect(outcomes([user("u1"), suggested], { s1: { status: "error", raw: {} } })).toEqual([null]);
+		const plainTool = assistant("a1", [text("Running."), tc("b1")], { stopReason: "toolUse" });
+		expect(outcomes([user("u1"), plainTool], { b1: ok })).toEqual([null]);
+	});
+
 	test("the divider outcome follows the round's last reply and closer", () => {
 		const outcomes = (turns: ChatTurn[], streaming = false) =>
 			deriveRows(turns, {}, streaming).flatMap((row) =>
@@ -694,6 +715,88 @@ test("turnDivider lets the spec side win a tie — a path reached by both routes
 	const d = turnDivider(turns, 2);
 	expect(d?.specs).toEqual([path]);
 	expect(d?.changedFiles).toEqual([]);
+});
+
+test("a round's artifacts are the ones a run of this chat created or changed within the round", () => {
+	const snapshot: WorkspaceArtifactsSnapshot = {
+		workspaceId: "w1",
+		dir: ".thinkrail/context",
+		outputs: null,
+		artifacts: [
+			{
+				path: ".thinkrail/context/mockups/a.html",
+				state: "live",
+				size: 1,
+				changedAt: 1,
+				firstSeenAt: 1,
+				role: "result",
+				published: true,
+				rounds: [
+					{ sessionId: "s1", startedAt: 1_500 },
+					{ sessionId: "s1", startedAt: 20_500 },
+				],
+			},
+			{
+				path: ".thinkrail/context/mockups/b.html",
+				state: "live",
+				size: 1,
+				changedAt: 1,
+				firstSeenAt: 1,
+				role: "result",
+				rounds: [{ sessionId: "s1", startedAt: 1_700 }],
+			},
+			{
+				path: ".thinkrail/context/mockups/_scratch/a.png",
+				state: "live",
+				size: 1,
+				changedAt: 1,
+				firstSeenAt: 1,
+				role: "working",
+				rounds: [{ sessionId: "s1", startedAt: 1_600 }],
+			},
+			{
+				path: ".thinkrail/context/other-chat.md",
+				state: "live",
+				size: 1,
+				changedAt: 1,
+				firstSeenAt: 1,
+				role: "result",
+				rounds: [{ sessionId: "s2", startedAt: 1_600 }],
+			},
+			{
+				path: ".thinkrail/context/gone.md",
+				state: "deleted",
+				size: 1,
+				changedAt: 1,
+				firstSeenAt: 1,
+				role: "result",
+				rounds: [{ sessionId: "s1", startedAt: 1_600 }],
+			},
+		],
+	};
+	const turns: ChatTurn[] = [
+		user("u1", 1_000),
+		assistantWithPaths("a1", [], 5_000),
+		user("u2", 10_000),
+		assistantWithPaths("a2", [], 12_000),
+		user("u3", 20_000),
+		assistantWithPaths("a3", [], 22_000),
+	];
+	const published = sessionRoundArtifacts(snapshot, "s1", "published");
+	expect(turnDivider(turns, 1, undefined, [], undefined, published)?.artifacts).toEqual([
+		{ path: ".thinkrail/context/mockups/a.html", label: "mockups/a.html" },
+	]);
+	expect(turnDivider(turns, 3, undefined, [], undefined, published)?.artifacts).toEqual([]);
+	expect(turnDivider(turns, 5, undefined, [], undefined, published)?.artifacts).toHaveLength(1);
+	const results = sessionRoundArtifacts(snapshot, "s1", "results");
+	expect(
+		turnDivider(turns, 1, undefined, [], undefined, results)?.artifacts.map((a) => a.label),
+	).toEqual(["mockups/a.html", "mockups/b.html"]);
+	const everything = sessionRoundArtifacts(snapshot, "s1", "all");
+	expect(
+		turnDivider(turns, 1, undefined, [], undefined, everything)?.artifacts.map((a) => a.label),
+	).toEqual(["mockups/_scratch/a.png", "mockups/a.html", "mockups/b.html"]);
+	expect(sessionRoundArtifacts(undefined, "s1", "results")).toEqual([]);
 });
 
 describe("stabilizeRows identity", () => {

@@ -21,6 +21,7 @@ import { QuietScrollArea } from "@/components/QuietScrollArea";
 import { PlanStatusIcon, SectionLabel } from "../chat/planKit";
 import { sessionGlance } from "../chat/planView";
 import { glanceIcon } from "../chat/TodoList";
+import { useToolRegistry } from "../chat/toolRegistry";
 import { type ReviewFocusSurface, selectDiffScope, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { ConfirmPopover } from "./ConfirmPopover";
@@ -359,9 +360,10 @@ function CommentRow({
 	const isDraft = comment.status === "draft";
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const ref = lineRef(comment);
+	const toolRegistry = useToolRegistry();
 	const glance = useAppStore((s) => {
 		const runtime = comment.sessionId ? s.sessions[comment.sessionId] : undefined;
-		return runtime ? sessionGlance(runtime) : "waiting";
+		return runtime ? sessionGlance(runtime, toolRegistry) : "waiting";
 	});
 
 	const update = async (patch: { status?: ReviewComment["status"] }) => {
@@ -443,7 +445,10 @@ function CommentRow({
 					</span>
 				</span>
 			</button>
-			<span className="absolute top-4 right-8 flex items-center gap-4 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 has-[[data-state=open]]:opacity-100">
+			<span
+				data-hint-reveal
+				className="absolute top-4 right-8 flex items-center gap-4 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 has-[[data-state=open]]:opacity-100"
+			>
 				{isDraft && (
 					<>
 						<IconButton
@@ -529,7 +534,10 @@ function ResolvedRow({
 			>
 				{comment.body}
 			</span>
-			<span className="flex shrink-0 items-center gap-4 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+			<span
+				data-hint-reveal
+				className="flex shrink-0 items-center gap-4 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100"
+			>
 				{comment.sessionId && (
 					<IconButton
 						variant="ghost"

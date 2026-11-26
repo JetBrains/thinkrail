@@ -3,10 +3,9 @@ import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import type { ReactNode } from "react";
 import { copyText } from "@/lib";
+import { SettingsNotice, SettingsRow } from "@/settingsKit";
 import { toast } from "@/store";
 import { errorText, getTransport } from "@/transport";
-import { SettingsNotice } from "./SettingsNotice";
-import { SettingsRow } from "./SettingsRow";
 
 export type RevealFolderMethod = "locales.reveal" | "themes.reveal" | "fonts.reveal";
 
@@ -32,49 +31,59 @@ export function useFolderActions(method: RevealFolderMethod): FolderActions {
 }
 
 export function SettingsFolderRow({
+	settingId,
 	label,
+	description,
 	folder,
 	hint,
 	testIdPrefix,
-	noBorder = false,
 	onCopyFolder,
 	onRevealFolder,
 }: FolderActions & {
+	settingId: string;
 	label: string;
+	description?: ReactNode;
 	folder: string;
 	hint?: ReactNode;
 	testIdPrefix: string;
-	noBorder?: boolean;
 }) {
 	const t = useT();
 	return (
 		<SettingsRow
+			settingId={settingId}
 			label={label}
+			testId={`${testIdPrefix}-folder`}
 			description={
 				<>
+					{description ? <span className="block">{description}</span> : null}
 					<code data-testid={`${testIdPrefix}-folder-path`} className="break-all tr-code-text">
 						{folder}
 					</code>
 					{hint ? <span className="block">{hint}</span> : null}
 				</>
 			}
-			testId={`${testIdPrefix}-folder`}
-			noBorder={noBorder}
 			control={
-				<div className="flex gap-8">
-					<Button variant="outline" size="m" iconLeft={Copy} onClick={() => onCopyFolder(folder)}>
-						{t("settings.language.folder.copy")}
-					</Button>
-					<Button
-						variant="outline"
-						size="m"
-						iconLeft={FolderOpen}
-						data-testid={`${testIdPrefix}-open-folder`}
-						onClick={onRevealFolder}
-					>
-						{t("settings.language.folder.open")}
-					</Button>
-				</div>
+				<Button
+					variant="outline"
+					size="m"
+					iconLeft={Copy}
+					tabIndex={0}
+					onClick={() => onCopyFolder(folder)}
+				>
+					{t("settings.language.folder.copy")}
+				</Button>
+			}
+			sides={
+				<Button
+					variant="outline"
+					size="m"
+					iconLeft={FolderOpen}
+					tabIndex={0}
+					data-testid={`${testIdPrefix}-open-folder`}
+					onClick={onRevealFolder}
+				>
+					{t("settings.language.folder.open")}
+				</Button>
 			}
 		/>
 	);

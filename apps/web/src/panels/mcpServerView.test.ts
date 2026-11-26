@@ -12,6 +12,8 @@ import {
 	mcpRowView,
 	mcpSaveFeedback,
 	mcpSettingWrite,
+	mcpUserRowView,
+	mcpUserServerWrite,
 } from "./mcpServerView";
 
 const NOW = 5_000_000;
@@ -307,4 +309,46 @@ test("configured codemode is labelled as treated like deferred", () => {
 		"direct",
 	);
 	expect(formatStartingElapsed(currentTranslator(), 20_000)).toBe("<1 min");
+});
+
+test("a row with no workspace shows its configuration, offers name-only probes and never per-chat actions", () => {
+	const idle = {
+		state: "not-running" as const,
+		sessions: { total: 0, reporting: [], connected: 0 },
+	};
+	expect(mcpUserRowView(currentTranslator(), row(idle), NOW)).toEqual({
+		label: "On",
+		tone: "success",
+		reason: "Starts in the chats of every project that doesn't turn it off.",
+		secondary: "show-log",
+	});
+	expect(mcpUserRowView(currentTranslator(), row(idle, { transport: "http" }), NOW).action).toBe(
+		"test-connection",
+	);
+	expect(mcpUserRowView(currentTranslator(), row(idle, { oauth: true }), NOW).action).toBe(
+		"sign-in",
+	);
+	const off = mcpUserRowView(
+		currentTranslator(),
+		row({ ...idle, state: "disabled" }, { enabled: false }),
+		NOW,
+	);
+	expect(off.reason).toBe("Turned off.");
+	expect(off.action).toBeUndefined();
+	const failed = mcpUserRowView(currentTranslator(), row({ state: "failed" }), NOW);
+	expect(failed.action).toBeUndefined();
+	expect(failed.secondary).toBe("show-log");
+});
+
+test("the no-workspace switch and exposure carry only the changed key and the rendered fingerprint", () => {
+	expect(mcpUserServerWrite(summary({ fingerprint: "fp" }), { enabled: false })).toEqual({
+		name: "docs",
+		expectedFingerprint: "fp",
+		enabled: false,
+	});
+	expect(mcpUserServerWrite(summary({ fingerprint: "fp" }), { exposure: "hidden" })).toEqual({
+		name: "docs",
+		expectedFingerprint: "fp",
+		exposure: "hidden",
+	});
 });

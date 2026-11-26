@@ -7,9 +7,12 @@ import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 export const ARTIFACTS_SECTION = "thinkrail-artifacts";
 
 export const ARTIFACTS_RULE = [
-	`Keep everything you produce for the user in this workspace's \`${WORKSPACE_CONTEXT_DIR}/\` folder: reports, notes, plans, mockups, screenshots, generated images, exported data and any other output that is not project code. It stays out of git, and the user finds it in the Artifacts tab.`,
+	`By default, keep everything you produce for the user in this workspace's \`${WORKSPACE_CONTEXT_DIR}/\` folder: reports, notes, plans, mockups, screenshots, generated images, exported data and any other output that is not project code. It stays out of git, and the user finds it in the Artifacts tab.`,
+	"- If the user explicitly requests another persistent path or directory, use that destination, including outside the workspace. If it is outside the artifacts folder, link its actual path in your final message; do not copy it into the artifacts folder just to publish it to Outputs.",
 	"- Never create such output in /tmp or another temporary folder: it disappears there and the user never sees it. Editing an existing file there that the user points you to is fine.",
 	`- Never delete or move files out of \`${WORKSPACE_CONTEXT_DIR}/\`; only the user removes artifacts. Update a file in place rather than replacing it.`,
+	"- When you hand off, link each result you made for the user (the files they should open) by its path in your final message, so the Artifacts tab can tell your results from your working files.",
+	"- Keep scratch work — scripts, intermediate renders, downloaded or generated data — in a `_`-prefixed folder next to the result it serves (for example `_work/`).",
 ].join("\n");
 
 function inside(root: string, path: string): boolean {

@@ -4,7 +4,7 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 import type { AppConfig } from "@thinkrail/contracts";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import { seedAnalyticsConsent } from "./fixtures/analyticsConsent";
-import { openAppFresh, resetApp } from "./fixtures/app";
+import { closeSettings, openAppFresh, resetApp } from "./fixtures/app";
 import { openProviders } from "./fixtures/jbcentral";
 import { E2E_DATA_DIR, E2E_HOME_DIR, E2E_PI_AGENT_DIR } from "./fixtures/paths";
 import { E2eWire } from "./fixtures/wire";
@@ -51,7 +51,7 @@ async function signOutEveryProvider(wire: E2eWire): Promise<void> {
 }
 
 async function openColdStart(page: Page, baseURL: string | undefined): Promise<void> {
-	await resetApp(page);
+	await resetApp();
 	const report = await withWire(baseURL, async (wire) => {
 		await expect
 			.poll(async () => (await wire.request("provider.status", {})).jbcentral.state, {
@@ -431,8 +431,7 @@ test("a provider connected through Settings during the intro is verified on reac
 	await expect(page.getByTestId("login-success")).toBeVisible();
 	await page.getByTestId("login-close").click();
 	await expect(page.getByTestId("login-dialog")).toHaveCount(0);
-	await page.keyboard.press("Escape");
-	await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
+	await closeSettings(page);
 
 	await wizard.getByTestId("onboarding-start").click();
 	await expect(wizard).toHaveAttribute("data-step", "done");
@@ -454,8 +453,7 @@ test("a provider connected and signed out again through Settings during the intr
 	await expect(
 		settings.locator('[data-testid="provider-row"][data-provider="e2e-apikey"]'),
 	).toHaveCount(0);
-	await page.keyboard.press("Escape");
-	await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
+	await closeSettings(page);
 
 	await wizard.getByTestId("onboarding-start").click();
 	await expect(wizard).toHaveAttribute("data-step", "connect");
@@ -483,8 +481,7 @@ test("a provider signed out while its status re-read is still in flight is not v
 	status.hold = true;
 	await signOut.click();
 	await expect.poll(status.held).toBeGreaterThan(0);
-	await page.keyboard.press("Escape");
-	await expect(page.getByTestId("settings-dialog")).toHaveCount(0);
+	await closeSettings(page);
 	await wizard.getByTestId("onboarding-start").click();
 	await expect(wizard.getByTestId("connect-provider-options")).toBeVisible();
 	status.release();

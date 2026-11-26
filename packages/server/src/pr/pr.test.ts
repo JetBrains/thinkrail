@@ -135,6 +135,7 @@ describe("isPushAuthFailure", () => {
 		],
 		["fatal: could not read Username for 'https://github.com': terminal prompts disabled", true],
 		["fatal: Authentication failed for 'https://github.com/acme/widgets.git/'", true],
+		["fatal: Cannot prompt because user interactivity has been disabled.", true],
 		["Host key verification failed.\nfatal: Could not read from remote repository.", true],
 		["error: failed to push some refs to 'origin' (non-fast-forward)", false],
 		["fatal: unable to access 'https://github.com/x.git/': Could not resolve host", false],
@@ -147,6 +148,7 @@ describe("pushGitEnv", () => {
 	test("forces prompt-free git, English git messages without touching hook encoding, batch-mode ssh", () => {
 		const env = pushGitEnv({ PATH: "/bin", LC_ALL: "ru_RU.UTF-8" }, false);
 		expect(env.GIT_TERMINAL_PROMPT).toBe("0");
+		expect(env.GCM_INTERACTIVE).toBe("never");
 		expect(env.LC_MESSAGES).toBe("C");
 		expect("LC_ALL" in env).toBe(false);
 		expect(env.LC_CTYPE).toBe("ru_RU.UTF-8");
@@ -154,6 +156,15 @@ describe("pushGitEnv", () => {
 			"en_US.UTF-8",
 		);
 		expect(env.GIT_SSH_COMMAND).toBe("ssh -oBatchMode=yes");
+	});
+
+	test("inherited credential-manager interaction is disabled without changing the caller", () => {
+		const base = { GCM_INTERACTIVE: "always", GIT_TERMINAL_PROMPT: "1" };
+		expect(pushGitEnv(base, false)).toMatchObject({
+			GCM_INTERACTIVE: "never",
+			GIT_TERMINAL_PROMPT: "0",
+		});
+		expect(base).toEqual({ GCM_INTERACTIVE: "always", GIT_TERMINAL_PROMPT: "1" });
 	});
 
 	test("never overrides the user's own ssh command — env vars or core.sshCommand config", () => {

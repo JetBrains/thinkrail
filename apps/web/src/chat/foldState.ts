@@ -5,13 +5,27 @@ import {
 	type ReactNode,
 	useCallback,
 	useContext,
+	useEffect,
 	useLayoutEffect,
 	useRef,
 	useState,
 } from "react";
 
 const foldState = new Map<string, boolean>();
+const foldExpanders = new Map<string, Set<() => void>>();
 const noop = () => undefined;
+
+export function foldOverride(id: string): boolean | undefined {
+	return foldState.get(id);
+}
+
+/** Opens these folds, mounted or not, as a reveal does before it lands inside them. */
+export function expandFolds(ids: readonly string[]): void {
+	for (const id of ids) {
+		foldState.set(id, true);
+		for (const expand of foldExpanders.get(id) ?? []) expand();
+	}
+}
 
 export type FoldAnchorResolver = () => HTMLElement | null;
 type FoldChangeCompletion = () => void;
@@ -80,6 +94,16 @@ export function useFold(id: string, fallback = false): [boolean, FoldToggle, Fol
 		completeChange.current = noop;
 		complete();
 	}, [expanded]);
+	useEffect(() => {
+		const expand = () => setOverride(true);
+		const expanders = foldExpanders.get(id) ?? new Set<() => void>();
+		expanders.add(expand);
+		foldExpanders.set(id, expanders);
+		return () => {
+			expanders.delete(expand);
+			if (expanders.size === 0 && foldExpanders.get(id) === expanders) foldExpanders.delete(id);
+		};
+	}, [id]);
 	const toggle: FoldToggle = (event) => {
 		if (event) completeChange.current = prepareChange(resolveAnchor, "user");
 		const next = !expanded;

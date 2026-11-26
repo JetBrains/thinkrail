@@ -4,7 +4,7 @@ type: architecture-design
 status: draft
 title: Pi compatibility — host adaptations and upgrade removal gates
 parent: architecture
-references: [submodule-server-agent, submodule-server-agent-mcp, submodule-server-history, submodule-server-templates, module-cli, module-desktop, submodule-web-chat, module-pi-subagents, module-pi-background-commands, module-pi-delegation]
+references: [submodule-server-agent, submodule-server-agent-mcp, submodule-server-extensions-installed, module-artifact-tests, submodule-server-history, submodule-server-templates, module-cli, module-desktop, submodule-web-chat, module-pi-subagents, module-pi-background-commands, module-pi-delegation, module-pi-session-insights]
 tags: [pi, compatibility]
 ---
 
@@ -17,54 +17,55 @@ The installed version comes only from the root dependency catalog, not a second 
 
 ## Last re-check
 
-Pi 1.5.2 was checked against the installed dist (1.5.0 → 1.5.1 → 1.5.2; every private symbol re-grepped,
-`agent-session.js`, `sdk.js`, `settings-defaults.js`, the extension loader/runner, `mcp-servers.js`, the
-MCP extension, `package-manager.js`, `model-resolver.js` and pi-ai's providers diffed). **One gate is
-met**: pi now clears a delivered image-only queued message itself (#8612), so the host's
-`stuckEmptyDeliveries` override is gone; the text-only queue API still needs the queued-image copy, whose
-entry below now stands alone. **Two adaptations were added**: the
-cache-warming default and the shutdown wait for credential writes (both below). Everything else stays,
-with this evidence:
+Pi 1.6.1 was checked against the installed dist (1.6.0 → 1.6.1, a single release; every private symbol
+re-grepped, `agent-session.js`, the extension runner, `session-manager.js`, `settings-manager.js`,
+`model-resolver.js`, `model-runtime.js`, the MCP extension, the bash tool and pi-ai's providers diffed). **No
+gate is met and no adaptation was added**; half of the SSE patch went upstream and one mirror followed pi.
+Byte-identical in 1.6.1: `sdk.js`, `resource-loader.js`, the extension `loader.js`, `package-manager.js`,
+`mcp-servers.js`, `agent-session-services.js`, `skills.js`, `source-info.js`, `utils/paths.js`,
+`tools/path-utils.js`, `tools/edit.d.ts`, compaction, pi-ai's `providers/openai.js` and the package root
+`index.d.ts` (no new public export). The evidence:
 
-- The Anthropic SSE framing defect is unchanged upstream (`consumeLine` is byte-identical; #10390 still
-  open): the unpatched 1.5.1 dist fails all three "defects the patch fixes" cases. The message-threads
-  code moved the hunks by ~175 lines, so the patch was regenerated from a clean dist, not renamed.
-- MCP: pi moved the *entry* validator into `@earendil-works/pi-mcp` as public `validateMcpServerConfig`
-  (with `isMcpServerOverride`, `mcpNamespace`, `createMcpToolName`, `limitMcpContent`,
-  `normalizeMcpInputSchema`), but pi's own fields (`exposure`, `toolExposure`, `auth`), the file loader
-  and the writers remain private in `core/mcp-servers.js` / `extensions/mcp/config.js`; the loader parity
-  fixture passes unchanged. `/mcp` status and sign-in wording did not change; sign-in moved onto pi-mcp's
-  `startMcpSignIn` / `completeMcpSignIn` behind the same `openUrl` seam. `AgentSession.dispose()` still
-  emits no shutdown; `AgentSession.reload()` now throws while streaming or compacting, which the host's
-  reload gate already refuses earlier. Codemode is still unpackaged; raw `structuredContent` is still
-  ephemeral.
-- `_isActivatedOnRegistration`, the provider-registration queues with `extensionPath`,
-  `getAllRegisteredTools`, the `sk-ant-oat` predicate, `getPackageIdentity`, `clearExtensionCache`,
-  `defaultModelPerProvider`, `"pi-virtual"`, `formatSkillsForPrompt`, `findCutPoint` / `generateSummary`
-  and the single-`appendFileSync` session append are all still private and unchanged in shape.
-  `isOfflineModeEnabled` is now exported from `core/package-manager.js` but not from the package root, so
-  the port stays. `defaultModelPerProvider` moved 17 providers (Anthropic/Bedrock → Claude Opus 5.5,
-  Azure → GPT-6.1 Sol, Google/Vertex → Gemini 4 Argon, …) and added `qwen-token-plan-individual-cn`; the
-  mirror follows. The Jiti loader now imports extensions by `realpath`; the bundled seams are unaffected,
-  only `check:seams`' allowlist text changed with pi's rewritten opaque imports.
-- `PackageManager` progress gains a `result` event the host does not consume; `GrepOperations.readFile`
-  is deprecated and `ReadOperations.createReadStream` added — the host has no custom operations.
-  OpenAI-compatible requests omit `tools: []` (vLLM/LiteLLM 400s); `compat.requiresToolsWithToolHistory`
-  is the opt-back-in for old LiteLLM→Anthropic proxies. Anthropic message threads are on by default for
-  `anthropic` on api.anthropic.com, keyed by pi's session id and cleaned in `dispose()`; host `context` /
-  `before_agent_start` handlers only cause pi's full-request fallback.
-- 1.5.2 on top of 1.5.1 touches no SDK surface the host uses: pi-ai bumps the Claude Code version it
-  reports for Anthropic OAuth, the interactive mode offers Continue / Fork / Cancel for a session whose cwd
-  is gone, and `/import` of such a session no longer leaves a stray copy. The SSE patch applies at the same
-  offsets. 1.5.2 adds four catalogue entries (`radius/claude-fable-5-2`, `meta/muse-ember-1.0`,
-  `opencode/minimax-m3.1-flash-free`, `openrouter/nex-agi/nex-n2.6`) on top of the 1.5.1 delta below.
-- The bundled chat catalogue changes from 1,592 to 1,639 provider/model pairs in 1.5.1: 66 added (Claude Fable 5.2
-  on Anthropic, Bedrock, OpenRouter, Vercel and OpenCode; Kimi K3.1 Pro; Gemini 4 Argon, GPT-6.1 Terra and
-  Mistral Large 4 on Radius; the `qwen-token-plan-individual-cn` provider) and 19 removed (older
-  OpenRouter MiniMax/Mercury/Llama aliases, Fireworks `gpt-oss-120b`, Vercel Gemini batch aliases). The
-  default `anthropic` model is now `claude-opus-5-5`. Release notes must say both and advise users to
-  check their default and restored-chat model; unavailable models follow the existing selection rules in
-  [[submodule-server-agent]], and the host still does not surface Pi's `modelFallbackMessage`.
+- pi-ai 1.6.1 replaced the Anthropic line splitter with a shared `utils/sse.js` `SseDecoder` that carries
+  a chunk-final CR into the next chunk: the unpatched 1.6.1 dist passes the split-CRLF case and fails the
+  two cut-off cases, so the patch was regenerated from a clean dist with only the cut-off half (every
+  `SseDecoder.end()` event tagged unfinished in `anthropic-messages.js`; `utils/sse.js` and the other
+  providers sharing it untouched) and the CRLF case moved to "behavior the patch keeps".
+- `defaultModelPerProvider` moved `mistral` from `devstral-medium-latest` (retired) to
+  `mistral-medium-latest`; the mirror follows. Every private symbol the registry names
+  (`_isActivatedOnRegistration`, the provider-registration queues, `getAllRegisteredTools`,
+  `omitReplacedExtensions`, the `sk-ant-oat` predicate and `maybeWarnAboutAnthropicSubscriptionAuth`,
+  `getPackageIdentity`, `isOfflineModeEnabled`, `clearExtensionCache`, `getResourcePathKey`, `"pi-virtual"`,
+  `getBranchSelection`, `projectContextEntry`, `getCacheWarmingMode` / `validateRun`, the single
+  `appendFileSync` append) occurs exactly as often as in 1.6.0 and stays off the package root; the parity
+  fixtures pass unchanged.
+- `session-manager.js` only builds the post-compaction context with a loop instead of a spread (#12154)
+  and scans only new text per read when loading; the leaf rule and the append are unchanged.
+  `AgentSession` only forwards the bash tool's new `fullOutputError`; the bash exit-code trailer is
+  unchanged. The runner accepts `fullOutputError` in tool-result details.
+- `SettingsManager` replaced `showCacheMissNotices` with `notices.*` (`getNotices` / `setNotice`, migrated on
+  load, all off by default); the host used neither. `getProviderAuthStatus` now reports a stored key that
+  does not resolve (a failing `!command`) as `configured: false, source: "stored"` (#12164); the provider
+  report already treats unconfigured providers that way and needs no change.
+- The MCP extension moved its content conversion and result schema into pi-mcp (`toMcpModelContent`,
+  `createMcpResultSchema`) with the same model-facing output; `extensions/mcp/config.js` is unchanged and
+  the host's MCP result, config and engine tests pass. `after_provider_response` now also fires for HTTP
+  error responses and retried attempts; the host registers no such handler.
+- pi-ai 1.6.1 adds no credential variable (the e2e denylist is unchanged), widens retries (Cloudflare 525,
+  gateway "temporarily unavailable", Anthropic streaming `api_error`, OpenRouter empty responses,
+  `finish_reason: "error"`), stops reading `plugin_request_too_large` as overflow, keeps the draft
+  `$schema` on non-strict Anthropic tools, and gains decision models (`pi-decision` API, codemode only).
+  The models declaring `allowedFallbackModels` and the fallback beta gating are unchanged. New
+  dependencies: `@aws-sdk/credential-provider-node` (direct) and `@google/genai` 3.x.
+- The bundled chat catalogue changes from 1,698 to 1,696 provider/model pairs: 63 added (Qwen4 Max on the
+  Qwen Token Plan, Fireworks and Together; GLM-5.4 on Z.ai; Mistral `ministral-14b-latest`; Hugging Face,
+  Together and Fireworks open models) and 65 removed (`gpt-4`, `gpt-4-turbo`, `gpt-4.1-nano`, `o1`,
+  `o1-pro`, `o3-mini`, `o4-mini`, `gpt-5-chat-latest` and `gpt-5.3-codex-spark` on OpenAI and Azure;
+  Mistral's Devstral, Pixtral and older dated models; Groq's `llama-3.1-8b-instant`,
+  `llama-3.3-70b-versatile` and `qwen/qwen3.6-27b`; Copilot's `claude-opus-5` and `gpt-5.6-terra`; older
+  OpenRouter, OpenCode and Hugging Face aliases). The default `mistral` model is now
+  `mistral-medium-latest`. Release notes must say both and advise users to check their default and
+  restored-chat model; unavailable models follow the existing selection rules in [[submodule-server-agent]].
 
 ## Upgrade contract
 
@@ -77,6 +78,8 @@ entry. A parity failure is evidence of drift, not permission to weaken the test.
 A public SDK replacement must preserve session isolation, cancellation, project trust, durable
 transcripts, and compiled/desktop behavior before the host implementation is removed. Importing a
 private dist path in production is not a replacement; such imports remain confined to parity tests.
+The step-by-step upgrade procedure lives in the repo skill
+`.agents/skills/upgrading-core-dependencies` (`playbooks/pi.md`); this registry stays the list of what it re-checks.
 
 ## MCP adaptations
 
@@ -165,10 +168,11 @@ restart and toggle-reload regressions on upgrades.
   On upgrades, re-diff the interactive check and its call sites, and run
   `agent/anthropicExtraUsage.test.ts`.
 - **pi package management** — [[submodule-server-agent-packages]], [[submodule-server-agent]]. The
-  Settings → Extensions package catalog and mutations build on pi's public `DefaultPackageManager`
-  (`resolve(onMissing)`, `install`, `remove`, `update`, `checkForAvailableUpdates`,
-  `listConfiguredPackages`, `addSourceToSettings` / `removeSourceFromSettings`) and `SettingsManager`
-  (`setPackages` / `set*Paths`, `flush`, `drainErrors`, `inMemory`). Eight pi facts the host compensates
+  Settings → Extensions & skills package catalog and mutations build on pi's public
+  `DefaultPackageManager` (`resolve(onMissing)`, `install`, `remove`, `update`,
+  `checkForAvailableUpdates`, `listConfiguredPackages`, `addSourceToSettings` /
+  `removeSourceFromSettings`) and `SettingsManager`
+  (`setPackages` / `set*Paths`, `flush`, `drainErrors`, `inMemory`). Nine pi facts the host compensates
   for, each with its gate:
   - `resolve()` without `onMissing` installs a declared-but-missing package, and
     `DefaultResourceLoader.reload()` always calls it that way; the catalog therefore reads with
@@ -184,6 +188,10 @@ restart and toggle-reload regressions on upgrades.
     `setResourceEnabled`-style API.
   - `getPackageIdentity` is private; `identity.ts` ports it for the host-wide `disabledPackages` key.
     **Gate:** pi exporting its identity rule.
+  - `getResourcePathKey` (synthetic paths as-is, else realpath with a raw-path fallback, case-folded on
+    Windows) is private; `identity.ts` ports it as `piResourcePathKey`, the path identity of
+    [[submodule-server-agent]]'s Central exclusion, so it matches the paths pi's resolve and loader dedupe.
+    Re-diff it against `core/source-info.js` / `utils/paths.js` on every bump. **Gate:** pi exporting it.
   - `installAndPersist` persists before the caller can re-check project trust, and settings writes are
     queued with swallowed errors; the host sequences `install → trust → addSourceToSettings → flush →
     drainErrors`. **Gate:** a persist step that reports failure and accepts a trust predicate.
@@ -208,11 +216,11 @@ restart and toggle-reload regressions on upgrades.
   carries no target version; pi skips pinned npm versions in update checks; pi classifies `git@host:…`
   and `github:…` sources as local paths.
 - **Anthropic SSE framing patch** — [[submodule-server-agent]] (Provider stream framing),
-  `patches/@earendil-works%2Fpi-ai@1.5.2.patch` on `dist/api/anthropic-messages.js`. Unpatched, two
-  streams fail with the non-retryable "Could not parse Anthropic SSE event": a valid CRLF stream whose
-  `\r\n` is split across network chunks, and a stream cut off mid-event. Patched, the first succeeds and
-  the second ends with a retryable truncation error such as "stream ended before message_stop".
-  **Removal gate:** an installed pi-ai release that fixes both (track
+  `patches/@earendil-works%2Fpi-ai@1.6.1.patch` on `dist/api/anthropic-messages.js`. Unpatched, a stream
+  cut off mid-event fails with the non-retryable "Could not parse Anthropic SSE event"; patched, it ends
+  with a retryable truncation error such as "stream ended before message_stop". (The split-CRLF half of
+  the patch went in pi-ai 1.6.1, whose shared `SseDecoder` fixes it.)
+  **Removal gate:** an installed pi-ai release that fixes the cut-off case (track
   [upstream #10390](https://github.com/earendil-works/pi/issues/10390)). Bun silently skips a patch whose
   version doesn't match, so every pi bump runs `agent/anthropicStreamFraming.test.ts` against the
   unpatched release. Its "defects the patch fixes" group decides: when it passes, delete the patch and its
@@ -222,18 +230,41 @@ restart and toggle-reload regressions on upgrades.
   test catches that. If only the "behavior the patch keeps" group fails, pi changed that behavior: decide
   whether to follow it before porting anything.
 - **Registry tool precedence** — [[submodule-server-extensions]], `preferRegistryTools` in the session
-  loader's `extensionsOverride`. It relies on three pi facts:
+  loader's `extensionsOverride`, and the composition order around it. It relies on three pi facts:
   - pi keeps every extension and gives a tool name to its first registration
     (`ExtensionRunner.getAllRegisteredTools`);
   - path extensions (user packages) load before inline factories;
   - tool conflicts are reported only between extensions, before the override runs.
 
-  The override moves a ThinkRail registry extension ahead of the first user package registering one of
-  its tool names, so a same-name package such as rpiv's `ask_user_question` cannot take over the card,
-  mailbox and repair that key on the name. Remove it when pi offers an inline-extension precedence or
-  replace option. Re-verify the three facts in the installed dist, and run the collision tests in
+  The override moves a **built-in** registry extension ahead of the first user package registering one
+  of its tool names (with the built-ins between them, keeping their order), so a same-name package such as rpiv's `ask_user_question` cannot take over the card,
+  mailbox and repair that key on the name. An installed extension is never promoted: it is composed
+  after every host-owned inline factory, so by the first fact any host tool (a built-in's, a host
+  factory's, a session extra's, an MCP tool of the `builtin:mcp` path) beats it, and by the second a
+  user's pi package beats it on a shared tool name — the pi package's tool wins, both extensions' other
+  tools stay. A fourth fact closes the gap order cannot: pi drops a **replaceable `builtin:` slot** when
+  any non-replaceable extension registers one of its names (`omitReplacedExtensions`), and loads the
+  slots before every inline factory; the session loader records the names the host's slots (`mcp`,
+  `tool-search`) register and refuses those registrations to an installed extension, so
+  `tool_search` and `/mcp` stay the host's. Remove it when pi offers an inline-extension precedence or
+  replace option. Re-verify the four facts in the installed dist, and run the collision tests in
   `agentSessionManager.test.ts` (same-name questionnaire before and after reload, and a chat created with
-  ours off that re-enables it over the package) on every upgrade.
+  ours off that re-enables it over the package) and `agent/extensions.test.ts` (an installed extension
+  registering every class of host name) on every upgrade.
+- **Superseded vanilla packages** — [[submodule-server-extensions]], `omitSupersededPackages` in the
+  same `extensionsOverride`. It relies on pi letting the override drop entries of a
+  `LoadExtensionsResult` (the disabled filter does too) and on `Extension.resolvedPath` being the loaded
+  file inside the package's install folder, whose nearest `package.json` names the package for npm, git
+  and local installs alike. Remove it when pi offers a host-side package exclusion. Run
+  `extensions/inline.test.ts` and the superseded-package case in `agent/extensions.test.ts` on every
+  upgrade and recheck where pi installs npm and git packages.
+- **`/insights` output per mode** — [[module-pi-session-insights]], `extension.ts`. The report goes
+  through `ctx.ui.notify(…, "info")`, which pi's TUI shows as dim text in the chat (a following status
+  replaces it) and RPC sends as a notification; in print and JSON modes, where `ctx.hasUI` is false and
+  pi redirects `process.stdout` to stderr to keep its own stdout clean, it writes to stderr directly.
+  Argument completions return full replacement values because pi's autocomplete replaces the whole
+  argument text. Recheck `docs/extensions.md` (Mode Behavior, `registerCommand`) on every bump; the
+  parity gate's command cases and `extension.test.ts` cover the modes.
 - **Provider-registration provenance** — [[submodule-server-agent]], `recordProviderOwners` in the
   session loader's `extensionsOverride` ([[module-pi-delegation]] decision #32). Pi keeps no
   provider-to-extension provenance: `LoadExtensionsResult.runtime.pendingProviderRegistrations` /
@@ -246,6 +277,23 @@ restart and toggle-reload regressions on upgrades.
   queues still carry `extensionPath` and are filled before `extensionsOverride` runs; run the provider-owner
   regressions in `agent/extensions.test.ts`, `agent/delegation.test.ts` and `pi-delegation`'s
   `service.test.ts` on every upgrade.
+- **Extension providers in the shared catalog** — [[submodule-server-agent]], the user-extension pass in
+  `piRuntime.ts` (`registerUserExtensionProviders`, #1351). Pi applies the queued
+  `pendingProviderRegistrations` / `pendingNativeProviderRegistrations` / `pendingVirtualModelRegistrations`
+  of a load only in `createAgentSessionServices` (the CLI, before model resolution) or at a session's
+  `bindCore` (after it). The services call cannot carry the catalog's user pass: it applies a load's
+  registrations whenever that load finishes, so a pass abandoned at its deadline would still register late,
+  after the generation's attribution was taken. The host therefore resolves the enabled set itself
+  (`resolve(onMissing → skip)`, then the Central exclusion of [[submodule-server-agent]]), loads it through
+  its own `noExtensions` loader and mirrors pi's apply loop over those queues on the candidate runtime, then
+  its awaited `refresh({ allowNetwork: false })` — only when something was applied, since the strict pass's
+  services call has just run it — all within the deadline. It does not clear the queues (the loader is
+  discarded) nor apply extension flags (the pass has none). It relies on the queues carrying every
+  registration of a load until bind and on a later session bind's re-registration merging over the boot one.
+  **Removal gate:** a public way to apply a path-filtered extension load's registrations to a given
+  `ModelRuntime` with cancellation (e.g. `createAgentSessionServices` taking an extension filter and a
+  signal). On upgrades re-diff the apply loop in `agent-session-services.js` against the host's and run the
+  user-extension tests in `piRuntime.test.ts`, `runtimeGenerations.test.ts` and `auth/jbcentral.test.ts`.
 - **Queued-message images** — [[submodule-server-agent]], queue projection. Pi's queue API is text-only:
   `getSteeringMessages()` / `getFollowUpMessages()` / `clearQueue()` return strings and drop image blocks,
   so the host keeps a transient per-lane copy of browser-queued message content (images included) while
@@ -259,6 +307,60 @@ restart and toggle-reload regressions on upgrades.
   and the image-resize override bridge resources a single-file artifact cannot discover or load.
   Replace each only when pi supplies an equivalent artifact seam; run `check:seams` and the relevant
   binary/desktop artifact probes, including extension value imports and images.
+- **Runtime extension descriptor shim** — [[submodule-server-extensions-installed]], `installed/loader.ts`.
+  An installed ThinkRail extension's server entry must import the host's single pi and typebox in every
+  launcher, but pi exports no "load a module with extension resolution" API. The host writes a shim that
+  evaluates the entry with the jiti instance pi's loader gives a module as `require` (stock jiti
+  `evalModule(source, { filename, async: true, forceTranspile: true })`, so a JavaScript entry is
+  transformed and resolved like a `.ts` one instead of native-imported), imports `createAgentSession` /
+  `Type` for its identity guard, and loads it with
+  the public `discoverAndLoadExtensions([shim], empty, empty)`, the descriptor coming back through a
+  per-load key on a `Symbol.for` global map. It relies on four pi facts:
+  - pi's extension loader applies its module resolution — the alias map in a source run (pi's own
+    `loader.js` is `.js`, so dev takes the alias branch), the virtual-module map in the compiled binary
+    and the desktop bundle — to every module the entry imports (stock jiti `virtualModules`/`alias`,
+    reached through `loadExtensionModule`);
+  - `discoverAndLoadExtensions` → `loadExtensions` stays uncached (never pi's process-wide factory cache)
+    and loads an explicit file path, so an edited entry reloads on the same path; building a
+    `DefaultResourceLoader` for it instead would be cached and would clear pi's cache for every session
+    loader of another cwd;
+  - pi still calls the default-export factory during load;
+  - with `JITI_TRY_NATIVE=false` and `JITI_REBUILD_FS_CACHE=1` around the load (the pair `piRuntime.ts`
+    forces, now one serialized `withForcedJitiTransform`, which also sets `JITI_FS_CACHE=false`: a forced
+    rebuild never reads that cache) a `.ts` dependency of the extension is
+    transformed and mapped; without it a `.ts` dependency reaching pi could bind to a copy in the
+    extension's `node_modules`. Plain-JavaScript dependencies are native-imported by Bun either way,
+    which is why the installer prunes `@earendil-works/*` and `typebox` from an install.
+  Every load checks member identity (`===` on `createAgentSession` and `Type`; jiti hands a namespace
+  over as a Proxy, so namespaces are never compared) and fails the extension otherwise.
+  **Removal gate:** pi exports a public module loader with its extension resolution (a
+  `createExtensionModuleLoader()` / `importExtensionModule(path)` on the package root, or its
+  `VIRTUAL_MODULES`); then drop the shim and the global map. **Re-check on every bump:** the artifact
+  probe that loads a fixture extension in the compiled binary and the desktop runtime
+  ([[module-artifact-tests]]), and `extensions/installed/loader.test.ts`.
+- **Installed extensions on pi's installer and loader** — [[submodule-server-extensions-installed]],
+  [[submodule-server-agent]]. Three more pi facts the installed-extension runtime builds on:
+  - `DefaultPackageManager.install(source)` at user scope writes only under its `agentDir`
+    (`npm/node_modules/<name>`, `git/<host>/<path>`), needs no persisted declaration
+    (`SettingsManager.inMemory({ npmCommand })`, the user's pi `npmCommand` carried over), and `getInstalledPath(source, "user")` names the package root; its
+    npm arguments omit peers (`--legacy-peer-deps`, bun/pnpm equivalents). `checkForAvailableUpdates()`
+    reads the declarations from the in-memory settings it is given. **Gate:** none needed while these
+    stay public; re-verify the layout on a bump.
+  - `DefaultResourceLoader` copies `extensionFactories` at construction and offers no way to change
+    them, so a change of the runtime registry is applied by building a fresh inner loader at the next
+    reload behind the one `ResourceLoader` a session keeps (`buildResourceLoader`). **Gate:** a loader
+    option read on every reload, or a setter. Run `agent/extensions.test.ts` ("rebuilds behind the same
+    loader…").
+  - pi's `parseGitUrl` reads only `git:` and `https?|ssh|git://` as git; everything else, `file://`
+    included, is a path. `extensions.json` follows the same rule (`extensionSourceKind`).
+- **Portable skill roots on reload** — [[submodule-server-agent]], `resolveSkillInputs` in `extensions.ts`.
+  Pi 1.6.0's `DefaultResourceLoader` retains the supplied `additionalSkillPaths` array by reference and
+  reads it on every reload, but exposes no path setter or pre-reload resolver. The host retains its existing
+  in-place refresh and re-discovers explicit alias roots and current Claude manifest install paths before
+  applying admission; it does not scan the plugin cache or swap the session's loader. **Removal gate:**
+  a public path setter/resolver that preserves reload admission and first-name-wins precedence can replace
+  the shared-array contract. Re-check the constructor and reload in installed `resource-loader.js` and
+  run `agent/extensions.test.ts`'s installed-Claude-plugin lifecycle and admission cases.
 - **Account-scoped model availability** — [[submodule-server-agent]], `modelAvailability.ts`. Pi's
   `openai` provider lists its whole API catalog under Sign in with ChatGPT (its `filterAllModels` drops
   only classifiers), so the host keeps the ids in pi's `openai-codex` catalog; Central proxies advertise
@@ -290,6 +392,8 @@ restart and toggle-reload regressions on upgrades.
 - **Session discovery and prompt-template parsing** — [[submodule-server-history]],
   [[submodule-server-templates]], [[submodule-web-chat]]. The host mirrors pi's session directory/JSONL
   discovery and prompt-template/frontmatter rules where public APIs cannot serve its read/edit UI.
+  [[module-pi-session-insights]]' `listSessionFiles` mirrors the same directory layout, since pi's
+  `SessionManager.list`/`listAll` parse every file they list.
   Prefer public discovery/parsing APIs when they meet those needs; retain parity coverage in history,
   template and composer tests until then.
 - **Context edits on summarized display turns** — [[submodule-server-history]], `displayTranscript.ts`
@@ -307,6 +411,90 @@ restart and toggle-reload regressions on upgrades.
   helper over entries or a file. Until then `delegation.test.ts` ("the subagent totals mirror matches pi's
   own totals for every spend source") pins parity with pi's `getSessionStats` on one transcript that
   carries every spend source, including off-branch spend; rerun it on every pi bump.
+- **Recorded totals, second mirror** — [[module-pi-session-insights]], `src/totals.ts`. Session insights'
+  headline tokens and cost are the same spend sources summed over a session file (`usage` entries,
+  compaction/branch-summary `usage`, assistant and tool-result message usage, every branch), because
+  `getSessionStats` needs a live `AgentSession`. **Removal gate:** pi exports a totals helper over entries
+  or a file; then this mirror and `subagentUsage.ts` go together. `totals.test.ts` pins parity with
+  `AgentSession.getSessionStats()` on one transcript carrying every spend source, off-branch included;
+  rerun it on every pi bump.
+- **Streaming parse of session files** — [[module-pi-session-insights]], `src/lines.ts`. Pi's exported
+  `parseSessionEntries` is one synchronous pass over a whole file's string, which would stall the host's
+  event loop on a large transcript, so the index mirrors the per-line rule it shares with pi's file
+  loader (split on `\n`, skip blank and unparseable lines, a complete unterminated last line counts) line
+  by line with cooperative yields. **Removal gate:** pi exports an incremental or
+  async parser. `lines.test.ts` compares the entries with `parseSessionEntries` on fixtures, a torn last
+  line included.
+- **Trace timings and the active branch** — [[module-pi-session-insights]], `src/trace.ts`. The trace
+  explorer draws a model call from `AssistantMessage.timestamp` (typed in pi-ai as "when the request
+  started") to `+ durationMs`, and a tool call ending at `ToolResultMessage.timestamp` and starting
+  `durationMs` before it; both `durationMs` fields are typed in pi-ai 1.6.1 but absent from
+  `docs/session-format.md`, and older entries lack them (then the span is approximated from entry
+  timestamps and labelled so). It also mirrors pi's load rule that the file's last entry is the current
+  leaf, following `parentId` to pick the shown branch, because `buildSessionContext` drops the entries a
+  trace needs (tool results' ranges, markers). The session timeline (who-waits bands, packed lanes, turn
+  durations) and the day view's turn bars are built on the same spans, no further field. **Removal gate:**
+  none for the fields (they are pi's record); on every pi bump rerun `trace.test.ts`, `timeline.test.ts` and
+  the golden test, and recheck the two `timestamp` doc comments and the leaf rule in `session-manager.js`.
+- **Skill activations from prompts** — [[module-pi-session-insights]], `src/facts.ts`. Session insights
+  reads a `/skill:name` prompt as a skill activation from the block pi's `AgentSession` expands it into
+  (`<skill name="…" location="…">`, `dist/core/agent-session.js`), which is not part of
+  `docs/session-format.md`; a successful `read` of `…/SKILL.md` counts too. **Removal gate:** pi records a
+  skill activation as an entry of its own. On every pi bump rerun `analysis.test.ts` and the golden test
+  (its fixture reads two `SKILL.md` files) and recheck the expansion's opening tag.
+- **Request reconstruction and composition replay** — [[module-pi-session-insights]],
+  `src/requestDiff.ts` and `src/ledger.ts`. The adjacent-request diff rebuilds a model call's request with
+  pi's exported `buildSessionProjection` (the projection behind `buildSessionContext`) at the call's
+  parent entry, read-only — nothing is assembled for or sent to a model — and then replays the system
+  messages in it the way pi-ai's `getCurrentSystemMessage` does (content appended, `sections` patched by
+  name with `null` removing one, `toolsAdded` / `toolsRemoved` by name), because pi-ai is not one of the
+  core's dependencies. The per-call composition estimate replays the same rules incrementally over the
+  active branch (the latest compaction's `firstKeptEntryId` and `systemMessage` checkpoint, `context_edit`
+  omissions and replacements) with pi's four-characters-a-token estimate, since rebuilding the projection
+  for every one of thousands of calls would be quadratic. A compaction without a `systemMessage` (older
+  entries) reconstructs without a system prompt, as pi's projection does. **Removal gate:** pi exports
+  the system-message replay through `pi-coding-agent`, or an incremental projection; on every pi bump rerun
+  `requestDiff.test.ts` and `context.test.ts` and recheck `buildContextEntries` and pi-ai's
+  `utils/transcript.js`.
+- **Edit and write facts** — [[module-pi-session-insights]], `src/facts.ts`. The files matrix counts
+  lines from an `edit` result's `details.patch` (pi's `EditToolDetails`, unified diff), falling back to the
+  numbered display `details.diff` (`+12 text` / `-12 text`), and a `write`'s `content` argument; these are
+  analytics only and badged "from tool calls". **Removal gate:** none (pi's record); on every pi bump rerun
+  `files.test.ts` and recheck `EditToolDetails` in `dist/core/tools/edit.d.ts`.
+- **Tool paths in the session's own flavor** — [[module-pi-session-insights]], `src/paths.ts`. A `read`,
+  `edit` or `write` path argument is stored as the model wrote it, and pi's tools resolve it against the
+  session's cwd with the platform's `path` (`resolveToCwd` in `dist/core/tools/path-utils.js`: `@`
+  dropped, `~` the home); the header records that cwd as pi's `process.cwd()`, so a Windows session's is a
+  drive-letter or UNC path. Session insights reads that prefix as the flavor (`path.win32`,
+  case-insensitive, else `path.posix`) rather than the host's, so a session copied to another OS keys its
+  files and `SKILL.md` reads as it did where it ran. **Removal gate:** none (pi's record); on every pi bump
+  rerun `paths.test.ts` and recheck `resolveToCwd` and the header's `cwd` in `SessionManager`.
+- **Persisted skills list and shell exit codes** — [[module-pi-session-insights]], `src/trace.ts`. The
+  statistics read which skills a session listed from the persisted system prompt's `skills` section (and a
+  compaction's `systemMessage` checkpoint), parsing the `<available_skills>` / `<skill><name>` markup pi's
+  `formatSkillsForPrompt` writes (`dist/core/skills.js`, not in `docs/session-format.md`), and size each
+  entry at pi's four characters a token. A `bash` result's exit code comes from the trailer pi's bash tool
+  appends (`Command exited with code N`, `Command timed out` / `aborted`), which the trace already read.
+  **Removal gate:** pi records the listed skills (or an exit code) as structured fields. On every pi bump
+  rerun `usage.test.ts` and `findings.test.ts` (both build pi-format lists and trailers) and recheck the
+  markup in `formatSkillsForPrompt` and the bash tool's trailer.
+- **Byte prefilter over session lines** — [[module-pi-session-insights]], `src/searchScan.ts`. Search
+  across sessions skips parsing a line unless its bytes hold a free-text term in the form a JSON string
+  holds it, which relies on pi writing each entry with `JSON.stringify` (non-ASCII characters and `/`
+  unescaped, `"`, `\` and control characters escaped as `JSON.stringify` does) — the format of
+  `SessionManager`'s appends, not stated in `docs/session-format.md`. A writer that `\u`-escaped non-ASCII
+  text would make such terms miss, never match wrongly. **Removal gate:** none (pi's record); on every pi
+  bump rerun `search.test.ts`, whose prefilter test compares against a full parse and searches a file pi's
+  `SessionManager` wrote (quotes, a backslash, Cyrillic and an emoji).
+- **Fixture cut of a session file** — [[module-pi-session-insights]], `src/fixture.ts`. The e2e fixture
+  export writes a loadable session by keeping the header and the `parentId` chain from the root to the
+  cut entry, in file order, and relies on pi's load rule that the last entry is the leaf (as the trace
+  does) and on every entry of a current-format file carrying `id` / `parentId`; strings are redacted and
+  the header's `cwd` replaced, which pi does not validate on open (the workflow harness rewrites it
+  anyway). A first-format file without ids is cut by position. **Removal gate:** pi exports a "fork at
+  entry" writer (pi's `SessionManager` forks copy whole branches into a new file, with a new id and a
+  `parentSession`, which a fixture must not carry). On every pi bump rerun `exports.test.ts` and recheck
+  the leaf rule and the entry fields in `docs/session-format.md`.
 - **Cut-back of a failed usage append** — [[submodule-server-agent]], `recordSessionUsage`. Since pi 1.5
   (`#11460`) a failed `_persist` removes the entry from memory and restores the leaf, so the host's leaf
   restore is gone and a failed append reports `false`. Pi still appends with one `appendFileSync`, which
@@ -365,6 +553,20 @@ restart and toggle-reload regressions on upgrades.
   generation and on every runtime a live chat still holds. Not a workaround but a pi fact the host must
   mirror: re-check on upgrades that credential writes are still tracked per `ModelRuntime` (a process-wide
   settle would let the host call it once) and run the manager's shutdown-settle test.
+- **Rejected server-side fallback repair** — [[submodule-server-agent]] (`agent/serverFallback.ts`),
+  [[submodule-web-chat]] (`assistantFailure.ts`). Pi sends Anthropic's `fallbacks` field and the
+  `server-side-fallback-*` beta whenever a model's `compat.allowedFallbackModels` is non-empty, and offers
+  no per-request opt-out, so the host repairs a proxy that rejects it by writing the documented
+  per-model `modelOverrides.<id>.compat.allowedFallbackModels: []` (pi: "when absent or empty, callers
+  must omit fallbacks"). Re-check on upgrades: that key name and its empty-list meaning; that
+  `modelOverrides` still apply after provider config and extension registrations; that the beta header
+  is still gated on the same list; which catalogue models declare fallbacks; and that a failed request
+  still leaves an assistant message with `stopReason: "error"`, `provider` and `model` as the last
+  message (the host reads the failed model from it). The web error-signature table matches proxy and
+  gateway wording, not pi's, so pi upgrades do not touch it. **Removal gate:** pi detects or tolerates a
+  rejected `fallbacks` field itself, or exposes a session-level opt-out. Run `serverFallback.test.ts`
+  (its fake proxy asserts the field and the beta are gone after the repair) and
+  `assistantFailure.test.ts`.
 
 ## Context-budget limitations
 

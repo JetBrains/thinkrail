@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
-import { openFixtureProject } from "./fixtures/app";
+import { closeSettings, openFixtureProject } from "./fixtures/app";
 import {
 	assertOnlyReviewedArgv,
 	centralInvocationCount,
@@ -81,12 +81,22 @@ test("provider settings control quota polling and validate the shared interval",
 	await expect(interval).toBeEnabled();
 	await expect(quota(page)).toHaveAttribute("data-state", "available");
 
+	const intervalRow = page.locator('[data-setting-id="jetbrains-quota-interval"]');
 	await interval.fill("0");
 	await interval.press("Enter");
-	await expect(page.getByTestId("jbcentral-quota-interval-error")).toContainText("1 to 3600");
+	await expect(interval).toHaveAttribute("aria-invalid", "true");
+	await expect(intervalRow).toContainText("Use 1–3600");
 	await interval.fill("30");
 	await interval.press("Enter");
-	await expect(page.getByTestId("jbcentral-quota-interval-error")).toHaveCount(0);
+	await expect(interval).toHaveAttribute("aria-invalid", "false");
+	await expect(intervalRow).not.toContainText("Use 1–3600");
+	await expect(page.getByTestId("settings-reset-jetbrains-quota-interval")).toHaveCount(0);
+
+	await toggle.click();
+	await expect(page.getByTestId("settings-reset-jetbrains-quota")).toBeVisible();
+	await page.getByTestId("settings-reset-jetbrains-quota").click();
+	await expect(toggle).toHaveAttribute("aria-checked", "true");
+	await expect(page.getByTestId("settings-reset-jetbrains-quota")).toHaveCount(0);
 	await page.getByTestId("jetbrains-disconnect").click();
 	await waitForCentralState(page, "supported");
 	assertOnlyReviewedArgv();
@@ -109,8 +119,7 @@ test("stale quota keeps its value, retries immediately, and preserves both numbe
 	await expect(page.getByTestId("jbcentral-quota-stale-marker")).toBeVisible();
 
 	await setIntervalSeconds(page, 3600);
-	await page.keyboard.press("Escape");
-	await expect(page.getByTestId("settings-dialog")).toBeHidden();
+	await closeSettings(page);
 	writeFileSync(E2E_CENTRAL_STATE, "quota-alt");
 	await quota(page).click();
 	await expect(quota(page)).toHaveAttribute("data-state", "available");

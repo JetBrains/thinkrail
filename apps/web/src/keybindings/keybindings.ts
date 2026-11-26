@@ -1,4 +1,5 @@
-import { type CommandShortcut, shortcutKeys } from "../commands";
+import { type ChordPressEvent, chordPressed } from "@thinkrail/ui/keyboard";
+import type { CommandShortcut } from "../commands";
 import { platformFamily } from "../lib";
 
 export const FOCUS_GROUP_BINDINGS = [
@@ -13,13 +14,45 @@ export const FOCUS_GROUP_BINDINGS = [
 	"focus.group9",
 ] as const;
 
+export const SUGGESTION_KEYS = {
+	send: [
+		"suggestions.send1",
+		"suggestions.send2",
+		"suggestions.send3",
+		"suggestions.send4",
+		"suggestions.send5",
+		"suggestions.send6",
+		"suggestions.send7",
+		"suggestions.send8",
+		"suggestions.send9",
+	],
+	edit: [
+		"suggestions.edit1",
+		"suggestions.edit2",
+		"suggestions.edit3",
+		"suggestions.edit4",
+		"suggestions.edit5",
+		"suggestions.edit6",
+		"suggestions.edit7",
+		"suggestions.edit8",
+		"suggestions.edit9",
+	],
+} as const;
+
+export type SuggestionKeybindingId =
+	| (typeof SUGGESTION_KEYS.send)[number]
+	| (typeof SUGGESTION_KEYS.edit)[number];
+
 export type KeybindingId =
 	| "view.toggleLeft"
 	| "view.toggleRight"
 	| "view.toggleBottom"
+	| "view.toggleAllPanels"
 	| "view.files"
 	| "view.changes"
 	| "workspace.new"
+	| "workspace.recentNext"
+	| "workspace.recentPrevious"
 	| "search.open"
 	| "files.findInFiles"
 	| "chat.history"
@@ -33,17 +66,17 @@ export type KeybindingId =
 	| "tab.moveToNextGroup"
 	| "group.splitRight"
 	| "shortcuts.open"
-	| (typeof FOCUS_GROUP_BINDINGS)[number];
+	| (typeof FOCUS_GROUP_BINDINGS)[number]
+	| SuggestionKeybindingId;
 
 type PlatformScope = "apple" | "other";
 
 interface ChordScope extends CommandShortcut {
-	readonly browserReserved?: boolean;
 	readonly displayOnly?: boolean;
 	readonly platform?: PlatformScope;
 }
 
-interface PhysicalChord extends ChordScope {
+export interface PhysicalChord extends ChordScope {
 	readonly code: string;
 	readonly typed?: never;
 }
@@ -53,22 +86,21 @@ interface TypedChord extends ChordScope {
 	readonly code?: never;
 }
 
-type KeyChord = PhysicalChord | TypedChord;
+export type KeyChord = PhysicalChord | TypedChord;
 
-type KeybindingEvent = Pick<
-	KeyboardEvent,
-	"code" | "key" | "altKey" | "ctrlKey" | "metaKey" | "shiftKey"
-> &
-	Partial<Pick<KeyboardEvent, "getModifierState">>;
+export type KeybindingEvent = ChordPressEvent;
 
 export const KEYBINDINGS: Readonly<Record<KeybindingId, readonly [KeyChord, ...KeyChord[]]>> = {
 	"view.toggleLeft": [{ code: "KeyB", key: "B", mod: true }],
 	"view.toggleRight": [{ code: "KeyJ", key: "J", mod: true }],
 	"view.toggleBottom": [{ code: "KeyJ", key: "J", mod: true, shift: true }],
+	"view.toggleAllPanels": [{ code: "F12", key: "F12", mod: true, shift: true }],
 	"workspace.new": [
-		{ code: "KeyN", key: "N", mod: true, browserReserved: true },
+		{ code: "KeyN", key: "N", mod: true },
 		{ code: "KeyN", key: "N", mod: true, alt: true },
 	],
+	"workspace.recentNext": [{ code: "Tab", key: "Tab", ctrl: true }],
+	"workspace.recentPrevious": [{ code: "Tab", key: "Tab", ctrl: true, shift: true }],
 	"search.open": [{ code: "KeyK", key: "K", mod: true }],
 	"files.findInFiles": [{ code: "KeyF", key: "F", mod: true, shift: true }],
 	"chat.history": [{ code: "KeyR", key: "R", ctrl: true }],
@@ -89,7 +121,7 @@ export const KEYBINDINGS: Readonly<Record<KeybindingId, readonly [KeyChord, ...K
 	"focus.group9": [{ code: "Digit9", key: "9", mod: true }],
 	"focus.terminal": [{ code: "Backquote", key: "`", ctrl: true }],
 	"tab.close": [
-		{ code: "KeyW", key: "W", mod: true, browserReserved: true, displayOnly: true },
+		{ code: "KeyW", key: "W", mod: true, displayOnly: true },
 		{ code: "KeyW", key: "W", mod: true, alt: true },
 	],
 	"tab.moveToPreviousGroup": [
@@ -102,44 +134,45 @@ export const KEYBINDINGS: Readonly<Record<KeybindingId, readonly [KeyChord, ...K
 	],
 	"group.splitRight": [{ code: "Backslash", key: "\\", mod: true }],
 	"shortcuts.open": [{ typed: true, key: "?", mod: true }],
+	"suggestions.send1": [{ code: "Digit1", key: "1", alt: true }],
+	"suggestions.send2": [{ code: "Digit2", key: "2", alt: true }],
+	"suggestions.send3": [{ code: "Digit3", key: "3", alt: true }],
+	"suggestions.send4": [{ code: "Digit4", key: "4", alt: true }],
+	"suggestions.send5": [{ code: "Digit5", key: "5", alt: true }],
+	"suggestions.send6": [{ code: "Digit6", key: "6", alt: true }],
+	"suggestions.send7": [{ code: "Digit7", key: "7", alt: true }],
+	"suggestions.send8": [{ code: "Digit8", key: "8", alt: true }],
+	"suggestions.send9": [{ code: "Digit9", key: "9", alt: true }],
+	"suggestions.edit1": [{ code: "Digit1", key: "1", alt: true, shift: true }],
+	"suggestions.edit2": [{ code: "Digit2", key: "2", alt: true, shift: true }],
+	"suggestions.edit3": [{ code: "Digit3", key: "3", alt: true, shift: true }],
+	"suggestions.edit4": [{ code: "Digit4", key: "4", alt: true, shift: true }],
+	"suggestions.edit5": [{ code: "Digit5", key: "5", alt: true, shift: true }],
+	"suggestions.edit6": [{ code: "Digit6", key: "6", alt: true, shift: true }],
+	"suggestions.edit7": [{ code: "Digit7", key: "7", alt: true, shift: true }],
+	"suggestions.edit8": [{ code: "Digit8", key: "8", alt: true, shift: true }],
+	"suggestions.edit9": [{ code: "Digit9", key: "9", alt: true, shift: true }],
 };
 
-function onPlatform(chord: KeyChord, apple: boolean): boolean {
+export function onPlatform(chord: KeyChord, apple: boolean): boolean {
 	return chord.platform === undefined || (chord.platform === "apple") === apple;
 }
 
-function pressed(chord: KeyChord, event: KeybindingEvent, apple: boolean): boolean {
-	const mod = chord.mod === true;
+export function pressed(
+	chord: KeyChord,
+	event: KeybindingEvent,
+	platform: string,
+	options?: { ignoreShift?: boolean },
+): boolean {
+	const apple = platformFamily(platform) === "apple";
 	return (
-		!chord.displayOnly &&
-		onPlatform(chord, apple) &&
-		!(chord.alt && !apple && event.getModifierState?.("AltGraph")) &&
-		(chord.typed
-			? event.key === chord.key
-			: event.code === chord.code && event.shiftKey === (chord.shift === true)) &&
-		event.ctrlKey === (chord.ctrl === true || (mod && !apple)) &&
-		event.metaKey === (mod && apple) &&
-		event.altKey === (chord.alt === true)
+		!chord.displayOnly && onPlatform(chord, apple) && chordPressed(chord, event, platform, options)
 	);
 }
 
-export function matchKeybinding(event: KeybindingEvent, platform?: string): KeybindingId | null {
-	const apple = platformFamily(platform) === "apple";
-	for (const [id, chords] of Object.entries(KEYBINDINGS) as [KeybindingId, readonly KeyChord[]][]) {
-		if (chords.some((chord) => pressed(chord, event, apple))) return id;
-	}
-	return null;
-}
-
-function platformChords(id: KeybindingId, platform?: string): KeyChord[] {
-	const apple = platformFamily(platform) === "apple";
-	return KEYBINDINGS[id].filter((chord) => onPlatform(chord, apple));
-}
-
-function displayShortcut({
+export function displayShortcut({
 	code: _code,
 	typed: _typed,
-	browserReserved: _reserved,
 	displayOnly: _displayOnly,
 	platform: _platform,
 	...shortcut
@@ -147,44 +180,6 @@ function displayShortcut({
 	return shortcut;
 }
 
-export function keybindingShortcut(
-	id: KeybindingId,
-	{ browser = false, platform }: { browser?: boolean; platform?: string } = {},
-): CommandShortcut {
-	const chords = platformChords(id, platform);
-	const chord =
-		(browser ? chords.find((each) => !each.browserReserved) : undefined) ??
-		chords[0] ??
-		KEYBINDINGS[id][0];
-	return displayShortcut(chord);
-}
-
 export function keysLabel(keys: readonly string[], platform?: string): string {
 	return keys.join(platformFamily(platform) === "apple" ? "" : "+");
-}
-
-export function keybindingKeys(
-	id: KeybindingId,
-	{ browser, platform }: { browser?: boolean; platform?: string } = {},
-): string[] {
-	return shortcutKeys(
-		keybindingShortcut(id, {
-			...(browser === undefined ? {} : { browser }),
-			...(platform === undefined ? {} : { platform }),
-		}),
-		platform,
-	);
-}
-
-export function keybindingLabel(
-	id: KeybindingId,
-	options: { browser?: boolean; platform?: string } = {},
-): string {
-	return keysLabel(keybindingKeys(id, options), options.platform);
-}
-
-export function keybindingLabels(id: KeybindingId, platform?: string): string[] {
-	return platformChords(id, platform).map((chord) =>
-		keysLabel(shortcutKeys(displayShortcut(chord), platform), platform),
-	);
 }

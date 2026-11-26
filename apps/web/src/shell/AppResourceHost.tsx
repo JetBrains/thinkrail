@@ -1,4 +1,4 @@
-import { MAX_SEARCH_PREVIEW_BYTES } from "@thinkrail/contracts";
+import { MAX_SEARCH_PREVIEW_BYTES, WORKSPACE_MOCKUP_DIR } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import {
 	type ResourceEnvironment,
@@ -15,6 +15,7 @@ import { type ReactNode, useMemo } from "react";
 import { Markdown } from "../chat/Markdown";
 import { cssColorToHex, usePhoneViewport } from "../lib";
 import { CODE_LANGUAGES, codeLanguageId } from "../lib/codeLanguages";
+import { OpenInBrowserButton } from "../panels/OpenInBrowserButton";
 import { openFileComparisonInTab, openFileInTab } from "../panels/openTabs";
 import { resourceBytesUrl } from "../panels/resourcePane";
 import { SendReviewButton } from "../panels/SendReviewButton";
@@ -27,8 +28,13 @@ import {
 } from "../store";
 import { resolveThinkrailEditorTheme, THINKRAIL_PIERRE_THEME } from "../themes";
 import { getTransport, wsErrorCode } from "../transport";
+import { hasNativeMessageBridge } from "./nativeBridges";
 
-registerBundledResourceRenderers();
+registerBundledResourceRenderers({
+	interactiveHtml: hasNativeMessageBridge(globalThis)
+		? []
+		: [`${WORKSPACE_MOCKUP_DIR}/*.html`, `${WORKSPACE_MOCKUP_DIR}/*.htm`],
+});
 
 function FileReview({ workspaceId, path, kind, sessionId, children }: ResourceFileReviewProps) {
 	const review = useFileReview(workspaceId, path, kind, undefined, sessionId).worktree;
@@ -66,6 +72,7 @@ const HOST: ResourceHost = {
 		}),
 	FileReview,
 	ReviewSend,
+	OpenInBrowser: OpenInBrowserButton,
 };
 
 function cappedBytesUrl(workspaceId: string, path: string, oid?: string | null): string {

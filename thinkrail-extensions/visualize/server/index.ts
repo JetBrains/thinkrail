@@ -1,5 +1,5 @@
 import { defineServerExtension } from "@thinkrail/extension-api/server";
-import { createVisualizeExtension } from "@thinkrail/pi-visualize";
+import { createVisualizeExtension, visualizedPaths } from "@thinkrail/pi-visualize";
 import { strictMermaidValidator } from "./mermaid";
 import { visualizationSaver } from "./save";
 
@@ -24,4 +24,5 @@ export default defineServerExtension({
 				: {}),
 		}),
 	],
+	artifactTools: { visualize: { presented: visualizedPaths } },
 });

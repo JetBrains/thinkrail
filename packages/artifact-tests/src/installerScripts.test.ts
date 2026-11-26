@@ -186,7 +186,6 @@ function runPowerShellInstaller(
 	tag = "v1.2.3",
 	prefix = "C:/isolated/thinkrail",
 ): ScriptResult {
-	if (!powershell) throw new Error("PowerShell is unavailable");
 	const wrapper = join(fixture.root, "invoke-installer.ps1");
 	const networkLog = join(fixture.root, "powershell-network.log");
 	writeFileSync(
@@ -203,6 +202,49 @@ function global:Invoke-WebRequest {
 & $env:THINKRAIL_INSTALLER -Channel $env:TEST_CHANNEL -Version $env:TEST_VERSION -Prefix $env:TEST_PREFIX -NoModifyPath
 `,
 	);
+	return spawnPowerShellWrapper(wrapper, {
+		TEST_CHANNEL: channel,
+		TEST_VERSION: version,
+		TEST_PREFIX: prefix,
+		FAKE_TAG: tag,
+		FAKE_NETWORK_LOG: networkLog,
+	});
+}
+
+function runPowerShellInstall(fixture: Fixture, version: string): ScriptResult {
+	const wrapper = join(fixture.root, "run-installer.ps1");
+	writeFileSync(
+		wrapper,
+		`function global:Invoke-RestMethod {
+    return [pscustomobject]@{ tag_name = $env:FAKE_TAG }
+}
+function global:Invoke-WebRequest {
+    param([switch]$UseBasicParsing, [string]$Uri, [string]$OutFile)
+    if ($Uri -like "*/SHA256SUMS") {
+        Set-Content -LiteralPath $OutFile -Value ("$env:FAKE_HASH  thinkrail-windows-x64.exe")
+    } else {
+        Set-Content -LiteralPath $OutFile -Value $env:FAKE_BODY -NoNewline
+    }
+}
+function global:Get-FileHash {
+    param([string]$Algorithm, [string]$Path)
+    return [pscustomobject]@{ Hash = $env:FAKE_HASH }
+}
+& $env:THINKRAIL_INSTALLER -Channel "stable" -Version $env:TEST_VERSION -Prefix $env:TEST_PREFIX -NoModifyPath
+`,
+	);
+	return spawnPowerShellWrapper(wrapper, {
+		USERPROFILE: fixture.home,
+		TEST_VERSION: version,
+		TEST_PREFIX: fixture.prefix,
+		FAKE_TAG: `v${version}`,
+		FAKE_HASH: binaryHash,
+		FAKE_BODY: binaryBody,
+	});
+}
+
+function spawnPowerShellWrapper(wrapper: string, env: Record<string, string>): ScriptResult {
+	if (!powershell) throw new Error("PowerShell is unavailable");
 	const child = Bun.spawnSync(
 		[powershell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", wrapper],
 		{
@@ -212,11 +254,7 @@ function global:Invoke-WebRequest {
 				...process.env,
 				OS: "Windows_NT",
 				THINKRAIL_INSTALLER: powershellInstaller,
-				TEST_CHANNEL: channel,
-				TEST_VERSION: version,
-				TEST_PREFIX: prefix,
-				FAKE_TAG: tag,
-				FAKE_NETWORK_LOG: networkLog,
+				...env,
 			},
 		},
 	);
@@ -405,6 +443,28 @@ describe.skipIf(process.platform !== "win32" || !powershell)("install.ps1 valida
 			expect(requests[0]).toContain(`/releases/download/${tag}/thinkrail-windows-x64.exe`);
 		},
 		POWERSHELL_TEST_TIMEOUT_MS,
+	);
+
+	test(
+		"rewrites install.json when run over an existing install",
+		() => {
+			const fixture = makeFixture();
+			const metaFile = join(fixture.home, ".config", "thinkrail", "install.json");
+
+			const first = runPowerShellInstall(fixture, "1.0.0");
+			expect(first.exitCode).toBe(0);
+			expect(JSON.parse(readFileSync(metaFile, "utf8"))).toMatchObject({ version: "1.0.0" });
+
+			const second = runPowerShellInstall(fixture, "2.0.0");
+			expect(second.stderr).not.toContain("Replace");
+			expect(second.exitCode).toBe(0);
+			expect(JSON.parse(readFileSync(metaFile, "utf8"))).toMatchObject({
+				version: "2.0.0",
+				tag: "v2.0.0",
+			});
+			expect(readdirSync(join(fixture.home, ".config", "thinkrail"))).toEqual(["install.json"]);
+		},
+		2 * POWERSHELL_TEST_TIMEOUT_MS,
 	);
 });
 

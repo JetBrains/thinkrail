@@ -238,6 +238,9 @@ argument-hint: "[topic] [check]"
 Prepare $1 and verify \${2:-tests}.
 `,
 	);
+	const startSha = gitAs(E2E_FIXTURE_REPO, "rev-parse", "HEAD");
+	gitAs(E2E_FIXTURE_REPO, "add", "--", templateFile);
+	gitAs(E2E_FIXTURE_REPO, "commit", "--no-verify", "-q", "-m", "kickoff template");
 
 	try {
 		await openFixtureProject(page);
@@ -275,6 +278,7 @@ Prepare $1 and verify \${2:-tests}.
 			"Prepare parser and verify tests.",
 		);
 	} finally {
+		gitAs(E2E_FIXTURE_REPO, "reset", "-q", "--hard", startSha);
 		rmSync(templateFile, { force: true });
 	}
 });
@@ -311,10 +315,16 @@ test("a slow checkout runs in the background while the rest of the app stays usa
 }) => {
 	await openAppFresh(page);
 	const { repo } = seedRemoteProject("slow-checkout");
+	const dialog = await openPickedProjectWorkspaceDialog(page, repo);
+	await page.getByTestId("create-workspace").click();
+	await expect(dialog).toBeHidden();
+	await expect(worktreeRows(page)).toHaveCount(1);
+	await expect(page.getByTestId("workspace-creation-row")).toHaveCount(0);
 	const hook = join(repo, ".git", "hooks", "post-checkout");
 	writeFileSync(hook, "#!/bin/sh\nsleep 3\n");
 	chmodSync(hook, 0o755);
-	const dialog = await openPickedProjectWorkspaceDialog(page, repo);
+	await page.getByTestId("add-workspace").first().click();
+	await expect(dialog).toBeVisible();
 	await dialog.getByTestId("ws-prompt").fill("Start in the new checkout");
 
 	await page.getByTestId("create-workspace").click();
@@ -322,6 +332,15 @@ test("a slow checkout runs in the background while the rest of the app stays usa
 	const row = page.getByTestId("workspace-creation-row");
 	await expect(row).toHaveAttribute("data-state", "running");
 	await expect(row).toHaveAttribute("data-active", "true");
+	const creationId = await row.getAttribute("data-focus-row");
+	const liveRowIds = () =>
+		page
+			.locator('[data-focus-list^="workspaces:"] > li [data-focus-row]:not([data-kind="default"])')
+			.evaluateAll((rows) => rows.map((r) => r.getAttribute("data-focus-row")));
+	const idsWhileCreating = await liveRowIds();
+	expect(idsWhileCreating).toHaveLength(2);
+	expect(idsWhileCreating[0]).toBe(creationId);
+	await expect(row.locator("xpath=following::*[@data-testid='settled-shelf']")).toHaveCount(1);
 	const view = page.getByTestId("workspace-creation-view");
 	await expect(view.getByTestId("workspace-creation-prompt")).toHaveText(
 		"Start in the new checkout",
@@ -333,7 +352,8 @@ test("a slow checkout runs in the background while the rest of the app stays usa
 	await expect(view).toBeVisible();
 
 	await expect(row).toHaveCount(0, { timeout: 30_000 });
-	await expect(worktreeRows(page)).toHaveCount(1);
+	await expect(worktreeRows(page)).toHaveCount(2);
+	expect(await liveRowIds()).toEqual(idsWhileCreating);
 	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toContainText(
 		"Start in the new checkout",
 	);
@@ -437,6 +457,55 @@ test("opening New Workspace prefetches a stale default before create", async ({ 
 	await expect
 		.poll(() => refOid(repo, "refs/remotes/origin/main"), { timeout: 5_000 })
 		.toBe(newSha);
+});
+
+test("the start prompt previews skills from the base branch, not a stale checkout", async ({
+	page,
+}) => {
+	await openAppFresh(page);
+	const { root, repo, origin } = seedRemoteProject("base-ref-skills");
+	const skill = (name: string) =>
+		`---\nname: ${name}\ndescription: Skill ${name} for the base-ref preview.\n---\n\nDo it.\n`;
+	mkdirSync(join(repo, ".agents", "skills", "e2e-local"), { recursive: true });
+	writeFileSync(join(repo, ".agents", "skills", "e2e-local", "SKILL.md"), skill("e2e-local"));
+	gitAs(repo, "add", "-A");
+	gitAs(repo, "commit", "-m", "local skill");
+	git(repo, "push", "origin", "main");
+	const writer = join(root, "writer");
+	git(root, "clone", origin, writer);
+	mkdirSync(join(writer, ".agents", "skills", "e2e-upstream"), { recursive: true });
+	writeFileSync(
+		join(writer, ".agents", "skills", "e2e-upstream", "SKILL.md"),
+		skill("e2e-upstream"),
+	);
+	gitAs(writer, "add", "-A");
+	gitAs(writer, "commit", "--no-verify", "-m", "upstream skill");
+	git(writer, "push", "origin", "main");
+	mkdirSync(join(repo, ".agents", "skills", "e2e-untracked"), { recursive: true });
+	writeFileSync(
+		join(repo, ".agents", "skills", "e2e-untracked", "SKILL.md"),
+		skill("e2e-untracked"),
+	);
+
+	const dialog = await openPickedProjectWorkspaceDialog(page, repo);
+	await expect(dialog.getByTestId("ws-branch-picker")).toContainText("origin/main");
+	await dialog.getByTestId("ws-trust-project").click();
+	await expect(dialog.getByTestId("ws-trust-notice")).toBeHidden();
+	await expect(dialog).toContainText("from origin/main, the branch this workspace starts from");
+
+	const prompt = dialog.getByTestId("ws-prompt");
+	const row = (name: string) =>
+		dialog.getByTestId("slash-command").filter({ hasText: `/skill:${name}` });
+	await prompt.fill("/skill:e2e");
+	await expect(row("e2e-upstream")).toBeVisible();
+	await expect(row("e2e-local")).toBeVisible();
+	await expect(row("e2e-untracked")).toHaveCount(0);
+
+	await prompt.fill("");
+	await dialog.getByTestId("ws-target-default").click();
+	await prompt.fill("/skill:e2e");
+	await expect(row("e2e-untracked")).toBeVisible();
+	await expect(row("e2e-upstream")).toHaveCount(0);
 });
 
 test("opening New Workspace prefetches a missing default tracking ref", async ({ page }) => {

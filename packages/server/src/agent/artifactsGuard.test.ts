@@ -62,5 +62,13 @@ test("the extension adds the artifacts rule and refuses only a new file in a tem
 	expect(call("edit", existing)).toBeUndefined();
 	expect(call("edit", fresh)).toBeUndefined();
 	expect(call("write", ".thinkrail/context/report.md")).toBeUndefined();
+	expect(call("write", "reports/summary.md")).toBeUndefined();
+	expect(call("write", "~/reports/summary.md")).toBeUndefined();
 	expect(call("read", fresh)).toBeUndefined();
+	expect(sections[ARTIFACTS_SECTION]).toContain("By default");
+	expect(sections[ARTIFACTS_SECTION]).toContain(
+		"If the user explicitly requests another persistent path or directory, use that destination",
+	);
+	expect(sections[ARTIFACTS_SECTION]).toContain("including outside the workspace");
+	expect(sections[ARTIFACTS_SECTION]).toContain("link its actual path");
 });

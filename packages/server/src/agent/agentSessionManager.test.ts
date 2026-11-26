@@ -8,6 +8,7 @@ import {
 	rmSync,
 	writeFileSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
@@ -85,6 +86,7 @@ import {
 	requestSessionReload,
 	respondToTool,
 	sendHostMessageToSession,
+	sessionCompletionOf,
 	sessionImageSource,
 	setAgentReviewEnabledResolver,
 	setSessionCreatedPublisher,
@@ -94,6 +96,7 @@ import {
 	setSessionPublisher,
 	setSessionStatePublisher,
 	setSkillAdmissionResolver,
+	setSubagentEnabledResolver,
 	setSubagentsEnabledResolver,
 	settleCredentialWritesForShutdown,
 	settleSessionsForShutdown,
@@ -206,6 +209,35 @@ function installAskToolGate(name: string): {
 		release: () => writeFileSync(releasePath, ""),
 		remove: () => rmSync(extensionPath, { force: true }),
 	};
+}
+
+function storedSessionName(path: string): string | undefined {
+	for (const line of readFileSync(path, "utf8").split("\n")) {
+		if (!line) continue;
+		const entry = JSON.parse(line) as { type?: string; name?: string };
+		if (entry.type === "session_info") return entry.name;
+	}
+	return undefined;
+}
+
+function installSessionNamer(fileName: string, name: string): { remove: () => void } {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const extensionPath = join(agentDir, "extensions", `${fileName}.ts`);
+	mkdirSync(dirname(extensionPath), { recursive: true });
+	writeFileSync(
+		extensionPath,
+		[
+			'import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";',
+			"export default function (pi: ExtensionAPI) {",
+			'\tpi.on("input", () => {',
+			`\t\tpi.setSessionName(${JSON.stringify(name)});`,
+			"\t});",
+			"}",
+			"",
+		].join("\n"),
+	);
+	return { remove: () => rmSync(extensionPath, { force: true }) };
 }
 
 function installInputSwallower(name: string, marker: string): { remove: () => void } {
@@ -572,11 +604,14 @@ test("agent_settled carries the final attempt's terminal metadata", async () => 
 			}),
 		}),
 	]);
+	expect(sessionCompletionOf(session.sessionId)).toMatchObject({ outcome: "failed" });
+	expect(sessionCompletionOf("never-ran")).toBeNull();
 
 	fauxA.setResponses([fauxAssistantMessage("complete")]);
 	await promptSession(session.sessionId, "again");
 	const completionId = getSessionState(session.sessionId).completion?.completionId;
 	if (!completionId) throw new Error("settled run has no completion id");
+	expect(sessionCompletionOf(session.sessionId)).toEqual({ completionId, outcome: "succeeded" });
 	expect(acknowledgeCompletion(session.sessionId, "stale")).toMatchObject({
 		acknowledged: false,
 		record: { title: "" },
@@ -1389,6 +1424,89 @@ test.each([false, true])(
 		}
 	},
 );
+
+function sessionInsightsCorePackage(): string {
+	const extensionEntry = createRequire(import.meta.url).resolve(
+		"@thinkrail/ext-session-insights/server",
+	);
+	return dirname(
+		createRequire(extensionEntry).resolve("@thinkrail/pi-session-insights/package.json"),
+	);
+}
+
+test("switching a superseding extension reloads an open chat that has the superseded package, once its turn ends, and no other chat", async () => {
+	const settingsPath = join(process.env.PI_CODING_AGENT_DIR ?? "", "settings.json");
+	let disabled = new Set<string>();
+	setDisabledExtensionsResolver(() => disabled);
+	const originalReload = AgentSession.prototype.reload;
+	const reloads = new Map<string, number>();
+	AgentSession.prototype.reload = async function (this: AgentSession, ...args) {
+		await originalReload.apply(this, args);
+		reloads.set(this.sessionId, (reloads.get(this.sessionId) ?? 0) + 1);
+	};
+	const commands = (id: string) => getSessionCommands(id).map((command) => command.name);
+	let release = () => {};
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	let started = () => {};
+	const turnStarted = new Promise<void>((resolve) => {
+		started = resolve;
+	});
+	const ids: string[] = [];
+	try {
+		const plain = await createSession({
+			cwd: tmpCwd("trpi-superseded-none-"),
+			workspaceId: "ws-superseded-none",
+			model: toWireModel(fauxA.getModel()),
+		});
+		ids.push(plain.sessionId);
+		writeFileSync(settingsPath, JSON.stringify({ packages: [sessionInsightsCorePackage()] }));
+		const installed = await createSession({
+			cwd: tmpCwd("trpi-superseded-installed-"),
+			workspaceId: "ws-superseded-installed",
+			model: toWireModel(fauxA.getModel()),
+		});
+		ids.push(installed.sessionId);
+		expect(commands(installed.sessionId)).not.toContain("insights");
+
+		fauxA.setResponses([
+			async () => {
+				started();
+				await gate;
+				return fauxAssistantMessage("GATED_TURN_DONE");
+			},
+		]);
+		const turn = promptSession(installed.sessionId, "Start the gated turn.");
+		await turnStarted;
+		disabled = new Set(["session-insights"]);
+		refreshExtensionTools();
+		await Bun.sleep(50);
+		expect(reloads.get(installed.sessionId)).toBeUndefined();
+		expect(commands(installed.sessionId)).not.toContain("insights");
+		release();
+		await turn;
+		for (let waited = 0; !reloads.has(installed.sessionId) && waited < 300; waited++)
+			await Bun.sleep(10);
+		expect(reloads.get(installed.sessionId)).toBe(1);
+		expect(commands(installed.sessionId)).toContain("insights");
+
+		disabled = new Set();
+		refreshExtensionTools();
+		for (let waited = 0; reloads.get(installed.sessionId) === 1 && waited < 300; waited++)
+			await Bun.sleep(10);
+		expect(reloads.get(installed.sessionId)).toBe(2);
+		expect(commands(installed.sessionId)).not.toContain("insights");
+		await Bun.sleep(50);
+		expect(reloads.get(plain.sessionId)).toBeUndefined();
+	} finally {
+		release();
+		AgentSession.prototype.reload = originalReload;
+		setDisabledExtensionsResolver(() => new Set());
+		rmSync(settingsPath, { force: true });
+		for (const id of ids) await removeSession(id);
+	}
+});
 
 test("repeated streaming policy changes resolve only the latest value at settlement", async () => {
 	const slow = createFauxCore({
@@ -3418,6 +3536,76 @@ test("renameSession updates a disk-only transcript without attaching an agent", 
 	}
 });
 
+test("an extension session name is shown without terminal escapes while the chat is live", async () => {
+	const namer = installSessionNamer("ansi-session-name", "\u001b[31mred\u001b[0m name");
+	fauxA.setResponses([fauxAssistantMessage("NAMED")]);
+	const cwd = tmpCwd("trpi-ansi-live-");
+	const workspaceId = "ws-ansi-live";
+	const session = await createSession({
+		cwd,
+		workspaceId,
+		model: toWireModel(fauxA.getModel()),
+	});
+	events.set(session.sessionId, []);
+	const published: SessionStateRecord[] = [];
+	setSessionStatePublisher((record) => published.push(record));
+	try {
+		await promptSession(session.sessionId, "name this chat");
+		expect(events.get(session.sessionId)).toContainEqual({
+			type: "session_info_changed",
+			name: "red name",
+		});
+		expect(
+			(await listSessions(workspaceId, cwd)).find((row) => row.sessionId === session.sessionId)
+				?.title,
+		).toBe("red name");
+		expect(published).toContainEqual(
+			expect.objectContaining({ sessionId: session.sessionId, title: "red name" }),
+		);
+		expect((await getSessionMessages(session.sessionId, workspaceId, cwd)).summary.title).toBe(
+			"red name",
+		);
+	} finally {
+		namer.remove();
+		setSessionStatePublisher(() => {});
+		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
+	}
+});
+
+test("a session name already saved with escapes is plain on reload, and the file keeps the codes", () =>
+	withFreshDataDir(async () => {
+		const cwd = tmpCwd("trpi-ansi-disk-");
+		const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+		const colored = "\u001b[31mred\u001b[0m name";
+		const visible = "x".repeat(100);
+		const long = `\u001b[31m${visible}\u001b[0m`;
+		const at = Date.now();
+		const { id, path } = writeFixtureSession(dir, {
+			cwd,
+			name: colored,
+			messages: [{ role: "user", text: "colored", timestamp: at }],
+		});
+		const { id: longId, path: longPath } = writeFixtureSession(dir, {
+			cwd,
+			name: long,
+			messages: [{ role: "user", text: "long", timestamp: at + 1 }],
+		});
+		const workspaceId = "ws-ansi-disk";
+		const listed = await listSessions(workspaceId, cwd);
+		expect(listed.find((row) => row.sessionId === id)?.title).toBe("red name");
+		expect(listed.find((row) => row.sessionId === longId)?.title).toBe(visible);
+		const workspace = { id: workspaceId, projectId: "p-ansi-disk", cwd };
+		await initializeSessionStates([workspace]);
+		const titles = Object.fromEntries(
+			(await listSessionStates([workspace])).map((record) => [record.sessionId, record.title]),
+		);
+		expect(titles[id]).toBe("red name");
+		expect(titles[longId]).toBe(visible);
+		expect(long.length).toBeGreaterThan(80);
+		expect(storedSessionName(path)).toBe(colored);
+		expect(storedSessionName(longPath)).toBe(long);
+	}));
+
 test("state records carry pi's session name as read: long names, explicit clears and attached chats", () =>
 	withFreshDataDir(async () => {
 		const cwd = tmpCwd("trpi-record-title-");
@@ -4569,4 +4757,40 @@ test("readFinalAssistantTexts reads live and on-disk chats without attaching the
 	expect(
 		(await readFinalAssistantTexts("ws-elsewhere", cwd, [live.sessionId])).get(live.sessionId),
 	).toBeNull();
+});
+
+test("host per-name subagent resolver stays live for existing and future chats", async () => {
+	let disabled = false;
+	setSubagentEnabledResolver((name) => name !== "scout" || !disabled);
+	const ids: string[] = [];
+	try {
+		const create = async () => {
+			const session = await createSession({
+				cwd: tmpCwd("trpi-role-policy-"),
+				workspaceId: "ws-role-policy",
+				model: toWireModel(fauxA.getModel()),
+			});
+			ids.push(session.sessionId);
+			return session.sessionId;
+		};
+		const existing = await create();
+		disabled = true;
+		for (const id of [existing, await create()]) {
+			fauxA.setResponses([
+				(context) => {
+					const description =
+						getCurrentTools(context.messages).find((tool) => tool.name === "Agent")?.description ??
+						"";
+					expect(description).not.toContain('"scout"');
+					expect(description).toContain('"worker"');
+					return fauxAssistantMessage("POLICY_LIVE");
+				},
+			]);
+			await promptSession(id, "Check role availability.");
+			expect(seen(id)).toContain("POLICY_LIVE");
+		}
+	} finally {
+		setSubagentEnabledResolver(null);
+		for (const id of ids) await removeSession(id);
+	}
 });

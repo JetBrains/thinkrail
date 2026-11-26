@@ -1,6 +1,7 @@
 import { existsSync, writeFileSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
 import {
+	closeSettings,
 	expandModelGroup,
 	modelGroupToggle,
 	openAppFresh,
@@ -187,8 +188,7 @@ test("Central is uninstalled while connected: models are withdrawn, the artifact
 	await connectCentral(page);
 	await waitForCentralState(page, "configured");
 
-	await page.keyboard.press("Escape");
-	await expect(page.getByTestId("settings-dialog")).toBeHidden();
+	await closeSettings(page);
 	expect(await centralModelsOfferedToNewChats(page)).toBe(1);
 
 	setCentralInstalled(false);
@@ -200,8 +200,7 @@ test("Central is uninstalled while connected: models are withdrawn, the artifact
 		expect(existsSync(E2E_CENTRAL_ARTIFACT)).toBe(true);
 		await shot(card, GROUP, "07-uninstalled-while-connected");
 
-		await page.keyboard.press("Escape");
-		await expect(page.getByTestId("settings-dialog")).toBeHidden();
+		await closeSettings(page);
 		expect(await centralModelsOfferedToNewChats(page)).toBe(0);
 	} finally {
 		setCentralInstalled(true);
@@ -213,8 +212,7 @@ test("Central is uninstalled while connected: models are withdrawn, the artifact
 	expect(centralInvocationCount("add pi")).toBe(1);
 	await shot(card, GROUP, "08-reinstalled-repairs");
 
-	await page.keyboard.press("Escape");
-	await expect(page.getByTestId("settings-dialog")).toBeHidden();
+	await closeSettings(page);
 	expect(await centralModelsOfferedToNewChats(page)).toBe(1);
 	assertOnlyReviewedArgv();
 });

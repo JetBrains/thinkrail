@@ -23,9 +23,11 @@ the injected `PaletteStart`).
 ## Boundary
 
 - **Public surface:** `SearchPalette`, `SearchPaletteProps`, `PaletteHost`, `PaletteStart`, `PaletteAsk`,
-  `SearchSettings`, `initSearchPreferences`, `createDoubleShiftDetector`, `buildWorkItems`,
-  `waitingItems`, `commandItems`, `SearchScope`, `PaletteItem`, `PaletteFile`.
-- **Allowed deps:** `contracts` (the shared matcher and the search DTOs), `commands`, `store`
+  `initSearchPreferences`, `createDoubleShiftDetector`, `buildWorkItems`, `waitingItems`,
+  `commandItems`, `SearchScope`, `PaletteItem`, `PaletteFile`, `recentWorkspaces`, `RecentWorkspaces`,
+  `RecentSwitcher`, `RecentSwitcherProps`, `RECENT_SWITCHER_TEST_ID`.
+- **Allowed deps:** `contracts` (the shared matcher and the search DTOs), `commands`, `keybindings`
+  (`LOCAL_KEY_DEFAULTS` for scope `palette`), `store`
   (`selectHostSearchAvailable` / `selectHostReachable`, the welcome generation, the location Recent
   stamps), `transport`
   (`search.query` / `search.preview`, and the backend endpoint for browser preference keys), `clientPreferences`, `constants`, `components`, `lib`,
@@ -82,10 +84,17 @@ for the rare tie of two waiting chats in one workspace, which keeps the snapshot
 
 **Recent** is where the user has been, newest first, by any route — the rail, the topbar, a link, the
 palette — plus anything run from the palette: up to five rows by `lastUsed`, never the place the user is in
-now (`currentPlaceIds`, read when the palette opens) nor a row Waiting or Actions already shows.
+now (`currentPlaceIds`, read when the palette opens) nor a row Waiting or Actions already shows — a
+waiting chat behind Waiting's "Show N more" is not shown, so it stays in Recent until Waiting expands.
 `initSearchPreferences` watches the store's location (the active workspace's attention center chat tab;
 in a chat without a project, its one chat whatever tab shows and before its layout resolves, since the
-palette has no other row for it; else the workspace; else Project Home) and stamps a visit when the place changes; a chat's visit retires
+palette has no other row for it; else the workspace; else Project Home) and stamps a visit when the place changes.
+A chat is not the place while its host record says the palette does not list it (`chatHasRow`, the one
+listing rule, over the record's title, reported first prompt and attention): a just-created workspace's
+empty chat would retire the workspace's stamp for a row that does not exist, so the workspace is the place
+until the chat's first prompt or name reaches its record, when the place moves to the chat on its own. A
+chat with no record yet stays the place — "not reported" is not "empty", and treating it so raced a chat
+opened before its record arrived out of Recent; once the record lands the rule re-reads it. A chat's visit retires
 its workspace's stamp, and a pick of a row the current place already covers (its workspace, picked from
 its chat — a navigation that changes nothing, so no visit follows) stamps the place instead, so one place
 is one row while the pick still feeds frecency and adaptive learning. Visits order Recent only — typed-query ranking keeps
@@ -242,7 +251,12 @@ with AltGr or Option on a digit key (`#`, `@`, `|`) stays the input's, and macOS
 since Option always types one (a chip writes its prefix into the query, so the prefix is the one source
 of scope). `Mod+I` toggles the preview pane where it is shown, `Mod+K` closes the palette (the chord that
 opened it), `Mod+↵` starts work from the typed text and `Alt+↵` asks the agent from a `#` query (both
-above).
+above). `Mod+I`, `Mod+↵` and `Alt+↵` are the rebindable local keys `palette.preview` / `startWork` / `ask`
+([[submodule-web-keybindings]], *Local keys*), matched through `useLocalKeys` (non-typing chords, so they
+act in the input) and shown in the footer and on the preview toggle with their resolved caps; ↑/↓, ↵,
+Tab and Escape are locked. A matched local key acts before any of them, Escape included (the dialog's
+`onEscapeKeyDown` yields to it), and they act only without Alt/Ctrl/⌘ — Tab is still consumed then, but
+changes no scope. `Mod+K` here stays literal.
 Escape clears the query, then closes; an untrusted (synthetic) Escape — the desktop close-item command —
 closes outright. Closing without a pick returns focus to the element that held it when the palette
 opened (the composer an accidental double Shift interrupted, the topbar button); a pick leaves focus to
@@ -251,6 +265,19 @@ Escape, arrows, Enter and `Alt+n` do nothing to the palette, and Tab only stays 
 are disabled while offline or before the current welcome, and a command may carry its own disabled reason
 (Settle while an agent works or a chat needs you). The palette has one level: no pages, no per-row action
 panel — a row is a destination or a command.
+
+## Recent workspace switcher
+
+`Ctrl+Tab`'s list ([[submodule-web-shell]] binds the chord and owns its keys) is ordered here because
+the visit stamps are: `recentWorkspaces(items, state)` ranks the work items' workspaces by the same
+`lastUsed` stamps Recent reads, so the two lists always agree. A workspace counts the newest of its own
+and its chats' stamps (a visit stamps either, *Ranking*); a project workspace is its `workspace:` row and a
+chat without a project its `chat:` row, so a workspace is one row whichever chat was visited; the active
+workspace leads and is reported as `currentId`; unvisited workspaces, Project Home, rows pending deletion
+and a workspace without a palette row are left out; at most ten rows. Agent activity (`lastActiveAt`)
+does not reorder it — a tap must return to where the user just was. `RecentSwitcher` is the props-driven
+list (a fixed portal, no focus taken) drawing the palette's own `Row` (`Row.tsx`, shared so the two
+cannot drift), the current row noted "current".
 
 ## Preferences
 
@@ -271,6 +298,7 @@ delivers keys to the parent window, so the gesture does not fire from inside it.
 
 ## Keyboard settings
 
-`SearchSettings` is the Settings → Keyboard section: the `Mod+K` note, the double-Shift switch and,
-below it, whatever `shortcuts` node the shell injects (the full read-only shortcut list with its own
-filter, [[submodule-web-shell]]) — `search` never imports the shell's list.
+`search` renders no Settings section. The Settings → Keyboard section — the `Mod+K` note, the
+double-Shift switch (`store.doubleShiftSearch`, read by the gesture above) and the shortcut editor — is the
+shell's `KeyboardSettings` ([[submodule-web-shell]]), built on the Settings kit; `search` keeps only the
+preference's persistence (`initSearchPreferences`) and the detector.

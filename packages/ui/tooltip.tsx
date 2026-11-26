@@ -34,6 +34,7 @@ function IconTooltip({
 	side,
 	align,
 	wrapTrigger,
+	passThrough,
 	children,
 }: {
 	label: React.ReactNode;
@@ -41,6 +42,8 @@ function IconTooltip({
 	side?: React.ComponentProps<typeof TooltipPrimitive.Content>["side"];
 	align?: React.ComponentProps<typeof TooltipPrimitive.Content>["align"];
 	wrapTrigger?: boolean;
+	/** The tooltip never takes the pointer: it closes as the pointer leaves the trigger and a click lands on what it covers. */
+	passThrough?: boolean;
 	children: React.ReactNode;
 }) {
 	const [open, setOpen] = useState(false);
@@ -64,7 +67,11 @@ function IconTooltip({
 		return () => window.removeEventListener("keydown", onKeyDown, true);
 	}, [open]);
 	return (
-		<Tooltip open={open} onOpenChange={onOpenChange}>
+		<Tooltip
+			open={open}
+			onOpenChange={onOpenChange}
+			{...(passThrough ? { disableHoverableContent: true } : {})}
+		>
 			{wrapTrigger ? (
 				<TooltipTrigger asChild onFocus={onFocus}>
 					<span className="flex">{children}</span>
@@ -74,7 +81,11 @@ function IconTooltip({
 					{children}
 				</TooltipTrigger>
 			)}
-			<TooltipContent {...(side ? { side } : {})} {...(align ? { align } : {})}>
+			<TooltipContent
+				{...(side ? { side } : {})}
+				{...(align ? { align } : {})}
+				{...(passThrough ? { "data-pass-through": "", className: "pointer-events-none" } : {})}
+			>
 				{shortcut?.length ? (
 					<span className="flex items-center gap-8">
 						<span>{label}</span>

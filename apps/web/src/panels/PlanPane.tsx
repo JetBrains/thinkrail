@@ -21,6 +21,7 @@ import type { ReviewComment, TodoGroupItem, TodoItem } from "@thinkrail/contract
 import { useT } from "@thinkrail/locales/react";
 import { ResourceScopeProvider } from "@thinkrail/resource-renderers";
 import { Button, buttonVariants, IconButton } from "@thinkrail/ui/button";
+import { DiffStatBadge } from "@thinkrail/ui/diff-stat-badge";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -31,7 +32,7 @@ import {
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { type ChatActions, ChatActionsContext } from "../chat/ChatActions";
 import {
 	awaitingToolCallIdOf,
@@ -65,8 +66,9 @@ import {
 	sessionGlance,
 } from "../chat/planView";
 import { StatusIcon } from "../chat/TodoList";
+import { ToolRendererBoundary } from "../chat/ToolRendererBoundary";
 import { useToolInteraction } from "../chat/toolInteraction";
-import { getToolRenderer } from "../chat/toolRegistry";
+import { DefaultToolRenderer, useToolRegistry, useToolRenderer } from "../chat/toolRegistry";
 import { hydrateSessionRuntime, useChatTodos } from "../chat/useChatTodos";
 import { copyText } from "../lib";
 import {
@@ -78,7 +80,6 @@ import {
 	useAppStore,
 } from "../store";
 import { errorText, getTransport, respondToTool, supportsPlanReview } from "../transport";
-import { DiffStatBadge } from "./DiffStatBadge";
 import { openChatInTab } from "./openChat";
 import { openDiffInTab, openFileInTab } from "./openTabs";
 import { PlanCommitsMenu } from "./PlanCommitsMenu";
@@ -392,6 +393,7 @@ function ItemBlock({
 								variant="primary"
 								size="m"
 								data-testid="plan-start-review"
+								data-hint-reveal
 								disabled={startDisabled}
 								tooltip={startDisabled ? t("plan.item.reviewBusy") : undefined}
 								onClick={() => onStartReview(item.id)}
@@ -638,6 +640,7 @@ function PlanComposer({
 						e.preventDefault();
 						void submit();
 					} else if (e.key === "Escape" && onClose) {
+						e.preventDefault();
 						onClose();
 					}
 				}}
@@ -682,48 +685,103 @@ function PlanInteractionCard({
 	pending: PendingInteraction;
 }) {
 	const interaction = useToolInteraction(pending.toolCallId, pending.toolName);
-	const Renderer = getToolRenderer(pending.toolName);
+	const Renderer = useToolRenderer(pending.toolName);
 	const scope = useMemo(() => ({ workspaceId, sessionId }), [workspaceId, sessionId]);
+	const props = {
+		toolCallId: pending.toolCallId,
+		toolName: pending.toolName,
+		args: pending.args,
+		result: pending.result,
+		status: pending.status,
+		streaming: pending.streaming,
+		interaction,
+		onOpenFile: (path: string) => void openFileInTab(workspaceId, path, "preview"),
+	};
 	return (
 		<ResourceScopeProvider value={scope}>
-			<Renderer
+			<ToolRendererBoundary
+				renderer={Renderer}
 				toolCallId={pending.toolCallId}
-				toolName={pending.toolName}
-				args={pending.args}
-				result={pending.result}
 				status={pending.status}
 				streaming={pending.streaming}
-				interaction={interaction}
-				onOpenFile={(path) => void openFileInTab(workspaceId, path, "preview")}
-			/>
+				fallback={<DefaultToolRenderer {...props} />}
+			>
+				<Renderer {...props} />
+			</ToolRendererBoundary>
 		</ResourceScopeProvider>
 	);
 }
 
 // Keep the session's live slot isolated from the heavy PlanPane.
-function PlanSessionLive({ workspaceId, sessionId }: { workspaceId: string; sessionId: string }) {
+function PlanSessionLive({
+	workspaceId,
+	sessionId,
+	landingChord,
+}: {
+	workspaceId: string;
+	sessionId: string;
+	landingChord: string;
+}) {
+	const slotRef = useRef<HTMLDivElement>(null);
+	return (
+		<div
+			ref={slotRef}
+			tabIndex={-1}
+			data-testid="plan-session-live"
+			className="rounded-sm focus-visible:focus-ring"
+		>
+			<PlanSessionLiveBody
+				workspaceId={workspaceId}
+				sessionId={sessionId}
+				landingChord={landingChord}
+				slotRef={slotRef}
+			/>
+		</div>
+	);
+}
+
+function PlanSessionLiveBody({
+	workspaceId,
+	sessionId,
+	landingChord,
+	slotRef,
+}: {
+	workspaceId: string;
+	sessionId: string;
+	landingChord: string;
+	slotRef: RefObject<HTMLDivElement | null>;
+}) {
 	const t = useT();
 	const runtime = useAppStore((s) => s.sessions[sessionId]);
 	const [focusScope] = useState<object>(() => ({}));
-	const actions = useMemo<ChatActions>(
-		() => ({
+	const actions = useMemo<ChatActions>(() => {
+		const focusSlot = () => slotRef.current?.focus({ preventScroll: true });
+		return {
 			cancelAutomaticReveal: () => {},
-			focusComposer: () => {},
+			focusComposer: focusSlot,
+			focusToolCall: focusSlot,
+			mayClaimFocus: () => true,
+			landingChord,
 			openSubagentTranscript: () => {},
 			respondToTool: (toolCallId, response) => respondToTool(sessionId, toolCallId, response),
 			resultOpener: () => undefined,
 			revealChatElement: () => {},
-		}),
-		[sessionId],
-	);
+		};
+	}, [landingChord, sessionId, slotRef]);
+	const registry = useToolRegistry();
 	const interactionStates = useMemo(
 		() =>
 			runtime
-				? deriveInteractionStates(runtime.turns, runtime.toolResponses, runtime.toolResults)
+				? deriveInteractionStates(
+						runtime.turns,
+						runtime.toolResponses,
+						runtime.toolResults,
+						registry,
+					)
 				: {},
-		[runtime],
+		[runtime, registry],
 	);
-	const pending = runtime ? pendingInteraction(runtime) : undefined;
+	const pending = runtime ? pendingInteraction(runtime, registry) : undefined;
 	if (pending) {
 		return (
 			<ChatActionsContext.Provider value={actions}>
@@ -900,9 +958,11 @@ function SessionBlock({
 export default function PlanPane({
 	workspaceId,
 	sessionId,
+	landingChord,
 }: {
 	workspaceId: string;
 	sessionId: string;
+	landingChord: string;
 }) {
 	const t = useT();
 	const plan = useChatTodos(workspaceId, sessionId);
@@ -912,9 +972,10 @@ export default function PlanPane({
 	const requestToolView = useAppStore((s) => s.requestToolView);
 	const workspace = useAppStore((s) => selectWorkspaceById(s, workspaceId));
 	const chat = workspace !== null && isChatWorkspace(workspace);
+	const toolRegistry = useToolRegistry();
 	const glance = useAppStore((s): PlanGlance => {
 		const rt = s.sessions[sessionId];
-		return rt ? sessionGlance(rt) : "waiting";
+		return rt ? sessionGlance(rt, toolRegistry) : "waiting";
 	});
 	const connection = useAppStore((s) => s.status);
 	const hasRuntime = useAppStore((s) => s.sessions[sessionId] !== undefined);
@@ -1400,7 +1461,13 @@ export default function PlanPane({
 					pendingLoose={sections.pendingLoose}
 					allDone={buildDone}
 					glance={glance}
-					renderLive={() => <PlanSessionLive workspaceId={workspaceId} sessionId={sessionId} />}
+					renderLive={() => (
+						<PlanSessionLive
+							workspaceId={workspaceId}
+							sessionId={sessionId}
+							landingChord={landingChord}
+						/>
+					)}
 					onAdd={(title) => plan.add(title, "page")}
 					onOpenChat={() => {
 						void openChatInTab(workspaceId, sessionId);

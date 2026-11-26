@@ -110,8 +110,18 @@ extension had to adopt and wire up. It was replaced so voice is a property of th
   a transition (`startTransition`): mounting the mic on focus is not urgent and must not delay the
   field's first keystrokes. Rendered synchronously, it held off WebKit's text input long enough for a
   questionnaire's page-change focus to win the race.
+- **Resting composer mics** (user decision, 2026-11-26): every eligible chat composer
+  (`[data-dictation-fallback]`) shows its mic without focus too, so users discover dictation and can
+  start it with one click. Other fields stay focus-only, which keeps mics off every search box and
+  settings input. Composers are found by a frame-coalesced `MutationObserver` scan (they do nothing
+  themselves); a read-only or disabled one gets none, except the one being dictated into, which our
+  own lock makes read-only. A start or setup press on an unfocused composer's mic focuses it first;
+  a stop or cancel-install press leaves focus where it is. A single mic that fell back to the composer on blur was rejected: it jumped between fields
+  and served only one split pane. Each mic is one `FieldMic` with its own placement; the setup
+  popover belongs to the field it was opened for. A mic's `data-mic-anchor` is `composer` or `field`.
 - **The mic** is rendered through a portal and re-placed against the field's rect whenever the field,
-  the page or its container resizes or anything scrolls (one `requestAnimationFrame` per burst; no idle
+  any of its ancestors (so a neighbouring pane opening moves a resting composer mic along) or its
+  container resizes, or anything scrolls (one `requestAnimationFrame` per burst; no idle
   frame loop, which kept the desktop renderer awake at 60 Hz): inside the right edge, at the bottom corner of a field 40 px or taller, centred vertically on a
   single line. A field narrower than 96 px, or one that left the page, gets no mic, though the chord
   still works on a narrow one. That decision is made where the mic is placed, not during render: a
@@ -120,7 +130,7 @@ extension had to adopt and wire up. It was replaced so voice is a property of th
   - It portals into the field's nearest `[role="dialog"]` or Radix popper wrapper, absolutely
     positioned against it (including its scroll offset and border), so it sits inside that layer's focus trap and outside-click guard. Elsewhere
     it is fixed to the viewport.
-  - When focus leaves, the mic is hidden (`hidden`), not unmounted, until another field takes focus or
+  - When focus leaves, the focus-following mic is hidden (`hidden`), not unmounted, until another field takes focus or
     its field leaves the page. Radix focus scopes move focus to their container whenever a node inside
     them is removed while focus is on `body`. Removing the mic mid-focus-change closed a model-picker
     popover on a click inside it, and broke a field's own focus restore after it disabled itself.
@@ -136,7 +146,8 @@ extension had to adopt and wire up. It was replaced so voice is a property of th
     disables the button.
   - Listening shows a danger-toned mic with a 4-bar level meter. `blocked` and `unavailable` show the
     mic-off icon with the reason.
-  - Pressing the mic never moves focus (`onMouseDown` prevents default), and the mic is never a Tab
+  - The mic never takes focus itself (`onMouseDown` prevents default); only a start or setup press
+    focuses its field. The mic is never a Tab
     stop (`tabIndex={-1}`); the chord is its keyboard path. As a Tab stop at the end of the dialog it
     was portaled into, the focus trap wrapped Shift+Tab onto it, stealing the search palette's
     Tab-cycled input focus. Dictation failures are toasts.
@@ -147,11 +158,15 @@ extension had to adopt and wire up. It was replaced so voice is a property of th
     (a `MutationObserver` while dictating), because only Chromium fires a blur when a focused element is
     removed; in WebKit (the macOS app) and Firefox, closing a dialog mid-dictation left the microphone
     live.
-  - **Esc is not a dictation key** (user decision). It keeps whatever meaning the page gives it:
-    Escape in a dialog closes the dialog, whose field blur then ends the dictation and drops its draft
-    with it, exactly as for typed text. An earlier version stopped dictation on Esc. A dialog's
-    dismiss runs first, so making Esc stop dictation without closing the dialog would have needed a
-    second window capture owner of Escape.
+  - **The first Esc stops a dictation, the next leaves the field** (user decision, 2026-11-16; it
+    replaces "Esc is not a dictation key"). `installDictationEscape` listens on `document` in the bubble
+    phase: after the field's own handlers and Radix's capture-phase dismiss (so Esc in a dialog still
+    closes the dialog, whose blur ends the dictation and drops its draft), and always before the shell's
+    window listener that leaves the field ([[submodule-web-shell]], *Esc leaves a text field*), whatever
+    the registration order. A bare Esc whose target is inside the dictating field, while it is `connecting` or
+    `listening`, stops the dictation, keeps the text and focus, and is `preventDefault`ed; the next Esc
+    leaves the field. Once it is `stopping` (finalizing), Esc is left to the shell, so a quick second Esc
+    leaves the field while the text still finishes writing.
   - When the controller goes idle or changes owner, the field is unlocked and the end is announced.
   - Owners are per element (`WeakMap`), so starting another field ends the first.
 - **Chord.** ⌘⇧Space on Apple, Ctrl+Shift+Space elsewhere, through one pair of window capture listeners.

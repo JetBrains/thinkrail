@@ -18,6 +18,7 @@ import {
 	rendererImplementationKey,
 } from "@thinkrail/resource-renderers";
 import { Button, IconButton } from "@thinkrail/ui/button";
+import { DiffStatBadge } from "@thinkrail/ui/diff-stat-badge";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -43,7 +44,6 @@ import {
 	stackedDiffBounded,
 	statusNameClass,
 } from "./changesModel";
-import { DiffStatBadge } from "./DiffStatBadge";
 import { DiffSurfaceBody, useDiffSurface } from "./DiffSurface";
 import { HeaderIconButton } from "./HeaderIconButton";
 import { openDiffInTab } from "./openTabs";
@@ -235,7 +235,9 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 		>
 			<div
 				data-testid="changes-section-header"
-				className={`${mode === "stacked" ? "sticky top-0 z-10" : ""} flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-8`}
+				data-focus-row-primary={mode === "single" || undefined}
+				tabIndex={-1}
+				className={`${mode === "stacked" ? "sticky top-0 z-10" : ""} flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-8 focus-visible:focus-ring-inset`}
 			>
 				{mode === "stacked" ? (
 					<IconButton

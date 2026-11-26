@@ -72,3 +72,26 @@ export function draftChanged(draft: EnvironmentDraft, status: HostEnvironmentSta
 		)
 	);
 }
+
+export type EnvironmentDraftField = { kind: "agentDir" } | { kind: "name" | "value"; id: string };
+
+/** The draft with one field put back to what it was when the form last loaded or saved, or null if unchanged. */
+export function revertDraftField(
+	draft: EnvironmentDraft,
+	baseline: EnvironmentDraft,
+	field: EnvironmentDraftField,
+): EnvironmentDraft | null {
+	if (field.kind === "agentDir") {
+		return draft.agentDir === baseline.agentDir ? null : { ...draft, agentDir: baseline.agentDir };
+	}
+	const entry = draft.vars.find((candidate) => candidate.id === field.id);
+	if (!entry) return null;
+	const original = baseline.vars.find((candidate) => candidate.id === field.id)?.[field.kind] ?? "";
+	if (entry[field.kind] === original) return null;
+	return {
+		...draft,
+		vars: draft.vars.map((candidate) =>
+			candidate.id === field.id ? { ...candidate, [field.kind]: original } : candidate,
+		),
+	};
+}

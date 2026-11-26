@@ -21,6 +21,7 @@ export {
 	piDeclarationIdentity,
 	piPackageIdentity,
 	piPackageSourceKind,
+	piResourcePathKey,
 	settingsBaseDir,
 } from "./identity";
 export {
@@ -31,6 +32,7 @@ export {
 	type PiPackageTarget,
 	type PiResourceToggle,
 	removePiPackage,
+	resolvePiInstallSource,
 	setPiResourceEnabled,
 	updatePiPackages,
 } from "./mutations";

@@ -38,6 +38,8 @@ paste into the folder, and extensions
   through `WorkspaceFiles.ensureArtifactsDir` before saving — so recreating a folder someone cleaned never
   leaves files git would stage;
   `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;
+  `@thinkrail/shared/packageInstallError` → `packageInstallError()`;
+  `@thinkrail/shared/stripAnsi` → `stripAnsi()`, `plainText()`;
   `@thinkrail/shared/toolHomes` → `toolHomeEnv(home)`, the environment that points every agent tool's
   config home (Claude Code, Codex, Gemini, Copilot, Kimi, Grok) under one sandbox home and clears the
   overrides that would reach outside it — the single list every hermetic host spawner (e2e, workflow
@@ -154,11 +156,25 @@ paste into the folder, and extensions
     11 taskbar's 24 px frame and read as blurry there.
   - **Frame order.** Frames are ordered largest first, because Bun's compiler keeps a named icon group
     that maps only icon #1 (oven-sh/bun#32428, [[module-cli]]).
+- **/stripAnsi** — `stripAnsi(text)` + `plainText(value)`: the host's plain-text strip for extension
+  display strings and session titles. A complete CSI, OSC, DCS, SOS, PM, APC, or two-byte escape (7-bit or
+  8-bit C1) is removed; a sequence with no final byte loses only its control byte, so the rest stays
+  readable. Text that merely looks like a code is unchanged; `plainText` maps a non-string to `""`. Built-ins do not fit: `util.stripVTControlCharacters`
+  leaves OSC tails, `Bun.stripANSI` is missing under Node, and pi-tui's `stripTerminalSequences` keeps DCS
+  strings. It lives here because `agent` and `history` both read session titles and neither may import the
+  other.
 - **/codedError** — `CodedError(code, message)` + `errorCodeOf(err)`: an error carrying a wire
   `WsErrorCode`, so a failure a client must react to *specifically* travels as a name rather than a string
   to pattern-match. It lives here because both ends of the seam need it and neither may import the other:
   the module that knows the failure throws it (today `server/src/git`, for a vanished commit scope) and the
   host's request handler reads it onto `WsResponse.errorCode`.
+- **/packageInstallError** — `packageInstallError(error)`: a failed package install as a `CodedError`
+  whose message is pi's text unchanged. npm's `E404` / "is not in this registry" in the captured output
+  is `PACKAGE_NOT_FOUND`; a network failure (`ENOTFOUND`, `EAI_AGAIN`, `ECONNREFUSED`, `ECONNRESET`,
+  `ETIMEDOUT`, `ENETUNREACH`, `EHOSTUNREACH`, "request to … failed") is `PACKAGE_REGISTRY_UNREACHABLE`;
+  anything else is `PACKAGE_INSTALL_FAILED`. It lives here because pi's install (`server/src/agent`) and
+  the installed-extension runtime (`server/src/extensions/installed`, which may not import `agent`) both
+  install packages.
 - **/removeTree** — `removeTree(path, options?)`: delete a tree that a child process ran from, and keep
   trying while the failure is one a short wait can resolve (`EBUSY`, `EMFILE`, `ENFILE`, `ENOTEMPTY`,
   `EPERM`, `EACCES`) — ten attempts with a linear 100 ms backoff by default. It exists because Windows

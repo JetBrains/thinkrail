@@ -17,21 +17,43 @@ geometry, and submit actions; this module makes those inputs behave the same onc
 
 ## Boundary
 
-- **Owns:** the props-driven slash menu and completion controller; pure catalog merge and command insertion;
+- **Owns:** the props-driven slash menu and completion controller; the argument-completion step
+  (`ArgumentCompletion.tsx`) — parsing, keys, insertion, the menu frame and the command/argument tint; pure catalog merge and command insertion;
   frontmatter stripping/template assembly; placeholder parsing, editing, mirroring, highlighting, and finalization;
   the template-pick controller that refuses to overwrite a draft changed after selection.
-- **Public surface:** `index.ts` is the only import path and re-exports the command-completion, template-text,
-  template-pick, template-slot, and caret/selection-restoration (`usePendingSelection`) APIs.
-- **Allowed deps:** `contracts` types, React, `@thinkrail/locales` (UI strings), `@thinkrail/ui/utils` (`cn`), and `@thinkrail/ui/button` (`TemplateSlotHint` is a shared `Button`).
+- **Public surface:** `index.ts` is the only import path and re-exports the command-completion, argument-completion,
+  template-text, template-pick, template-slot, and caret/selection-restoration (`usePendingSelection`) APIs.
+- **Allowed deps:** `contracts` types and its shared tiered matcher (`matchFields` / `parseMatchTerms`), React, `@thinkrail/locales` (UI strings), `@thinkrail/ui/utils` (`cn`), `@thinkrail/ui/button` (`TemplateSlotHint` is a shared `Button`), and `@thinkrail/ui/popover` (the argument menu's anchored positioning).
 - **Forbidden:** store or transport access; workspace/session/project lookup; deciding which commands exist in a
   lifecycle; sending a prompt; importing `chat` or `panels`.
 
 ## Behavior
 
-A slash token is active only at the beginning of the draft and before its first whitespace. Up/Down wrap the
+A slash token is active only at the beginning of the draft and before its first whitespace. Matches
+are ranked with the shared tiered matcher the search palette uses — exact, starts-with, word-start,
+contains, then letters in order — on the command's name without its `skill:` prefix (the full name is a
+secondary field, so `/skill:rev` still works); ties keep catalog order, and the menu shows the best
+eight. Plain containment in catalog order hid a skill whose name starts with the query behind eight
+earlier commands that merely contained it — a user with many personal skills could not see
+`/skill:reviewing-a-pr` after typing `/re`, because the host lists bundled skills last. Up/Down wrap the
 visible matches; Enter/Tab selects; Escape dismisses; IME-owned key events take precedence in the consuming
 input. Catalog merge is deterministic and lets the caller's more-specific later source replace a same-named
 earlier source.
+
+**Argument completion** takes over once a command is completed: when the whole draft is one line
+`/<command> <argument>` and the command declares `argumentCompletion` (from the host's catalog), the
+text after the command is the caller's query. The module decides the keys — ↑/↓ wrap the caller's
+candidates, Enter picks (Shift+Enter and an empty list let Enter through, so the draft can still be sent
+as typed), Tab / Shift+Tab hand focus to the caller's filter row, Escape dismisses until the query
+changes — and the caller decides what the candidates are, when an argument is complete (the menu then
+closes for whatever follows it, such as a focus note), and renders rows, header and footer through
+`ArgumentCompletionFrame` inside `ArgumentCompletionMenu`. The menu is a popover anchored above the
+caller's prompt that never flips below it and is capped to the space left above (and 60vh), so a
+prompt low in the window — the New Workspace dialog near its bottom — shrinks the rows, which alone
+scroll, and the header with the filters stays in view; positioned as a plain `bottom-full` box it grew
+past the window's top edge and hid them. A pick replaces the argument and adds one space. `slashArgumentTint` splits
+the draft into command / argument / plain spans for a prompt's highlight layer. The slash menu and the
+argument step never overlap: one needs a token without whitespace, the other a space after it.
 
 Template selection is latest-pick-wins and applies only while the draft is byte-identical to its value at pick
 time and the caller's project/workspace context is unchanged. The picker exposes pending state so submit

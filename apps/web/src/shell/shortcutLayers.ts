@@ -25,10 +25,25 @@ export function hasDismissibleLayer(doc: LayerDocument) {
 	return hasLayer(doc, DISMISSIBLE_LAYER_SELECTOR) || hasGroupLayer(doc);
 }
 
+export function isInLayer(target: { closest(selector: string): unknown }): boolean {
+	return target.closest(DISMISSIBLE_LAYER_SELECTOR) !== null;
+}
+
+export function activeLayer(doc: ParentNode = document): ParentNode {
+	const layers = doc.querySelectorAll(DISMISSIBLE_LAYER_SELECTOR);
+	return layers[layers.length - 1] ?? doc;
+}
+
 const TERMINAL_ROOT_SELECTOR = ".xterm";
 
 export function isInTerminal(target: EventTarget | null) {
 	return target instanceof Element && target.closest(TERMINAL_ROOT_SELECTOR) !== null;
+}
+
+const CODE_EDITOR_SELECTOR = ".monaco-editor";
+
+export function isInCodeEditor(target: EventTarget | null) {
+	return target instanceof Element && target.closest(CODE_EDITOR_SELECTOR) !== null;
 }
 
 const EDITOR_FIND_SELECTOR = ".monaco-editor .find-widget";

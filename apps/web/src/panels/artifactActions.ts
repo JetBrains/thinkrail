@@ -1,10 +1,10 @@
 import type { WorkspaceArtifact } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { fileName, tupleKey } from "../lib";
-import { selectAttentionCenterTab, toast, useAppStore } from "../store";
+import { selectArtifactsView, selectAttentionCenterTab, toast, useAppStore } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
 import { mentionText } from "./artifactsModel";
-import { openFileInTab } from "./openTabs";
+import { type OpenTabOptions, openFileInTab } from "./openTabs";
 
 export function selectArtifactMentionTarget(
 	state: ReturnType<typeof useAppStore.getState>,
@@ -22,11 +22,10 @@ export function mentionArtifact(workspaceId: string, path: string): void {
 	store.requestComposerFocus(workspaceId, sessionId, { dismissHistory: true });
 }
 
-export function revealArtifact(workspaceId: string, path: string): void {
+export function revealArtifactsListing(workspaceId: string): void {
 	const store = useAppStore.getState();
-	store.setFilesMode("all");
-	store.revealInFiles(workspaceId, path);
-	store.requestToolView(workspaceId, "files");
+	if (selectArtifactsView(store) === "outputs") store.setArtifactsView("list");
+	store.requestToolView(workspaceId, "artifacts");
 }
 
 export async function restoreArtifact(workspaceId: string, path: string): Promise<boolean> {
@@ -71,11 +70,14 @@ export async function openArtifact(
 	workspaceId: string,
 	artifact: WorkspaceArtifact,
 	intent: "preview" | "keep",
+	options?: OpenTabOptions,
 ): Promise<void> {
-	if (artifact.state !== "deleted") return openFileInTab(workspaceId, artifact.path, intent);
+	if (artifact.state !== "deleted") {
+		return openFileInTab(workspaceId, artifact.path, intent, undefined, options);
+	}
 	const navigation = useAppStore.getState().beginCenterNavigation(workspaceId);
 	if (!(await restoreDeletedArtifact(workspaceId, artifact))) return;
-	await openFileInTab(workspaceId, artifact.path, intent, navigation);
+	await openFileInTab(workspaceId, artifact.path, intent, navigation, options);
 }
 
 export async function discardArtifact(workspaceId: string, path: string): Promise<void> {

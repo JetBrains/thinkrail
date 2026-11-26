@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { TODO_NUDGE_PREFIX } from "@thinkrail/contracts";
-import { extractSession } from "./extract";
+import { extractSession, locateEntry } from "./extract";
 
 const line = (obj: unknown) => JSON.stringify(obj);
 
@@ -110,6 +110,30 @@ describe("extractSession", () => {
 			line({ type: "session_info", id: "i1", parentId: "i0", name: "" }),
 		].join("\n");
 		expect(extractSession(cleared)?.title).toBeUndefined();
+	});
+
+	test("strips terminal escapes from the latest session name without the write cap", () => {
+		const named = [
+			header(),
+			line({ type: "session_info", id: "i0", parentId: null, name: "\u001b[31mred\u001b[0m name" }),
+		].join("\n");
+		expect(extractSession(named)?.title).toBe("red name");
+
+		const visible = "x".repeat(100);
+		const raw = `\u001b[31m${visible}\u001b[0m`;
+		const long = [
+			header(),
+			line({ type: "session_info", id: "i0", parentId: null, name: raw }),
+		].join("\n");
+		expect(raw.length).toBeGreaterThan(80);
+		expect(extractSession(long)?.title).toBe(visible);
+
+		const onlyEscapes = [
+			header(),
+			line({ type: "session_info", id: "i0", parentId: null, name: "Named" }),
+			line({ type: "session_info", id: "i1", parentId: "i0", name: "\u001b[31m\u001b[0m" }),
+		].join("\n");
+		expect(extractSession(onlyEscapes)?.title).toBeUndefined();
 	});
 
 	test("rejects a file whose first parseable entry is not a session header (pi's own rule)", () => {
@@ -410,5 +434,108 @@ describe("extractSession", () => {
 			{ text: "terminal failure partial", role: "assistant", timestamp: 100, messageIndex: 0 },
 			{ text: "try again", role: "user", timestamp: 200, messageIndex: 1 },
 		]);
+	});
+});
+
+describe("locateEntry", () => {
+	const jsonl = [
+		header(),
+		line({
+			type: "message",
+			id: "u1",
+			parentId: null,
+			message: { role: "user", content: "fix the flaky test", timestamp: 100 },
+		}),
+		line({
+			type: "message",
+			id: "a1",
+			parentId: "u1",
+			message: {
+				role: "assistant",
+				timestamp: 200,
+				content: [
+					{ type: "text", text: "Running it." },
+					{ type: "toolCall", id: "t1", name: "bash", arguments: {} },
+				],
+			},
+		}),
+		line({
+			type: "message",
+			id: "r1",
+			parentId: "a1",
+			message: { role: "toolResult", toolCallId: "t1", content: [], timestamp: 300 },
+		}),
+		line({ type: "usage", id: "x1", parentId: "r1", kind: "warm", usage: {} }),
+		line({
+			type: "message",
+			id: "off",
+			parentId: "u1",
+			message: {
+				role: "assistant",
+				timestamp: 250,
+				content: [{ type: "text", text: "Abandoned." }],
+			},
+		}),
+		line({
+			type: "message",
+			id: "a2",
+			parentId: "x1",
+			message: { role: "assistant", timestamp: 400, content: [{ type: "text", text: "Done." }] },
+		}),
+		line({
+			type: "message",
+			id: "a3",
+			parentId: "a2",
+			message: {
+				role: "assistant",
+				timestamp: 500,
+				content: [
+					{ type: "thinking", thinking: "Lint next." },
+					{ type: "toolCall", id: "t2", name: "bash", arguments: {} },
+					{ type: "toolCall", id: "t3", name: "read", arguments: {} },
+				],
+			},
+		}),
+	].join("\n");
+
+	test("maps a shown entry to its display index and text", () => {
+		expect(locateEntry(jsonl, "u1")).toEqual({
+			messageIndex: 0,
+			anchorText: "fix the flaky test",
+			entryId: "u1",
+			exact: true,
+		});
+		expect(locateEntry(jsonl, "a1")).toMatchObject({ messageIndex: 1, anchorText: "Running it." });
+		expect(locateEntry(jsonl, "a2")).toMatchObject({ messageIndex: 3, exact: true });
+		expect(locateEntry(jsonl, "a1")).not.toHaveProperty("toolCallId");
+	});
+
+	test("names the tool call of a message without text", () => {
+		expect(locateEntry(jsonl, "a3")).toEqual({
+			messageIndex: 4,
+			anchorText: "",
+			entryId: "a3",
+			exact: true,
+			toolCallId: "t2",
+		});
+		expect(locateEntry(jsonl, "r1")).toEqual({
+			messageIndex: 2,
+			anchorText: "",
+			entryId: "r1",
+			exact: true,
+			toolCallId: "t1",
+		});
+	});
+
+	test("falls back to the nearest shown ancestor, and to nothing for an unknown entry", () => {
+		expect(locateEntry(jsonl, "x1")).toMatchObject({
+			entryId: "r1",
+			messageIndex: 2,
+			exact: false,
+			toolCallId: "t1",
+		});
+		expect(locateEntry(jsonl, "off")).toMatchObject({ entryId: "u1", exact: false });
+		expect(locateEntry(jsonl, "missing")).toBeNull();
+		expect(locateEntry("not a session", "u1")).toBeNull();
 	});
 });

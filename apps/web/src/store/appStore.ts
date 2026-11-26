@@ -3,6 +3,7 @@ import type {
 	AppSurvey,
 	ChatContinuation,
 	ComposerGrowthLimit,
+	ExtensionCatalogEntry,
 	ExtUiRequest,
 	FontChoice,
 	GitDiffScope,
@@ -63,14 +64,17 @@ import {
 	isControlMessage,
 	isLineWidth,
 	isLocalePreference,
+	isPullRequestFilter,
 	isQuestionPanelHeight,
 	isSettleIdleDays,
 	isSubagentCompletionMessage,
 	isSubagentMaxConcurrent,
 	isTerminalWindowsShell,
 	isTodoReviewFixMessage,
+	type KeybindingOverrides,
 	normalizeFontSettings,
 	normalizeThemePreference,
+	type PullRequestFilter,
 	readToolResponseMessage,
 	sameModel,
 } from "@thinkrail/contracts";
@@ -156,6 +160,8 @@ import {
 	supportsWorkspaceSettling,
 } from "./selectors";
 
+export type ExtensionCatalogRead = ExtensionCatalogEntry[] | "loading" | "failed";
+
 export interface FileTab {
 	kind: "file";
 	id: string;
@@ -181,9 +187,13 @@ export interface FileClipboard {
 	cut?: true;
 }
 
+export type ArtifactsView = "outputs" | "smart" | "list" | "tree";
+
 export interface ArtifactsPreferences {
 	seen: Record<string, number>;
 	showIgnored: boolean;
+	view: ArtifactsView | null;
+	treeExpanded: Record<string, readonly string[]>;
 }
 export interface ChatTab {
 	kind: "chat";
@@ -276,7 +286,17 @@ export interface PlanTab {
 	name: string;
 	sessionId: string;
 }
-export type EditorTab = FileTab | ChatTab | DocTab | DiffTab | ChangesTab | PlanTab;
+export interface ExtensionTab {
+	kind: "extension";
+	id: string;
+	workspaceId: string;
+	name: string;
+	extension: string;
+	panel: string;
+	titleKey: string;
+	params: Readonly<Record<string, string>>;
+}
+export type EditorTab = FileTab | ChatTab | DocTab | DiffTab | ChangesTab | PlanTab | ExtensionTab;
 
 export function chatTabId(workspaceId: string, sessionId: string): string {
 	return tupleKey("chat", workspaceId, sessionId);
@@ -348,6 +368,7 @@ export interface LocalLayoutStatePayload {
 	documentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
 	attentionByWorkspace: Record<string, LayoutAttention>;
 	preferences: LocalLayoutPreferences;
+	panelsToRestore?: readonly LayoutAuxiliaryRegion[];
 }
 
 export interface CenterNavigationStamp {
@@ -370,12 +391,15 @@ export interface ComposerFocusRequest {
 	dismissHistory?: true;
 }
 
+export type TabOpenFocus = "content" | "none";
+
 export interface LayoutOpenOptions {
 	targetGroupId?: string;
 	activate?: boolean;
 	navigation?: CenterNavigationStamp | null;
 	countNavigation?: boolean;
 	claimPreview?: boolean;
+	focus?: TabOpenFocus;
 }
 
 export type LayoutIntent =
@@ -390,6 +414,7 @@ export type LayoutIntent =
 			claimPreview?: boolean;
 			navigation?: CenterNavigationStamp | null;
 			countNavigation?: boolean;
+			focus?: TabOpenFocus;
 	  }
 	| { id: string; kind: "close"; workspaceId: string; tabId: string }
 	| {
@@ -404,7 +429,7 @@ export type LayoutIntent =
 			navigation?: CenterNavigationStamp | null;
 			countNavigation?: boolean;
 	  }
-	| { id: string; kind: "reveal-tool"; workspaceId: string; tool: LayoutToolId }
+	| { id: string; kind: "reveal-tool"; workspaceId: string; tool: LayoutToolId; focus?: false }
 	| { id: string; kind: "remove-session"; workspaceId: string; sessionId: string }
 	| {
 			id: string;
@@ -422,7 +447,9 @@ export type LayoutIntent =
 	| { id: string; kind: "close-terminal"; workspaceId: string; tabKey: string }
 	| { id: string; kind: "select-terminal"; workspaceId: string; tabKey: string }
 	| { id: string; kind: "toggle-side"; workspaceId: string; side: "left" | "right" }
-	| { id: string; kind: "toggle-bottom"; workspaceId: string };
+	| { id: string; kind: "toggle-bottom"; workspaceId: string }
+	| { id: string; kind: "toggle-all-panels"; workspaceId: string }
+	| { id: string; kind: "hide-all-panels"; workspaceId: string };
 export type LayoutIntentInput = LayoutIntent extends infer Intent
 	? Intent extends { id: string }
 		? Omit<Intent, "id">
@@ -451,8 +478,27 @@ export const SettingsSection = {
 	Extensions: "extensions",
 	Environment: "environment",
 	Voice: "voice",
+	Artifacts: "artifacts",
+	Subagents: "subagents",
+	Text: "text",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
+
+export const RETIRED_SETTINGS_SECTIONS: Readonly<
+	Partial<Record<SettingsSection, SettingsSection>>
+> = {
+	[SettingsSection.Artifacts]: SettingsSection.Layout,
+	[SettingsSection.LineWidth]: SettingsSection.Text,
+	[SettingsSection.Review]: SettingsSection.Models,
+};
+
+export const CLIENT_PREFERENCE_DEFAULTS = {
+	doubleShiftSearch: true,
+	markdownOutlineSide: "right",
+} as const satisfies {
+	doubleShiftSearch: boolean;
+	markdownOutlineSide: MarkdownOutlineSide;
+};
 
 export interface CreationChatHandoff {
 	workspaceId: string;
@@ -499,7 +545,39 @@ export interface ChatLocationRequest {
 	sessionId: string;
 	messageIndex: number;
 	anchorText: string;
+	/** Reveal this tool call's row; the message is the fallback when the chat does not show it. */
+	toolCallId?: string;
+	/** The message is the nearest shown ancestor of the requested entry; the chat says so. */
+	approximate?: boolean;
+	/** Reveal and highlight in place, leaving focus where it is. */
+	focus?: false;
 	navigation?: CenterNavigationStamp | null;
+}
+
+export interface ChatPanePanel {
+	readonly extension: string;
+	readonly panel: string;
+	readonly params: Readonly<Record<string, string>>;
+}
+
+export interface ChatPane extends ChatPanePanel {
+	readonly open: boolean;
+	/** The pane's share of the chat's tab, in percent; `null` until it first lays out. */
+	readonly width: number | null;
+}
+
+/** A panel's saved view; `epoch` counts the times another placement handed it over (`transferPanelViewState`). */
+export interface PanelViewEntry {
+	readonly state: unknown;
+	readonly epoch: number;
+}
+
+export function chatPaneViewKey(sessionId: string, extension: string, panel: string): string {
+	return tupleKey("chat-pane", sessionId, extension, panel);
+}
+
+function chatPaneViewPrefix(sessionId: string): string {
+	return tupleKey("chat-pane", sessionId);
 }
 
 export interface PendingMarkUnread {
@@ -545,6 +623,7 @@ export interface SessionRuntime {
 	composerEdit: ComposerEdit | null;
 	promptImages: PromptImagesState;
 	readingAnchor: ChatReadingAnchor | null;
+	composerFocusWonOver: string | null;
 	pendingExtUi: ExtUiDialogRequest | null;
 	extUiQueue: ExtUiDialogRequest[];
 	extUiStatus: Record<string, string>;
@@ -580,6 +659,7 @@ function newRuntime(
 		composerEdit: null,
 		promptImages: newPromptImagesState(),
 		readingAnchor: null,
+		composerFocusWonOver: null,
 		pendingExtUi: null,
 		extUiQueue: [],
 		extUiStatus: {},
@@ -1112,6 +1192,8 @@ interface AppState {
 	layoutDocumentsByWorkspace: Record<string, WorkspaceLayoutDocument>;
 	layoutAttentionByWorkspace: Record<string, LayoutAttention>;
 	layoutProjectionEpoch: number;
+	/** The panes `view.toggleAllPanels` hid and brings back next; runtime only, never persisted. */
+	panelsToRestore: readonly LayoutAuxiliaryRegion[];
 	layoutIntents: LayoutIntent[];
 	tabsByWorkspace: Record<string, EditorTab[]>;
 	activeTabByWorkspace: Record<string, string | null>;
@@ -1144,6 +1226,7 @@ interface AppState {
 	templatesVersion: number;
 	/** Bumped on `packages.changed`; the Extensions page re-lists installed pi packages when it moves. */
 	packagesVersion: number;
+	extensionCatalog: ExtensionCatalogRead;
 	modelsRefreshing: boolean;
 	modelsFresh: boolean;
 	changesRequest: {
@@ -1165,6 +1248,8 @@ interface AppState {
 	artifactsTickByWorkspace: Record<string, number>;
 	artifactsSeenByWorkspace: Record<string, number>;
 	artifactsShowIgnored: boolean;
+	artifactsView: ArtifactsView | null;
+	artifactsTreeExpandedByWorkspace: Record<string, readonly string[]>;
 	reviewsByWorkspace: Record<string, ReviewSnapshot>;
 	reviewFocusRequest: {
 		workspaceId: string;
@@ -1180,6 +1265,7 @@ interface AppState {
 	unheldLoginFrame: LoginPush | null;
 	settingsOpen: boolean;
 	settingsSection: SettingsSection;
+	settingsTarget: string | null;
 	surveyInvitationOpen: boolean;
 	surveyWindowOpen: boolean;
 	inAppSurvey: AppSurvey | null;
@@ -1195,6 +1281,7 @@ interface AppState {
 	analyticsConsentConfirmed: boolean;
 	notificationsEnabled: boolean;
 	subagentsEnabled: boolean;
+	disabledSubagents: string[];
 	subagentMaxConcurrent: number;
 	settleIdleDays: number | null;
 	jbcentralQuotaEnabled: boolean;
@@ -1221,6 +1308,8 @@ interface AppState {
 	agentReviewEnabled: boolean;
 	disabledExtensions: string[];
 	extensionSettings: ExtensionSettingValues;
+	keybindingOverrides: KeybindingOverrides;
+	pullRequestFilters: Record<string, PullRequestFilter>;
 	otherAgentSkills: boolean;
 	disabledPackages: string[];
 	locale: string;
@@ -1285,6 +1374,7 @@ interface AppState {
 		options?: { dismissHistory?: boolean },
 	) => void;
 	clearComposerFocusRequest: () => void;
+	serveComposerFocusRequest: (sessionId: string, waitingToolCallId: string | null) => void;
 	hydrateLocalLayoutState: (payload: LocalLayoutStatePayload) => void;
 	applyLocalLayoutState: (payload: LocalLayoutStatePayload, invalidateProjection?: boolean) => void;
 	setLocalLayoutPreferences: (preferences: LocalLayoutPreferences) => void;
@@ -1301,7 +1391,7 @@ interface AppState {
 		syncLayout?: boolean,
 		options?: LayoutOpenOptions,
 	) => void;
-	openDoc: (tab: DocTab | PlanTab) => void;
+	openDoc: (tab: DocTab | PlanTab | ExtensionTab) => void;
 	closeTab: (
 		id: string,
 		syncLayout?: boolean,
@@ -1407,6 +1497,16 @@ interface AppState {
 	setChangesLayout: (layout: ChangesLayout) => void;
 	diffScopeByWorkspace: Record<string, GitDiffScope>;
 	setDiffScope: (workspaceId: string, scope: GitDiffScope) => void;
+	chatPanesByWorkspace: Record<string, Record<string, ChatPane>>;
+	openChatPane: (workspaceId: string, sessionId: string, panel: ChatPanePanel) => void;
+	closeChatPane: (workspaceId: string, sessionId: string) => void;
+	setChatPaneWidth: (workspaceId: string, sessionId: string, width: number) => void;
+	panelViewStatesByWorkspace: Record<string, Record<string, PanelViewEntry>>;
+	savePanelViewState: (workspaceId: string, key: string, state: unknown) => void;
+	/** Saves a view another placement hands over and bumps its epoch, so a mounted panel remounts on it. */
+	transferPanelViewState: (workspaceId: string, key: string, state: unknown) => void;
+	/** Forgets a closed tab's view, epoch included, whether or not the tab had a cache. */
+	dropPanelViewState: (workspaceId: string, key: string) => void;
 	noteFsChanged: (payload: WorkspaceFsChangedPayload) => void;
 	turnsByWorkspace: Record<string, TurnChangeSet[]>;
 	setWorkspaceTurns: (
@@ -1530,6 +1630,7 @@ interface AppState {
 	installProviderStatus: (version: number, report: ProviderStatusReport | null) => void;
 	bumpTemplatesVersion: () => void;
 	bumpPackagesVersion: () => void;
+	installExtensionCatalog: (catalog: ExtensionCatalogEntry[] | "failed") => void;
 	beginModelsRefresh: () => number;
 	finishModelsRefresh: (providerVersion: number, result: RefreshedModels | null) => void;
 	dropModelsFreshness: () => void;
@@ -1561,9 +1662,10 @@ interface AppState {
 	clearLoginInput: () => void;
 	clearLogin: (loginId?: string) => void;
 	clearSettledLogin: (providerId: string) => void;
-	openSettings: (section?: SettingsSection) => void;
+	openSettings: (section?: SettingsSection, settingId?: string) => void;
 	closeSettings: () => void;
 	setSettingsSection: (section: SettingsSection) => void;
+	consumeSettingsTarget: () => string | null;
 	showSurveyInvitation: () => void;
 	hideSurveyInvitation: () => void;
 	openSurveyWindow: () => void;
@@ -1595,6 +1697,13 @@ interface AppState {
 	noteArtifactsChanged: (workspaceId: string) => void;
 	markArtifactsSeen: (workspaceId: string, watermark: number) => void;
 	setArtifactsShowIgnored: (show: boolean) => void;
+	setArtifactsView: (view: ArtifactsView) => void;
+	setArtifactsTreeExpanded: (
+		workspaceId: string,
+		paths: readonly string[],
+		expanded: boolean,
+	) => void;
+	collapseAllArtifacts: (workspaceId: string) => void;
 	hydrateArtifactsPreferences: (preferences: ArtifactsPreferences) => void;
 	setWorkspaceReview: (workspaceId: string, snapshot: ReviewSnapshot) => void;
 	requestReviewFocus: (workspaceId: string, commentId: string, surface: ReviewFocusSurface) => void;
@@ -1636,6 +1745,7 @@ function configPatch(config: AppConfig) {
 				? config.notificationsEnabled
 				: DEFAULT_CONFIG.notificationsEnabled,
 		subagentsEnabled: config.subagentsEnabled ?? DEFAULT_CONFIG.subagentsEnabled,
+		disabledSubagents: config.disabledSubagents ?? [],
 		subagentMaxConcurrent: isSubagentMaxConcurrent(config.subagentMaxConcurrent)
 			? config.subagentMaxConcurrent
 			: DEFAULT_CONFIG.subagentMaxConcurrent,
@@ -1687,6 +1797,17 @@ function configPatch(config: AppConfig) {
 			config.extensionSettings && typeof config.extensionSettings === "object"
 				? config.extensionSettings
 				: DEFAULT_CONFIG.extensionSettings,
+		keybindingOverrides:
+			config.keybindings &&
+			typeof config.keybindings === "object" &&
+			!Array.isArray(config.keybindings)
+				? config.keybindings
+				: DEFAULT_CONFIG.keybindings,
+		pullRequestFilters: Object.fromEntries(
+			Object.entries(config.pullRequestFilters ?? {}).filter((entry) =>
+				isPullRequestFilter(entry[1]),
+			),
+		),
 		otherAgentSkills: typeof config.otherAgentSkills === "boolean" ? config.otherAgentSkills : true,
 		disabledPackages: Array.isArray(config.disabledPackages)
 			? config.disabledPackages
@@ -1864,6 +1985,41 @@ function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
 	return rest;
 }
 
+function patchChatPane(
+	state: Pick<AppState, "chatPanesByWorkspace">,
+	workspaceId: string,
+	sessionId: string,
+	pane: ChatPane,
+): Pick<AppState, "chatPanesByWorkspace"> {
+	return {
+		chatPanesByWorkspace: {
+			...state.chatPanesByWorkspace,
+			[workspaceId]: { ...state.chatPanesByWorkspace[workspaceId], [sessionId]: pane },
+		},
+	};
+}
+
+/** A panel view's owner is still there: a tab of that identity in the workspace's view, or a live chat's pane. */
+function panelViewOwned(s: AppState, workspaceId: string, key: string): boolean {
+	if (selectLayoutIdentityPlacement(s, workspaceId, key) !== null) return true;
+	return Object.keys(s.chatPanesByWorkspace[workspaceId] ?? {}).some(
+		(sessionId) =>
+			key.startsWith(chatPaneViewPrefix(sessionId)) && !isSessionDeleted(s, workspaceId, sessionId),
+	);
+}
+
+function withoutPanelViewStates(
+	states: AppState["panelViewStatesByWorkspace"],
+	workspaceId: string,
+	drop: (key: string) => boolean,
+): AppState["panelViewStatesByWorkspace"] {
+	const current = states[workspaceId];
+	if (!current) return states;
+	const kept = Object.entries(current).filter(([key]) => !drop(key));
+	if (kept.length === Object.keys(current).length) return states;
+	return { ...states, [workspaceId]: Object.fromEntries(kept) };
+}
+
 function appendLayoutIntent(intents: LayoutIntent[], input: LayoutIntentInput): LayoutIntent[] {
 	return [...intents, { ...input, id: randomId("layout-intent") }];
 }
@@ -1875,6 +2031,7 @@ function layoutOpenIntentFields(options: LayoutOpenOptions) {
 		...(Object.hasOwn(options, "navigation") ? { navigation: options.navigation } : {}),
 		...(options.countNavigation !== undefined ? { countNavigation: options.countNavigation } : {}),
 		...(options.claimPreview ? { claimPreview: true } : {}),
+		...(options.focus ? { focus: options.focus } : {}),
 	};
 }
 
@@ -2132,6 +2289,11 @@ function withoutChat(
 	const hasRenderedCompletion = Object.hasOwn(s.renderedCompletionBySession, sessionId);
 	const isObscured = Boolean(s.obscuredChatSessions[sessionId]);
 	const hasSkillBaseline = Object.hasOwn(s.skillsSyncedTickBySession, sessionId);
+	const hasChatPane = s.chatPanesByWorkspace[workspaceId]?.[sessionId] !== undefined;
+	const paneViewPrefix = chatPaneViewPrefix(sessionId);
+	const panelViewStates = withoutPanelViewStates(s.panelViewStatesByWorkspace, workspaceId, (key) =>
+		key.startsWith(paneViewPrefix),
+	);
 	const targetsLocation =
 		s.chatLocationRequest?.workspaceId === workspaceId &&
 		s.chatLocationRequest.sessionId === sessionId;
@@ -2152,6 +2314,8 @@ function withoutChat(
 		!hasRenderedCompletion &&
 		!isObscured &&
 		!hasSkillBaseline &&
+		!hasChatPane &&
+		panelViewStates === s.panelViewStatesByWorkspace &&
 		!targetsLocation &&
 		!targetsRoute &&
 		!targetsHistory &&
@@ -2240,6 +2404,15 @@ function withoutChat(
 		...(hasSkillBaseline
 			? { skillsSyncedTickBySession: omitKey(s.skillsSyncedTickBySession, sessionId) }
 			: {}),
+		...(hasChatPane
+			? {
+					chatPanesByWorkspace: {
+						...s.chatPanesByWorkspace,
+						[workspaceId]: omitKey(s.chatPanesByWorkspace[workspaceId] ?? {}, sessionId),
+					},
+				}
+			: {}),
+		panelViewStatesByWorkspace: panelViewStates,
 		...(targetsLocation ? { chatLocationRequest: null } : {}),
 		...(targetsRoute ? { routeChatTarget: null } : {}),
 		...(targetsHistory ? { historyOpenRequest: null } : {}),
@@ -2422,6 +2595,15 @@ function withRuntime(
 	return next === rt ? {} : { sessions: { ...s.sessions, [sessionId]: next } };
 }
 
+function loginWorkspaceRemoved(
+	state: Pick<AppState, "removedWorkspaceIds">,
+	target: LoginPush["target"] | undefined,
+): boolean {
+	return (
+		target?.workspaceId !== undefined && state.removedWorkspaceIds[target.workspaceId] === true
+	);
+}
+
 function newLoginState(
 	loginId: string,
 	providerId: string,
@@ -2515,6 +2697,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	layoutDocumentsByWorkspace: {},
 	layoutAttentionByWorkspace: {},
 	layoutProjectionEpoch: 0,
+	panelsToRestore: [],
 	layoutIntents: [],
 	tabsByWorkspace: {},
 	activeTabByWorkspace: {},
@@ -2546,6 +2729,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	providerStatus: { version: -1, report: null, failed: false },
 	templatesVersion: 0,
 	packagesVersion: 0,
+	extensionCatalog: "loading",
 	modelsRefreshing: false,
 	modelsFresh: false,
 	changesRequest: null,
@@ -2555,6 +2739,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	artifactsTickByWorkspace: {},
 	artifactsSeenByWorkspace: {},
 	artifactsShowIgnored: true,
+	artifactsView: null,
+	artifactsTreeExpandedByWorkspace: {},
 	reviewsByWorkspace: {},
 	reviewFocusRequest: null,
 	changesView: "tree",
@@ -2563,6 +2749,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	filesTreeByWorkspace: {},
 	changesLayout: "stacked",
 	diffScopeByWorkspace: {},
+	chatPanesByWorkspace: {},
+	panelViewStatesByWorkspace: {},
 	chatLocationRequest: null,
 	historyOpenRequest: null,
 	fsChangesByWorkspace: {},
@@ -2574,6 +2762,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	unheldLoginFrame: null,
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
+	settingsTarget: null,
 	surveyInvitationOpen: false,
 	surveyWindowOpen: false,
 	inAppSurvey: null,
@@ -2581,7 +2770,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	searchOpen: false,
 	searchSession: 0,
 	shortcutsOpen: false,
-	doubleShiftSearch: true,
+	doubleShiftSearch: CLIENT_PREFERENCE_DEFAULTS.doubleShiftSearch,
 	theme: DEFAULT_CONFIG.theme,
 	themeMode: DEFAULT_CONFIG.themeMode,
 	systemThemePair: DEFAULT_CONFIG.systemThemePair,
@@ -2589,6 +2778,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	analyticsConsentConfirmed: DEFAULT_CONFIG.analyticsConsentConfirmed,
 	notificationsEnabled: DEFAULT_CONFIG.notificationsEnabled,
 	subagentsEnabled: DEFAULT_CONFIG.subagentsEnabled,
+	disabledSubagents: DEFAULT_CONFIG.disabledSubagents,
 	subagentMaxConcurrent: DEFAULT_CONFIG.subagentMaxConcurrent,
 	settleIdleDays: DEFAULT_CONFIG.settleIdleDays,
 	jbcentralQuotaEnabled: DEFAULT_CONFIG.jbcentralQuotaEnabled,
@@ -2604,7 +2794,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	voiceInputEnabled: DEFAULT_CONFIG.voiceInputEnabled,
 	chatMessageOrder: "oldest-first",
 	markdownOutlineVisible: null,
-	markdownOutlineSide: "right",
+	markdownOutlineSide: CLIENT_PREFERENCE_DEFAULTS.markdownOutlineSide,
 	customLayoutPresets: DEFAULT_CONFIG.customLayoutPresets,
 	defaultModel: DEFAULT_CONFIG.defaultModel,
 	defaultEffort: DEFAULT_CONFIG.defaultEffort,
@@ -2616,6 +2806,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	agentReviewEnabled: DEFAULT_CONFIG.agentReviewEnabled,
 	disabledExtensions: DEFAULT_CONFIG.disabledExtensions,
 	extensionSettings: DEFAULT_CONFIG.extensionSettings,
+	keybindingOverrides: DEFAULT_CONFIG.keybindings,
+	pullRequestFilters: DEFAULT_CONFIG.pullRequestFilters,
 	otherAgentSkills: DEFAULT_CONFIG.otherAgentSkills,
 	disabledPackages: DEFAULT_CONFIG.disabledPackages,
 	locale: DEFAULT_CONFIG.locale,
@@ -2834,6 +3026,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 				...pruneExpandedProjects(state, openProjects),
 				welcomeGeneration: state.welcomeGeneration + 1,
 				providerStatusVersion: state.providerStatusVersion + 1,
+				...(state.welcomeProtocolVersion === protocolVersion
+					? {}
+					: { extensionCatalog: "loading" as const }),
 			};
 		}),
 	applyHostUpdate: (hostUpdate) => set({ hostUpdate }),
@@ -2943,7 +3138,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 				artifactsByWorkspace: omitKey(state.artifactsByWorkspace, workspaceId),
 				artifactsTickByWorkspace: omitKey(state.artifactsTickByWorkspace, workspaceId),
 				artifactsSeenByWorkspace: omitKey(state.artifactsSeenByWorkspace, workspaceId),
+				artifactsTreeExpandedByWorkspace: omitKey(
+					state.artifactsTreeExpandedByWorkspace,
+					workspaceId,
+				),
 				diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
+				chatPanesByWorkspace: omitKey(state.chatPanesByWorkspace, workspaceId),
+				panelViewStatesByWorkspace: omitKey(state.panelViewStatesByWorkspace, workspaceId),
 				filesTreeByWorkspace: omitKey(state.filesTreeByWorkspace, workspaceId),
 				fileClipboard:
 					state.fileClipboard?.workspaceId === workspaceId ? null : state.fileClipboard,
@@ -3066,6 +3267,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 		})),
 	clearComposerFocusRequest: () =>
 		set((state) => (state.composerFocusRequest ? { composerFocusRequest: null } : state)),
+	serveComposerFocusRequest: (sessionId, waitingToolCallId) =>
+		set((state) => ({
+			composerFocusRequest: null,
+			...withRuntime(state, sessionId, (rt) =>
+				rt.composerFocusWonOver === waitingToolCallId
+					? rt
+					: { ...rt, composerFocusWonOver: waitingToolCallId },
+			),
+		})),
 	hydrateLocalLayoutState: (payload) => {
 		set((state) =>
 			state.layoutStateReady
@@ -3088,6 +3298,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			layoutAttentionByWorkspace: payload.attentionByWorkspace,
 			localLayoutPreferences: payload.preferences,
 			layoutProjectionEpoch: state.layoutProjectionEpoch + (invalidateProjection ? 1 : 0),
+			panelsToRestore: payload.panelsToRestore ?? state.panelsToRestore,
 		}));
 	},
 	setLocalLayoutPreferences: (preferences) => set({ localLayoutPreferences: preferences }),
@@ -3287,9 +3498,20 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => {
 			const wsId = workspaceId ?? s.activeWorkspaceId;
 			if (!wsId || s.removedWorkspaceIds[wsId]) return {};
+			const closed = (s.tabsByWorkspace[wsId] ?? []).find((t) => t.id === id);
 			const tabs = (s.tabsByWorkspace[wsId] ?? []).filter((t) => t.id !== id);
 			const wasActive = s.activeTabByWorkspace[wsId] === id;
+			const viewKey = closed?.kind === "extension" ? editorResourceIdentity(closed) : null;
 			return {
+				...(viewKey !== null
+					? {
+							panelViewStatesByWorkspace: withoutPanelViewStates(
+								s.panelViewStatesByWorkspace,
+								wsId,
+								(key) => key === viewKey,
+							),
+						}
+					: {}),
 				...(syncLayout
 					? {
 							layoutIntents: appendLayoutIntent(s.layoutIntents, {
@@ -3574,6 +3796,70 @@ export const useAppStore = create<AppState>((set, get) => ({
 				? {}
 				: { diffScopeByWorkspace: { ...s.diffScopeByWorkspace, [workspaceId]: scope } },
 		),
+	openChatPane: (workspaceId, sessionId, { extension, panel, params }) =>
+		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
+			const width = s.chatPanesByWorkspace[workspaceId]?.[sessionId]?.width ?? null;
+			return patchChatPane(s, workspaceId, sessionId, {
+				extension,
+				panel,
+				params: { ...params },
+				open: true,
+				width,
+			});
+		}),
+	closeChatPane: (workspaceId, sessionId) =>
+		set((s) => {
+			const pane = s.chatPanesByWorkspace[workspaceId]?.[sessionId];
+			return pane?.open ? patchChatPane(s, workspaceId, sessionId, { ...pane, open: false }) : {};
+		}),
+	setChatPaneWidth: (workspaceId, sessionId, width) =>
+		set((s) => {
+			const pane = s.chatPanesByWorkspace[workspaceId]?.[sessionId];
+			return pane && pane.width !== width
+				? patchChatPane(s, workspaceId, sessionId, { ...pane, width })
+				: {};
+		}),
+	savePanelViewState: (workspaceId, key, state) =>
+		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId] || !panelViewOwned(s, workspaceId, key)) return {};
+			const current = s.panelViewStatesByWorkspace[workspaceId] ?? {};
+			const entry = current[key];
+			if (state === undefined && entry?.state === undefined) return {};
+			const epoch = entry?.epoch ?? 0;
+			return {
+				panelViewStatesByWorkspace: {
+					...s.panelViewStatesByWorkspace,
+					[workspaceId]:
+						state === undefined && epoch === 0
+							? omitKey(current, key)
+							: { ...current, [key]: { state, epoch } },
+				},
+			};
+		}),
+	transferPanelViewState: (workspaceId, key, state) =>
+		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
+			const current = s.panelViewStatesByWorkspace[workspaceId] ?? {};
+			const epoch = (current[key]?.epoch ?? 0) + 1;
+			return {
+				panelViewStatesByWorkspace: {
+					...s.panelViewStatesByWorkspace,
+					[workspaceId]: { ...current, [key]: { state, epoch } },
+				},
+			};
+		}),
+	dropPanelViewState: (workspaceId, key) =>
+		set((s) => {
+			const panelViewStatesByWorkspace = withoutPanelViewStates(
+				s.panelViewStatesByWorkspace,
+				workspaceId,
+				(candidate) => candidate === key,
+			);
+			return panelViewStatesByWorkspace === s.panelViewStatesByWorkspace
+				? {}
+				: { panelViewStatesByWorkspace };
+		}),
 	setWorkspaceTurns: (workspaceId, turns, baseline, connectionGeneration) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId] || !isConnectedGeneration(s, connectionGeneration)) {
@@ -4685,6 +4971,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		),
 	bumpTemplatesVersion: () => set((s) => ({ templatesVersion: s.templatesVersion + 1 })),
 	bumpPackagesVersion: () => set((s) => ({ packagesVersion: s.packagesVersion + 1 })),
+	installExtensionCatalog: (extensionCatalog) => set({ extensionCatalog }),
 	beginModelsRefresh: () => {
 		const providerVersion = get().providerVersion;
 		set({ modelsRefreshing: true });
@@ -4777,7 +5064,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	finishLoginStart: () => set({ loginStarting: false }),
 	beginLogin: (loginId, providerId, target, method) =>
 		set((s) => {
-			if (target && s.removedWorkspaceIds[target.workspaceId]) return {};
+			if (loginWorkspaceRemoved(s, target)) return {};
 			if (s.activeLogin?.loginId === loginId)
 				return method && !s.activeLogin.method ? { activeLogin: { ...s.activeLogin, method } } : {};
 			if (s.activeLogin?.status === "active") return {};
@@ -4793,7 +5080,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	applyLoginFrame: (push) =>
 		set((s) => {
-			if (push.target && s.removedWorkspaceIds[push.target.workspaceId]) return {};
+			if (loginWorkspaceRemoved(s, push.target)) return {};
 			const statusChanged =
 				push.frame.kind === "success" && !push.target
 					? { providerStatusVersion: s.providerStatusVersion + 1 }
@@ -4825,10 +5112,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 			if (!login || login.target || login.providerId !== providerId) return {};
 			return login.status === "active" ? {} : { activeLogin: null };
 		}),
-	openSettings: (section = SettingsSection.Providers) =>
-		set({ settingsOpen: true, settingsSection: section }),
-	closeSettings: () => set({ settingsOpen: false }),
+	openSettings: (section, settingId) =>
+		set((state) => ({
+			settingsOpen: true,
+			settingsSection: section ?? state.settingsSection,
+			settingsTarget: settingId ?? null,
+		})),
+	closeSettings: () => set({ settingsOpen: false, settingsTarget: null }),
 	setSettingsSection: (section) => set({ settingsSection: section }),
+	consumeSettingsTarget: () => {
+		const target = get().settingsTarget;
+		if (target !== null) set({ settingsTarget: null });
+		return target;
+	},
 	openNotificationPrompt: () =>
 		set((state) => (state.notificationPromptOpen ? state : { notificationPromptOpen: true })),
 	closeNotificationPrompt: () => set({ notificationPromptOpen: false }),
@@ -5011,10 +5307,41 @@ export const useAppStore = create<AppState>((set, get) => ({
 					},
 		),
 	setArtifactsShowIgnored: (artifactsShowIgnored) => set({ artifactsShowIgnored }),
-	hydrateArtifactsPreferences: ({ seen, showIgnored }) =>
+	setArtifactsView: (artifactsView) => set({ artifactsView }),
+	setArtifactsTreeExpanded: (workspaceId, paths, expanded) =>
+		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
+			const current = s.artifactsTreeExpandedByWorkspace[workspaceId] ?? [];
+			const next = withPathMembership(current, paths, expanded);
+			return next === current
+				? {}
+				: {
+						artifactsTreeExpandedByWorkspace: {
+							...s.artifactsTreeExpandedByWorkspace,
+							[workspaceId]: next,
+						},
+					};
+		}),
+	collapseAllArtifacts: (workspaceId) =>
+		set((s) =>
+			s.artifactsTreeExpandedByWorkspace[workspaceId]?.length
+				? {
+						artifactsTreeExpandedByWorkspace: omitKey(
+							s.artifactsTreeExpandedByWorkspace,
+							workspaceId,
+						),
+					}
+				: {},
+		),
+	hydrateArtifactsPreferences: ({ seen, showIgnored, view, treeExpanded }) =>
 		set((s) => ({
 			artifactsSeenByWorkspace: { ...seen, ...s.artifactsSeenByWorkspace },
 			artifactsShowIgnored: showIgnored,
+			artifactsView: view,
+			artifactsTreeExpandedByWorkspace: {
+				...treeExpanded,
+				...s.artifactsTreeExpandedByWorkspace,
+			},
 		})),
 	requestReviewFocus: (workspaceId, commentId, surface) =>
 		set((state) =>

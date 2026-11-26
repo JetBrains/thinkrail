@@ -134,7 +134,7 @@ export function createVisualizeExtension(
 				const text = saved ? `${markdown}\n\nSaved to \`${saved}\`.` : markdown;
 				return {
 					content: [{ type: "text", text }],
-					details: params,
+					details: saved ? { ...params, savedPath: saved } : params,
 				};
 			},
 			renderCall: renderVisualizeCall,

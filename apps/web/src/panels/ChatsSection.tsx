@@ -24,15 +24,17 @@ import {
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
+import { useTreeItem } from "@thinkrail/ui/tree-item";
 import { cn } from "@thinkrail/ui/utils";
 import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
-import { chatLabel, copyText } from "@/lib";
+import { type ChatAction, chatLabel, copyText } from "@/lib";
 import {
 	selectChatsContainer,
 	selectChatWorkspaceFirstPrompt,
+	selectChatWorkspaceSession,
 	selectChatWorkspaces,
 	selectChatWorkspaceTitle,
 	selectWorkspaceIsRunning,
@@ -55,7 +57,7 @@ import {
 	Tree,
 	treeRowControlProps,
 	treeRowKey,
-	useTreeItem,
+	useTreeKeys,
 } from "./treeNavigation";
 import {
 	loadProjectWorkspaces,
@@ -69,7 +71,13 @@ import {
 const HOVER_CONTROL_CLASS =
 	"shrink-0 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100";
 
-export function ChatsSection() {
+const NO_CHAT_ACTIONS: readonly ChatAction[] = [];
+
+export function ChatsSection({
+	chatActions = NO_CHAT_ACTIONS,
+}: {
+	chatActions?: readonly ChatAction[] | undefined;
+}) {
 	const t = useT();
 	const container = useAppStore(selectChatsContainer);
 	const supported = useAppStore((s) => supportsProjectlessChats(s.protocolVersion));
@@ -136,6 +144,7 @@ export function ChatsSection() {
 									: null
 							}
 							editors={editors}
+							chatActions={chatActions}
 						/>
 					))}
 				</Tree>
@@ -152,6 +161,7 @@ function ChatRow({
 	isRunning,
 	readAction,
 	editors,
+	chatActions,
 }: {
 	workspace: Workspace;
 	title: string | null;
@@ -160,9 +170,12 @@ function ChatRow({
 	isRunning: boolean;
 	readAction: WorkspaceReadAction | null;
 	editors: EditorInfo[];
+	chatActions: readonly ChatAction[];
 }) {
 	const t = useT();
+	const treeKeys = useTreeKeys();
 	const firstPrompt = useAppStore((s) => selectChatWorkspaceFirstPrompt(s, workspace.id));
+	const sessionId = useAppStore((s) => selectChatWorkspaceSession(s, workspace.id));
 	const label = chatLabel(t, title, firstPrompt);
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [confirming, setConfirming] = useState(false);
@@ -209,7 +222,7 @@ function ChatRow({
 						if (!pending) useAppStore.getState().activateWorkspace(workspace);
 					}}
 					onKeyDown={(event) => {
-						const key = treeRowKey(event);
+						const key = treeRowKey(event.nativeEvent, treeKeys);
 						if (key === "menu") setMenuOpen(true);
 						else if (key === "delete" && pending) void deleteProjectlessChat(workspace.id);
 						else if (key === "delete") setConfirming(true);
@@ -297,6 +310,19 @@ function ChatRow({
 									<FolderOpen />
 									{t("panels.projectTree.reveal")}
 								</DropdownMenuItem>
+								{sessionId
+									? chatActions.map(({ id, menuLabel, icon: Icon, run }) => (
+											<DropdownMenuItem
+												key={id}
+												data-testid="chat-row-action"
+												data-action={id}
+												onSelect={() => run({ workspaceId: workspace.id, sessionId })}
+											>
+												<Icon />
+												{menuLabel}
+											</DropdownMenuItem>
+										))
+									: null}
 								{readAction === "markRead" ? (
 									<DropdownMenuItem onSelect={() => markWorkspaceRead(workspace.id)}>
 										<MailOpen />

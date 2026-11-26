@@ -1,25 +1,32 @@
 import {
 	RiFileTextLine as FileText,
 	RiMagicLine as MagicWand,
-	RiPencilLine as Pencil,
 	RiAddLine as Plus,
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import type { TemplateInfo, TemplateScope } from "@thinkrail/contracts";
-import { T, t as translate, useT } from "@thinkrail/locales/react";
+import { t as translate, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
-import { PopoverTrigger } from "@thinkrail/ui/popover";
 import { SkeletonRows } from "@thinkrail/ui/skeleton";
-import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useEffect, useState } from "react";
 import { TemplateEditorDialog } from "@/chat/TemplateEditorDialog";
 import { assembleTemplate } from "@/prompt";
+import {
+	SETTINGS_LIST_PRIMARY,
+	SETTINGS_LIST_ROW,
+	SettingsGroup,
+	type SettingsGroupAction,
+	SettingsLine,
+	SettingsList,
+	SettingsNotice,
+	SettingsPage,
+	useSettingsListRow,
+} from "@/settingsKit";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
-import { ConfirmPopover } from "./ConfirmPopover";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { openFileInTab } from "./openTabs";
-import { SettingsPageContainer } from "./SettingsGroup";
-import { SettingsNotice } from "./SettingsNotice";
+import { SETTING } from "./settingsCatalog";
 
 interface StarterTemplate {
 	name: string;
@@ -70,33 +77,45 @@ const STARTER_TEMPLATES: readonly StarterTemplate[] = [
 	),
 ];
 
+export function splitTemplates(templates: readonly TemplateInfo[]): {
+	project: TemplateInfo[];
+	global: TemplateInfo[];
+} {
+	return {
+		project: templates.filter((template) => template.scope === "project"),
+		global: templates.filter((template) => template.scope === "global"),
+	};
+}
+
 function useTemplateList(
 	workspaceId: string | undefined,
-	scope: TemplateScope,
-	enabled: boolean,
+	attempt: number,
 ): { templates: TemplateInfo[] | null; failed: boolean } {
 	const templatesVersion = useAppStore((s) => s.templatesVersion);
-	const [fetched, setFetched] = useState<{ version: number; templates: TemplateInfo[] } | null>(
-		null,
-	);
+	const [fetched, setFetched] = useState<{
+		key: string;
+		templates: TemplateInfo[];
+	} | null>(null);
 	const [failed, setFailed] = useState(false);
+	const key = `${workspaceId ?? ""}\0${templatesVersion}`;
 
 	useEffect(() => {
-		if (!enabled) {
-			setFetched(null);
-			setFailed(false);
-			return;
-		}
 		let cancelled = false;
-		getTransport()
-			.request("template.list", workspaceId ? { workspaceId } : {})
-			.then((res) => {
+		setFailed(false);
+		const list = (params: { workspaceId?: string }) =>
+			getTransport()
+				.request("template.list", params)
+				.then((res) => res.templates);
+		Promise.all([list({}), workspaceId ? list({ workspaceId }) : Promise.resolve([])])
+			.then(([global, project]) => {
 				if (cancelled) return;
 				setFetched({
-					version: templatesVersion,
-					templates: res.templates.filter((template) => template.scope === scope),
+					key,
+					templates: [
+						...project.filter((template) => template.scope === "project"),
+						...global.filter((template) => template.scope === "global"),
+					],
 				});
-				setFailed(false);
 			})
 			.catch(() => {
 				if (!cancelled) setFailed(true);
@@ -104,161 +123,23 @@ function useTemplateList(
 		return () => {
 			cancelled = true;
 		};
-	}, [enabled, workspaceId, scope, templatesVersion]);
+	}, [workspaceId, key, attempt]);
 
-	return {
-		templates: fetched?.version === templatesVersion ? fetched.templates : null,
-		failed,
-	};
+	return { templates: fetched?.key === key ? fetched.templates : null, failed };
 }
 
-export function TemplatesSettings() {
-	const t = useT();
-	const workspaceId = useAppStore((s) => s.activeWorkspaceId);
-	const [editorOpen, setEditorOpen] = useState(false);
-	const [editing, setEditing] = useState<TemplateInfo | null>(null);
-	const [newScope, setNewScope] = useState<TemplateScope>("global");
-
-	const { templates: globalTemplates, failed: globalFailed } = useTemplateList(
-		undefined,
-		"global",
-		true,
-	);
-	const { templates: projectTemplates, failed: projectFailed } = useTemplateList(
-		workspaceId ?? undefined,
-		"project",
-		workspaceId != null,
-	);
-
-	const openNew = (scope: TemplateScope) => {
-		setEditing(null);
-		setNewScope(scope);
-		setEditorOpen(true);
+async function deleteTemplate(template: TemplateInfo, workspaceId: string | undefined) {
+	const params = {
+		...(template.scope === "project" && workspaceId ? { workspaceId } : {}),
+		scope: template.scope,
+		name: template.name,
 	};
-	const openEdit = (template: TemplateInfo) => {
-		setEditing(template);
-		setEditorOpen(true);
-	};
-
-	const failed = globalFailed || projectFailed;
-	const loading =
-		!failed && (globalTemplates == null || (workspaceId != null && projectTemplates == null));
-
-	if (loading) {
-		return (
-			<div data-testid="settings-templates">
-				<SkeletonRows rows={3} />
-			</div>
-		);
+	try {
+		await getTransport().request("template.delete", params);
+		useAppStore.getState().bumpTemplatesVersion();
+	} catch (err) {
+		toast.error(errorText(err), translate("settings.templates.deleteFailed"));
 	}
-
-	if (failed) {
-		return (
-			<div data-testid="settings-templates">
-				<p data-testid="templates-error" className="text-text-muted tr-text-ui">
-					{t("settings.templates.loadFailed")}
-				</p>
-			</div>
-		);
-	}
-
-	return (
-		<>
-			<SettingsPageContainer testId="settings-templates">
-				<ProjectTemplatesSection
-					workspaceId={workspaceId ?? undefined}
-					templates={projectTemplates}
-					onNew={() => openNew("project")}
-					onEdit={openEdit}
-				/>
-
-				<GlobalTemplatesSection
-					templates={globalTemplates ?? []}
-					onNew={() => openNew("global")}
-					onEdit={openEdit}
-				/>
-			</SettingsPageContainer>
-
-			<TemplateEditorDialog
-				open={editorOpen}
-				onOpenChange={setEditorOpen}
-				workspaceId={workspaceId ?? undefined}
-				template={editing}
-				initialScope={newScope}
-			/>
-		</>
-	);
-}
-
-function ProjectTemplatesSection({
-	workspaceId,
-	templates,
-	onNew,
-	onEdit,
-}: {
-	workspaceId: string | undefined;
-	templates: TemplateInfo[] | null;
-	onNew: () => void;
-	onEdit: (template: TemplateInfo) => void;
-}) {
-	const t = useT();
-	const hasProject = workspaceId != null;
-
-	return (
-		<section data-focus-list="templates:project" className="flex flex-col gap-12">
-			<div className="flex items-center justify-between">
-				<h4 className="tr-text-label-pill text-text-subtle">
-					{t("settings.templates.projectTitle")}
-				</h4>
-				{hasProject ? (
-					<Button
-						variant="soft-primary"
-						size="m"
-						iconLeft={Plus}
-						data-testid="template-new-project"
-						data-focus-fallback="templates:project"
-						onClick={onNew}
-					>
-						{t("settings.templates.new")}
-					</Button>
-				) : null}
-			</div>
-
-			{!hasProject ? (
-				<SettingsNotice variant="info" testId="project-templates-unavailable">
-					<p className="tr-text-ui text-text-default">{t("settings.templates.openProject")}</p>
-					<p className="tr-text-metadata text-text-muted">
-						<T
-							i18nKey="settings.templates.projectLocation"
-							components={[<code key="path" className="tr-code-text" />]}
-						/>
-					</p>
-				</SettingsNotice>
-			) : templates && templates.length === 0 ? (
-				<SettingsNotice variant="neutral" hideIcon testId="project-templates-empty">
-					<p className="tr-text-ui text-text-default">{t("settings.templates.projectEmpty")}</p>
-					<p className="tr-text-metadata text-text-muted">
-						<T
-							i18nKey="settings.templates.projectEmptyLocation"
-							components={[<code key="path" className="tr-code-text" />]}
-						/>
-					</p>
-				</SettingsNotice>
-			) : templates ? (
-				<div className="flex flex-col gap-8">
-					{templates.map((template) => (
-						<TemplateRow
-							key={template.name}
-							template={template}
-							workspaceId={workspaceId}
-							showOpenAsFile
-							onEdit={() => onEdit(template)}
-						/>
-					))}
-				</div>
-			) : null}
-		</section>
-	);
 }
 
 async function addStarterTemplates() {
@@ -277,173 +158,346 @@ async function addStarterTemplates() {
 	}
 }
 
-function GlobalTemplatesSection({
-	templates,
-	onNew,
-	onEdit,
-}: {
-	templates: TemplateInfo[];
-	onNew: () => void;
-	onEdit: (template: TemplateInfo) => void;
-}) {
+export function TemplatesSettings() {
 	const t = useT();
-	const [adding, setAdding] = useState(false);
+	const workspaceId = useAppStore((s) => s.activeWorkspaceId) ?? undefined;
+	const [attempt, setAttempt] = useState(0);
+	const [editorOpen, setEditorOpen] = useState(false);
+	const [editing, setEditing] = useState<TemplateInfo | null>(null);
+	const [newScope, setNewScope] = useState<TemplateScope>("global");
+	const [deleting, setDeleting] = useState<TemplateInfo | null>(null);
+	const { templates, failed } = useTemplateList(workspaceId, attempt);
 
-	const addStarters = () => {
-		if (adding) return;
-		setAdding(true);
-		void addStarterTemplates().then(() => setAdding(false));
+	const openNew = (scope: TemplateScope) => {
+		setEditing(null);
+		setNewScope(scope);
+		setEditorOpen(true);
 	};
-
-	return (
-		<section data-focus-list="templates:global" className="flex flex-col gap-12">
-			<div className="flex items-center justify-between">
-				<h4 className="tr-text-label-pill text-text-subtle">
-					{t("settings.templates.globalTitle")}
-				</h4>
-				<Button
-					variant="soft-primary"
-					size="m"
-					iconLeft={Plus}
-					data-testid="template-new-global"
-					data-focus-fallback="templates:global"
-					onClick={onNew}
-				>
-					{t("settings.templates.new")}
-				</Button>
-			</div>
-
-			{templates.length === 0 ? (
-				<SettingsNotice
-					variant="info"
-					icon={<MagicWand className="size-14" />}
-					testId="global-templates-empty"
-					action={
-						<Button
-							data-testid="template-starters"
-							variant="outline"
-							size="m"
-							iconLeft={MagicWand}
-							disabled={adding}
-							onClick={addStarters}
-						>
-							{t("settings.templates.addStarters")}
-						</Button>
-					}
-				>
-					<p className="tr-text-ui text-text-default">{t("settings.templates.globalEmpty")}</p>
-					<p className="tr-text-metadata text-text-muted">
-						{t("settings.templates.globalEmptyDescription")}
-					</p>
-				</SettingsNotice>
-			) : (
-				<div className="flex flex-col gap-8">
-					{templates.map((template) => (
-						<TemplateRow
-							key={template.name}
-							template={template}
-							workspaceId={undefined}
-							showOpenAsFile={false}
-							onEdit={() => onEdit(template)}
-						/>
-					))}
-				</div>
-			)}
-		</section>
-	);
-}
-
-function TemplateRow({
-	template,
-	workspaceId,
-	showOpenAsFile,
-	onEdit,
-}: {
-	template: TemplateInfo;
-	workspaceId: string | undefined;
-	showOpenAsFile: boolean;
-	onEdit: () => void;
-}) {
-	const t = useT();
-	const [confirmOpen, setConfirmOpen] = useState(false);
-
-	const del = async () => {
-		const params = {
-			...(workspaceId ? { workspaceId } : {}),
-			scope: template.scope,
-			name: template.name,
-		};
-		try {
-			await getTransport().request("template.delete", params);
-			useAppStore.getState().bumpTemplatesVersion();
-		} catch (err) {
-			toast.error(errorText(err), t("settings.templates.deleteFailed"));
-		}
+	const openEdit = (template: TemplateInfo) => {
+		setEditing(template);
+		setEditorOpen(true);
 	};
-
-	const openAsFile = () => {
+	const openAsFile = (template: TemplateInfo) => {
 		if (!workspaceId) return;
 		void openFileInTab(workspaceId, `.pi/prompts/${template.name}.md`, "keep");
 		useAppStore.getState().closeSettings();
 	};
 
+	const split = templates ? splitTemplates(templates) : null;
 	return (
-		<ConfirmPopover
-			open={confirmOpen}
-			onOpenChange={setConfirmOpen}
-			title={t("settings.templates.deleteTitle", { name: template.name })}
-			description={t("settings.templates.deleteDescription")}
-			confirmLabel={t("common.delete")}
-			destructive
-			confirmTestId="template-confirm-delete"
-			onConfirm={() => void del()}
-			align="end"
-		>
-			<div
-				data-testid="template-row"
-				data-focus-row={template.name}
-				data-name={template.name}
-				data-scope={template.scope}
-				className="group flex items-center gap-8 rounded-sm bg-control-bg px-12 py-8"
-			>
-				<div className="flex min-w-0 flex-1 flex-col">
-					<span className="truncate tr-text-ui text-text-default">{template.name}</span>
-					{template.description ? (
-						<span className="truncate text-text-muted tr-text-metadata">
-							{template.description}
-						</span>
-					) : null}
-				</div>
-				<div className="flex shrink-0 items-center gap-4">
-					{showOpenAsFile ? (
-						<IconButton
-							icon={FileText}
-							label={t("settings.templates.openAsFile")}
-							data-testid="template-open-file"
-							onClick={openAsFile}
+		<>
+			<TemplatesPage
+				workspaceId={workspaceId}
+				split={split}
+				failed={failed}
+				onRetry={() => setAttempt((value) => value + 1)}
+				onNew={openNew}
+				onEdit={openEdit}
+				onOpenFile={openAsFile}
+				onDelete={setDeleting}
+			/>
+			<TemplateEditorDialog
+				open={editorOpen}
+				onOpenChange={setEditorOpen}
+				workspaceId={workspaceId}
+				template={editing}
+				initialScope={newScope}
+			/>
+			<ConfirmDialog
+				open={deleting !== null}
+				onOpenChange={(open) => {
+					if (!open) setDeleting(null);
+				}}
+				title={t("settings.templates.deleteTitle", { name: deleting?.name ?? "" })}
+				description={t("settings.templates.deleteDescription")}
+				confirmLabel={t("common.delete")}
+				destructive
+				confirmTestId="template-confirm-delete"
+				onConfirm={() => {
+					if (deleting) void deleteTemplate(deleting, workspaceId);
+				}}
+			/>
+		</>
+	);
+}
+
+export function TemplatesPage({
+	workspaceId,
+	split,
+	failed,
+	onRetry,
+	onNew,
+	onEdit,
+	onOpenFile,
+	onDelete,
+}: {
+	workspaceId: string | undefined;
+	split: { project: TemplateInfo[]; global: TemplateInfo[] } | null;
+	failed: boolean;
+	onRetry: () => void;
+	onNew: (scope: TemplateScope) => void;
+	onEdit: (template: TemplateInfo) => void;
+	onOpenFile: (template: TemplateInfo) => void;
+	onDelete: (template: TemplateInfo) => void;
+}) {
+	const t = useT();
+	const title = t("settings.nav.templates");
+	const description = t("settings.templates.pageDescription");
+	if (failed) {
+		return (
+			<SettingsPage testId="settings-templates" title={title} description={description}>
+				<SettingsLine
+					rowId="templates-load-failed"
+					className="flex flex-col items-start gap-8 py-8"
+				>
+					<p role="alert" data-testid="templates-error" className="text-text-muted tr-text-ui">
+						{t("settings.templates.loadFailed")}
+					</p>
+					<Button
+						variant="outline"
+						size="m"
+						tabIndex={0}
+						data-testid="templates-retry"
+						onClick={onRetry}
+					>
+						{t("common.retry")}
+					</Button>
+				</SettingsLine>
+			</SettingsPage>
+		);
+	}
+	if (!split) {
+		return (
+			<SettingsPage testId="settings-templates" title={title} description={description}>
+				<SkeletonRows rows={3} />
+			</SettingsPage>
+		);
+	}
+	return (
+		<SettingsPage testId="settings-templates" title={title} description={description}>
+			{workspaceId ? (
+				<SettingsGroup
+					testId="templates-project"
+					title={t("settings.templates.projectTitle")}
+					scope="project"
+					description={t("settings.templates.projectDescription")}
+					action={newTemplateAction("project", onNew)}
+				>
+					{split.project.length === 0 ? (
+						<p
+							data-testid="project-templates-empty"
+							data-setting-id={SETTING.projectTemplates.id}
+							className="px-8 py-8 text-text-muted tr-text-metadata"
+						>
+							{t("settings.templates.projectEmpty")}
+						</p>
+					) : (
+						<TemplateList
+							scope="project"
+							templates={split.project}
+							onEdit={onEdit}
+							onOpenFile={onOpenFile}
+							onDelete={onDelete}
 						/>
-					) : null}
-					<IconButton
-						icon={Pencil}
-						label={t("common.edit")}
-						data-testid="template-edit"
-						data-focus-row-primary
-						onClick={onEdit}
+					)}
+				</SettingsGroup>
+			) : null}
+			<SettingsGroup
+				testId="templates-global"
+				title={t("settings.templates.globalTitle")}
+				scope="allProjects"
+				description={t("settings.templates.globalDescription")}
+				action={newTemplateAction("global", onNew)}
+			>
+				{split.global.length === 0 ? (
+					<div data-setting-id={SETTING.globalTemplates.id} className="py-8">
+						<GlobalTemplatesEmpty />
+					</div>
+				) : (
+					<TemplateList
+						scope="global"
+						templates={split.global}
+						onEdit={onEdit}
+						onDelete={onDelete}
 					/>
-					<IconTooltip label={t("common.delete")} wrapTrigger>
-						<PopoverTrigger asChild>
-							<button
-								type="button"
-								data-testid="template-delete"
-								aria-label={t("common.delete")}
-								className="flex size-24 items-center justify-center rounded-sm text-text-muted transition hover:bg-control-bg-hovered hover:text-feedback-error focus-visible:focus-ring"
-							>
-								<Trash2 className="size-14" />
-							</button>
-						</PopoverTrigger>
-					</IconTooltip>
-				</div>
-			</div>
-		</ConfirmPopover>
+				)}
+				{workspaceId ? null : (
+					<p
+						data-testid="project-templates-hint"
+						className="px-8 pt-8 text-text-muted tr-text-metadata"
+					>
+						{t("settings.templates.projectHint")}
+					</p>
+				)}
+			</SettingsGroup>
+		</SettingsPage>
+	);
+}
+
+function newTemplateAction(
+	scope: TemplateScope,
+	onNew: (scope: TemplateScope) => void,
+): SettingsGroupAction {
+	return {
+		rowId: `template-new-${scope}`,
+		control: <NewTemplateButton scope={scope} onNew={onNew} />,
+	};
+}
+
+function NewTemplateButton({
+	scope,
+	onNew,
+}: {
+	scope: TemplateScope;
+	onNew: (scope: TemplateScope) => void;
+}) {
+	const t = useT();
+	return (
+		<Button
+			variant="soft-primary"
+			size="m"
+			iconLeft={Plus}
+			tabIndex={0}
+			data-testid={`template-new-${scope}`}
+			data-focus-fallback={`templates:${scope}`}
+			onClick={() => onNew(scope)}
+		>
+			{t("settings.templates.new")}
+		</Button>
+	);
+}
+
+function TemplateList({
+	scope,
+	templates,
+	onEdit,
+	onOpenFile,
+	onDelete,
+}: {
+	scope: TemplateScope;
+	templates: readonly TemplateInfo[];
+	onEdit: (template: TemplateInfo) => void;
+	onOpenFile?: (template: TemplateInfo) => void;
+	onDelete: (template: TemplateInfo) => void;
+}) {
+	const t = useT();
+	const byName = (name: string) => templates.find((template) => template.name === name);
+	return (
+		<SettingsList
+			focusList={`templates:${scope}`}
+			label={
+				scope === "project"
+					? t("settings.templates.projectTitle")
+					: t("settings.templates.globalTitle")
+			}
+			rowIds={templates.map((template) => template.name)}
+			settingId={scope === "project" ? SETTING.projectTemplates.id : SETTING.globalTemplates.id}
+			testId={`templates-${scope}-list`}
+			onRemove={(name) => {
+				const template = byName(name);
+				if (template) onDelete(template);
+			}}
+		>
+			{templates.map((template) => (
+				<TemplateRow
+					key={template.name}
+					template={template}
+					onEdit={() => onEdit(template)}
+					onOpenFile={onOpenFile ? () => onOpenFile(template) : undefined}
+					onDelete={() => onDelete(template)}
+				/>
+			))}
+		</SettingsList>
+	);
+}
+
+function GlobalTemplatesEmpty() {
+	const t = useT();
+	const [adding, setAdding] = useState(false);
+	const addStarters = () => {
+		if (adding) return;
+		setAdding(true);
+		void addStarterTemplates().then(() => setAdding(false));
+	};
+	return (
+		<SettingsNotice
+			variant="info"
+			icon={<MagicWand className="size-14" />}
+			rowId="templates-starters"
+			testId="global-templates-empty"
+			action={
+				<Button
+					data-testid="template-starters"
+					variant="outline"
+					size="m"
+					iconLeft={MagicWand}
+					tabIndex={0}
+					disabled={adding}
+					onClick={addStarters}
+				>
+					{t("settings.templates.addStarters")}
+				</Button>
+			}
+		>
+			<p className="tr-text-ui text-text-default">{t("settings.templates.globalEmpty")}</p>
+			<p className="tr-text-metadata text-text-muted">
+				{t("settings.templates.globalEmptyDescription")}
+			</p>
+		</SettingsNotice>
+	);
+}
+
+function TemplateRow({
+	template,
+	onEdit,
+	onOpenFile,
+	onDelete,
+}: {
+	template: TemplateInfo;
+	onEdit: () => void;
+	onOpenFile: (() => void) | undefined;
+	onDelete: () => void;
+}) {
+	const t = useT();
+	const { rowProps, primaryProps, sideProps } = useSettingsListRow(template.name);
+	return (
+		<li
+			{...rowProps}
+			data-testid="template-row"
+			data-name={template.name}
+			data-scope={template.scope}
+			className={SETTINGS_LIST_ROW}
+		>
+			<button
+				type="button"
+				{...primaryProps}
+				data-testid="template-edit"
+				className={SETTINGS_LIST_PRIMARY}
+				onClick={onEdit}
+			>
+				<span className="wrap-anywhere tr-text-ui text-text-default">{template.name}</span>
+				{template.description ? (
+					<span className="wrap-break-word text-text-muted tr-text-metadata">
+						{template.description}
+					</span>
+				) : null}
+			</button>
+			{onOpenFile ? (
+				<IconButton
+					icon={FileText}
+					label={t("settings.templates.openAsFile")}
+					{...sideProps}
+					data-testid="template-open-file"
+					onClick={onOpenFile}
+				/>
+			) : null}
+			<IconButton
+				icon={Trash2}
+				label={t("common.delete")}
+				{...sideProps}
+				data-testid="template-delete"
+				onClick={onDelete}
+			/>
+		</li>
 	);
 }

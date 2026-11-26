@@ -1,5 +1,6 @@
 import { dirname, isAbsolute, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { EXTENSION_ASSETS_ROUTE } from "@thinkrail/contracts";
 
 export type ErrorSource = "host_crash" | "host_logged" | "request" | "ui" | "desktop";
 export type FatalErrorKind = "uncaughtException" | "unhandledRejection";
@@ -12,11 +13,13 @@ export interface FrameRoots {
 	appRoot: string;
 	remapBase?: string;
 	caseInsensitive: boolean;
+	foreignRoots?: () => readonly string[];
 }
 
 export interface FrameRootOptions {
 	appRoot?: string;
 	remapBase?: string;
+	foreignRoots?: () => readonly string[];
 }
 
 function safely<T>(read: () => T, fallback: T): T {
@@ -47,8 +50,22 @@ export function frameRoots(options: FrameRootOptions = {}): FrameRoots {
 			toSlashes(options.appRoot ? resolve(options.appRoot) : detectAppRoot()),
 		),
 		...(options.remapBase ? { remapBase: options.remapBase } : {}),
+		...(options.foreignRoots ? { foreignRoots: options.foreignRoots } : {}),
 		caseInsensitive: process.platform === "win32",
 	};
+}
+
+function isWithin(absolute: string, folder: string, caseInsensitive: boolean): boolean {
+	const root = `${stripTrailingSlash(toSlashes(folder))}/`;
+	if (root.length <= 1) return false;
+	return caseInsensitive
+		? absolute.toLowerCase().startsWith(root.toLowerCase())
+		: absolute.startsWith(root);
+}
+
+function isForeign(absolute: string, roots: FrameRoots): boolean {
+	const folders = safely(() => roots.foreignRoots?.() ?? [], [] as readonly string[]);
+	return folders.some((folder) => isWithin(absolute, folder, roots.caseInsensitive));
 }
 
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
@@ -71,7 +88,9 @@ export function normalizeFrameFilename(filename: unknown, roots: FrameRoots): No
 			const local =
 				url.protocol === "views:" ||
 				((url.protocol === "http:" || url.protocol === "https:") && LOCAL_HOSTS.has(url.hostname));
-			if (!local) return { ...external, web: true };
+			if (!local || url.pathname.startsWith(EXTENSION_ASSETS_ROUTE)) {
+				return { ...external, web: true };
+			}
 			const views = url.protocol === "views:";
 			const clean = `${views ? url.host : ""}${url.pathname}`.replace(/^\/+/, "");
 			if (!/^[A-Za-z0-9_\-./@]+$/.test(clean)) return { ...external, web: true };
@@ -85,10 +104,9 @@ export function normalizeFrameFilename(filename: unknown, roots: FrameRoots): No
 	if (!isAbsolute(raw) && !/^[A-Za-z]:[\\/]/.test(raw)) return remappedFrame(raw, roots);
 	const absolute = toSlashes(raw);
 	const root = `${stripTrailingSlash(toSlashes(roots.appRoot))}/`;
-	const within = roots.caseInsensitive
-		? absolute.toLowerCase().startsWith(root.toLowerCase())
-		: absolute.startsWith(root);
-	if (root.length <= 1 || !within) return external;
+	if (!isWithin(absolute, roots.appRoot, roots.caseInsensitive) || isForeign(absolute, roots)) {
+		return external;
+	}
 	const relative = absolute.slice(root.length);
 	if (!relative || !/^[A-Za-z0-9_\-./@$~+]+$/.test(relative)) return external;
 	return { filename: relative, inApp: !relative.includes("node_modules/"), web: false };

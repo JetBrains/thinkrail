@@ -5,7 +5,14 @@ import {
 } from "@remixicon/react";
 import type { HostUpdateNotice, NativeUpdateState } from "@thinkrail/contracts";
 import { T, useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { Button, type ButtonIcon } from "@thinkrail/ui/button";
+import {
+	SETTINGS_ROWS,
+	SettingsGroup,
+	SettingsNotice,
+	SettingsPage,
+	SettingsRow,
+} from "../settingsKit";
 import { installFailureCopy } from "./installCopy";
 import type { NativeUpdateAction, UpdatesController } from "./useUpdates";
 
@@ -112,6 +119,15 @@ function hostNoticeCopy(
 	}
 }
 
+interface UpdateAction {
+	testId: string;
+	label: string;
+	icon: ButtonIcon;
+	primary?: boolean;
+	disabled?: boolean;
+	onClick: () => void;
+}
+
 function publicChannel(channel: string | undefined): string | undefined {
 	return channel === "canary" ? "nightly" : channel;
 }
@@ -143,7 +159,6 @@ export function UpdateSettings({ updates }: UpdateSettingsProps) {
 	const checking = nativeState?.status === "checking";
 	const downloading = nativeState?.status === "downloading";
 	const preparing = nativeState?.status === "preparing";
-	const installing = nativeState?.status === "installing";
 	const progress =
 		downloading &&
 		typeof nativeState?.progress === "number" &&
@@ -159,14 +174,6 @@ export function UpdateSettings({ updates }: UpdateSettingsProps) {
 			: hostRunning
 				? t("updates.progress.running")
 				: null;
-	const toneClass =
-		error || hostFailed
-			? "text-feedback-error"
-			: ready || nativeAvailable || hostAvailable || hostSucceeded
-				? "text-primary"
-				: checking || downloading || preparing || installing || hostRunning
-					? "text-feedback-info"
-					: "text-text-muted";
 	const currentVersion = hostNotice?.currentVersion ?? nativeState?.version;
 	const channel = hostNotice?.channel ?? publicChannel(nativeState?.channel);
 	const availableVersion = hostNotice?.availableVersion ?? nativeState?.availableVersion;
@@ -182,167 +189,166 @@ export function UpdateSettings({ updates }: UpdateSettingsProps) {
 		hostNotice !== null &&
 		(hostStatus === undefined || hostStatus === "failed" || hostRequestFailed);
 
+	const actions: UpdateAction[] = [];
+	if (updates.source === "native") {
+		if (updates.state.status === "idle" || checking) {
+			actions.push({
+				testId: "update-check",
+				label: checking ? t("updates.action.checking") : t("updates.action.check"),
+				icon: Refresh,
+				disabled: checking,
+				onClick: updates.checkForUpdates,
+			});
+		}
+		if (retry) {
+			actions.push({
+				testId: "update-retry",
+				label: t("common.retry"),
+				icon: Refresh,
+				onClick: retry,
+			});
+		}
+		if (nativeAvailable && failedAction !== "download") {
+			actions.push({
+				testId: "update-download",
+				label: t("updates.action.download"),
+				icon: DownloadCloud,
+				primary: true,
+				onClick: updates.downloadUpdate,
+			});
+		}
+		if (ready && failedAction !== "install") {
+			actions.push({
+				testId: "update-restart",
+				label: t("updates.action.installRestart"),
+				icon: Restart,
+				primary: true,
+				onClick: updates.restartToUpdate,
+			});
+		}
+	} else if (updates.canRun && (hostAvailable || hostFailed)) {
+		actions.push(
+			hostFailed
+				? {
+						testId: "update-retry",
+						label: t("common.retry"),
+						icon: Refresh,
+						onClick: updates.runUpdate,
+					}
+				: {
+						testId: "update-run-host",
+						label: t("updates.action.run"),
+						icon: DownloadCloud,
+						primary: true,
+						onClick: updates.runUpdate,
+					},
+		);
+	}
+	const [first, ...rest] = actions.map((action) => (
+		<Button
+			key={action.testId}
+			variant={action.primary ? "primary" : "outline"}
+			size="m"
+			iconLeft={action.icon}
+			tabIndex={0}
+			disabled={action.disabled}
+			data-testid={action.testId}
+			onClick={action.onClick}
+		>
+			{action.label}
+		</Button>
+	));
+
 	return (
-		<section data-testid="settings-updates" className="flex flex-col gap-16">
-			<div className="flex flex-col gap-4">
-				<h3 className="tr-title-section text-text-default">{t("updates.settings.title")}</h3>
-				<p className="text-text-muted tr-text-metadata">
-					{updates.source === "native"
-						? t("updates.settings.nativeDescription")
-						: t("updates.settings.hostDescription")}
-				</p>
-			</div>
-
-			<div
-				data-testid="update-status"
-				data-source={updates.source}
-				data-status={updates.source === "native" ? nativeStatus : (hostStatus ?? "legacy")}
-				className="flex flex-col gap-12 rounded-sm border border-border-default bg-control-bg p-12"
-			>
-				<div className="flex items-start gap-8">
-					<DownloadCloud aria-hidden="true" className={`mt-2 size-16 shrink-0 ${toneClass}`} />
-					<div className="min-w-0 flex-1">
-						<p className="tr-title-compact text-text-default">
-							{nativeRequestError ? t("updates.requestFailed.title") : copy.title}
-						</p>
-						<p className="text-text-muted tr-text-metadata">
-							{nativeRequestError ? t("updates.requestFailed.detail") : copy.detail}
-						</p>
-					</div>
-				</div>
-
-				{progressLabel ? (
-					<div className="flex flex-col gap-4">
-						<progress
-							max={100}
-							{...(downloading && progress !== null ? { value: progress } : {})}
-							aria-label={progressLabel}
-							className="h-4 w-full accent-primary"
-						/>
-						<span className="text-text-muted tr-text-metadata">{progressLabel}</span>
-					</div>
-				) : null}
-
-				{error ? (
-					<p data-testid="update-error" role="alert" className="text-feedback-error tr-text-ui">
-						{error}
-					</p>
-				) : null}
-
-				{installFailure ? (
-					<div
-						data-testid="update-last-install"
-						className="flex flex-col gap-2 rounded-sm border border-feedback-error-muted bg-feedback-error-subtle p-8"
-					>
-						<p className="tr-title-compact text-text-default">
-							{t("updates.result.settingsCallout", { cause: installFailure.cause })}
-						</p>
-						<p className="text-text-muted tr-text-metadata">{installFailure.advice}</p>
-					</div>
-				) : null}
-
-				{showHostManualGuidance ? (
-					<p
-						data-testid="update-command-guidance"
-						className="rounded-sm border border-border-default bg-container-elevated-bg p-8 text-text-default tr-text-ui"
-					>
-						<T
-							i18nKey="updates.manualGuidance"
-							components={[<code key="command" className="tr-code-text text-primary" />]}
-						/>
-					</p>
-				) : null}
-
-				{hostSucceeded ? (
-					<p
-						data-testid="update-host-restart-guidance"
-						className="rounded-sm border border-border-default bg-container-elevated-bg p-8 text-text-default tr-text-ui"
-					>
-						{t("updates.restartGuidance", { version: availableVersion })}
-					</p>
-				) : null}
-
-				<div className="flex flex-wrap items-center justify-between gap-8 border-border-default border-t pt-8">
-					<span data-testid="update-version" className="text-text-muted tr-text-metadata">
-						{currentVersion && channel
-							? updates.source === "host"
-								? t("updates.version.current", { version: currentVersion, channel })
-								: t("updates.version.native", { version: currentVersion, channel })
-							: t("updates.version.unavailable")}
-					</span>
-					{availableVersion ? (
-						<span className="text-text-muted tr-text-metadata">
-							{t("updates.version.available", { version: availableVersion })}
-						</span>
+		<SettingsPage
+			title={t("settings.nav.updates")}
+			description={
+				updates.source === "native"
+					? t("updates.settings.nativeDescription")
+					: t("updates.settings.hostDescription")
+			}
+			testId="settings-updates"
+		>
+			<SettingsGroup title={t("updates.settings.title")}>
+				<div
+					data-testid="update-status"
+					data-source={updates.source}
+					data-status={updates.source === "native" ? nativeStatus : (hostStatus ?? "legacy")}
+					className={SETTINGS_ROWS}
+				>
+					<SettingsRow
+						settingId="software-updates"
+						label={nativeRequestError ? t("updates.requestFailed.title") : copy.title}
+						description={
+							<div className="flex flex-col gap-4">
+								<p>{nativeRequestError ? t("updates.requestFailed.detail") : copy.detail}</p>
+								{progressLabel ? (
+									<div className="flex flex-col gap-4">
+										<progress
+											max={100}
+											{...(downloading && progress !== null ? { value: progress } : {})}
+											aria-label={progressLabel}
+											className="h-4 w-full accent-primary"
+										/>
+										<span>{progressLabel}</span>
+									</div>
+								) : null}
+								{error ? (
+									<p
+										data-testid="update-error"
+										role="alert"
+										className="text-feedback-error tr-text-ui"
+									>
+										{error}
+									</p>
+								) : null}
+								<div className="flex flex-wrap gap-x-8">
+									<span data-testid="update-version">
+										{currentVersion && channel
+											? updates.source === "host"
+												? t("updates.version.current", { version: currentVersion, channel })
+												: t("updates.version.native", { version: currentVersion, channel })
+											: t("updates.version.unavailable")}
+									</span>
+									{availableVersion ? (
+										<span>{t("updates.version.available", { version: availableVersion })}</span>
+									) : null}
+								</div>
+								{ready ? <p>{t("updates.settings.deferral")}</p> : null}
+							</div>
+						}
+						control={first}
+						sides={rest.length > 0 ? rest : undefined}
+					/>
+					{installFailure ? (
+						<div className="py-12">
+							<SettingsNotice variant="error" testId="update-last-install">
+								<p className="tr-title-compact">
+									{t("updates.result.settingsCallout", { cause: installFailure.cause })}
+								</p>
+								<p className="text-text-muted tr-text-metadata">{installFailure.advice}</p>
+							</SettingsNotice>
+						</div>
+					) : null}
+					{showHostManualGuidance ? (
+						<div className="py-12">
+							<SettingsNotice variant="neutral" testId="update-command-guidance">
+								<T
+									i18nKey="updates.manualGuidance"
+									components={[<code key="command" className="tr-code-text text-primary" />]}
+								/>
+							</SettingsNotice>
+						</div>
+					) : null}
+					{hostSucceeded ? (
+						<div className="py-12">
+							<SettingsNotice variant="info" testId="update-host-restart-guidance">
+								{t("updates.restartGuidance", { version: availableVersion })}
+							</SettingsNotice>
+						</div>
 					) : null}
 				</div>
-			</div>
-
-			{updates.source === "native" ? (
-				<div className="flex flex-wrap justify-end gap-8">
-					{updates.state.status === "idle" || checking ? (
-						<Button
-							variant="outline"
-							size="l"
-							iconLeft={Refresh}
-							data-testid="update-check"
-							disabled={checking}
-							onClick={updates.checkForUpdates}
-						>
-							{checking ? t("updates.action.checking") : t("updates.action.check")}
-						</Button>
-					) : null}
-					{retry ? (
-						<Button
-							variant="outline"
-							size="l"
-							iconLeft={Refresh}
-							data-testid="update-retry"
-							onClick={retry}
-						>
-							{t("common.retry")}
-						</Button>
-					) : null}
-					{nativeAvailable && failedAction !== "download" ? (
-						<Button
-							variant="primary"
-							size="l"
-							iconLeft={DownloadCloud}
-							data-testid="update-download"
-							onClick={updates.downloadUpdate}
-						>
-							{t("updates.action.download")}
-						</Button>
-					) : null}
-					{ready && failedAction !== "install" ? (
-						<Button
-							variant="primary"
-							size="l"
-							iconLeft={Restart}
-							data-testid="update-restart"
-							onClick={updates.restartToUpdate}
-						>
-							{t("updates.action.installRestart")}
-						</Button>
-					) : null}
-				</div>
-			) : updates.canRun && (hostAvailable || hostFailed) ? (
-				<div className="flex flex-wrap justify-end gap-8">
-					<Button
-						variant={hostFailed ? "outline" : "primary"}
-						size="l"
-						iconLeft={hostFailed ? Refresh : DownloadCloud}
-						data-testid={hostFailed ? "update-retry" : "update-run-host"}
-						onClick={updates.runUpdate}
-					>
-						{hostFailed ? t("common.retry") : t("updates.action.run")}
-					</Button>
-				</div>
-			) : null}
-
-			{ready ? (
-				<p className="text-text-muted tr-text-metadata">{t("updates.settings.deferral")}</p>
-			) : null}
-		</section>
+			</SettingsGroup>
+		</SettingsPage>
 	);
 }

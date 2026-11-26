@@ -15,6 +15,7 @@ import { isPhoneViewport } from "../lib";
 import type { FileTab } from "../store";
 import { selectWorkspaceById, useAppStore } from "../store";
 import { getTransport } from "../transport";
+import { OpenInBrowserButton, useOpensInBrowser } from "./OpenInBrowserButton";
 import { resourceBytesUrl, useResetViewStateOnImplementationChange } from "./resourcePane";
 import { reviewFlagFor } from "./reviewModel";
 import { SendReviewButton } from "./SendReviewButton";
@@ -60,7 +61,8 @@ export function FilePane({ tab }: { tab: FileTab }) {
 		resourceBytesUrl(tab.workspaceId, tab.path),
 	);
 	const reviews = reviewable ? [review.worktree] : [];
-	const showToolbar = candidates.length >= 2 || fileHasDraft;
+	const opensInBrowser = useOpensInBrowser(tab.path);
+	const showToolbar = candidates.length >= 2 || fileHasDraft || opensInBrowser;
 	const saveViewState = (state: unknown) => {
 		const current = useAppStore
 			.getState()
@@ -75,7 +77,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 	};
 
 	return (
-		<div className="flex h-full min-h-0 flex-col">
+		<div data-file-pane className="flex h-full min-h-0 flex-col">
 			{showToolbar ? (
 				<div
 					data-testid="resource-view-toggle"
@@ -83,6 +85,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 					aria-label={t("panels.filePane.resourceView")}
 					className="flex h-32 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-12"
 				>
+					<OpenInBrowserButton workspaceId={tab.workspaceId} path={tab.path} />
 					<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />
 					<RendererToggles
 						candidates={candidates}
@@ -103,6 +106,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 				<Suspense fallback={loading}>
 					<RendererView
 						key={implementationKey}
+						focusHome
 						renderer={renderer}
 						mobile={mobile}
 						resource={resource}

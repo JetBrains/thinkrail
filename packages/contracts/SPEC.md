@@ -39,7 +39,11 @@ the palette ranks with — kept here so host-side search can rank with the same 
   another project while the chat is already being continued — the first gesture is never silently
   joined by a different choice), `COPY_TOO_LARGE` (a Files tree folder paste with more entries than the host copies — nothing was written; the client words it), `ENTRY_CHANGED` (an entry a Files tree paste or a trash claim was acting on was replaced, moved out of the worktree or turned into a link mid-operation — the host stopped instead of following it; a paste keeps what it already wrote, a delete or a whole-file revert left the entry in place; the client words it), `TEXT_SEARCH_TIMEOUT` / `TEXT_SEARCH_FAILED` (a text search git could not
   finish in its budget, or could not run — the host's logged classifier; the client only sees the search
-  end `failed`), `RESOURCE_UNAVAILABLE`, and `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is
+  end `failed`), `SERVER_FALLBACK_NOT_USED` / `SERVER_FALLBACK_STILL_ON`
+  (`session.disableServerFallback`, v126 `SERVER_FALLBACK_PROTOCOL_VERSION`: the chat has no failed
+  request, or the failed request's model declares no Anthropic server-side fallback, so there is nothing
+  to turn off and a plain retry is the answer; or pi did not apply the written override — e.g. it
+  rejected `models.json` — so a retry would fail the same way), `RESOURCE_UNAVAILABLE`, and `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is
   `subagent.getTranscript`'s **permanent** miss, the
   signal that stops the transcript dialog's polling. A known child whose first transcript file is not
   written yet instead returns empty messages with its current status, so a live run remains pollable;
@@ -54,8 +58,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   the four `feedback.survey.submit` refusals `SURVEY_INVALID`, `SURVEY_UNAVAILABLE`, `SURVEY_CHANGED` and
   `SURVEY_NOT_SENT`, and `fonts.installed`'s `INSTALLED_FONTS_UNAVAILABLE`: the host's OS font service could
   not be read, a failure analytics tells apart from a lost connection while the font picker offers Retry for
-  either; and the closed `SPEECH_ERROR_CODES` (§ Voice input), each naming a voice state the UI words
-  differently), so a client can react to one specific failure
+  either; the two `extension.query` refusals **`EXTENSION_DISABLED`** (the user switched the extension
+  off — its panel shows the off placeholder) and **`UNKNOWN_EXTENSION_QUERY`** (no such extension or method
+  on this host, or a malformed request); and the closed `SPEECH_ERROR_CODES` (§ Voice input), each naming
+  a voice state the UI words differently), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it or Error Tracking must tell it apart (it never sees `message`). Two codes exist for the latter:
   **`REQUEST_REPLAY_OVERFLOW`** — the host's replay namespace for this page is full
@@ -64,13 +70,19 @@ the palette ranks with — kept here so host-side search can rank with the same 
   code, so it needs no protocol bump. One code is named by the client and never sent by the host:
   **`FRAME_TOO_LARGE`**, a request refused before sending because its frame exceeds `WS_MAX_FRAME_BYTES`
   (below) — the composer hands that prompt back to its draft instead of losing it.
+  **`EXTENSION_UI_UNSUPPORTED`** is also used locally: the host's in-process extension UI rejects
+  `custom()` with this code so an extension can choose a supported dialog instead of treating absent
+  terminal UI as user cancellation. It adds no WS method, payload or capability; an uncaught extension
+  error still follows pi's existing notification path.
   Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
   (`NativeUpdateState` / `NativeUpdateBridge`, `NativeWindowState` / `NativeWindowControlsBridge`,
   `NativeQuitHint` / `NativeCommand` / `NativeShortcutsBridge`, and
   `NativeNotificationInput` / `NativeNotificationBridge`, `NativePageZoomAction` / `NativePageZoomBridge`,
-  and `NativeMenuBridge` (translated native menu labels), the optional shell-local desktop capabilities);
+  `NativeClipboardContent` / `NativeClipboardFile` / `NativeClipboardBridge`, and `NativeMenuBridge`
+  (translated native menu labels), the optional shell-local desktop capabilities); `attachments` (§ Chat
+  attachments);
   `QUIT_CONFIRMATION` + **`createQuitConfirmation`** + `QuitConfirmationDependencies` from `quitConfirmation`;
   **`matchFields`** + `parseMatchTerms` + `foldMatchText` + `MATCH_TIER` and the `Match*` types from
   `match` (the one search matcher: fixed tiers exact > prefix > word start/camel hump/acronym > substring >
@@ -113,6 +125,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `InstalledFontsResult`, served by `fonts.list` /
   `fonts.installed` from `FONTS_PROTOCOL_VERSION`, v102, with `USER_FONTS_ROUTE`, `USER_FONT_UPLOAD_HEADER` and
   `USER_FONT_EXTENSIONS` naming the host's `/fonts/` route and its upload guard,
+  **`WORKSPACE_VIEW_ROUTE`** (`/view/`) naming the host's browser view of a workspace file, served from
+  **`BROWSER_VIEW_PROTOCOL_VERSION`** (v122; the UI offers "Open in browser" only from it, and the desktop
+  routes same-origin URLs under it to the OS),
   `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
   `parsePiPackageInput` (§ pi packages),
   **`isValidTemplateName(name)`** (the one prompt-template name rule — the host's traversal gate in
@@ -131,6 +146,11 @@ the palette ranks with — kept here so host-side search can rank with the same 
   no text has no head and the next user text is tried — a prompt that merely starts with `<Button>` keeps
   its head; only the first 800 units of a line are normalized —
   host and client call the same functions over their user texts so the label never jumps),
+  **`isKeybindingChord(value)`** + `isKeybindingOverrides` + `isModifierKeyCode` + `KEYBINDING_MODIFIERS`
+  (`keybindingChord`: the one chord shape — modifiers in the order `Mod`, `Ctrl`, `Alt`, `Shift`, each at
+  most once, then a `KeyboardEvent.code` that is not a modifier key, joined by `+`, e.g. `Mod+Alt+KeyS`;
+  the host validates `AppConfig.keybindings` with it and the web's grammar parses with it), the types
+  `KeybindingOverrides` / `KeybindingModifier`,
   `LINE_WIDTH_COLUMNS` + **`isLineWidth(value)`** (the shared 40–240 integer contract for synchronized
   chat/file wrap columns), `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
   **`isControlMessage(text)`** (the one shared reading of that marker — the client hides such sends on
@@ -168,6 +188,36 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `@earendil-works/pi-coding-agent` (pulls `node:fs`); the pi-ai **provider / API subpaths**
   (`/providers/*`, `/api/*`, `/bedrock-provider`, … — they statically load the Node provider SDKs); and
   importing `server` / `shared` / `web`.
+
+## Subagent catalog (v127)
+
+`SUBAGENT_CATALOG_PROTOCOL_VERSION` (127) gates `subagent.list`, `subagent.setEnabled` and writes of
+`AppConfig.disabledSubagents` (default `[]`); the client checks it. `subagent.list({ workspaceId? })`
+returns `SubagentCatalogEntry[]` — `name`, `description`, `source` (`builtin` | `personal` | `project`),
+optional `model` and `thinking`, disabled entries included, never a prompt body or path; it takes no cwd
+([[submodule-server-host]] derives project admission). `subagent.setEnabled({ name, enabled })` returns
+`Ack` and changes only that name ([[submodule-server-settings]]); the result converges through
+`settings.changed`, with no new channel. Enforcement: [[module-pi-subagents]].
+
+## Chat attachments (v129)
+
+`CHAT_ATTACHMENTS_PROTOCOL_VERSION` (129) gates the host's attachment doors ([[submodule-server-host]]); the
+client checks it and turns a file on an older host into an error chip. `attachments.ts` holds the shared
+pieces: `CHAT_ATTACHMENTS_ROUTE` (`/attachments/`), `CHAT_ATTACHMENT_WORKSPACE_PARAM`,
+`CHAT_ATTACHMENT_UPLOAD_HEADER`, `CHAT_ATTACHMENT_MAX_BYTES` (100 MB per file), the closed
+`ChatAttachmentErrorCode`s and the `ChatAttachmentResult` both doors answer (`isChatAttachmentResult`
+guards the HTTP body); `attachments.copyLocal({ workspaceId?, path })` is the socket door for a local path.
+**`withAttachedFiles(prompt, files)`** is the one "Attached files:" trailer, shared by `start_workspace` and
+the composer so the agent reads one format. **`attachmentImageType({ name, type })`** is the one image
+classifier: a raster image by MIME type, else by extension (png, jpg/jpeg, gif, webp, bmp, heic/heif, avif,
+tif/tiff), answers the type it goes to the model as, SVG and everything else `null` (a file the agent reads
+from disk); the composer and the desktop's clipboard read share it, so a format the webview cannot convert
+(HEIC…) ends on the image error chip on every path and is never copied to the workspace. **`copiedFilePaths(text, { barePaths })`** reads what a file manager put on
+the clipboard as text — local `file://` URIs one per line, GNOME's copied-files `copy`/`cut` line (and
+Nautilus 3.30–3.38's `x-special/nautilus-clipboard` header) allowed before them — or answers `null`. Bare
+absolute paths count only with `barePaths`, for the text of a clipboard that also offers a file target
+(GTK 4 file managers put paths there); copied as plain text they stay text, since whoever copies a path
+usually wants the path. The desktop's clipboard read and the web's decision to consult it use this one rule.
 
 ## Contents
 
@@ -247,14 +297,25 @@ the palette ranks with — kept here so host-side search can rank with the same 
   - the cheap-win mirrors (declared in the Node-only `pi-coding-agent`): **`SessionStats`** + **`ContextUsage`**
     (tokens/cost/context bar — display only) and **`SlashCommandInfo`** + **`SlashCommandSourceInfo`** (the
     command autocomplete rows, returned by live `session.getCommands`, skill-only pre-session `skill.list`,
-    and mapped prompt-template listings), and **`SkillCatalogEntry`** + **`SkillDecision`** (`load`/`untrusted`/`pending-ack`/
+    and mapped prompt-template listings; the additive optional `argumentCompletion` (v133, today only
+    `"pull-request"`) is ThinkRail's, not pi's: the host reads a skill's `argument-completion`
+    frontmatter key so a prompt can offer the argument — an older host omits it and prompts send the
+    command as typed), and **`SkillCatalogEntry`** + **`SkillDecision`** (`load`/`untrusted`/`pending-ack`/
     `disabled`) — the workspace Skills manager's `skills.state` rows; the additive optional `manualOnly`
     marks pi's `disable-model-invocation` skills, which pi never lists in the prompt (an older host omits it).
-  - **`ExtensionCatalogEntry`** (`{ name, title, description?, enabled, tools, hasChildExtensions, settings? }`) — one
+  - **`ExtensionCatalogEntry`** (`{ name, title, description?, enabled, tools, hasParentExtensions?, hasChildExtensions, settings?, apiVersion? }`) — one
     host-registry ThinkRail extension as `extension.list` reports it; `name` is the identity the
-    `AppConfig.disabledExtensions` list keys on, `tools` the names its parent factories register, and
+    `AppConfig.disabledExtensions` list keys on, `tools` the names its parent factories register,
+    `hasParentExtensions` (absent below `EXTENSION_QUERY_PROTOCOL_VERSION`) whether its descriptor
+    composes any parent factory at all — so an empty `tools` reads as "queries only by design" rather than
+    "its factories failed to load" ([[module-artifact-tests]]' smoke relies on it),
     `settings` (`ExtensionSettingDescriptor[]`, `{ key, default: boolean }`, absent below
-    `EXTENSION_SETTINGS_PROTOCOL_VERSION` = v105) the boolean settings the extension declares.
+    `EXTENSION_SETTINGS_PROTOCOL_VERSION` = v105) the boolean settings the extension declares, and
+    `apiVersion` (absent when undeclared, and below `EXTENSION_QUERY_PROTOCOL_VERSION` = v130) the version
+    of the payloads its server half answers through `extension.query`. Neither query methods nor panels are
+    in the catalog: the extension's own halves agree on the methods, and the web registry is the panels' one
+    authority. From `INSTALLED_EXTENSIONS_PROTOCOL_VERSION` (v131) an entry also says its `kind` and, for an
+    installed one, its install state (§ Installed extensions).
     `ASK_DISCUSS_PROTOCOL_VERSION` (v105) is the host version that renders `ask_user_question`
     `kind: "discuss"` answers; the card withholds Discuss below it.
   - **`SessionSummary`** — a chat session as the host reports it for hydration (read side); `live`
@@ -437,13 +498,26 @@ the palette ranks with — kept here so host-side search can rank with the same 
   name }` → `{ path }`, in place, refused with `ENTRY_EXISTS` when another entry holds the name) and
   `fs.move` (`fs.copy`'s params → `{ path }`, the Cut-and-Paste move, same or another workspace, refused
   with `ENTRY_EXISTS` instead of renaming, for a folder into itself, and with `MOVE_ACROSS_DEVICES` when
-  source and destination are on different file systems),
+  source and destination are on different file systems), and from **`FS_REVEAL_PROTOCOL_VERSION`** (v134)
+  `fs.reveal` (`{ workspaceId, path }` → ack: the host's OS file manager opens with that worktree entry
+  selected — on the host's machine, which a remote browser does not see; a client hides the action from
+  older hosts),
   the **Artifacts** tool's wire from the same version: `artifacts.list` (`{ workspaceId }` →
-  **`WorkspaceArtifactsSnapshot`**: `dir` (the artifacts folder, `.thinkrail/context`), `artifacts`
+  **`WorkspaceArtifactsSnapshot`**: `dir` (the artifacts folder, `.thinkrail/context`; agents write mockups to
+  its **`WORKSPACE_MOCKUP_DIR`**, `.thinkrail/context/mockups`, the one name the host's mockup check and the
+  browser UI's interactive-HTML glob share), `artifacts`
   (**`WorkspaceArtifact`**: worktree-relative `path`, `state: "live" | "deleted"` — deleted means gone from
   disk but restorable from the host's kept copy — `size`, `changedAt` (for a deleted row, when the host saw
   it gone, so a new deletion of the same path carries a new value), `firstSeenAt`, the writing chat's
-  optional `sessionId`) and `outputs` (**`WorkspaceIgnoredOutput`** rows — an ignored file or folder an
+  optional `sessionId`, and from **`ARTIFACT_ROLES_PROTOCOL_VERSION`** (v124) the host's **`role`**
+  (`ArtifactRole`: `"result" | "working"`), its **`reason`** (`ArtifactRoleReason`: `published`, `picked`,
+  `shown`, `linked` for a result; `working-folder`, `script`, `data`, `unshown` for a working file; a
+  v124–v127 host also sent `document`, which v128 dropped), from **`ARTIFACT_OUTPUTS_PROTOCOL_VERSION`**
+  (v128) the flag **`published: true`** on what the agent published (`present_files`), whatever its
+  reason, and **`rounds`** (`ArtifactRound[]`: the chat rounds, `{ sessionId, startedAt }`, that created or
+  changed it, oldest first and bounded; `startedAt` is the round's prompt timestamp, or the run start for a
+  run no prompt opened) — absent from an older host, so a client that needs them checks the
+  version rather than reading absence as "working") and `outputs` (**`WorkspaceIgnoredOutput`** rows — an ignored file or folder an
   agent run produced, with its live `files` count and `filesTruncated` — or `null` where there is no git),
   `artifacts.restore` / `artifacts.discard` (`{ workspaceId, path }` → ack; a deleted row only, otherwise
   `ARTIFACT_UNKNOWN`; restore refuses a path that exists again with `ENTRY_EXISTS`; discard sends the kept
@@ -554,12 +628,13 @@ the palette ranks with — kept here so host-side search can rank with the same 
   fileLineWidthBounded, voiceInputEnabled, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
   favoriteModels, recentModels, reviewAutoFix, agentReviewEnabled, subagentsEnabled, subagentMaxConcurrent,
   jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, disabledExtensions, extensionSettings, otherAgentSkills,
-  onboardingDismissed, interfaceFont, codeFont, codeFontSize, codeLigatures, fontWeightOffset }` — an extensible
+  onboardingDismissed, interfaceFont, codeFont, codeFontSize, codeLigatures, fontWeightOffset, keybindings,
+  pullRequestFilters }` — an extensible
   bag; the five font fields join at v102 and normalize together through `normalizeFontSettings` (host load, web
   store, fonts runtime); the line-width fields join the wire at protocol v61, `terminalWindowsShell` at v62, and
   `voiceInputEnabled` (default `true`) with voice input at v107, and `questionPanelHeight`
   (**`QUESTION_PANEL_PROTOCOL_VERSION`** = v114; whole percents `QUESTION_PANEL_HEIGHT_PERCENT` 40–100,
-  default 60, `isQuestionPanelHeight`) caps the chat's interaction dock; a client of an older host hides
+  default 70 since 2026-11-17, `isQuestionPanelHeight`) caps the chat's interaction dock; a client of an older host hides
   the setting and uses the default. `onboardingDismissed` (v94, default `false`)
   records that the user finished or skipped the cold-start onboarding wizard, so it never returns.
   `otherAgentSkills` (**`OTHER_AGENT_SKILLS_PROTOCOL_VERSION`** = v108, default `false`) is the host-wide
@@ -582,7 +657,11 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `submodule-server-terminal`'s shell-selection decision for what each value spawns.
   **`PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION`** pins v63's additive project-located `template.list` /
   `template.get` reads, allowing Create Workspace to preview global plus current-checkout project templates
-  without sending host paths; older hosts retain a global-only fallback. `themeMode` defaults to `"fixed"`
+  without sending host paths; older hosts retain a global-only fallback.
+  **`REF_RESOURCE_PREVIEW_PROTOCOL_VERSION`** (v135) adds an optional **`baseRef`** beside `projectId` on
+  those reads and on `skill.list`: the host answers from the project's resources as they are at that ref (what
+  a worktree cut from it will hold) instead of the current checkout, and falls back to the checkout when the
+  ref does not resolve. The dialog sends it only on a v135+ host; an older host would ignore it. `themeMode` defaults to `"fixed"`
   and no pair, preserving both legacy configs
   and the explicit Dark default; `subagentsEnabled` is the host-wide subagent default (`true` for current
   behavior), overridden only by `Workspace.subagentsOverride`; `subagentMaxConcurrent` (whole number in
@@ -598,7 +677,14 @@ the palette ranks with — kept here so host-side search can rank with the same 
   [[submodule-server-extensions]]); `extensionSettings` (`ExtensionSettingValues`, default `{}`, on the wire from
   `EXTENSION_SETTINGS_PROTOCOL_VERSION` = v105) maps extension name → setting key → boolean for the settings
   an `ExtensionCatalogEntry` declares — an absent key means the descriptor's `default`, and
-  `settings.update { extensionSettings }` merges per key; `customLayoutPresets` is the bounded
+  `settings.update { extensionSettings }` merges per key; `pullRequestFilters` (default `{}`, from v133)
+  maps a project id to the pull-request completion's last `PullRequestFilter` (`isPullRequestFilter`
+  validates one; `DEFAULT_PULL_REQUEST_FILTER` is all open including drafts), and
+  `settings.update { pullRequestFilters }` merges per project, `null` forgetting one; `keybindings` (`KeybindingOverrides`, default `{}`,
+  on the wire from **`KEYBINDINGS_PROTOCOL_VERSION`** = v123) maps a command id — the app's or a web
+  extension's — to the user's chords, replacing its defaults (`[]` unbinds, an absent id keeps them); an
+  update replaces the whole map, unknown ids are kept, and a malformed value is refused with
+  **`KEYBINDINGS_INVALID`** (a client bug Error Tracking tells apart); `customLayoutPresets` is the bounded
   resource-free catalog and is the **only** layout value synchronized by the host; current/default preset
   and group limits are web-local); `analyticsEnabled` is the additional-data preference and host gate,
   default `false`, while `analyticsConsentConfirmed` defaults `false` and records completion of the initial
@@ -760,7 +846,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   desktop-only subscription seam, not host-wire state. The page-zoom bridge's one action
   `request(action)` asks the native side to step (`in` / `out`) or reset its page zoom; it returns nothing
   and the web keeps no zoom state. `NativePageZoomAction` is the one definition of the actions; the
-  desktop's zoom chords send the same ones. A browser
+  desktop's zoom chords send the same ones. The clipboard bridge's one action `read()` answers what the
+  system clipboard holds when the webview hid it from a paste: an image (its MIME type and bytes), the files
+  a file manager copied (path, name, size, and an image file's bytes while they fit the read's budget),
+  `oversized` (an image past that budget), `unreadable`, or nothing. A browser
   connection has none of these bridges and renders none of their affordances.
 - **quitConfirmation.ts** — the single home of the quit-confirmation gesture shared by the desktop main
   process (macOS Cmd+Q, key state polled through CoreGraphics) and the web shell (Linux Ctrl+Q, key state
@@ -842,7 +931,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`cacheWarming.get`** / **`cacheWarming.set`** (v111, `CACHE_WARMING_SETTINGS_PROTOCOL_VERSION`; both
   return a **`CacheWarmingSetting`** — pi's `cacheWarming` mode, one of **`CACHE_WARMING_MODES`** `off` /
   `streaming` / `idle` tested by `isCacheWarmingMode`, and `source`: `user` when pi's global `settings.json`
-  names it, `default` when the host's own default applies. The mutation takes `{mode}`; a write pi's
+  names it, `default` when the host's own default, **`DEFAULT_CACHE_WARMING_MODE`** (`streaming`), applies. The mutation takes `{mode}`; a write pi's
   settings loader would silently skip fails with **`CACHE_WARMING_WRITE_FAILED`**. The value lives only in
   pi's file; no AppConfig field mirrors it) /
   **`customEndpoints.list`** / **`customEndpoints.probe`** / **`customEndpoints.save`** /
@@ -926,11 +1015,25 @@ the palette ranks with — kept here so host-side search can rank with the same 
   queued it (merge queue / auto-merge), in which case the branch is never deleted; a merge that landed while
   the branch deletion failed is a success with the reason), and **`workspace.deleteRemoteBranch`** (`{ workspaceId,
   branch }` → `Ack`; `PUSH_AUTH_FAILED` as for a push) /
+  the v133 **pull-request reads** (`PULL_REQUEST_REVIEW_PROTOCOL_VERSION`, gating the prompts'
+  pull-request completion so a newer client sends the command as typed against an older host):
+  **`pr.list`** (`{ projectId, filter: { scope: "review-requested" | "mine" | "all", drafts, author? },
+  query?, cursor? }` → `PullRequestPage { pullRequests, nextCursor?, unavailable? }` — one page of the
+  project's open GitHub pull requests matching the filter and the typed words, most recently updated
+  first, each a `PullRequestSummary` with `baseRef` already resolved on the local remote and
+  `reviewRequested` for the signed-in `gh` user, **without `size`**; when it cannot list, an empty page
+  with the reason — `missing` / `unauthenticated` (the `GhSetupProblem` pair), `not-github`, or
+  `failed`), **`pr.authors`** (`{ projectId, cursor? }` → `PullRequestAuthorPage { authors, nextCursor? }`,
+  the logins of the open pull requests' authors, 100 pull requests a page, each login once per page —
+  the client merges pages; an empty page when it cannot read), **`pr.sizes`** (`{ projectId, numbers }` → `PullRequestSizeEntry[]`, the diff stats of the
+  rows on screen, leaving out any it could not read) and **`pr.get`** (`{ projectId, number }` →
+  `PullRequestSummary | null` with `size`, in any state, `null` when it does not exist or cannot be
+  read; `reviewRequested` is always `false` there) /
   **`project.setTrust`** (persist a project's trust grant → the updated `Project`; gates its committed
   cross-agent skill aliases; `resources: true` also grants pi-level resource trust, see Project trust) /
   **`skill.list`** (a pre-session, skill-only `SlashCommandInfo[]` preview for a `projectId`, resolved from
-  that project's current checkout with its **project-scoped aliases gated by trust**; the eventual worktree
-  session is authoritative) / the **Skills-manager set** — **`project.aliasSkills`** (present committed alias
+  that project's current checkout — or, with v135's optional `baseRef`, its resources at that ref — with its
+  **project-scoped aliases gated by trust**; the eventual worktree session is authoritative) / the **Skills-manager set** — **`project.aliasSkills`** (present committed alias
   names, for the presence-gated notice's count) / **`project.acknowledgeSkills`** (confirm skills that
   appeared after trust) / **`project.setSkillEnabled`** (project baseline) / **`project.setGroupEnabled`**
   (turn a plugin / source tier / `@plugins` on/off at the baseline) / **`workspace.setSkillOverride`**
@@ -968,7 +1071,13 @@ the palette ranks with — kept here so host-side search can rank with the same 
   frames to the workspaces whose diff base that ref is, so their git-derived reads re-converge) / **`skills.state`** (`SkillCatalogEntry[]` — full catalog +
   per-skill `decision` + `group` — for a `workspaceId`) / **`extension.list`** (`ExtensionCatalogEntry[]`,
   no params — the host registry joined with `disabledExtensions`; v82, **`EXTENSION_CATALOG_PROTOCOL_VERSION`**;
-  there is no write method — the Settings switch writes `settings.update { disabledExtensions }`) / **`packages.*`**
+  the Settings switch writes `settings.update { disabledExtensions }`; installed extensions add
+  `extensions.*`, § Installed extensions) /
+  **`extension.query`** (`ExtensionQueryParams` `{ extension, method, params? }` → `unknown`; v130,
+  **`EXTENSION_QUERY_PROTOCOL_VERSION`**: one query of a host-registry extension's server half (reads, and
+  writes only to the extension's own data folder or the workspace's Artifacts).
+  The payload is the extension's own, versioned by its catalog `apiVersion` rather than by the protocol,
+  and the extension validates `params`; refusals are `EXTENSION_DISABLED` / `UNKNOWN_EXTENSION_QUERY`) / **`packages.*`**
   (installed pi packages; v99, § pi packages below) / **`project.skills`** (the same, project-scoped, for
   the pre-session manager) / **`session.reloadResources`** (re-scan skills + rebuild the system prompt for one
   running session; rejected while streaming) /
@@ -1198,7 +1307,10 @@ plain-text diagnostic excerpt and truncation flag, and the same optional `delive
 subagent completion (`wake` | `run` | `appended` — how the result reached the agent; absent in
 transcripts written before it, which keep the old round rules). The guards do not validate it; the
 shared `completionDelivery(details)` reader returns the marker or `undefined`, so an unknown value
-reads as absent everywhere. The conversation may render that historical notice,
+reads as absent everywhere. **`opensChatRound(message)`** is the message-level twin of the chat's
+turn-level `opensRound` ([[submodule-web-chat]]): a user prompt other than a control message, a
+`todo-review-fix`, a continuation request, a handoff, or a completion not delivered as `run`. The host
+uses it to cut artifact round markers where the chat cuts rounds; a web test pins the two together. The conversation may render that historical notice,
 but must never infer current resource authority from it; logs and controls still use scoped reads.
 
 Every read/control validates workspace membership and parent lineage, not merely a syntactically
@@ -1248,6 +1360,20 @@ contracts only.
 - Every request names its target: `workspaceId` for configuration (project scope = that workspace's
   `.pi/mcp.json`; `user` = the global file), plus `sessionId` for per-session actions (`reconnect`,
   `setSessionOverride`, `readOutput`). The host has no notion of an "active workspace".
+- **User-level servers without a workspace** (`MCP_USER_SERVERS_PROTOCOL_VERSION`, 125). `mcp.list`,
+  `mcp.login`, `mcp.logout`, `mcp.testConnection` and `mcp.readLog` take `workspaceId` optionally;
+  `add` / `update` / `remove` take it optionally only at `scope: "user"` (`McpScopeTarget`), and the host
+  refuses project scope without one (`MCP_CONFIG_INVALID`). Without a workspace the list holds the user
+  servers alone with `statuses: []`, the global file's `configErrors`, and `handledElsewhere` from pi's
+  global settings only (no chat is consulted); mutations reconcile every workspace's live chats; probes
+  run against the global file with no project policy, and their `provider.login` pushes carry a
+  `LoginPush.target` (`McpLoginTarget`, whose `workspaceId` is optional) that names no workspace.
+  **`mcp.setUserServer { name, expectedFingerprint, enabled?, exposure? }`** is the no-workspace switch: it merges only those keys into the user entry of
+  the global `mcp.json` (pi's writer semantics — `enabled: true` is removed as the default; exposure is
+  `deferred` / `direct` / `hidden`), so it applies to every project without its own override and to the
+  pi CLI, refused like `update` when the entry no longer has the rendered fingerprint. Inside a workspace
+  the switch stays `setProjectOverride`, a record write; the global file is never written by a toggle
+  there.
 - `mcp.list` returns the configured `McpServerSummary` set (scope, defining file, the `fingerprint` of the
   defining file's entry as rendered, masked endpoint, configured and effective exposure, enablement,
   project override, repo-approval state, pi-equivalent config error — one per named entry, an entry that
@@ -1272,7 +1398,7 @@ contracts only.
   (`{ tool, label }`: grants still valid for the effective entry, listed on that row only) and
   `mcp.revokeToolGrant { workspaceId, name, tool }`, a record-only mutation like `setProjectOverride`.
   An older host never lists grants, so a client needs no gate to hide the revoke.
-- Mutations (`add`, `update`, `remove`, `setProjectOverride`, `approve`, `shareWithRepo`, `revokeToolGrant`) re-check that
+- Mutations (`add`, `update`, `remove`, `setUserServer`, `setProjectOverride`, `approve`, `shareWithRepo`, `revokeToolGrant`) re-check that
   ownership and the current project policy in the same synchronous step as the write and fail with `MCP_HANDLED_ELSEWHERE` where
   `mcp.list` would set `handledElsewhere`, so a stale client cannot write while another manager owns MCP; they return the fresh
   list without waiting for the open chats to reload; `mcp.status` pushes report each reload, so the returned
@@ -1318,7 +1444,7 @@ contracts only.
   `details.thinkrail` that lets cards render identically live, after reload and on another client.
   `mcp.readOutput` serves a result's recorded `fullOutputPath` only and reports `expired` when the temp
   file is gone.
-- `mcp.readLog { workspaceId, name }` returns `McpServerLog`: the server's latest lines (at most 200, oldest
+- `mcp.readLog { workspaceId?, name }` returns `McpServerLog`: the server's latest lines (at most 200, oldest
   first) from pi's shared `mcp.log` and its rotated copy — the `notifications/message` log messages servers
   send pi, attributed by each entry's `[<server>]` head — masked like `detail`; `text` is empty when the
   server logged nothing there. It needs no session: pi keeps one log per agent directory.
@@ -1377,7 +1503,11 @@ and what it loaded, never pi's own types.
   (the host's effective state: `false` when any of `switchKeys` is in `disabledPackages`; a client
   renders it as is, never recomputes it), `shadowed` (a user declaration pi leaves aside because the
   repository declares the same identity outright; a repository `autoload: false` override is a delta
-  over the user install, so its resources land on the user row and nothing is shadowed), and
+  over the user install, so its resources land on the user row and nothing is shadowed), `supersededBy`
+  (`{ name, title }` of the ThinkRail extension, on now, whose `supersedesPackages` names this installed
+  package — host sessions leave its extensions out, so the row says it is replaced rather than showing a
+  package that never loads as merely enabled; absent otherwise and before v130; a switch of that
+  extension re-lists through `packages.changed`), and
   `resources: PiPackageResource[]` — every extension, skill and prompt file (themes are terminal-only and
   never listed) with pi's `enabled` (read-only here: a resource inside a package is switched with its
   package), pi's `pi config` display name, and for an extension some loader has recorded the `tools`
@@ -1399,14 +1529,75 @@ and what it loaded, never pi's own types.
   (opens the install folder or a loose file's folder; the path must be in the current catalog). The
   package switch is `settings.update { disabledPackages }`, converging on `settings.changed` like the
   extension switches. **`packages.changed`** (no payload) tells an open page to re-list after an outside
-  edit, a chat load that installed something, or an update.
+  edit, a chat load that installed something, an update, or a package or extension switch.
 - Error codes: `PACKAGE_SOURCE_INVALID` (also an unsupported `type` / `scope`, validated at the boundary),
   `PACKAGE_OFFLINE` (npm/git only; local installs work offline), `PACKAGE_UNTRUSTED`, `PACKAGE_UNKNOWN`,
-  `PACKAGE_INSTALL_FAILED`, `PACKAGE_REMOVE_FAILED`, `PACKAGE_UPDATE_FAILED`,
+  `PACKAGE_INSTALL_FAILED` (with its two named causes, `PACKAGE_NOT_FOUND` — npm found no such package
+  or dependency — and `PACKAGE_REGISTRY_UNREACHABLE`; all three carry pi's text, npm's output included),
+  `PACKAGE_REMOVE_FAILED`, `PACKAGE_UPDATE_FAILED`,
   `PACKAGE_SETTINGS_WRITE_FAILED`, and `PACKAGE_INSTALLED_UNLISTED` — the declaration was persisted but
   the host could not produce the row; of the install codes only `PACKAGE_SOURCE_INVALID`,
-  `PACKAGE_OFFLINE`, `PACKAGE_UNTRUSTED`, `PACKAGE_INSTALL_FAILED` and `PACKAGE_SETTINGS_WRITE_FAILED`
-  are raised before anything is written, and a client may claim "nothing was added" only for those.
+  `PACKAGE_OFFLINE`, `PACKAGE_UNTRUSTED`, the three install-failure codes and `PACKAGE_SETTINGS_WRITE_FAILED`
+  are raised before anything is written, and a client may claim "nothing was added" only for those. A
+  client that does not know a newer code shows the message and makes no such claim.
+
+## Installed extensions
+
+`INSTALLED_EXTENSIONS_PROTOCOL_VERSION` (131) gates what the host adds for extensions authored outside
+the repository ([[module-thinkrail-extensions]] § Installed extensions): the extra `extension.list`
+fields, the `extensions.*` methods, the `extensions.changed` channel and `packages.install`'s `installed`
+kind. Below it a client sees installed extensions as ordinary `extension.list` rows; built-in rows mean
+what they always did.
+
+- **`ExtensionCatalogEntry`** gains `kind` (`builtin` | `installed`; absent from an older host, read as
+  built in). An installed entry adds `source` (the declaration in `extensions.json`, exactly as written —
+  the target of the methods below), `version`, `state` (`InstalledExtensionState`: `loaded` — also a
+  web-only extension; `failed` — install or load error, a duplicate name; `incompatible` — the manifest's
+  `api` is not this host's major or is a newer minor), `error` (the reason, the host's or pi's text) and
+  `web` (`ExtensionWebHalf`, `{ url, styles?, shadowed? }`: host-relative URLs, only when the extension is
+  loaded, compatible and has a web half, whether switched on or off; `shadowed` names the tools its server
+  half registers that the host keeps, which the client never draws with this web half's renderers). `name` is the npm package name — the key of
+  `disabledExtensions` and `extensionSettings` as for a built-in; `title` is the manifest's, else the
+  name; `description` the package's. An installed entry's `settings` carry the extension's own `title` /
+  `description` (`ExtensionSettingDescriptor`), which a client shows instead of locale keys.
+- **Web half route:** `GET /extensions/<encodeURIComponent(name)>/<token>/<manifest path>`
+  (`EXTENSION_ASSETS_ROUTE`, a value export, is the `/extensions/` prefix) — the token
+  changes with the files, so the response is immutable; a client uses the URLs as given.
+- **`packages.install`** returns `PackageInstallResult`: the pi package row with `installed: "package"`,
+  or for a package whose `package.json` carries a `thinkrail` manifest `installed: "extension"`, the
+  `extension` entry, and the same fields shaped as a user-scope row with no resources (so an older
+  client's dialog still names what landed). Like a package, a confirmed extension install turns it on:
+  its `name` leaves `disabledExtensions` (its `extensionSettings` values are kept). The host fetches and
+  inspects first and declares last, so for an extension `PACKAGE_SOURCE_INVALID`, `PACKAGE_OFFLINE`,
+  `PACKAGE_INSTALL_FAILED`, **`EXTENSION_SCOPE_UNSUPPORTED`** (an extension asked for at repository
+  scope) and **`EXTENSIONS_FILE_INVALID`** are all raised before `extensions.json` is written.
+- **`extensions.remove { source }`** (drops the declaration; the host-owned install folder goes at the
+  next host start; a folder source's own folder is never touched) / **`extensions.update { source }`** (a fresh install of the
+  source in a new folder, or a re-load in place for a folder source; the old install stays when the new
+  one fails) / **`extensions.checkUpdates { force? }`** (the npm and git `{ source }`s with a newer
+  version, cached briefly unless `force`) — each resolves `Ack` / the list once the host reconciled.
+  Codes: **`EXTENSION_UNKNOWN`** (no such declaration), **`EXTENSIONS_FILE_INVALID`** (`extensions.json`
+  does not parse, so the host will not rewrite it), and the package codes `PACKAGE_SOURCE_INVALID`,
+  `PACKAGE_OFFLINE`, `PACKAGE_INSTALL_FAILED`, `PACKAGE_UPDATE_FAILED` for the install pipeline both share.
+- **`extensions.changed`** (no payload) follows every reconcile that changed what `extension.list`
+  reports; a client re-lists.
+
+### Community catalog (Browse)
+
+`EXTENSION_BROWSE_PROTOCOL_VERSION` (132) adds the in-app Browse read and one field:
+
+- **`extensions.browse { force? }` → `ExtensionBrowseResult`** (`{ generatedAt, extensions:
+  ExtensionBrowseEntry[] }`): the website's `catalog.json` ([[module-thinkrail-extensions]] § Catalog) as the
+  host fetched and validated it ([[submodule-server-extension-catalog]]), each `ExtensionListing` (`name`,
+  `version`, `title?`, `description`, `author?`, `api`, `halves` ⊆ `server`/`web`, `install`
+  = `npm:<name>`, `npm`, `repository?`, `publishedAt`) plus **`installed`** — an installed extension already
+  has that name. A listing carries no image: the host ignores a catalog entry's `image`
+  ([[submodule-server-extension-catalog]]), so no author-chosen URL reaches a client. The host caches the file for minutes; `force` refetches. Codes: **`EXTENSION_CATALOG_OFFLINE`**
+  (`PI_OFFLINE`), **`EXTENSION_CATALOG_UNREACHABLE`** (network, timeout, HTTP status) and
+  **`EXTENSION_CATALOG_INVALID`** (not the expected shape). `api` is passed through uninterpreted; the client
+  decides whether this app can load it.
+- An installed **`ExtensionCatalogEntry`** also carries **`api`** (the manifest's, when it was read), so a
+  client can say whether an `incompatible` extension needs a newer ThinkRail or was built for an older one.
 
 ## Voice input
 

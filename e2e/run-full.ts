@@ -91,7 +91,7 @@ async function main(): Promise<number> {
 	}
 	let webBuildReady = false;
 	if (!listOnly) {
-		const { exitCode } = await runE2eProcess([bun, "run", "build:web"]);
+		const { exitCode } = await runE2eProcess([bun, "run", "build:e2e"]);
 		if (exitCode !== 0) return exitCode;
 		webBuildReady = true;
 	}

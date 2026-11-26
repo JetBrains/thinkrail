@@ -1,6 +1,11 @@
 import { realpathSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
-import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
+import {
+	closeSettings,
+	enterDefaultWorkspace,
+	openFixtureProject,
+	openPersistedChat,
+} from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 import {
@@ -80,7 +85,7 @@ const selectNewestFirst = async (page: Page) => {
 	const option = page.getByTestId("chat-order-newest-first");
 	await option.click();
 	await expect(option).toHaveAttribute("data-active", "true");
-	await page.keyboard.press("Escape");
+	await closeSettings(page);
 };
 
 const history = (exchanges: number) =>

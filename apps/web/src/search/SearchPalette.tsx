@@ -1,5 +1,4 @@
 import {
-	RiCornerDownLeftLine,
 	RiErrorWarningLine,
 	RiInformationLine,
 	RiSearchLine,
@@ -21,10 +20,10 @@ import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { Keycaps } from "@thinkrail/ui/keycaps";
+import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import {
-	Fragment,
 	type KeyboardEvent as ReactKeyboardEvent,
 	type MouseEvent as ReactMouseEvent,
 	type ReactNode,
@@ -36,11 +35,9 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { shortcutKeys } from "../commands";
-import { AttentionDot } from "../components/AttentionDot";
 import { KeyHint } from "../components/KeyHint";
-import { highlightRanges } from "../components/MatchHighlight";
 import { RunningIcon } from "../components/RunningIcon";
+import { LOCAL_KEY_DEFAULTS } from "../keybindings";
 import { hasPlatformModifier, useMediaQuery } from "../lib";
 import { selectHostReachable, useAppStore } from "../store";
 import { hostItems, hostOverflow } from "./hostItems";
@@ -70,6 +67,7 @@ import {
 	stripScopePrefix,
 	withScopePrefix,
 } from "./query";
+import { Row } from "./Row";
 import { scopeChordIndex } from "./scopeChord";
 import {
 	askEligible,
@@ -154,6 +152,7 @@ function PaletteContent({
 	notice,
 }: SearchPaletteProps) {
 	const t = useT();
+	const keys = useLocalKeys("palette", LOCAL_KEY_DEFAULTS.palette);
 	const [query, setQuery] = useState("");
 	const [expanded, setExpanded] = useState<ReadonlySet<string>>(NO_GROUPS);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -360,9 +359,26 @@ function PaletteContent({
 		});
 	};
 
+	const runLocal = (local: string | null, repeat: boolean): boolean => {
+		if (local === "palette.startWork") {
+			if (!repeat) startFromText();
+			return true;
+		}
+		if (askInput && local === "palette.ask") {
+			if (!repeat) askFromText();
+			return true;
+		}
+		if (local === "palette.preview") {
+			if (wide) togglePreview();
+			return true;
+		}
+		return false;
+	};
+
 	const onEscapeKeyDown = (event: KeyboardEvent) => {
 		event.preventDefault();
 		if (isImeComposing(event)) return;
+		if (runLocal(keys.match(event), event.repeat)) return;
 		if (!event.isTrusted || !query) {
 			onClose();
 			return;
@@ -383,31 +399,22 @@ function PaletteContent({
 			event.preventDefault();
 			if (fromFrame) inputRef.current?.focus();
 		};
+		const local = keys.match(event.nativeEvent);
+		if (runLocal(local, event.repeat)) {
+			claim();
+			return;
+		}
+		const commandModifier = event.altKey || event.ctrlKey || event.metaKey;
+		if (event.key === "Tab") {
+			claim();
+			if (local === null && !commandModifier) cycleScope(event.shiftKey ? -1 : 1);
+			return;
+		}
 		const mod = hasPlatformModifier(event.nativeEvent);
 		if (mod && event.code === "KeyK" && !event.shiftKey && !event.altKey) {
 			event.preventDefault();
 			event.stopPropagation();
 			onClose();
-			return;
-		}
-		if (event.key === "Tab") {
-			claim();
-			cycleScope(event.shiftKey ? -1 : 1);
-			return;
-		}
-		if (mod && event.key === "Enter" && !event.altKey && !event.shiftKey) {
-			claim();
-			if (!event.repeat) startFromText();
-			return;
-		}
-		if (askInput && event.altKey && event.key === "Enter" && !mod && !event.shiftKey) {
-			claim();
-			if (!event.repeat) askFromText();
-			return;
-		}
-		if (mod && event.code === "KeyI" && !event.shiftKey && !event.altKey) {
-			claim();
-			if (wide) togglePreview();
 			return;
 		}
 		const chord = scopeChordIndex(event.nativeEvent);
@@ -419,19 +426,23 @@ function PaletteContent({
 			}
 			return;
 		}
-		switch (event.key) {
-			case "ArrowDown":
-				claim();
-				select(selectedIndexRef.current + 1);
-				return;
-			case "ArrowUp":
-				claim();
-				select(selectedIndexRef.current - 1);
-				return;
-			case "Enter":
-				claim();
-				if (!event.repeat) activate(selected);
-				return;
+		if (local === null && !commandModifier) {
+			switch (event.key) {
+				case "ArrowDown":
+					if (event.shiftKey) break;
+					claim();
+					select(selectedIndexRef.current + 1);
+					return;
+				case "ArrowUp":
+					if (event.shiftKey) break;
+					claim();
+					select(selectedIndexRef.current - 1);
+					return;
+				case "Enter":
+					claim();
+					if (!event.repeat) activate(selected);
+					return;
+			}
 		}
 		if (fromFrame && !event.ctrlKey && !event.metaKey && !MODIFIER_KEYS.has(event.key)) {
 			inputRef.current?.focus();
@@ -566,13 +577,10 @@ function PaletteContent({
 						<KeyHint keys={["↵"]} label={t(enterLabel(selected?.item))} />
 						<KeyHint keys={["Tab"]} label={t("search.hint.scope")} />
 						{startInput ? (
-							<KeyHint
-								keys={shortcutKeys({ key: "↵", mod: true })}
-								label={t("search.hint.start")}
-							/>
+							<KeyHint keys={keys.caps("palette.startWork")} label={t("search.hint.start")} />
 						) : null}
 						{askInput && !askInput.disabledReason && selected?.item.kind !== "ask" ? (
-							<KeyHint keys={shortcutKeys({ key: "↵", alt: true })} label={t("search.hint.ask")} />
+							<KeyHint keys={keys.caps("palette.ask")} label={t("search.hint.ask")} />
 						) : null}
 						<KeyHint keys={["esc"]} label={t(query ? "search.hint.clear" : "search.hint.close")} />
 					</div>
@@ -591,7 +599,7 @@ function PaletteContent({
 							onClick={togglePreview}
 						>
 							{t("search.palette.preview")}
-							<Keycaps keys={shortcutKeys({ key: "I", mod: true })} />
+							<Keycaps keys={keys.caps("palette.preview")} />
 						</Button>
 					) : null}
 				</footer>
@@ -794,141 +802,6 @@ function Sections({
 			})}
 		</fieldset>
 	));
-}
-
-function Row({
-	row,
-	id,
-	index,
-	selected,
-	onHover,
-	onActivate,
-}: {
-	row: PaletteRow;
-	id: string;
-	index: number;
-	selected: boolean;
-	onHover: () => void;
-	onActivate: () => void;
-}) {
-	const { item } = row;
-	const Icon = item.icon;
-	return (
-		<div
-			id={id}
-			role="option"
-			tabIndex={-1}
-			aria-selected={selected}
-			aria-disabled={item.disabledReason ? true : undefined}
-			data-testid="search-row"
-			data-index={index}
-			data-item-id={item.id}
-			data-kind={item.kind}
-			data-top={row.top === true}
-			onMouseMove={selected ? undefined : onHover}
-			onMouseDown={(event) => event.preventDefault()}
-			onClick={onActivate}
-			onKeyDown={(event) => {
-				if (event.key === "Enter" || event.key === " ") {
-					event.preventDefault();
-					onActivate();
-				}
-			}}
-			className={cn(
-				"group flex cursor-pointer items-center gap-8 rounded-sm px-8 py-4",
-				item.subtitle ? "min-h-40" : "min-h-32",
-				row.top ? "min-h-48" : undefined,
-				selected ? "bg-control-bg-selected" : undefined,
-				item.disabledReason ? "cursor-default" : undefined,
-			)}
-		>
-			{item.running ? (
-				<RunningIcon className="size-16 shrink-0 text-text-muted group-aria-selected:text-primary" />
-			) : (
-				<Icon
-					aria-hidden
-					className={cn(
-						"size-16 shrink-0",
-						item.disabledReason
-							? "text-text-disabled"
-							: "text-text-muted group-aria-selected:text-primary",
-					)}
-				/>
-			)}
-			<span className="flex min-w-0 flex-1 flex-col">
-				<span
-					data-title-source={item.titleSource}
-					title={item.titleTooltip}
-					className={cn(
-						"truncate",
-						row.top ? "tr-title-section" : "tr-text-ui",
-						item.disabledReason ? "text-text-disabled" : "text-text-default",
-					)}
-				>
-					<RowTitle title={item.title} lead={item.titleLead ?? 0} ranges={row.ranges.title} />
-				</span>
-				{item.subtitle ? (
-					<span
-						data-testid="search-row-subtitle"
-						className="truncate tr-text-metadata text-text-subtle"
-					>
-						{highlightSpans(item.subtitle, row.ranges.subtitle, item.subtitleEmphasis)}
-					</span>
-				) : null}
-			</span>
-			<span className="flex min-w-0 max-w-[50%] items-center gap-8 tr-text-metadata text-text-subtle">
-				{item.disabledReason ? <span className="truncate">{item.disabledReason}</span> : null}
-				{item.badge ? (
-					<span className="truncate rounded-xs border border-border-muted px-4">{item.badge}</span>
-				) : null}
-				{item.attention && item.attention !== "running" ? <AttentionDot /> : null}
-				{item.shortcut ? <Keycaps keys={shortcutKeys(item.shortcut)} /> : null}
-				{selected && !item.disabledReason ? (
-					<RiCornerDownLeftLine aria-hidden className="size-14 text-text-muted" />
-				) : null}
-			</span>
-		</div>
-	);
-}
-
-function RowTitle({
-	title,
-	lead,
-	ranges = [],
-}: {
-	title: string;
-	lead: number;
-	ranges: readonly (readonly [number, number])[] | undefined;
-}): ReactNode {
-	return highlightSpans(title, ranges, lead > 0 ? [[0, lead]] : undefined);
-}
-
-type Span = readonly [number, number];
-
-function highlightSpans(
-	text: string,
-	ranges: readonly Span[] | undefined,
-	spans: readonly Span[] | undefined,
-): ReactNode {
-	if (!spans?.length) return highlightRanges(text, ranges);
-	const cuts = [...new Set([0, text.length, ...spans.flat()])]
-		.filter((cut) => cut >= 0 && cut <= text.length)
-		.sort((a, b) => a - b);
-	return cuts.slice(1).map((end, index) => {
-		const start = cuts[index] ?? 0;
-		const inner = (ranges ?? [])
-			.filter(([from, to]) => from < end && to > start)
-			.map(([from, to]): Span => [Math.max(from, start) - start, Math.min(to, end) - start]);
-		const content = highlightRanges(text.slice(start, end), inner);
-		const marked = spans.some(([from, to]) => from <= start && end <= to);
-		return marked ? (
-			<span key={start} className="text-text-muted">
-				{content}
-			</span>
-		) : (
-			<Fragment key={start}>{content}</Fragment>
-		);
-	});
 }
 
 function Preview({

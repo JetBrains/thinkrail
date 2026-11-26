@@ -1,5 +1,9 @@
 import { afterAll, beforeEach, expect, mock, test } from "bun:test";
-import type { WorkspaceArtifact, WsErrorCode } from "@thinkrail/contracts";
+import {
+	ARTIFACT_OUTPUTS_PROTOCOL_VERSION,
+	type WorkspaceArtifact,
+	type WsErrorCode,
+} from "@thinkrail/contracts";
 
 const requests: string[] = [];
 let restoreFailure: WsErrorCode | null = null;
@@ -21,7 +25,9 @@ mock.module("../transport", () => ({
 }));
 
 const { useAppStore } = await import("../store");
-const { openArtifact, restoreDeletedArtifact } = await import("./artifactActions");
+const { openArtifact, restoreDeletedArtifact, revealArtifactsListing } = await import(
+	"./artifactActions"
+);
 const initial = useAppStore.getInitialState();
 const PATH = ".thinkrail/context/report.md";
 const deleted = (deletedAt = 1): WorkspaceArtifact => ({
@@ -104,4 +110,24 @@ test("a failed restore is asked again on the next open", async () => {
 	restoreFailure = null;
 	expect(await restore(record)).toBe(true);
 	expect(requests).toEqual(["artifacts.restore", "artifacts.restore"]);
+});
+
+test("revealing the Artifacts tool for a written file leaves Outputs for List, any other view as it is", () => {
+	const reveal = (artifactsView: "outputs" | "tree" | null) => {
+		useAppStore.setState({
+			protocolVersion: ARTIFACT_OUTPUTS_PROTOCOL_VERSION,
+			disabledExtensions: [],
+			artifactsView,
+			layoutIntents: [],
+		});
+		revealArtifactsListing("w6");
+		const { artifactsView: view, layoutIntents: intents } = useAppStore.getState();
+		return { view, intents };
+	};
+	const revealed = [
+		expect.objectContaining({ kind: "reveal-tool", workspaceId: "w6", tool: "artifacts" }),
+	];
+	expect(reveal(null)).toEqual({ view: "list", intents: revealed });
+	expect(reveal("outputs")).toEqual({ view: "list", intents: revealed });
+	expect(reveal("tree")).toEqual({ view: "tree", intents: revealed });
 });

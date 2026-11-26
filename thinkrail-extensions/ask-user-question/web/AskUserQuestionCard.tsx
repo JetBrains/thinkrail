@@ -5,7 +5,9 @@ import { useT } from "@thinkrail/locales/react";
 import type { AskUserQuestionResult } from "@thinkrail/pi-ask-user-question/core";
 import { AttentionLine } from "@thinkrail/ui/attention-line";
 import { Button, IconButton } from "@thinkrail/ui/button";
-import { hasPlatformModifier, isImeComposing } from "@thinkrail/ui/keyboard";
+import { focusAndReveal } from "@thinkrail/ui/focus";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	type FocusEvent,
@@ -30,9 +32,12 @@ import {
 	isCardBackground,
 	isInsidePreview,
 	isTextEntryTarget,
+	revealActiveTab,
 	shouldClaimQuestionFocus,
 } from "./focus";
 import { GhostPage } from "./ghost";
+import { CARD_COMMANDS, CARD_KEYS, CARD_SCOPE } from "./keys";
+import { isHtmlSource, previewSource, scrollsWithPage } from "./previews";
 import { QuestionBody } from "./QuestionBody";
 import { readAskUserQuestionResult } from "./readResult";
 import {
@@ -49,18 +54,28 @@ import {
 	deriveAnswers,
 	discussReasonPatch,
 	emptyQState,
-	hasPreview,
+	type FootControl,
+	footKeyAction,
+	hasOptionPreviews,
 	nudgeShowsOnPage,
 	openNotePatch,
+	pageKeyTarget,
 	parseQuestions,
 	type QState,
-	questionPageForKey,
 	selectOptionPatch,
 	toggleCustomPatch,
 	toggleMultiPatch,
 } from "./state";
 
 const noLayoutChange = () => () => undefined;
+
+type Announced = "plain" | "elsewhere" | null;
+type ReplyVia = "key" | "click";
+
+const via = (event: { detail: number }): ReplyVia => (event.detail === 0 ? "key" : "click");
+
+const isPlainEscape = (event: KeyboardEvent<HTMLElement>) =>
+	event.key === "Escape" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey;
 
 const panelDomId = (toolCallId: string) => `ask-panel-${toolCallId}`;
 const tabDomId = (toolCallId: string, page: number) => `ask-tab-${toolCallId}-${page}`;
@@ -121,6 +136,7 @@ export function AskUserQuestionCard({
 	onOpenFile,
 }: ToolRenderProps) {
 	const t = useT();
+	const keys = useLocalKeys(CARD_SCOPE, CARD_COMMANDS);
 	const localFocusScope = useRef<object>({}).current;
 	const focusScope = interaction?.focusScope ?? localFocusScope;
 	const placement = interaction?.placement;
@@ -131,6 +147,7 @@ export function AskUserQuestionCard({
 	const cardRef = useRef<HTMLElement>(null);
 	const bodyRef = useRef<HTMLDivElement>(null);
 	const primaryRef = useRef<HTMLButtonElement>(null);
+	const skipRef = useRef<HTMLButtonElement>(null);
 	const questions = useMemo(() => parseQuestions(args), [args]);
 	const resolvedResult =
 		readAskUserQuestionResult(interaction?.state.response) ?? readAskUserQuestionResult(result);
@@ -151,7 +168,10 @@ export function AskUserQuestionCard({
 	const [submitted, setSubmitted] = useState(
 		() => cardStateCache.get(toolCallId)?.submitted ?? false,
 	);
-	const [announced, setAnnounced] = useState(false);
+	const [announced, setAnnounced] = useState<Announced>(null);
+	const [holdsFocus, setHoldsFocus] = useState(false);
+	const mayClaimFocus = interaction?.mayClaimFocus;
+	const landingChord = interaction?.landingChord ?? "";
 	const [nudge, setNudge] = useState<ChoiceNudge | null>(null);
 	const [nudgeSpoken, setNudgeSpoken] = useState(false);
 	const nudgeSeq = useRef(0);
@@ -194,7 +214,7 @@ export function AskUserQuestionCard({
 		if (!reclaimFocusAfterFailedSend.current || submitted) return;
 		reclaimFocusAfterFailedSend.current = false;
 		const card = cardRef.current;
-		if (card) focusQuestionAttention(card);
+		if (card) focusQuestionAttention(card, focusAndReveal);
 	});
 
 	useEffect(() => {
@@ -204,27 +224,35 @@ export function AskUserQuestionCard({
 			const card = cardRef.current;
 			if (!card) return;
 			bodyRef.current?.scrollTo({ top: 0 });
-			focusCurrentQuestionPage(card);
+			if (!activeQuestionPage(card).contains(document.activeElement))
+				focusCurrentQuestionPage(card);
+			revealActiveTab(card);
 		});
 		return () => cancelAnimationFrame(frame);
 	}, [tab]);
 
 	useEffect(() => {
 		if (!awaiting || !canRespond || streaming || questions.length === 0 || submitted) return;
-		if (placement === "stub") return;
+		if (placement === "stub" || !mayClaimFocus) return;
 		const frame = requestAnimationFrame(() => {
 			const card = cardRef.current;
 			if (!card || !claimQuestionAttention(focusScope, toolCallId)) return;
-			setAnnounced(true);
-			if (card.contains(document.activeElement)) return;
-			const kind = focusTargetKind(document.activeElement, card);
-			if (shouldClaimQuestionFocus(kind, hasCoarsePointer())) focusQuestionAttention(card);
+			const active = document.activeElement;
+			const kind = focusTargetKind(active, card.contains(active));
+			const coarse = hasCoarsePointer();
+			if (shouldClaimQuestionFocus(kind, coarse, mayClaimFocus())) focusQuestionAttention(card);
+			else if (kind !== "inside" && !coarse) {
+				setAnnounced("elsewhere");
+				return;
+			}
+			setAnnounced("plain");
 		});
 		return () => cancelAnimationFrame(frame);
 	}, [
 		awaiting,
 		canRespond,
 		focusScope,
+		mayClaimFocus,
 		placement,
 		questions.length,
 		streaming,
@@ -238,8 +266,8 @@ export function AskUserQuestionCard({
 		const frame = requestAnimationFrame(() => {
 			const card = cardRef.current;
 			if (!card) return;
-			if (hasCoarsePointer()) focusCurrentQuestionPage(card);
-			else focusQuestionAttention(card);
+			if (hasCoarsePointer()) focusCurrentQuestionPage(card, focusAndReveal);
+			else focusQuestionAttention(card, focusAndReveal);
 		});
 		return () => cancelAnimationFrame(frame);
 	}, [docked, dock.focusRequest]);
@@ -254,15 +282,14 @@ export function AskUserQuestionCard({
 		answers.filter((a) => a.kind === "discuss").map((a) => a.questionIndex),
 	);
 
-	const reply = (r: AskUserQuestionResult) => {
+	const reply = (r: AskUserQuestionResult, by: ReplyVia) => {
 		if (!interaction || !canRespond) return;
-		const held = document.activeElement;
-		const handedOff = !!held && !!cardRef.current?.contains(held) && held.matches(":focus-visible");
-		if (handedOff) interaction.focusComposer();
+		if (by === "click") interaction.focusTranscript();
+		else interaction.focusComposer();
 		completeSubmitChange.current = prepareGeometryChange(() => cardRef.current, "user");
 		setSubmitted(true);
 		interaction.respond(r).catch(() => {
-			reclaimFocusAfterFailedSend.current = handedOff;
+			reclaimFocusAfterFailedSend.current = true;
 			setSubmitted(false);
 		});
 	};
@@ -305,66 +332,77 @@ export function AskUserQuestionCard({
 	const canSubmit = canRespond && answers.length > 0;
 	const nudgeVisible = nudgeShowsOnPage(nudge, idx, answeredIndices.has(idx));
 
+	const primaryEnabled = showContinue || canSubmit;
+	const paneSources = hasOptionPreviews(q) ? q.options.map(previewSource) : [];
+
+	const askForChoice = () => {
+		if (!canRespond) return;
+		if (collapsed) setDockCollapsed(toolCallId, false);
+		nudgeSeq.current += 1;
+		setNudge({ question: idx, seq: nudgeSeq.current });
+	};
+
 	const submitRound = () => {
 		if (!canRespond) return;
 		if (answers.length === 0) {
-			nudgeSeq.current += 1;
-			setNudge({ question: idx, seq: nudgeSeq.current });
+			askForChoice();
 			return;
 		}
 		setNudge(null);
-		reply({ answers, cancelled: false });
+		reply({ answers, cancelled: false }, "key");
 	};
 
-	const focusPrimary = () => {
-		const button = primaryRef.current;
+	const focusFoot = (control: FootControl) => {
+		const button = control === "skip" ? skipRef.current : primaryRef.current;
 		if (!button || button.disabled) return false;
-		button.focus({ preventScroll: true });
+		focusAndReveal(button);
 		return true;
 	};
 
-	const onPrimaryKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+	const onFootKeyDown = (control: FootControl) => (event: KeyboardEvent<HTMLButtonElement>) => {
 		if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
-		if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+		const target = footKeyAction(event.key, control, primaryEnabled);
 		const card = cardRef.current;
-		if (!card) return;
-		const page = activeQuestionPage(card);
-		const target =
-			event.key === "ArrowUp"
-				? page.querySelector<HTMLElement>("[data-ask-custom-row] textarea")
-				: page.querySelector<HTMLElement>("[data-ask-option]");
-		if (!target) return;
+		if (!target || !card) return;
 		event.preventDefault();
-		target.focus({ preventScroll: true });
+		if (target === "stay") return;
+		if (target === "skip" || target === "primary") {
+			focusFoot(target);
+			return;
+		}
+		const page = activeQuestionPage(card);
+		const choice =
+			target === "other"
+				? page.querySelector<HTMLElement>("[data-ask-custom-row] textarea")
+				: (page.querySelector<HTMLElement>("[data-ask-option]") ??
+					page.querySelector<HTMLElement>("[data-ask-custom-row] textarea"));
+		if (choice) focusAndReveal(choice);
 	};
 
 	const onCardKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-		if (collapsed || isImeComposing(event.nativeEvent)) return;
+		if (isImeComposing(event.nativeEvent)) return;
 		if (!(event.target instanceof Node) || !event.currentTarget.contains(event.target)) return;
 		if (isInsidePreview(event.target)) return;
-		if (
-			event.key === "Escape" &&
-			event.shiftKey &&
-			!event.altKey &&
-			!event.ctrlKey &&
-			!event.metaKey
-		) {
+		const command = keys.match(event.nativeEvent);
+		if (command === CARD_KEYS.skip) {
 			event.preventDefault();
 			event.stopPropagation();
-			reply({ answers: [], cancelled: true });
+			reply({ answers: [], cancelled: true }, "key");
 			return;
 		}
-		if (
-			event.key === "Enter" &&
-			hasPlatformModifier(event.nativeEvent) &&
-			!event.altKey &&
-			!event.shiftKey
-		) {
+		if (command === CARD_KEYS.submit) {
 			event.preventDefault();
 			event.stopPropagation();
 			submitRound();
 			return;
 		}
+		if (isPlainEscape(event) && !event.defaultPrevented && !isTextEntryTarget(event.target)) {
+			event.preventDefault();
+			event.stopPropagation();
+			interaction?.focusComposer();
+			return;
+		}
+		if (collapsed || event.defaultPrevented) return;
 		if (
 			event.target === event.currentTarget &&
 			(event.key === "ArrowUp" || event.key === "ArrowDown") &&
@@ -374,21 +412,17 @@ export function AskUserQuestionCard({
 			!event.metaKey
 		) {
 			event.preventDefault();
-			focusCurrentQuestionPage(event.currentTarget);
+			focusCurrentQuestionPage(event.currentTarget, focusAndReveal);
 			return;
 		}
-		if (
-			!multipleQuestions ||
-			event.altKey ||
-			event.ctrlKey ||
-			event.metaKey ||
-			isTextEntryTarget(event.target)
-		)
-			return;
-		const next = questionPageForKey(event.key, idx, lastPage);
-		if (next == null) return;
+		if (event.altKey || event.ctrlKey || event.metaKey || isTextEntryTarget(event.target)) return;
+		const onTab = event.target instanceof Element && event.target.closest('[role="tab"]') !== null;
+		const target = pageKeyTarget(event.key, idx, lastPage, { edges: onTab, canSubmit });
+		if (target === null) return;
 		event.preventDefault();
-		if (next !== idx) setTab(next);
+		if (target.kind === "submit") focusFoot("primary");
+		else if (target.kind === "needsChoice") askForChoice();
+		else if (target.page !== idx) setTab(target.page);
 	};
 
 	const closeNote = () => {
@@ -399,9 +433,12 @@ export function AskUserQuestionCard({
 		if (isCardBackground(event.target, event.currentTarget)) closeNote();
 	};
 
+	const onCardFocus = () => setHoldsFocus(true);
+
 	const onCardBlur = (event: FocusEvent<HTMLElement>) => {
-		if (event.currentTarget.contains(event.relatedTarget) || !document.hasFocus()) return;
-		closeNote();
+		if (event.currentTarget.contains(event.relatedTarget)) return;
+		setHoldsFocus(false);
+		if (document.hasFocus()) closeNote();
 	};
 
 	const selectPage = (page: number) => {
@@ -411,6 +448,7 @@ export function AskUserQuestionCard({
 
 	const tabs = multipleQuestions ? (
 		<div
+			ref={revealActiveTab}
 			role="tablist"
 			aria-label={t("tools.ask.tabsLabel")}
 			className={cn(
@@ -457,10 +495,12 @@ export function AskUserQuestionCard({
 							<QuestionBody
 								question={question}
 								state={pageState}
+								keys={keys}
 								pageKeys={multipleQuestions}
 								discussAvailable={discussAvailable}
 								primaryEnabled={page < lastPage || canSubmit}
-								onFocusPrimary={focusPrimary}
+								claimFocus={active && canRespond && !collapsed}
+								onFocusFoot={focusFoot}
 								onOpenFile={onOpenFile}
 								onSelect={(label, cursor) =>
 									patch(page, selectOptionPatch(pageState, label, cursor))
@@ -499,10 +539,14 @@ export function AskUserQuestionCard({
 	const footer = (
 		<div className="flex flex-col gap-8 sm:flex-row sm:items-center sm:justify-between">
 			<ModeHint
+				keys={keys}
 				multiSelect={!!q.multiSelect}
 				multipleQuestions={multipleQuestions}
-				previewKeys={!q.multiSelect && q.options.some(hasPreview)}
+				previewKeys={paneSources.some(scrollsWithPage)}
 				discussKey={discussAvailable}
+				interactKey={paneSources.some(isHtmlSource)}
+				compareKey={paneSources.some((source) => source !== null)}
+				escapeKey={docked}
 			/>
 			<div className="flex items-center justify-end gap-12">
 				{nudgeVisible ? (
@@ -518,11 +562,13 @@ export function AskUserQuestionCard({
 					{nudgeVisible && nudgeSpoken ? t("tools.ask.needsChoiceAnnouncement") : ""}
 				</span>
 				<Button
+					ref={skipRef}
 					variant="ghost"
 					size="l"
 					tabIndex={0}
 					data-testid="ask-skip"
-					onClick={() => reply({ answers: [], cancelled: true })}
+					onKeyDown={onFootKeyDown("skip")}
+					onClick={(event) => reply({ answers: [], cancelled: true }, via(event))}
 					disabled={!canRespond}
 					className="shrink-0"
 				>
@@ -535,7 +581,7 @@ export function AskUserQuestionCard({
 						size="l"
 						tabIndex={0}
 						data-testid="ask-continue"
-						onKeyDown={onPrimaryKeyDown}
+						onKeyDown={onFootKeyDown("primary")}
 						onClick={() => setTab(idx + 1)}
 						className="shrink-0"
 					>
@@ -548,8 +594,8 @@ export function AskUserQuestionCard({
 						size="l"
 						tabIndex={0}
 						data-testid="ask-submit"
-						onKeyDown={onPrimaryKeyDown}
-						onClick={() => reply({ answers, cancelled: false })}
+						onKeyDown={onFootKeyDown("primary")}
+						onClick={(event) => reply({ answers, cancelled: false }, via(event))}
 						disabled={!canSubmit}
 						className="shrink-0"
 					>
@@ -565,12 +611,26 @@ export function AskUserQuestionCard({
 		"data-testid": "ask-user-question",
 		"data-tone": canRespond ? "active" : "idle",
 		"aria-label": t("tools.ask.cardLabel"),
-		"aria-keyshortcuts": "Shift+Escape Meta+Enter Control+Enter",
+		"aria-keyshortcuts": [keys.aria(CARD_KEYS.submit, CARD_KEYS.skip), interaction ? "Escape" : ""]
+			.filter(Boolean)
+			.join(" "),
+		"data-key-scope": CARD_SCOPE,
 		tabIndex: -1,
 		onKeyDown: onCardKeyDown,
 		onPointerDown: onCardPointerDown,
+		onFocus: onCardFocus,
 		onBlur: onCardBlur,
 	};
+	const attention = (
+		<AttentionLine
+			announced={announced !== null}
+			announcement={
+				announced === "elsewhere" && landingChord
+					? t("tools.ask.announceElsewhere", { chord: landingChord })
+					: undefined
+			}
+		/>
+	);
 
 	if (docked) {
 		return (
@@ -581,8 +641,18 @@ export function AskUserQuestionCard({
 				className="@container flex min-h-0 flex-col border-primary border-t-2 bg-container-elevated-bg focus-visible:focus-ring-inset motion-safe:animate-reveal"
 			>
 				<div className="flex shrink-0 items-center gap-12 border-border-default border-b px-12 py-4">
-					<div className="shrink-0">
-						<AttentionLine announced={announced} />
+					<div className="flex shrink-0 items-center gap-8">
+						{attention}
+						{canRespond && announced !== null && !holdsFocus ? (
+							<span
+								data-testid="ask-waiting"
+								className="whitespace-nowrap rounded-full border border-feedback-warning px-8 text-feedback-warning tr-text-metadata"
+							>
+								{landingChord
+									? t("tools.ask.waitingHint", { chord: landingChord })
+									: t("tools.ask.waiting")}
+							</span>
+						) : null}
 					</div>
 					<div className="flex min-w-0 flex-1 justify-end">
 						{tabs ?? (
@@ -597,6 +667,7 @@ export function AskUserQuestionCard({
 						aria-expanded={!collapsed}
 						tabIndex={0}
 						data-testid="ask-collapse"
+						data-focus-claim={(collapsed && canRespond) || undefined}
 						onClick={() => setDockCollapsed(toolCallId, !collapsed)}
 						className="shrink-0"
 					/>
@@ -622,7 +693,7 @@ export function AskUserQuestionCard({
 
 	return (
 		<div className="flex flex-col gap-4 motion-safe:animate-reveal">
-			{canRespond ? <AttentionLine announced={announced} /> : null}
+			{canRespond ? attention : null}
 			<section
 				{...cardProps}
 				className={cn(

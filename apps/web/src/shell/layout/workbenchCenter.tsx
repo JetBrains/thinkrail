@@ -20,7 +20,7 @@ import {
 } from "./model";
 import { centerSplitGeometry } from "./tabActions";
 import type { LayoutCenterGroup, LayoutCenterNode, LayoutCenterSplit } from "./types";
-import type { SharedGroupProps, WorkbenchProps } from "./workbenchShared";
+import type { SharedGroupProps, TabSelectOptions, WorkbenchProps } from "./workbenchShared";
 import {
 	CenterSplitTarget,
 	GroupTabBody,
@@ -53,8 +53,8 @@ export const CenterGroupView = memo(function CenterGroupView({
 	const splitGeometry = centerSplitGeometry(size);
 	const selected = group.tabs.find((tab) => tab.id === selectedId) ?? group.tabs[0];
 	const groupRemoval = removeLayoutGroup(t, shared.document, location);
-	const applySelect = (tabId: string, keep?: boolean) => {
-		shared.onSelectTab(location, tabId, { center: true, ...(keep !== undefined ? { keep } : {}) });
+	const applySelect = (tabId: string, options?: TabSelectOptions) => {
+		shared.onSelectTab(location, tabId, { center: true, ...options });
 	};
 	return (
 		<section
@@ -68,7 +68,7 @@ export const CenterGroupView = memo(function CenterGroupView({
 			aria-label={
 				group.tabs.length === 0 ? t("workbench.center.emptyGroup") : t("workbench.center.group")
 			}
-			className="relative flex h-full min-h-0 min-w-0 flex-col bg-container-content-bg focus-visible:focus-ring-inset"
+			className="relative flex h-full min-h-0 min-w-0 flex-col bg-container-content-bg outline-none"
 			onFocusCapture={() => {
 				if (selected) shared.onFocusGroup(location, selected.id);
 			}}
@@ -94,6 +94,7 @@ export const CenterGroupView = memo(function CenterGroupView({
 				onRenameChat={shared.onRenameChat}
 				registerChatRename={shared.registerChatRename}
 				{...(shared.chatFirstPrompts ? { chatFirstPrompts: shared.chatFirstPrompts } : {})}
+				{...(shared.chatActions ? { chatActions: shared.chatActions } : {})}
 				canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 				renderTabAdornment={shared.renderTabAdornment}
 				worktreePath={shared.worktreePath}

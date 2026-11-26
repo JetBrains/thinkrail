@@ -33,7 +33,7 @@ bun run dev
 locally unstamped builds expose no application updater: update a checkout with Git and rebuild it.
 Running `thinkrail update` from source installs a published binary; it does not pull, install
 dependencies, or rebuild the checkout. On-disk app state (projects, workspaces, worktrees) lives under
-`~/.thinkrail`.
+`~/.thinkrail`, or wherever `THINKRAIL_DATA_DIR` points.
 
 To run the launchers:
 

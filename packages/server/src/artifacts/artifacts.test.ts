@@ -19,6 +19,7 @@ import { basename, join } from "node:path";
 import { setTrashImplementationForTests } from "../trash";
 import {
 	artifactsStoreRoot,
+	checkArtifactFiles,
 	discardArtifact,
 	isArtifactPath,
 	isSameFile,
@@ -582,4 +583,230 @@ test("discarding a kept copy while its workspace is removed leaves no store behi
 	});
 	await discardArtifact("w1", `${CONTEXT}/a.md`);
 	expect(existsSync(join(artifactsStoreRoot(), "w1"))).toBe(false);
+});
+
+async function byPath(): Promise<
+	Map<string, Awaited<ReturnType<typeof listArtifacts>>["artifacts"][number]>
+> {
+	return new Map((await listArtifacts("w1")).artifacts.map((a) => [a.path, a]));
+}
+
+test("what a tool showed and what the user picked become results; working files stay working", async () => {
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
+	write(`${CONTEXT}/mockups/a.html`, "a");
+	write(`${CONTEXT}/mockups/b.html`, "b");
+	write(`${CONTEXT}/mockups/_scratch/a.png`, "png");
+	await observeArtifactSessionEvent("w1", "s1", {
+		type: "tool_execution_end",
+		toolCallId: "ask-1",
+		toolName: "ask_user_question",
+		presented: [`${CONTEXT}/mockups/a.html`, `${root}/${CONTEXT}/mockups/b.html`, "src/app.ts"],
+		picked: [`@${CONTEXT}/mockups/b.html`],
+	});
+	const rows = await byPath();
+	expect(rows.get(`${CONTEXT}/mockups/a.html`)).toMatchObject({ role: "result", reason: "shown" });
+	expect(rows.get(`${CONTEXT}/mockups/b.html`)).toMatchObject({ role: "result", reason: "picked" });
+	expect(rows.get(`${CONTEXT}/mockups/_scratch/a.png`)).toMatchObject({
+		role: "working",
+		reason: "working-folder",
+	});
+});
+
+test("a file passes the artifact check exactly when the index would list it, named as the index names it", async () => {
+	write(`${CONTEXT}/mockups/a.html`, "a");
+	write(`${CONTEXT}/mockups/dist/index.html`, "built");
+	write(`${CONTEXT}/app/node_modules/x/index.js`, "dep");
+	write(`${CONTEXT}/real.md`, "real");
+	write("README.md", "readme");
+	symlinkSync(join(root, CONTEXT, "real.md"), join(root, CONTEXT, "alias.md"));
+	symlinkSync(join(root, CONTEXT, "mockups"), join(root, CONTEXT, "mockups-link"));
+	const inside = `${CONTEXT}/mockups/a.html`;
+	expect(
+		checkArtifactFiles(
+			[inside, `./${CONTEXT}/x/../mockups/a.html`, join(root, inside), `${CONTEXT}/real.md`],
+			root,
+		),
+	).toEqual([{ path: inside }, { path: inside }, { path: inside }, { path: `${CONTEXT}/real.md` }]);
+	const refusals = checkArtifactFiles(
+		[
+			`${CONTEXT}/../../README.md`,
+			"README.md",
+			`${CONTEXT}/.gitignore`,
+			`${CONTEXT}/mockups/dist/index.html`,
+			`${CONTEXT}/app/node_modules/x/index.js`,
+			`${CONTEXT}/alias.md`,
+			`${CONTEXT}/mockups-link/a.html`,
+			`${CONTEXT}/missing.md`,
+			`${CONTEXT}/mockups`,
+		],
+		root,
+	).map((check) => ("error" in check ? check.error : ""));
+	expect(refusals[0]).toContain("not inside");
+	expect(refusals[1]).toContain("not inside");
+	expect(refusals[2]).toContain("not inside");
+	expect(refusals[3]).toContain("`dist`");
+	expect(refusals[4]).toContain("`node_modules`");
+	expect(refusals[5]).toContain("link");
+	expect(refusals[6]).toContain("link");
+	expect(refusals[7]).toBe("no such file");
+	expect(refusals[8]).toBe("not a regular file");
+
+	await reconcileArtifacts("w1");
+	const listed = new Set((await listArtifacts("w1")).artifacts.map((entry) => entry.path));
+	expect(listed).toEqual(new Set([inside, `${CONTEXT}/real.md`]));
+});
+
+test("a file the index's bounded walk never reaches fails the artifact check, as it is never listed", async () => {
+	for (let index = 0; index < 5_000; index++) write(`${CONTEXT}/asset-${index}.png`, "png");
+	write(`${CONTEXT}/reports/r.md`, "r");
+	const [report] = checkArtifactFiles([`${CONTEXT}/reports/r.md`], root);
+	expect(report && "error" in report ? report.error : "").toContain("more than 5000 entries");
+	await reconcileArtifacts("w1");
+	const listed = new Set((await listArtifacts("w1")).artifacts.map((entry) => entry.path));
+	expect(listed.has(`${CONTEXT}/reports/r.md`)).toBe(false);
+});
+
+test("a published file is a flagged result that keeps the flag across a move", async () => {
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
+	write(`${CONTEXT}/mockups/a.html`, "a");
+	write(`${CONTEXT}/mockups/helper.html`, "h");
+	await observeArtifactSessionEvent("w1", "s1", {
+		type: "tool_execution_end",
+		toolCallId: "present-1",
+		toolName: "present_files",
+		published: [`${CONTEXT}/mockups/a.html`, "src/app.ts"],
+	});
+	let rows = await byPath();
+	expect(rows.get(`${CONTEXT}/mockups/a.html`)).toMatchObject({
+		role: "result",
+		reason: "published",
+		published: true,
+	});
+	expect(rows.get(`${CONTEXT}/mockups/helper.html`)).toMatchObject({
+		role: "working",
+		reason: "unshown",
+	});
+	expect(rows.get(`${CONTEXT}/mockups/helper.html`)?.published).toBeUndefined();
+
+	renameSync(join(root, `${CONTEXT}/mockups/a.html`), join(root, `${CONTEXT}/mockups/b.html`));
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_settled" });
+	rows = await byPath();
+	expect(rows.get(`${CONTEXT}/mockups/b.html`)).toMatchObject({ published: true });
+});
+
+test("paths linked in the run's last reply become results, not those of earlier messages", async () => {
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
+	write(`${CONTEXT}/reports/r.json`, "{}");
+	write(`${CONTEXT}/old.json`, "{}");
+	write(`${CONTEXT}/data.csv`, "a,b");
+	await observeArtifactSessionEvent("w1", "s1", {
+		type: "assistant_message",
+		text: "Working on `old.json` now.",
+	});
+	await observeArtifactSessionEvent("w1", "s1", {
+		type: "assistant_message",
+		text: "Done: [the report](reports/r.json) and `.thinkrail/context/data.csv`.",
+	});
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_settled" });
+	await observeArtifactSessionEvent("w1", "s2", { type: "agent_start" });
+	write(`${CONTEXT}/helper.json`, "{}");
+	await observeArtifactSessionEvent("w1", "s2", {
+		type: "assistant_message",
+		text: "Let me write `helper.json` first.",
+	});
+	await observeArtifactSessionEvent("w1", "s2", { type: "assistant_message", text: "" });
+	await observeArtifactSessionEvent("w1", "s2", { type: "agent_settled" });
+	const rows = await byPath();
+	expect(rows.get(`${CONTEXT}/reports/r.json`)).toMatchObject({ role: "result", reason: "linked" });
+	expect(rows.get(`${CONTEXT}/data.csv`)).toMatchObject({ role: "result", reason: "linked" });
+	expect(rows.get(`${CONTEXT}/old.json`)).toMatchObject({ role: "working", reason: "data" });
+	expect(rows.get(`${CONTEXT}/helper.json`)).toMatchObject({ role: "working", reason: "data" });
+});
+
+test("a change waiting from before a run gets no marker of that run", async () => {
+	write(`${CONTEXT}/edited-earlier.md`, "by the user");
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
+	write(`${CONTEXT}/by-the-run.md`, "by the run");
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_settled" });
+	const rows = await byPath();
+	expect(rows.get(`${CONTEXT}/edited-earlier.md`)?.rounds).toBeUndefined();
+	expect(rows.get(`${CONTEXT}/by-the-run.md`)?.rounds).toHaveLength(1);
+});
+
+test("each run that creates or changes a file leaves a marker, and markers and signals survive a restart and a move", async () => {
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
+	write(`${CONTEXT}/plan.md`, "v1");
+	await observeArtifactSessionEvent("w1", "s1", {
+		type: "tool_execution_end",
+		toolCallId: "show-1",
+		toolName: "visualize",
+		presented: [`${CONTEXT}/plan.md`],
+	});
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_settled" });
+	const first = (await byPath()).get(`${CONTEXT}/plan.md`)?.rounds;
+	expect(first).toHaveLength(1);
+	expect(first?.[0]?.sessionId).toBe("s1");
+
+	await Bun.sleep(5);
+	await observeArtifactSessionEvent("w1", "s2", { type: "agent_start" });
+	write(`${CONTEXT}/plan.md`, "v2 is longer");
+	await observeArtifactSessionEvent("w1", "s2", { type: "agent_settled" });
+	write(`${CONTEXT}/by-user.md`, "no run");
+
+	resetArtifactsForTests();
+	mkdirSync(join(root, CONTEXT, "done"));
+	renameSync(join(root, CONTEXT, "plan.md"), join(root, CONTEXT, "done", "plan.md"));
+	const rows = await byPath();
+	const moved = rows.get(`${CONTEXT}/done/plan.md`);
+	expect(moved?.rounds?.map((run) => run.sessionId)).toEqual(["s1", "s2"]);
+	expect(moved?.rounds?.[0]?.startedAt).toBeLessThan(moved?.rounds?.[1]?.startedAt ?? 0);
+	expect(moved).toMatchObject({ role: "result", reason: "shown" });
+	expect(rows.get(`${CONTEXT}/by-user.md`)?.rounds).toBeUndefined();
+});
+
+test("a prompt delivered inside a run starts its own round: changes and the earlier reply's links go to the right round", async () => {
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
+	await observeArtifactSessionEvent("w1", "s1", { type: "round_start", at: 1_000 });
+	write(`${CONTEXT}/first.csv`, "a");
+	await observeArtifactSessionEvent("w1", "s1", {
+		type: "assistant_message",
+		text: "Made [first](first.csv).",
+	});
+	await observeArtifactSessionEvent("w1", "s1", { type: "round_start", at: 2_000 });
+	write(`${CONTEXT}/second.csv`, "b");
+	await observeArtifactSessionEvent("w1", "s1", { type: "assistant_message", text: "Done." });
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_settled" });
+	const rows = await byPath();
+	expect(rows.get(`${CONTEXT}/first.csv`)?.rounds).toEqual([{ sessionId: "s1", startedAt: 1_000 }]);
+	expect(rows.get(`${CONTEXT}/first.csv`)).toMatchObject({ role: "result", reason: "linked" });
+	expect(rows.get(`${CONTEXT}/second.csv`)?.rounds).toEqual([
+		{ sessionId: "s1", startedAt: 2_000 },
+	]);
+	expect(rows.get(`${CONTEXT}/second.csv`)).toMatchObject({ role: "working", reason: "data" });
+});
+
+test("chats taking turns on a file record each round once, so earlier rounds keep their marker", async () => {
+	await observeArtifactSessionEvent("w1", "s0", { type: "agent_start" });
+	write(`${CONTEXT}/shared.md`, "start");
+	await observeArtifactSessionEvent("w1", "s0", { type: "agent_settled" });
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
+	await observeArtifactSessionEvent("w1", "s2", { type: "agent_start" });
+	for (let turn = 0; turn < 20; turn++) {
+		const sessionId = turn % 2 ? "s2" : "s1";
+		await observeArtifactSessionEvent("w1", sessionId, {
+			type: "tool_execution_start",
+			toolCallId: `c${turn}`,
+			toolName: "write",
+			args: { path: `${CONTEXT}/shared.md` },
+		});
+		write(`${CONTEXT}/shared.md`, `v${turn + 1}${"!".repeat(turn)}`);
+		await observeArtifactSessionEvent("w1", sessionId, {
+			type: "tool_execution_end",
+			toolCallId: `c${turn}`,
+			toolName: "write",
+		});
+	}
+	const rounds = (await byPath()).get(`${CONTEXT}/shared.md`)?.rounds;
+	expect(rounds?.map((round) => round.sessionId)).toEqual(["s0", "s1", "s2"]);
 });

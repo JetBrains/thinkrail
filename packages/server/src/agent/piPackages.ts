@@ -8,19 +8,31 @@ import type {
 	PiPackagesCatalog,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import {
+	type InstalledExtensionRecord,
+	installedExtensions,
+	supersedingExtension,
+} from "../extensions";
 import { refreshExtensionTools } from "./agentSessionManager";
-import { bumpPackagesRevision, setInstalledPackagesListener } from "./extensions";
+import {
+	bumpPackagesRevision,
+	disabledExtensions,
+	setInstalledPackagesListener,
+} from "./extensions";
 import { HOST_BUILTIN_EXTENSION_NAMES } from "./mcp";
 import {
 	checkPiPackageUpdates,
+	createPiSettings,
 	installPiPackage,
 	invalidatePiPackageCatalog,
 	invalidatePiPackageUpdates,
 	listPiPackageCatalog,
 	listPiPackageRevealTargets,
 	type PiPackageHostContext,
+	piPackageSourceKind,
 	probeExtensionInfo,
 	removePiPackage,
+	resolvePiInstallSource,
 	setExtensionInfoListener,
 	setPiResourceEnabled,
 	updatePiPackages,
@@ -57,6 +69,16 @@ export function publishPiPackagesChanged(): void {
 	publish?.();
 }
 
+export function piNpmCommand(): string[] | undefined {
+	return createPiSettings(getAgentDir(), getAgentDir(), { packages: "none" }).getGlobalSettings()
+		.npmCommand;
+}
+
+export function refreshInstalledExtensions(): void {
+	bumpPackagesRevision();
+	refreshExtensionTools();
+}
+
 /** The declared or installed set changed: every registered chat re-decides through the gated reload, pages re-list. */
 export function refreshPiPackages(): void {
 	bumpPackagesRevision();
@@ -80,13 +102,30 @@ async function excludedExtensionPaths(): Promise<readonly string[]> {
 	return (await getPiRuntimeGeneration()).excludedSessionExtensionPaths;
 }
 
+/** Marks each installed package a ThinkRail extension that is on replaces, so its row can say so. */
+function withSupersededBy(catalog: PiPackagesCatalog): PiPackagesCatalog {
+	const disabled = disabledExtensions();
+	let marked = false;
+	const packages = catalog.packages.map((summary): PiPackageSummary => {
+		if (summary.installedPath === undefined) return summary;
+		const extension = supersedingExtension(summary.name, (name) => disabled.has(name));
+		if (!extension) return summary;
+		marked = true;
+		return {
+			...summary,
+			supersededBy: { name: extension.name, title: extension.title ?? extension.name },
+		};
+	});
+	return marked ? { ...catalog, packages } : catalog;
+}
+
 export async function piPackagesCatalog(
 	target: PiPackagesTarget,
 	disabledPackages: ReadonlySet<string>,
 	opts: { fresh?: boolean } = {},
 ): Promise<PiPackagesCatalog> {
 	if (opts.fresh) invalidatePiPackageCatalog();
-	return listPiPackageCatalog({
+	const catalog = await listPiPackageCatalog({
 		...(target.cwd ? { cwd: target.cwd } : {}),
 		agentDir: getAgentDir(),
 		projectTrusted: target.projectTrusted(),
@@ -94,15 +133,78 @@ export async function piPackagesCatalog(
 		excludedExtensionPaths: await excludedExtensionPaths(),
 		disabledPackages,
 	});
+	return withSupersededBy(catalog);
 }
 
-// `disabledPackages` is read after the install (minutes, possibly) so another client's switch flips are honoured.
+export type PiPackagesInstallOutcome =
+	| { installed: "package"; identity: string; summary: PiPackageSummary }
+	| { installed: "extension"; record: InstalledExtensionRecord };
+
+function scopeRefused(name: string): CodedError {
+	return new CodedError(
+		"EXTENSION_SCOPE_UNSUPPORTED",
+		`${name} is a ThinkRail extension; extensions install for you only, not for a repository.`,
+	);
+}
+
 export async function piPackagesInstall(
 	target: PiPackagesTarget,
 	request: { source: string; scope: PiPackageScope },
 	disabledPackages: () => ReadonlySet<string>,
-): Promise<{ identity: string; summary: PiPackageSummary }> {
-	const identity = await installPiPackage(hostContext(target), request);
+): Promise<PiPackagesInstallOutcome> {
+	const source = resolvePiInstallSource(hostContext(target), request);
+	const declared = { source, scope: request.scope };
+	const extensions = installedExtensions();
+	const fetched = piPackageSourceKind(source) !== "local";
+	if (extensions && fetched) {
+		const installed = await installPiPackageDeclared(target, declared, disabledPackages, (path) =>
+			extensions.isExtensionAt(path),
+		);
+		if (installed) return { installed: "package", ...installed };
+		if (request.scope !== "user") throw scopeRefused(source);
+	}
+	const staged = extensions ? await extensions.stage(source) : undefined;
+	if (extensions && staged) {
+		if (request.scope !== "user") {
+			extensions.discard(staged);
+			throw scopeRefused(staged.name);
+		}
+		return { installed: "extension", record: await extensions.adopt(staged) };
+	}
+	if (extensions && fetched) {
+		throw new CodedError("PACKAGE_SOURCE_INVALID", `${source} is no longer a ThinkRail extension.`);
+	}
+	return {
+		installed: "package",
+		...(await installPiPackageDeclared(target, declared, disabledPackages)),
+	};
+}
+
+interface DeclaredPackage {
+	identity: string;
+	summary: PiPackageSummary;
+}
+
+// `disabledPackages` is read after the install (minutes, possibly) so another client's switch flips are honoured.
+function installPiPackageDeclared(
+	target: PiPackagesTarget,
+	request: { source: string; scope: PiPackageScope },
+	disabledPackages: () => ReadonlySet<string>,
+): Promise<DeclaredPackage>;
+function installPiPackageDeclared(
+	target: PiPackagesTarget,
+	request: { source: string; scope: PiPackageScope },
+	disabledPackages: () => ReadonlySet<string>,
+	isExtension: (installedPath: string) => boolean,
+): Promise<DeclaredPackage | undefined>;
+async function installPiPackageDeclared(
+	target: PiPackagesTarget,
+	request: { source: string; scope: PiPackageScope },
+	disabledPackages: () => ReadonlySet<string>,
+	isExtension?: (installedPath: string) => boolean,
+): Promise<DeclaredPackage | undefined> {
+	const identity = await installPiPackage(hostContext(target), request, isExtension);
+	if (identity === undefined) return undefined;
 	refreshPiPackages();
 	const enabledFromNowOn = new Set(disabledPackages());
 	enabledFromNowOn.delete(identity);

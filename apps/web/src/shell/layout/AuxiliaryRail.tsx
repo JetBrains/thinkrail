@@ -2,9 +2,12 @@ import type { RemixiconComponentType } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { buttonDataAttributes, buttonVariants } from "@thinkrail/ui/button";
+import { isImeComposing, twinArrow } from "@thinkrail/ui/keyboard";
+import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { Fragment, forwardRef, type ReactNode, useRef, useState } from "react";
+import { LOCAL_KEY_DEFAULTS } from "../../keybindings";
 import {
 	type AuxiliaryRailEntry,
 	type AuxiliaryRailToolEntry,
@@ -19,8 +22,12 @@ export interface AuxiliaryRailControlProps {
 	onFocus: () => void;
 }
 
+export interface AuxiliaryRailFooterItem {
+	readonly key: string;
+	readonly render: (control: AuxiliaryRailControlProps) => ReactNode;
+}
+
 const RAIL_CONTROLS = "[data-rail-entry], [data-rail-action]";
-const FOOTER_KEY = "rail-footer";
 
 const RAIL_TOOLBAR_LABELS = {
 	left: "workbench.rail.leftTools",
@@ -141,17 +148,19 @@ export function AuxiliaryRail({
 	renderEntry: (entry: AuxiliaryRailEntry, control: AuxiliaryRailControlProps) => ReactNode;
 	renderBoundary?: (paneIndex: number) => ReactNode;
 	trailing?: ReactNode;
-	footer?: ((control: AuxiliaryRailControlProps) => ReactNode) | undefined;
+	footer?: readonly AuxiliaryRailFooterItem[] | undefined;
 }) {
 	const t = useT();
+	const keys = useLocalKeys("rails", LOCAL_KEY_DEFAULTS.rails);
 	const root = useRef<HTMLDivElement>(null);
 	const [focused, setFocused] = useState<string | null>(null);
-	const footerFocused = footer !== undefined && focused === FOOTER_KEY;
+	const footerItems = footer ?? [];
 	const activeKey =
-		footerFocused || entries.some((entry) => entry.key === focused)
+		entries.some((entry) => entry.key === focused) ||
+		footerItems.some((item) => item.key === focused)
 			? focused
 			: ((entries.find((entry) => entry.selected && entry.expanded) ?? entries[0])?.key ??
-				(footer ? FOOTER_KEY : undefined));
+				footerItems[0]?.key);
 	const horizontal = region === "bottom";
 	const clusters = clusterAuxiliaryRail(entries);
 	const paneCount = clusters.filter((cluster) => cluster.groupId !== null).length;
@@ -169,6 +178,7 @@ export function AuxiliaryRail({
 		<div
 			ref={root}
 			role="toolbar"
+			data-esc-ladder=""
 			aria-label={t(RAIL_TOOLBAR_LABELS[region])}
 			aria-orientation={horizontal ? "horizontal" : "vertical"}
 			data-testid={region === "bottom" ? "bottom-tool-rail" : `${region}-layout-rail`}
@@ -181,7 +191,10 @@ export function AuxiliaryRail({
 				region === "right" && "border-border-muted border-l",
 			)}
 			onKeyDown={(event) => {
-				if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+				if (isImeComposing(event.nativeEvent)) return;
+				const twin = twinArrow(keys.match(event.nativeEvent));
+				const modified = event.altKey || event.ctrlKey || event.metaKey || event.shiftKey;
+				if (twin === undefined && modified) return;
 				if (!(event.target instanceof HTMLElement) || !root.current?.contains(event.target)) return;
 				const current = event.target.closest<HTMLButtonElement>(RAIL_CONTROLS);
 				if (!current) return;
@@ -189,16 +202,18 @@ export function AuxiliaryRail({
 					root.current.querySelectorAll<HTMLButtonElement>(RAIL_CONTROLS),
 				);
 				const index = controls.indexOf(current);
-				const nextKey = horizontal ? "ArrowRight" : "ArrowDown";
-				const previousKey = horizontal ? "ArrowLeft" : "ArrowUp";
+				const key = twin ?? event.key;
+				const [previousKey, nextKey] = horizontal
+					? ["ArrowLeft", "ArrowRight"]
+					: ["ArrowUp", "ArrowDown"];
 				const next =
-					event.key === "Home"
+					key === "Home"
 						? 0
-						: event.key === "End"
+						: key === "End"
 							? controls.length - 1
-							: event.key === nextKey
+							: key === nextKey
 								? (index + 1) % controls.length
-								: event.key === previousKey
+								: key === previousKey
 									? (index - 1 + controls.length) % controls.length
 									: null;
 				if (next === null) return;
@@ -233,14 +248,21 @@ export function AuxiliaryRail({
 			))}
 			{paneCount === 0 ? boundary(0) : null}
 			{trailing}
-			{footer ? (
+			{footerItems.length > 0 ? (
 				<div
-					className={cn("flex shrink-0 items-center", horizontal ? "ml-auto" : "mt-auto flex-col")}
+					className={cn(
+						"flex shrink-0 items-center gap-4",
+						horizontal ? "ml-auto" : "mt-auto flex-col",
+					)}
 				>
-					{footer({
-						tabIndex: activeKey === FOOTER_KEY ? 0 : -1,
-						onFocus: () => setFocused(FOOTER_KEY),
-					})}
+					{footerItems.map((item) => (
+						<Fragment key={item.key}>
+							{item.render({
+								tabIndex: item.key === activeKey ? 0 : -1,
+								onFocus: () => setFocused(item.key),
+							})}
+						</Fragment>
+					))}
 				</div>
 			) : null}
 		</div>

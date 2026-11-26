@@ -113,3 +113,136 @@ test("a subscription-limit failure offers the usage page and provider settings i
 	await failure.getByTestId("agent-open-provider-settings").click();
 	await expect(page.getByTestId("settings-providers")).toBeVisible();
 });
+
+async function interceptFallbackRepair(
+	page: Page,
+	frames: ClientFrame[],
+	repair: "ok" | "fail" | "not-used",
+): Promise<void> {
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		const server = ws.connectToServer();
+		ws.onMessage((message) => {
+			const raw = typeof message === "string" ? message : message.toString();
+			let frame: ClientFrame;
+			try {
+				frame = JSON.parse(raw) as ClientFrame;
+			} catch {
+				server.send(message);
+				return;
+			}
+			if (frame.id && frame.method === "session.disableServerFallback") {
+				frames.push(frame);
+				ws.send(
+					JSON.stringify(
+						repair === "ok"
+							? {
+									id: frame.id,
+									ok: true,
+									result: { provider: "anthropic", id: "claude-fable-5", name: "Claude Fable 5" },
+								}
+							: repair === "not-used"
+								? {
+										id: frame.id,
+										ok: false,
+										error: "The chat's model sends no fallbacks",
+										errorCode: "SERVER_FALLBACK_NOT_USED",
+									}
+								: { id: frame.id, ok: false, error: "Couldn't save pi's models.json." },
+					),
+				);
+				return;
+			}
+			if (frame.id && frame.method === "session.prompt" && frame.params?.text === "Try again.") {
+				frames.push(frame);
+				ws.send(JSON.stringify({ id: frame.id, ok: true, result: { ok: true } }));
+				return;
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => ws.send(message));
+	});
+}
+
+function seedFallbackFailure(): { id: string } {
+	return seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name: "proxy fallback chat",
+		messages: [
+			{ role: "user", text: "finish the task", timestamp: BASE_TS },
+			{
+				role: "assistant",
+				text: "",
+				timestamp: BASE_TS + 1_000,
+				stopReason: "error",
+				errorMessage: "400 Anthropic proxy does not support fallback field",
+			},
+		],
+	});
+}
+
+test("a proxy rejecting fallbacks offers one click that turns fallback off and retries", async ({
+	page,
+}) => {
+	const frames: ClientFrame[] = [];
+	await interceptFallbackRepair(page, frames, "ok");
+	await openFixtureProject(page);
+	const chat = seedFallbackFailure();
+
+	await enterDefaultWorkspace(page);
+	const failure = page
+		.locator('[data-testid="chat-message"][data-role="error"]')
+		.filter({ hasText: "does not support fallback field" });
+	await expect(failure).toContainText("server-side fallback");
+	await expect(failure.getByTestId("agent-try-again")).toHaveCount(0);
+
+	await failure.getByTestId("agent-disable-fallback").click();
+
+	await expect
+		.poll(() => frames.map((frame) => frame.method))
+		.toEqual(["session.disableServerFallback", "session.prompt"]);
+	expect(frames[0]?.params).toEqual({ sessionId: chat.id });
+	expect(frames[1]?.params).toEqual({ sessionId: chat.id, text: "Try again." });
+	await expect(page.getByTestId("agent-disable-fallback")).toHaveCount(0);
+	await expect(
+		page
+			.locator('[data-testid="chat-message"][data-role="user"]')
+			.filter({ hasText: "Try again." }),
+	).toHaveCount(1);
+});
+
+test("a failed fallback repair says so and keeps the button without retrying", async ({ page }) => {
+	const frames: ClientFrame[] = [];
+	await interceptFallbackRepair(page, frames, "fail");
+	await openFixtureProject(page);
+	seedFallbackFailure();
+
+	await enterDefaultWorkspace(page);
+	const failure = page
+		.locator('[data-testid="chat-message"][data-role="error"]')
+		.filter({ hasText: "does not support fallback field" });
+	await failure.getByTestId("agent-disable-fallback").click();
+
+	await expect(failure.getByRole("alert")).toHaveText(
+		"Couldn't turn off fallback. Check pi's models.json, then try again.",
+	);
+	await expect(failure.getByTestId("agent-disable-fallback")).toBeEnabled();
+	expect(frames.map((frame) => frame.method)).toEqual(["session.disableServerFallback"]);
+});
+
+test("a chat whose model already sends no fallbacks just retries", async ({ page }) => {
+	const frames: ClientFrame[] = [];
+	await interceptFallbackRepair(page, frames, "not-used");
+	await openFixtureProject(page);
+	const chat = seedFallbackFailure();
+
+	await enterDefaultWorkspace(page);
+	const failure = page
+		.locator('[data-testid="chat-message"][data-role="error"]')
+		.filter({ hasText: "does not support fallback field" });
+	await failure.getByTestId("agent-disable-fallback").click();
+
+	await expect
+		.poll(() => frames.map((frame) => frame.method))
+		.toEqual(["session.disableServerFallback", "session.prompt"]);
+	expect(frames[1]?.params).toEqual({ sessionId: chat.id, text: "Try again." });
+	await expect(failure.getByRole("alert")).toHaveCount(0);
+});

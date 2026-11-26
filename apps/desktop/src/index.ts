@@ -29,6 +29,7 @@ import { deliverDeepLinkWhenReady } from "./deepLinkBootstrap";
 import { desktopError, setDesktopErrorReporter } from "./errorReporting";
 import { installExternalNavigation, windowNavigationRules } from "./externalNavigation";
 import { createKeyStateReader } from "./keyState";
+import { readNativeClipboard } from "./nativeClipboard";
 import {
 	type DesktopDialogLabels,
 	readDialogLabels,
@@ -63,6 +64,7 @@ import {
 	createElectrobunUpdateController,
 	readPendingInstallVersion,
 } from "./updates";
+import { createWindowWithWebviewFocus } from "./webviewFocus";
 import {
 	desktopWindowChrome,
 	injectInitialWindowChrome,
@@ -402,6 +404,12 @@ async function start(): Promise<void> {
 						...(input.silent === undefined ? {} : { silent: input.silent }),
 					});
 				},
+				readClipboard: () =>
+					readNativeClipboard({
+						availableFormats: () => Utils.clipboardAvailableFormats(),
+						readImage: () => Utils.clipboardReadImage(),
+						readText: () => Utils.clipboardReadText(),
+					}),
 			},
 			messages: {
 				titleBarDoubleClick: () => {
@@ -457,24 +465,26 @@ async function start(): Promise<void> {
 					injectInitialDesktopPreferences(preloadSource, initialPreferences),
 					windowChromePreloadSeed(windowChrome),
 				);
-	mainWindow = new BrowserWindow({
-		title: "ThinkRail",
-		url: neutral ? "about:blank" : `${origin}/${initialRoute}`,
-		preload,
-		...(neutral ? {} : { rpc }),
-		hidden:
-			process.env.THINKRAIL_DESKTOP_HIDDEN === "1" ||
-			process.env.THINKRAIL_DESKTOP_E2E_HOST === "1",
-		frame: { width: 1440, height: 920 },
-		...(neutral
-			? {}
-			: {
-					titleBarStyle: windowChrome.titleBarStyle,
-					...(windowChrome.trafficLightOffset
-						? { trafficLightOffset: windowChrome.trafficLightOffset }
-						: {}),
-				}),
-	});
+	mainWindow = createWindowWithWebviewFocus(
+		(options) => new BrowserWindow(options),
+		{
+			title: "ThinkRail",
+			url: neutral ? "about:blank" : `${origin}/${initialRoute}`,
+			preload,
+			...(neutral ? {} : { rpc }),
+			hidden: process.env.THINKRAIL_DESKTOP_HIDDEN === "1" || neutral,
+			frame: { width: 1440, height: 920 },
+			...(neutral
+				? {}
+				: {
+						titleBarStyle: windowChrome.titleBarStyle,
+						...(windowChrome.trafficLightOffset
+							? { trafficLightOffset: windowChrome.trafficLightOffset }
+							: {}),
+					}),
+		},
+		process.platform,
+	);
 	setWindowsWindowIcon(mainWindow);
 	if (!neutral) {
 		mainWindow.webview.setNavigationRules(windowNavigationRules(origin));

@@ -10,20 +10,25 @@ import {
 	isFontChoice,
 	isFontWeightOffset,
 	isJbcentralQuotaRefreshSeconds,
+	isKeybindingOverrides,
 	isLineWidth,
 	isLocalePreference,
+	isPullRequestFilter,
 	isQuestionPanelHeight,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
 	isSystemThemePair,
 	isTerminalWindowsShell,
 	isThemeMode,
+	type KeybindingOverrides,
 	LINE_WIDTH_COLUMNS,
+	type PullRequestFilter,
 	QUESTION_PANEL_HEIGHT_PERCENT,
 	RECENT_MODELS_LIMIT,
 	sameModel,
 	type WireModel,
 } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 import { loadConfig, saveConfig } from "../persistence";
 import { normalizeStoredCustomLayoutPresets, validateCustomLayoutPresets } from "./layoutPresets";
 
@@ -63,6 +68,7 @@ const ACCEPTED_UPDATE_KEYS = {
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: true,
 	settleIdleDays: true,
+	disabledSubagents: true,
 	disabledExtensions: true,
 	extensionSettings: true,
 	otherAgentSkills: true,
@@ -74,6 +80,8 @@ const ACCEPTED_UPDATE_KEYS = {
 	codeFontSize: true,
 	codeLigatures: true,
 	fontWeightOffset: true,
+	keybindings: true,
+	pullRequestFilters: true,
 	chatMessageOrder: true,
 	layout: true,
 	recentModels: true,
@@ -139,6 +147,30 @@ function mergeExtensionSettings(
 	return next;
 }
 
+function validatePullRequestFilters(value: unknown): Record<string, PullRequestFilter | null> {
+	const invalid = () =>
+		new Error("pullRequestFilters must map project ids to pull-request filters or null");
+	if (!isPlainObject(value)) throw invalid();
+	for (const [projectId, filter] of Object.entries(value)) {
+		if (projectId.trim().length === 0 || (filter !== null && !isPullRequestFilter(filter))) {
+			throw invalid();
+		}
+	}
+	return value as Record<string, PullRequestFilter | null>;
+}
+
+function mergePullRequestFilters(
+	current: Record<string, PullRequestFilter>,
+	update: Record<string, PullRequestFilter | null>,
+): Record<string, PullRequestFilter> {
+	const next = { ...current };
+	for (const [projectId, filter] of Object.entries(update)) {
+		if (filter === null) delete next[projectId];
+		else next[projectId] = filter;
+	}
+	return next;
+}
+
 function validateNameList(value: unknown, setting: string, noun: string): string[] {
 	if (
 		!Array.isArray(value) ||
@@ -147,6 +179,18 @@ function validateNameList(value: unknown, setting: string, noun: string): string
 		throw new Error(`${setting} must be a list of ${noun}`);
 	}
 	return [...new Set(value as string[])];
+}
+
+function validateKeybindings(value: unknown): KeybindingOverrides {
+	if (!isKeybindingOverrides(value)) {
+		throw new CodedError(
+			"KEYBINDINGS_INVALID",
+			"keybindings must map command ids to lists of chords such as Mod+Alt+KeyS",
+		);
+	}
+	return Object.fromEntries(
+		Object.entries(value).map(([id, chords]) => [id, [...new Set(chords)]]),
+	);
 }
 
 let publishSettings: SettingsPublisher | null = null;
@@ -249,13 +293,23 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		systemThemePair,
 		jbcentralQuotaEnabled,
 		jbcentralQuotaRefreshSeconds,
+		disabledSubagents,
 		disabledExtensions,
 		extensionSettings,
 		disabledPackages,
+		keybindings,
+		pullRequestFilters,
 		...rest
 	} = runtimeUpdate;
+	const pullRequestFiltersUpdate =
+		pullRequestFilters === undefined ? undefined : validatePullRequestFilters(pullRequestFilters);
+	const nextKeybindings = keybindings === undefined ? undefined : validateKeybindings(keybindings);
 	const extensionSettingsUpdate =
 		extensionSettings === undefined ? undefined : validateExtensionSettings(extensionSettings);
+	const nextDisabledSubagents =
+		disabledSubagents === undefined
+			? undefined
+			: validateNameList(disabledSubagents, "disabledSubagents", "agent names");
 	const nextDisabledExtensions =
 		disabledExtensions === undefined
 			? undefined
@@ -355,6 +409,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		...(favoriteModels === undefined
 			? {}
 			: { favoriteModels: validateFavoriteModels(favoriteModels) }),
+		...(nextDisabledSubagents === undefined ? {} : { disabledSubagents: nextDisabledSubagents }),
 		...(nextDisabledExtensions === undefined ? {} : { disabledExtensions: nextDisabledExtensions }),
 		...(extensionSettingsUpdate === undefined
 			? {}
@@ -365,6 +420,15 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 					),
 				}),
 		...(nextDisabledPackages === undefined ? {} : { disabledPackages: nextDisabledPackages }),
+		...(nextKeybindings === undefined ? {} : { keybindings: nextKeybindings }),
+		...(pullRequestFiltersUpdate === undefined
+			? {}
+			: {
+					pullRequestFilters: mergePullRequestFilters(
+						current.pullRequestFilters ?? {},
+						pullRequestFiltersUpdate,
+					),
+				}),
 	};
 	if (defaultModel !== undefined) {
 		if (defaultModel === null) delete next.defaultModel;
@@ -386,6 +450,17 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	cached = next;
 	publishSettings?.(next, runtimeUpdate);
 	return next;
+}
+
+export function setSubagentEnabled(name: string, enabled: boolean): AppConfig {
+	if (typeof name !== "string" || !name.trim()) {
+		throw new Error("subagent name must be a non-blank string");
+	}
+	if (typeof enabled !== "boolean") {
+		throw new Error("subagent enabled must be a boolean");
+	}
+	const without = getConfig().disabledSubagents.filter((candidate) => candidate !== name);
+	return updateConfig({ disabledSubagents: enabled ? without : [...without, name] });
 }
 
 /** Records an explicit model choice at the head of `recentModels` (deduped, capped), then publishes. */

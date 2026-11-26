@@ -13,6 +13,46 @@ tags: [host, public-surface-checked]
 The wire and composition root: `Bun.serve` HTTP+WS, static SPA serving, the WS method→handler registry,
 channel fan-out, and the process-boot wrapper both launchers share.
 
+## Subagent catalog
+
+`subagent.list` takes an optional `workspaceId`, never a caller cwd: the host resolves the registered
+workspace and passes its worktree and `admissionContextFor(...).piResourceTrusted` to agent's metadata-only
+`listSubagentCatalog`, so without a workspace or pi-resource trust only built-in and personal definitions
+are read. Each read rediscovers files; there is no catalog state or push. `subagent.setEnabled` delegates
+to settings' `setSubagentEnabled` ([[submodule-server-settings]]). The host injects
+`getConfig().disabledSubagents` as agent's live per-name resolver and resets it on stop. Wire shape and
+gate: [[module-contracts]].
+
+## Chat attachments
+
+`attachments.ts` writes the files a prompt attaches into `<worktree>/.thinkrail/context/attachments/`
+(`ATTACHMENTS_DIR`), or `<dataDir>/attachments/` when no workspace is named (New Workspace, whose worktree
+does not exist yet), and answers `ChatAttachmentResult`: the worktree-relative path, or the absolute one
+under the data dir. Two doors, from `CHAT_ATTACHMENTS_PROTOCOL_VERSION`:
+
+- **`PUT /attachments/<name>[?workspace=<id>]`** (`CHAT_ATTACHMENTS_ROUTE`), behind the
+  `CHAT_ATTACHMENT_UPLOAD_HEADER` preflight guard, the fonts route's pattern: file bytes travel over HTTP,
+  never the socket. 413 `too-large` past `CHAT_ATTACHMENT_MAX_BYTES` (checked on `Content-Length` and while
+  streaming; a partial file is removed), 404 `unknown-workspace` (also a chat being deleted), 400
+  `invalid-name`, 500 `unwritable`; any other method 405.
+- **`attachments.copyLocal { workspaceId?, path }`** copies a local file a desktop paste named (a file
+  manager's copied path, [[module-desktop]]) at send time. **Trust:** it reads any absolute path the host
+  user can read. The wire is unauthenticated by design: Tailscale ACLs and device identity are the auth
+  ([[architecture]] Decision 7), so every client they admit — the local desktop or browser, and a phone or
+  remote browser on the user's tailnet — can ask it, and every such client already has the same reach
+  through terminals and the agent's shell, so the door adds no capability. It refuses a
+  relative path, anything but a regular file (opened `O_NONBLOCK` and checked on the open handle, so a FIFO
+  or device swapped in cannot hang the host) and a file over the limit.
+
+The folder is flat: a base name is flattened (no separators, Windows-reserved characters replaced, control
+characters refused), cut to 250 UTF-8 bytes at a code point (the extension kept, at most 32 bytes), so the
+largest suffix still fits the file system's 255-byte name limit, and a taken name becomes `name-2.ext`,
+`name-3.ext`, … `name-1000.ext` through `O_CREAT | O_EXCL | O_NOFOLLOW`, so nothing is overwritten and a
+symlink holding a name is skipped. `.thinkrail/context` is
+seeded by shared's `seedArtifactsDir`; it and `attachments/` must be real directories (a symlink anywhere
+below the worktree root is `unwritable`) whose real path stays inside the worktree. A workspace write
+nudges `fsChanged`. Nothing cleans the folder: sent messages keep naming its files, and Artifacts shows them.
+
 ## Boundary
 
 - **Owns:** `server.ts` (async `createServer` first asks auth to start Central artifact watching and publish
@@ -48,15 +88,35 @@ channel fan-out, and the process-boot wrapper both launchers share.
   any method but `GET`/`HEAD` with 405; the host injects its
   source (agent's live lookup plus the tombstone check), calls `forgetImageSession` on every `session.deleted`,
   and calls `resetImages` on stop. Then the **`/fonts/<file>`** route (`fontRoutes.ts`, ahead of the static fallback) over the
-  [[submodule-server-fonts]] folder — the host's one HTTP write route, and besides `/images` (GET/HEAD only)
+  [[submodule-server-fonts]] folder — one of the host's two HTTP write routes (the other is `PUT /attachments/`,
+  § Chat attachments, which takes `PUT` only), and besides those and `/images` (GET/HEAD only)
   the only route that checks its method: `GET` serves a font by its extension's type (`font/ttf|otf|woff|woff2`) with
   `Cache-Control: no-cache` (list URLs carry a content version) and 404s any name `fontFileKind` refuses,
   a collection, or a missing file; `PUT` (behind the upload guard below) answers 400 for a refused name,
   else stores the body through `saveUserFont` and answers that file's entry as JSON: 200, 413 `too-large`
   (checked against `Content-Length` before reading and again while streaming), 409 `too-many`, 422
   `unsupported-collection`/`invalid-font`, or 500 `unreadable`; any other method is 405 with
-  `Allow: GET, PUT`, the `fonts` poller's `fonts.changed` nudge reaching
-  only sockets whose `?protocol=` is at least `FONTS_PROTOCOL_VERSION`; the **`/speech` socket**
+  `Allow: GET, PUT`, the **`GET /view/<workspace>/<path>`** route (`WORKSPACE_VIEW_ROUTE`, `serveWorktreeView`,
+  GET/HEAD only, else 405) — a workspace file for a *browser tab* ("Open in browser"): the same worktree
+  resolution as `/files/`, `no-store`, `nosniff`, a web type table for what a page loads (`.css`, `.js`/`.mjs`,
+  `.json`, images, fonts, media; text types with `charset=utf-8`), and for HTML/XHTML/SVG `viewPolicy(base)`:
+  `sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox; default-src 'none'`, script, style, image,
+  font, media, frame and base sources limited to `base` — the request origin plus `/view/<workspace>/`, so a
+  page loads only its own workspace's files — and `connect-src 'none'; worker-src 'none'; object-src 'none';
+  form-action 'none'`. The page's scripts run (it is the user's own file, opened on purpose), but in an
+  opaque origin that touches nothing of the app, and with no fetch or WebSocket they cannot reach the
+  host's unauthenticated wire (Decision 7). Never add CORS headers to it: they would let any website read
+  workspace files — any site can make an opaque-origin document, so even `Access-Control-Allow-Origin: null`
+  would. Known limitation that follows: what browsers fetch in CORS mode from the page's opaque origin — a
+  module script by `src` and `@font-face` files — does not load (classic scripts, inline modules,
+  stylesheets, images and `data:` fonts do); lifting it needs an isolated preview origin, not CORS, the `fonts` poller's `fonts.changed` nudge reaching
+  only sockets whose `?protocol=` is at least `FONTS_PROTOCOL_VERSION`; the **`/extensions/<name>/<token>/<file>`**
+  route (`extensionRoutes.ts`, `EXTENSION_ASSETS_ROUTE`, ahead of the static fallback), which serves only
+  a loaded installed extension's manifest `web` or `styles` file through the `extensions` barrel's
+  `resolveExtensionAsset` — `text/javascript` / `text/css` with `charset=utf-8`, `X-Content-Type-Options:
+  nosniff`, `Cache-Control: public, max-age=31536000, immutable` (the token changes with the files) — 404s
+  every other name, an unknown extension or a stale token, and answers 405 with `Allow: GET, HEAD` to any
+  other method; no CORS, like every route (a cross-origin UI would need it); the **`/speech` socket**
   (`SPEECH_SOCKET_ROUTE`, refused below `SPEECH_PROTOCOL_VERSION`), which shares the one `Bun.serve`
   websocket handler but is tagged at upgrade. Its `open` / `message` / `close` go straight to that
   socket's [[submodule-server-speech]] relay, so it never joins the `clientKey → socket` registry, the
@@ -90,7 +150,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   handler settled, and a result settling after a reconnect went to the dead socket and sat until the next
   `resume`, so enough slow requests filled the namespace and refused every later request from that window.
   Abandoned work is still running work, so it stays bounded (the tracked ceiling below). Each `ack`/`resume`
-  that abandons running work logs one `warn` with the per-method counts; `RequestAbandonedError`
+  that abandons running work logs its per-method counts at `debug`. A host-wide summary logs the accumulated
+  counts at `warn` every 60 seconds when nonempty, and flushes the final partial interval on stop. Counts
+  clear after each summary; reconnects and new client keys share the same interval. This keeps routine
+  polling cancellation from flooding normal support logs (#1448), without losing the affected methods or
+  their frequency. The summary retains counts, never request ids or payloads. `RequestAbandonedError`
   (`code: "REQUEST_ABANDONED"`, tagged with the method) is reported once per method per launch and for at most
   10 methods, because it shares the `request` source's fixed per-launch report budget with genuine handler
   failures and the overflow report, and a reload's new client key must not renew it. Requests that settle
@@ -233,9 +297,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `boot.ts` (`bootHost` → await `initLogging` — debug level when the launcher passed `verbose` — then
   install the crash report, await the login-shell environment when the launcher passed
   `resolveShellEnv: true` (started before `initLogging`), apply the stored host environment
-  (`applyHostEnvironment`, before any `getAgentDir()` reader), pre-warm the same Central watcher/runtime
-  initialization before choosing the serving port, await `createServer` (which idempotently enforces
-  runtime bootstrap for low-level embedders), and write the `listening on` info line (see
+  (`applyHostEnvironment`, before any `getAgentDir()` reader), pre-warm the same runtime initialization
+  `createServer` runs (`hostRuntime.ts`'s `initializeHostRuntime`: install the persisted `disabledPackages`
+  resolver, then the Central watcher/runtime, so the first generation's user-extension pass never runs a
+  switched-off package) before choosing the serving port, await `createServer` (which idempotently enforces
+  that bootstrap for low-level embedders), and write the `listening on` info line (see
   `submodule-server-log`); `reportDesktopError(error, scope)` is the desktop launcher's handled-error door
   into analytics (source `desktop`). Its
   SIGINT/SIGTERM handlers await that same shutdown before process exit. Settling aborts streaming sessions
@@ -268,6 +334,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   catalog. An ambient API key must not preempt a configured subscription; explicit selections, available
   saved defaults and pi's global default still take precedence, including environment-backed ones. This
   changes only new-chat resolution, never an existing session's model or a failed request's connection.
+  `session.disableServerFallback` delegates to agent's `disableSessionServerFallback`;
   `model.contextSettings` and `model.setContextWindow` delegate to agent's `modelContext`
   adapter and return its `ModelContextSetting[]`; the mutation names a provider/model target or all
   eligible pairs, never arbitrary model metadata, and successful saves reuse `provider.changed` to
@@ -277,10 +344,19 @@ channel fan-out, and the process-boot wrapper both launchers share.
   the **Skills-manager set**: `skill.list` / `skills.state` / `project.skills` build
   the admission context from `projects` (+ the
   workspace's `skillOverrides` when workspace-scoped) and pass it into agent's `listSkillCommands`/
-  `listSkillCatalog`; the **MCP set** (`mcp.*`, `host/mcp.ts`) composes `agent`'s MCP
+  `listSkillCatalog`; `skill.list` and the project-located `template.list`/`template.get` with a `baseRef`
+  read from `workspaces`' `previewRefPaths(project, baseRef, [...PROJECT_SKILL_ROOTS, PROJECT_TEMPLATE_ROOT])`
+  folder instead of the project checkout (same admission, so trust gates are unchanged), falling back to the
+  checkout when the preview is `null`; the **MCP set** (`mcp.*`, `host/mcp.ts`) composes `agent`'s MCP
   service with `projects` (approvals, overrides, pi-level trust) and publishes `mcp.status` snapshots (topic
   subscribed only by clients at `MCP_PROTOCOL_VERSION` or later) plus `session.resourcesChanged`
-  invalidations. Every request resolves its workspace and that workspace's project. Management mutations
+  invalidations. Every request that names a workspace resolves it and its project; one without (user scope
+  only, `MCP_USER_SERVERS_PROTOCOL_VERSION`) resolves none: the list is agent's `listUserMcpServers`,
+  mutations and probes are admitted by the ownership guard over agent's `userMcpContext()` (pi's agent dir
+  as cwd, untrusted, empty policy, no live owners), project scope is refused with `MCP_CONFIG_INVALID`,
+  every write reconciles all workspaces' live chats, and `mcp.setUserServer` checks the global entry's
+  rendered fingerprint in the same synchronous step as agent's `setUserMcpEntryFields` writes `enabled` /
+  `exposure`. Workspace-scoped management mutations
   and probes re-read both after asynchronous ownership resolution, then check ownership and admit work
   in one synchronous call stack. A changed project identity, cwd or pi-level trust rejects the request
   for retry; approvals and overrides come from the latest record, not the pre-await snapshot. Project
@@ -309,7 +385,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   runs agent's `reconnectMcpServer` (pi's notices stay out of the chat; pi's failure, masked, is the
   request's error) and refreshes that chat's status either way;
   `mcp.readOutput` reads agent's `readMcpToolOutput` for a session of that workspace only;
-  `mcp.readLog` resolves the workspace, checks the name against pi's charset and returns agent's
+  `mcp.readLog` resolves the workspace when one is named, checks the name against pi's charset and returns agent's
   `readMcpServerLog` (pi keeps one `mcp.log` per agent directory, so it needs no session);
   `mcp.login` / `mcp.testConnection` start agent's probe with the caller's `clientKey` as owner and return
   its `loginId` (`mcp.logout` awaits the probe). Probe admission resolves the valid effective server from
@@ -475,7 +551,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `AppConfig.extensionSettings` the same way (cleared on shutdown), and `extension.list` answers with the
   `extensions` catalog joined with that same setting — the switch itself writes through `settings.update`,
   so there is no extension write method. **Installed pi packages** follow the same pattern one level up:
-  `setDisabledPackagesResolver` returns `AppConfig.disabledPackages`, a change to either list calls
+  `setDisabledPackagesResolver` returns `AppConfig.disabledPackages` (installed by `initializeHostRuntime`,
+  before any runtime generation), a change to either list calls
   `refreshExtensionTools()`, and `host/packages.ts` answers the `packages.*` methods by mapping an
   optional `workspaceId` onto the checkout plus a fresh project-trust thunk (`host/mcp.ts`'s shape) and
   delegating to the `agent` façade; a confirmed `packages.install` also drops the new identity from
@@ -486,10 +563,52 @@ channel fan-out, and the process-boot wrapper both launchers share.
   routes a `.pi/settings.json` workspace nudge to `handleProjectPiSettingsChanged` only for a project
   whose pi-level trust is granted — an untrusted repository's file never affects resolution, so it must
   not fan out a reload; a `disabledPackages` change also publishes `packages.changed` so a re-enabled
-  row regains its chips. The channel is subscribed from `PI_PACKAGES_PROTOCOL_VERSION` and published
-  through `setPiPackagesPublisher`. The
+  row regains its chips, and so does a `disabledExtensions` change, since a row a ThinkRail extension
+  supersedes carries `supersededBy` only while that extension is on. The channel is subscribed from `PI_PACKAGES_PROTOCOL_VERSION` and published
+  through `setPiPackagesPublisher`. **Installed ThinkRail extensions:** `createServer` starts the
+  `extensions` runtime (`startInstalledExtensions` over the data dir — a background reconcile that never
+  delays the server) and stops it on shutdown; its `onChange` calls the agent's
+  `refreshInstalledExtensions()` (package revision bump + `refreshExtensionTools()`, so open chats rebuild
+  their loader when the turn ends) and publishes `extensions.changed`, subscribed from
+  `INSTALLED_EXTENSIONS_PROTOCOL_VERSION`. `packages.install` returns `PackageInstallResult`: for an
+  extension (the agent façade's kind rule) it drops the name from `disabledExtensions` and answers a
+  user-scope row shaped for older clients plus the extension's catalog entry; `host/extensions.ts` answers
+  `extensions.remove` / `extensions.update` / `extensions.checkUpdates` against the runtime by `source`,
+  and `extensions.browse { force? }` (from `EXTENSION_BROWSE_PROTOCOL_VERSION`) by handing the runtime's
+  installed names to [[submodule-server-extension-catalog]], which owns the fetch, validation, cache and
+  its coded failures. An installed `extension.list` entry also carries its manifest `api` (from the same
+  version) so the client can say which way an incompatible extension is out of date.
+  The
   two authoritative publishers remain the clients' convergence path; the host-to-agent refresh changes
   runtime capability, not frontend state;
+  **extension queries** are composed here too: `extension.query` goes to one `createExtensionQueries` over
+  the `disabledExtensions` setting, whose `releaseDisabled()` the settings publisher calls
+  (`releaseDisabledExtensionQueries`) on every `disabledExtensions` change, so a switched-off extension's
+  table is aborted and dropped at once rather than at the next query; `extensionHost.ts` builds each
+  extension's `ExtensionHostServices` from projects, workspaces, chats and `agent` — host facts and
+  locations only, it parses no transcript: `signal` is the one its table was built with, `dataDir` is
+  `<dataDir>/extensions/<name>/`, `log` the `extension:<name>` logger scope, `sessionsRoot`
+  the `sessions` folder of pi's agent dir, read live. `sessionScope` reuses `history.search`'s `buildHistoryScope` +
+  `historyHiddenCwd` and places a cwd: a registered workspace is `open`; a cwd under
+  `<dataDir>/worktrees/<project slug>/` of an open project with no record at or above it is `removed`,
+  named by its path below the slug folder (`feat/x`); a chat whose deletion is pending is hidden (`null`);
+  anything else is `none`. `removed` and `none` are in an `all` scope, `removed` also in its project's; a
+  `chat` scope places nothing, since placement is by cwd. `childTranscriptDirs` is the
+  known workspace's delegation folder for the parent, else a scan of `<delegation root>/*/<parentSessionId>`,
+  existing folders only, none for an id that is not a pi session id; `sessionStatus` joins `hasSession`
+  with `agent`'s `sessionCompletionOf`; `messageAnchor(file, entryId)` reads a `.jsonl` strictly under
+  `sessionsRoot` (anything else is `null`) and answers `history`'s `locateEntry` — the entry's place in the
+  same display projection `session.getMessages` sends, or its nearest shown ancestor — so the chat jump
+  never needs a second copy of that pi mirror; `contextWindow(provider, model)` reads the active pi
+  runtime's `getModel(...).contextWindow` (catalog plus `models.json` overrides and custom endpoints),
+  `null` when the runtime has no such model or fails; `turnReceipts(sessionId)` gathers that session's
+  `turns` receipts across the registered workspaces (`listTurns`), oldest first, paths as git reported
+  them; `turnTree(sessionId, startedAt, limits)` finds that receipt and reads its `headTree` from the
+  workspace's repository (`git ls-tree -r --long`, regular files only — no links or submodules —, then
+  each blob), answering `tooLarge` past the file or byte limit before reading any blob and `null` when the
+  receipt, the workspace or the objects are gone; `ensureArtifactsDir(workspaceId)` seeds a registered
+  workspace's `.thinkrail/context/` with `seedArtifactsDir` (as `workspaceFiles.ensureArtifactsDir` does)
+  and answers it absolute and worktree-relative, `null` for an unknown workspace;
   **Review marks are memory-plus-disk, and only the disk half survives a restart.** The serial chain and
   the per-item latches are in-memory; `pending` marks are a disk sidecar. `createServer` calls
   **`reconcilePendingReviewsOnBoot`** once, before the server accepts connections: it walks every project's
@@ -773,7 +892,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   the handler (`REPOSITORY_ONLY_METHODS` — git, changes, reviews, pull requests, turns, diff stats and
   base, and the plan's review doors `todo.review` / `startReview` / `reviewAll` / `requestFix`, which
   would reach a git-backed review snapshot — plus project close/rename/trust/skills,
-  `workspace.create`/`listExisting`, `git.listBranches`/`prefetch`); **the capability matrix of a chat
+  `workspace.create`/`listExisting`, `git.listBranches`/`prefetch`, `pr.list`/`pr.get`/`pr.sizes`/`pr.authors`); **the capability matrix of a chat
   is files, terminal and Plan, never git, review or specs**: `fs.readDir` lists a chat's folder without
   the git-ignore decoration, the `/blob` route answers 404 for a chat before any git, the
   Agent-review resolver handed to `agent` answers `false` for a chat (so its sessions get neither
@@ -785,7 +904,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   skip chats; and
   `applyGitCeiling()` merges `<dataDir>/chats` into `GIT_CEILING_DIRECTORIES` before the server exists
   (the root created first), so git, `gh`, PTYs and pi's bash inherit a ceiling that stops any walk up
-  out of a chat folder into a repository that happens to enclose the data dir. The container is ensured
+  out of a chat folder into a repository that happens to enclose the data dir; `THINKRAIL_DATA_DIR` is set
+  to the resolved data dir at the same point, so agent shells find it ([[submodule-server-extensions-installed]]). The container is ensured
   at boot. **Older clients:** one visibility policy, `seesChats(protocolVersion)` (`chats.ts`), decides
   what a socket below `CHATS_PROTOCOL_VERSION` may learn — nothing of the container, its chats or their
   sessions. Its welcome, `project.list` and `session.stateList` omit them; `workspace.list` of the
@@ -864,8 +984,15 @@ channel fan-out, and the process-boot wrapper both launchers share.
 **Artifacts wiring** ([[submodule-server-artifacts]]): the `workspace.fsChanged` publisher hands every
 batch to `noteArtifactPathsChanged` (it reconciles when the batch is truncated or touches
 `.thinkrail/context`, and recounts a recorded ignored output the batch reaches);
-the session-event tee maps `agent_start`, `agent_settled`, `tool_execution_start` (tool call id, name and
-args) and `tool_execution_end` (call id and name) into `observeArtifactSessionEvent`, and an `agent_start` also
+the session-event tee maps pi events through `createArtifactEventMapper` (`host/artifactEvents.ts`) into
+`observeArtifactSessionEvent`: `agent_start`, `agent_settled`, `tool_execution_start` (call id, name and
+args), every assistant `message_end` as `assistant_message` (its text, empty for a tool-call-only turn),
+every `message_end` that `opensChatRound` (contracts) says opens a chat round as `round_start` (its
+timestamp: queued and steered ones included),
+and `tool_execution_end` with the `presented` / `picked` / `published` paths that the enabled extensions'
+`artifactTools` declarations ([[submodule-server-extensions]]) read from the call's args and result
+`details` — only for a successful call, a throwing declaration logged and skipped; a call's args are
+held per session and call id, since providers may reuse ids across chats — so the host names no tool; an `agent_start` also
 `ensureWatch`es the workspace in watch's bounded **prewarm** tier, so a working agent nobody looks at is
 watched without promoting its watcher for the host's lifetime (on Linux each watched worktree costs one
 inotify watch per folder; background runs in big repositories would otherwise exhaust
@@ -873,7 +1000,8 @@ inotify watch per folder; background runs in big repositories would otherwise ex
 and settle do not depend on it. `setArtifactsPublisher` fans
 the index's change out as the pathless `workspace.artifactsChanged` nudge to v121+ sockets of that
 workspace. `fs.delete`, `fs.rename` and `fs.move` run their mutation inside `withUserRemoval` (a move locks
-both workspaces in id order), `fs.copy` and `fs.move` first call `prepareArtifactsDestination` for their
+both workspaces in id order); `fs.reveal` resolves its path through `fs`'s `resolveWorktreeEntry` (contained,
+never `.git`) before handing it to `editors.revealItemInFileManager`; `fs.copy` and `fs.move` first call `prepareArtifactsDestination` for their
 destination folder, and `workspace.remove` / `chat.delete` call `removeWorkspaceArtifacts` once the
 workspace or chat record is gone.
 
@@ -883,17 +1011,25 @@ enabled/confirmed choice before entering analytics attribution.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`, `BuildKind`, `reportDesktopError`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
-  `boot.ts`; `codedError`; `paths` — the scratch-dir convention `chat.inspect` leaves uncounted); `persistence` (`dataDir` — where `crashLog.ts` writes); `pi-todos/core` (reduced synchronous
+  `boot.ts`; `codedError`; `paths` — the scratch-dir convention `chat.inspect` leaves uncounted); `persistence` (`dataDir` — where `crashLog.ts` writes,
+  and the extension host's data and worktree roots); `@earendil-works/pi-coding-agent` (`getAgentDir`, the extension host's
+  `sessionsRoot`); `pi-todos/core` (reduced synchronous
   task snapshots, with group status still core-owned); the feature modules it composes (per the parent dependency graph, incl. `fs`'s
   `resolveWorktreeFile`/`resourceMeta` and `git`'s `readBlobStreamAtAsync` for the `/files` + `/blob`
-  routes, `fonts`' `fontFileKind`/`saveUserFont` for `/fonts/`); Bun/Node.
+  routes, `fonts`' `fontFileKind`/`saveUserFont` for `/fonts/`, `extensions`' `resolveExtensionAsset`
+  for `/extensions/`); Bun/Node.
 - **Forbidden:** being imported by any feature module; importing `web`/`cli`/`desktop`.
 
 - **Settled-lifecycle wiring (`settledLifecycle.ts`).** The host is where the three activity sources meet the
   `workspaces` writers: the normalized session-state publisher stamps `recordWorkspaceActivity(record.workspaceId)`
   whenever a record reports `execution: "running"` (a user prompt flips it, so both user and agent turns
   count — and the writer's one-per-minute coalescing makes a streaming agent cheap), an accepted
-  `terminal.write` stamps the owning workspace (a displaced/no-op write does not), and the repo-metadata
+  `terminal.write` stamps the owning workspace only when the accepted chunk contains input other than
+  complete terminal focus reports (`ESC[I` / `ESC[O`); an empty chunk or a displaced/no-op write does not.
+  `stampTerminalActivity` leaves all bytes for the PTY and skips the activity writer entirely for pure
+  focus reports, including its coalesced high-water mark. Mixed input, other escape sequences and partial
+  focus sequences still count; xterm emits each focus report as one data event, so there is no cross-write
+  parser or buffering that could swallow an Escape key. The repo-metadata
   callback calls `recordWorkspaceHead`, with `watch`'s watch-started nudge wired to `seedWorkspaceHead` so
   first admission seeds and watcher recreation detects a HEAD move made while unwatched. Reading a result, selecting a workspace, or opening
   files never stamps — "looking is not working" is the user-visible rule. `workspace.settle` /
@@ -1046,15 +1182,17 @@ enabled/confirmed choice before entering analytics attribution.
   - **Bound.** One frame per pending stream key; there is no byte budget. Quarantine stays the safety
     net for everything else.
 - The host is the single place features are wired together — features never reach back into it.
-- **A font upload must carry `X-ThinkRail-Request: font-upload`** (`USER_FONT_UPLOAD_HEADER`), else 403.
-  The host has no auth, no Origin check and no CORS ([[architecture]] Decision 7). A cross-origin upload
-  needs a CORS preflight — by the `PUT` method, and by this non-simple header whatever the method — which
-  the route answers 405 with no `Access-Control-*` headers, so another website's write never leaves the
-  browser; the same-origin client needs no preflight. Never add CORS headers to `/fonts/`, and keep the
-  header check should the route ever accept a simple method such as `POST`. It is the host's only HTTP
-  write because the alternatives fail the feature: base64 over the WebSocket hits the 16 MiB frame cap
-  (CJK fonts run past 20 MB) and a pending frame is replayed on every reconnect, and the host's native
-  file dialog cannot take a drag-and-drop and opens on the host's screen, not a remote browser's.
+- **An upload must carry its guard header, else 403:** a font `X-ThinkRail-Request: font-upload`
+  (`USER_FONT_UPLOAD_HEADER`), a chat attachment `X-ThinkRail-Request: attachment-upload`
+  (`CHAT_ATTACHMENT_UPLOAD_HEADER`). The host has no auth, no Origin check and no CORS ([[architecture]]
+  Decision 7). A cross-origin upload needs a CORS preflight — by the `PUT` method, and by the non-simple
+  header whatever the method — which both routes answer 405 with no `Access-Control-*` headers, so another
+  website's write never leaves the browser; the same-origin client needs no preflight. Never add CORS
+  headers to `/fonts/` or `/attachments/`, and keep the header check should either route ever accept a
+  simple method such as `POST`. They are the host's only HTTP writes because the alternatives fail the
+  features: base64 over the WebSocket hits the 16 MiB frame cap (CJK fonts run past 20 MB, attachments
+  to 100 MB) and a pending frame is replayed on every reconnect, and the host's native file dialog cannot
+  take a drag-and-drop or a paste and opens on the host's screen, not a remote browser's.
 - **Login-shell environment import is opt-in at boot** (`resolveShellEnv: true`, passed by the dev,
   CLI and desktop launchers). Post-mortem: with it on by default, `boot.test.ts` copied the developer's
   login environment — provider API keys included — into the shared `bun test` process (`bun test`

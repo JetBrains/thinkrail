@@ -10,7 +10,6 @@ import {
 	RiToolsLine as Wrench,
 } from "@remixicon/react";
 import {
-	isJbcentralQuotaRefreshSeconds,
 	JBCENTRAL_QUOTA_REFRESH_SECONDS,
 	type JbcentralAction,
 	type JbcentralActionFailureReason,
@@ -21,12 +20,21 @@ import {
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton, withIconClass } from "@thinkrail/ui/button";
+import { Switch } from "@thinkrail/ui/switch";
 import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { copyText } from "@/lib";
+import {
+	SETTINGS_ROW_FOCUS,
+	SETTINGS_ROW_INSET,
+	SettingsGroup,
+	SettingsNumberField,
+	type SettingsReset,
+	SettingsRow,
+	useSettingsRowStop,
+} from "@/settingsKit";
 import { getTransport } from "@/transport";
-import { SettingsSwitch } from "./SettingsSwitch";
-import { SETTINGS_INPUT, useSettingsDraft } from "./settingsDraft";
+import { SETTING, settingProps } from "./settingsCatalog";
 
 const LOGIN_CMD = "central login";
 
@@ -36,110 +44,14 @@ type Notice =
 	| { kind: "login-launched" }
 	| { kind: "login-failed" };
 
-interface JbcentralQuotaSettingsProps {
-	enabled: boolean;
-	refreshSeconds: number;
-	onEnabledChange: (enabled: boolean) => Promise<void>;
-	onRefreshSecondsChange: (seconds: number) => Promise<void>;
+interface Marks {
+	readonly tabIndex?: number;
 }
 
-function JbcentralQuotaSettings({
-	enabled,
-	refreshSeconds,
-	onEnabledChange,
-	onRefreshSecondsChange,
-}: JbcentralQuotaSettingsProps) {
-	const t = useT();
-	const savedText = String(refreshSeconds);
-	const [saveError, setSaveError] = useState<string | null>(null);
-	const { invalid, inputProps } = useSettingsDraft({
-		saved: savedText,
-		isValid: (draft) => isJbcentralQuotaRefreshSeconds(Number(draft)),
-		commit: (draft) => {
-			setSaveError(null);
-			return onRefreshSecondsChange(Number(draft)).then(
-				() => true,
-				() => {
-					setSaveError(t("settings.jbcentral.quota.intervalSaveFailed"));
-					return false;
-				},
-			);
-		},
-		enterBlurs: true,
-		onEdit: () => setSaveError(null),
-	});
-	const error = invalid
-		? t("settings.jbcentral.quota.invalid", {
-				min: JBCENTRAL_QUOTA_REFRESH_SECONDS.min,
-				max: JBCENTRAL_QUOTA_REFRESH_SECONDS.max,
-			})
-		: saveError;
-	const errorId = "jbcentral-quota-interval-error";
+const NO_MARKS: Marks = {};
+const ROW_MARKS: Marks = { tabIndex: 0 };
 
-	return (
-		<div
-			data-testid="jbcentral-quota-settings"
-			className="flex flex-col border-border-muted border-t"
-		>
-			<div className="flex items-center justify-between gap-12 border-border-muted border-b py-12">
-				<span className="text-text-default tr-text-ui">{t("settings.jbcentral.quota.show")}</span>
-				<SettingsSwitch
-					checked={enabled}
-					label={t("settings.jbcentral.quota.showLabel")}
-					testId="jbcentral-quota-toggle"
-					onChange={(next) => {
-						setSaveError(null);
-						void onEnabledChange(next).catch(() =>
-							setSaveError(t("settings.jbcentral.quota.displaySaveFailed")),
-						);
-					}}
-				/>
-			</div>
-
-			<div className="flex items-center justify-between gap-12 py-12">
-				<label htmlFor="jbcentral-quota-interval" className="text-text-default tr-text-ui">
-					{t("settings.jbcentral.quota.interval")}
-				</label>
-				<input
-					id="jbcentral-quota-interval"
-					type="number"
-					inputMode="numeric"
-					data-testid="jbcentral-quota-interval"
-					min={JBCENTRAL_QUOTA_REFRESH_SECONDS.min}
-					max={JBCENTRAL_QUOTA_REFRESH_SECONDS.max}
-					step={1}
-					{...inputProps}
-					disabled={!enabled}
-					aria-describedby={error ? errorId : undefined}
-					className={cn(SETTINGS_INPUT, "w-64")}
-				/>
-			</div>
-
-			{error ? (
-				<p
-					id={errorId}
-					data-testid="jbcentral-quota-interval-error"
-					className="pb-12 text-feedback-error tr-text-metadata"
-				>
-					{error}
-				</p>
-			) : null}
-		</div>
-	);
-}
-
-export function JetBrainsAiCard({
-	status,
-	install,
-	onChanged,
-	quotaSettings,
-}: {
-	status: JbcentralStatus;
-	install: JbcentralInstall;
-	onChanged: () => void | Promise<void>;
-	quotaSettings?: JbcentralQuotaSettingsProps;
-}) {
-	const t = useT();
+function useJetBrainsCentral(status: JbcentralStatus, onChanged: () => void | Promise<void>) {
 	const [busyAction, setBusyAction] = useState<JbcentralAction | null>(null);
 	const [notice, setNotice] = useState<Notice | null>(null);
 	const [signingIn, setSigningIn] = useState(false);
@@ -201,73 +113,103 @@ export function JetBrainsAiCard({
 			.finally(() => setSigningIn(false));
 	}, [signingIn, onChanged]);
 
-	const visibleState = busyAction ? "configuring" : status.state;
-	const signedOut = isSignedOut(status);
-	const installed = status.state !== "absent";
-	const configured = status.state === "configured";
+	return {
+		status,
+		onChanged,
+		busyAction,
+		notice,
+		signingIn,
+		runAction,
+		signIn,
+		visibleState: busyAction ? "configuring" : status.state,
+		signedOut: isSignedOut(status),
+		installed: status.state !== "absent",
+		configured: status.state === "configured",
+	};
+}
+
+type Central = ReturnType<typeof useJetBrainsCentral>;
+
+function CentralActions({
+	central,
+	marks = NO_MARKS,
+	recheckWhenAbsent = false,
+}: {
+	central: Central;
+	marks?: Marks;
+	recheckWhenAbsent?: boolean;
+}) {
+	const t = useT();
+	const { status, busyAction, signedOut, signingIn, runAction, signIn, onChanged } = central;
 	const primaryAction = actionForStatus(status);
 	const retryAction = status.state === "load-failed" ? retryActionFor(status) : null;
+	if (busyAction) {
+		return (
+			<Button
+				variant="primary"
+				size="m"
+				iconLeft={Loader2}
+				loading
+				data-testid="jetbrains-configuring"
+				{...marks}
+			>
+				{t(ACTION_BUSY_LABEL[busyAction])}
+			</Button>
+		);
+	}
+	if (signedOut) {
+		return (
+			<SignInButton
+				label={t("settings.jbcentral.signIn")}
+				signingIn={signingIn}
+				marks={marks}
+				onSignIn={() => void signIn()}
+			/>
+		);
+	}
+	if (status.state === "load-failed" && retryAction) {
+		return (
+			<>
+				<Button
+					variant="primary"
+					size="m"
+					iconLeft={RefreshCw}
+					data-testid="jetbrains-retry"
+					{...marks}
+					onClick={() => void runAction(retryAction)}
+				>
+					{t("common.retry")}
+				</Button>
+				{status.configured ? (
+					<ActionButton
+						action="disconnect"
+						marks={marks}
+						onAction={() => void runAction("disconnect")}
+					/>
+				) : null}
+			</>
+		);
+	}
+	if (primaryAction) {
+		return (
+			<ActionButton
+				action={primaryAction}
+				marks={marks}
+				onAction={() => void runAction(primaryAction)}
+			/>
+		);
+	}
+	if (needsRecheck(status) || (recheckWhenAbsent && status.state === "absent")) {
+		return <RecheckButton marks={marks} onChanged={onChanged} />;
+	}
+	return null;
+}
 
+function CentralNotices({ central, marks = NO_MARKS }: { central: Central; marks?: Marks }) {
+	const t = useT();
+	const { notice, signedOut, signingIn, signIn } = central;
 	return (
-		<section
-			data-testid="jetbrains-ai-card"
-			data-state={visibleState}
-			data-configured={configured}
-			data-installed={installed}
-			className="flex flex-col gap-8"
-		>
-			<div className="flex items-center justify-between gap-12">
-				<h3 className="tr-text-label-pill text-text-subtle">{t("settings.jbcentral.title")}</h3>
-				<div className="flex shrink-0 items-center gap-4">
-					{busyAction ? (
-						<Button
-							variant="primary"
-							size="m"
-							iconLeft={Loader2}
-							loading
-							data-testid="jetbrains-configuring"
-						>
-							{t(ACTION_BUSY_LABEL[busyAction])}
-						</Button>
-					) : signedOut ? (
-						<SignInButton
-							label={t("settings.jbcentral.signIn")}
-							signingIn={signingIn}
-							onSignIn={() => void signIn()}
-						/>
-					) : status.state === "load-failed" && retryAction ? (
-						<>
-							<Button
-								variant="primary"
-								size="m"
-								iconLeft={RefreshCw}
-								data-testid="jetbrains-retry"
-								onClick={() => void runAction(retryAction)}
-							>
-								{t("common.retry")}
-							</Button>
-							{status.configured ? (
-								<ActionButton action="disconnect" onAction={() => void runAction("disconnect")} />
-							) : null}
-						</>
-					) : primaryAction ? (
-						<ActionButton action={primaryAction} onAction={() => void runAction(primaryAction)} />
-					) : needsRecheck(status) ? (
-						<Button
-							variant="ghost"
-							size="m"
-							iconLeft={RefreshCw}
-							data-testid="jetbrains-recheck"
-							onClick={() => void onChanged()}
-						>
-							{t("settings.jbcentral.recheck")}
-						</Button>
-					) : null}
-				</div>
-			</div>
-
-			<StatusBody status={status} install={install} onChanged={onChanged} />
-
+		<>
 			{notice?.kind === "failed" || notice?.kind === "transport-failed" ? (
 				<div className="flex flex-col gap-4" data-testid="jetbrains-error">
 					<p className="text-feedback-error tr-text-metadata">
@@ -278,7 +220,7 @@ export function JetBrainsAiCard({
 					{!signedOut &&
 					notice.action === "connect" &&
 					(notice.kind === "transport-failed" || notice.reason === "central-action-failed") ? (
-						<SignInGuidance signingIn={signingIn} onSignIn={() => void signIn()} />
+						<SignInGuidance signingIn={signingIn} marks={marks} onSignIn={() => void signIn()} />
 					) : null}
 				</div>
 			) : null}
@@ -292,16 +234,183 @@ export function JetBrainsAiCard({
 					<p className="text-feedback-error tr-text-metadata">
 						{t("settings.jbcentral.loginFailed")}
 					</p>
-					<CopyableCommand command={LOGIN_CMD} />
+					<CopyableCommand command={LOGIN_CMD} marks={marks} />
 				</div>
 			) : null}
+		</>
+	);
+}
 
-			{quotaSettings ? <JbcentralQuotaSettings {...quotaSettings} /> : null}
+export function JetBrainsAiCard({
+	status,
+	install,
+	onChanged,
+}: {
+	status: JbcentralStatus;
+	install: JbcentralInstall;
+	onChanged: () => void | Promise<void>;
+}) {
+	const t = useT();
+	const central = useJetBrainsCentral(status, onChanged);
+	return (
+		<section
+			data-testid="jetbrains-ai-card"
+			data-state={central.visibleState}
+			data-configured={central.configured}
+			data-installed={central.installed}
+			className="flex flex-col gap-8"
+		>
+			<div className="flex items-center justify-between gap-12">
+				<h3 className="tr-text-label-pill text-text-subtle">{t("settings.jbcentral.title")}</h3>
+				<div className="flex shrink-0 items-center gap-4">
+					<CentralActions central={central} />
+				</div>
+			</div>
+
+			<StatusBody status={status} install={install} onChanged={onChanged} />
+
+			<CentralNotices central={central} />
 		</section>
 	);
 }
 
-function ActionButton({ action, onAction }: { action: JbcentralAction; onAction: () => void }) {
+export interface JetBrainsQuotaSettings {
+	enabled: boolean;
+	refreshSeconds: number;
+	enabledReset: SettingsReset;
+	intervalReset: SettingsReset;
+	onEnabledChange: (enabled: boolean) => void;
+	onRefreshSecondsChange: (seconds: number) => Promise<boolean>;
+}
+
+export function JetBrainsAiSettings({
+	status,
+	install,
+	onChanged,
+	quota,
+}: {
+	status: JbcentralStatus;
+	install: JbcentralInstall;
+	onChanged: () => void | Promise<void>;
+	quota: JetBrainsQuotaSettings | null;
+}) {
+	const t = useT();
+	const central = useJetBrainsCentral(status, onChanged);
+	const quotaRow = settingProps(t, SETTING.jetbrainsQuota);
+	const intervalRow = settingProps(t, SETTING.jetbrainsQuotaInterval);
+	const cardRow = useSettingsRowStop(SETTING.jetbrainsCentral.id);
+	return (
+		<SettingsGroup
+			title={t("settings.jbcentral.title")}
+			description={t("settings.jbcentral.description")}
+			testId="settings-jetbrains"
+		>
+			<div
+				{...cardRow}
+				data-setting-id={SETTING.jetbrainsCentral.id}
+				data-testid="jetbrains-ai-card"
+				data-state={central.visibleState}
+				data-configured={central.configured}
+				data-installed={central.installed}
+				className={cn("border-border-muted border-b py-12", SETTINGS_ROW_INSET, SETTINGS_ROW_FOCUS)}
+			>
+				<div className="flex flex-col gap-8 rounded-sm bg-control-bg px-12 py-8">
+					<div className="flex flex-wrap items-start justify-between gap-12">
+						<div className="flex min-w-160 flex-1 flex-col gap-4">
+							<span className="tr-text-emphasis text-text-default">
+								{t("settings.jbcentral.central")}
+							</span>
+							<StatusBody
+								status={status}
+								install={install}
+								onChanged={onChanged}
+								marks={ROW_MARKS}
+								recheck={false}
+							/>
+						</div>
+						<div className="flex shrink-0 flex-wrap items-center gap-4">
+							<CentralActions central={central} marks={ROW_MARKS} recheckWhenAbsent />
+						</div>
+					</div>
+					<CentralNotices central={central} marks={ROW_MARKS} />
+				</div>
+			</div>
+			{quota ? (
+				<>
+					<SettingsRow
+						{...quotaRow}
+						testId="jbcentral-quota-settings"
+						control={
+							<Switch
+								checked={quota.enabled}
+								label={t("settings.jbcentral.quota.showLabel")}
+								testId="jbcentral-quota-toggle"
+								tabIndex={0}
+								onCheckedChange={quota.onEnabledChange}
+							/>
+						}
+						reset={quota.enabledReset}
+					/>
+					<SettingsRow
+						{...intervalRow}
+						description={t("settings.jbcentral.quota.intervalDescription", {
+							min: JBCENTRAL_QUOTA_REFRESH_SECONDS.min,
+							max: JBCENTRAL_QUOTA_REFRESH_SECONDS.max,
+						})}
+						control={
+							<SettingsNumberField
+								label={intervalRow.label}
+								value={quota.refreshSeconds}
+								min={JBCENTRAL_QUOTA_REFRESH_SECONDS.min}
+								max={JBCENTRAL_QUOTA_REFRESH_SECONDS.max}
+								unit={t("settings.jbcentral.quota.seconds")}
+								disabled={!quota.enabled}
+								testId="jbcentral-quota-interval"
+								onCommit={quota.onRefreshSecondsChange}
+							/>
+						}
+						reset={quota.intervalReset}
+					/>
+				</>
+			) : null}
+		</SettingsGroup>
+	);
+}
+
+function RecheckButton({
+	marks,
+	onChanged,
+	className,
+}: {
+	marks: Marks;
+	onChanged: () => void | Promise<void>;
+	className?: string;
+}) {
+	const t = useT();
+	return (
+		<Button
+			variant="ghost"
+			size="m"
+			iconLeft={RefreshCw}
+			data-testid="jetbrains-recheck"
+			{...marks}
+			onClick={() => void onChanged()}
+			className={className}
+		>
+			{t("settings.jbcentral.recheck")}
+		</Button>
+	);
+}
+
+function ActionButton({
+	action,
+	marks,
+	onAction,
+}: {
+	action: JbcentralAction;
+	marks: Marks;
+	onAction: () => void;
+}) {
 	const t = useT();
 	const disconnect = action === "disconnect";
 	const icon = disconnect
@@ -317,6 +426,7 @@ function ActionButton({ action, onAction }: { action: JbcentralAction; onAction:
 			size="m"
 			{...(icon ? { iconLeft: icon } : {})}
 			data-testid={`jetbrains-${action}`}
+			{...marks}
 			onClick={onAction}
 		>
 			{t(ACTION_LABEL[action])}
@@ -328,10 +438,14 @@ function StatusBody({
 	status,
 	install,
 	onChanged,
+	marks = NO_MARKS,
+	recheck = true,
 }: {
 	status: JbcentralStatus;
 	install: JbcentralInstall;
 	onChanged: () => void | Promise<void>;
+	marks?: Marks;
+	recheck?: boolean;
 }) {
 	const t = useT();
 	if (isSignedOut(status)) return <SignedOutNotice />;
@@ -341,17 +455,10 @@ function StatusBody({
 			return (
 				<div className="flex flex-col gap-4" data-testid="jetbrains-needs-install">
 					<p className="text-text-muted tr-text-metadata">{t("settings.jbcentral.needsInstall")}</p>
-					<CopyableCommand command={install.command} />
-					<Button
-						variant="ghost"
-						size="m"
-						iconLeft={RefreshCw}
-						data-testid="jetbrains-recheck"
-						onClick={() => void onChanged()}
-						className="self-start"
-					>
-						{t("settings.jbcentral.recheck")}
-					</Button>
+					<CopyableCommand command={install.command} marks={marks} />
+					{recheck ? (
+						<RecheckButton marks={marks} onChanged={onChanged} className="self-start" />
+					) : null}
 				</div>
 			);
 		case "outdated":
@@ -420,10 +527,12 @@ function SignInButton({
 	signingIn,
 	onSignIn,
 	label,
+	marks,
 }: {
 	signingIn: boolean;
 	onSignIn: () => void;
 	label: string;
+	marks: Marks;
 }) {
 	return (
 		<Button
@@ -432,6 +541,7 @@ function SignInButton({
 			iconLeft={ExternalLink}
 			loading={signingIn}
 			data-testid="jetbrains-signin"
+			{...marks}
 			onClick={onSignIn}
 			className="self-start"
 		>
@@ -440,7 +550,15 @@ function SignInButton({
 	);
 }
 
-function SignInGuidance({ signingIn, onSignIn }: { signingIn: boolean; onSignIn: () => void }) {
+function SignInGuidance({
+	signingIn,
+	onSignIn,
+	marks,
+}: {
+	signingIn: boolean;
+	onSignIn: () => void;
+	marks: Marks;
+}) {
 	const t = useT();
 	return (
 		<div className="flex flex-col gap-4" data-testid="jetbrains-signin-guidance">
@@ -448,6 +566,7 @@ function SignInGuidance({ signingIn, onSignIn }: { signingIn: boolean; onSignIn:
 			<SignInButton
 				label={t("settings.jbcentral.signInToJetBrains")}
 				signingIn={signingIn}
+				marks={marks}
 				onSignIn={onSignIn}
 			/>
 		</div>
@@ -542,7 +661,7 @@ function failureText(action: JbcentralAction, reason: JbcentralActionFailureReas
 
 const CopiedCheck = withIconClass(Check, "text-feedback-success");
 
-function CopyableCommand({ command }: { command: string }) {
+function CopyableCommand({ command, marks }: { command: string; marks: Marks }) {
 	const t = useT();
 	const [copied, setCopied] = useState(false);
 	const copy = async () => {
@@ -560,6 +679,7 @@ function CopyableCommand({ command }: { command: string }) {
 				label={t("settings.jbcentral.copyCommand", { command })}
 				tooltip={t("common.copy")}
 				data-testid="jetbrains-copy-cmd"
+				{...marks}
 				onClick={() => void copy()}
 				className="shrink-0"
 			/>

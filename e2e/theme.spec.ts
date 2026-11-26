@@ -1,79 +1,101 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
+	closeSettings,
 	createWorkspaceViaDialog,
 	enterDefaultWorkspace,
-	expandDisclosure,
 	openFixtureProject,
+	openSettingsSection,
 	revealWorkbenchTool,
 } from "./fixtures/app";
+
+type Appearance = "light" | "dark";
 
 interface ThemeOption {
 	id: string;
 	label: string;
-	appearance: "light" | "dark";
-	contrast: "normal" | "high";
+	appearance: Appearance;
 	active: boolean;
 }
 
-async function openAppearance(page: Page) {
-	await page.getByTestId("open-settings").click();
-	const dialog = page.getByTestId("settings-dialog");
-	await expect(dialog).toBeVisible();
-	await page.getByTestId("settings-nav-appearance").click();
-	await expect(dialog).toContainText("Theme");
+async function openAppearance(page: Page): Promise<Locator> {
+	const dialog = await openSettingsSection(page, "appearance");
+	await expect(dialog.getByTestId("theme-mode-control")).toBeVisible();
 	return dialog;
 }
 
-/** Opens Appearance with its fixed-mode theme list, which the page keeps in a collapsed disclosure. */
-async function openThemeList(page: Page) {
-	const dialog = await openAppearance(page);
-	await expandDisclosure(dialog.getByTestId("theme-toggle"));
-	return dialog;
-}
-
-async function readThemeOptions(page: Page): Promise<ThemeOption[]> {
-	const dialog = await openThemeList(page);
-	const options: ThemeOption[] = await dialog
-		.locator('[data-testid^="theme-option-"]')
-		.evaluateAll((nodes) =>
+/** The theme options one list shows: Light or Dark mode shows its own list, System both. */
+async function readList(dialog: Locator, appearance: Appearance): Promise<ThemeOption[]> {
+	const list = dialog.getByTestId(`theme-list-${appearance}`);
+	await expect(list.getByRole("option").first()).toBeVisible();
+	return list.getByRole("option").evaluateAll(
+		(nodes, listAppearance) =>
 			nodes.map((node) => ({
-				id: node.getAttribute("data-theme-id") ?? "",
+				id: (node.getAttribute("data-testid") ?? "").replace(/^theme-option-/, ""),
 				label: node.textContent?.trim() ?? "",
-				appearance: node.getAttribute("data-appearance") === "light" ? "light" : "dark",
-				contrast: node.getAttribute("data-contrast") === "high" ? "high" : "normal",
-				active: node.getAttribute("data-active") === "true",
+				appearance: listAppearance,
+				active: node.getAttribute("aria-selected") === "true",
 			})),
-		);
-	await page.keyboard.press("Escape");
-	await expect(dialog).toBeHidden();
-	return options;
+		appearance,
+	);
 }
 
-async function pickTheme(page: Page, theme: string): Promise<void> {
-	const dialog = await openThemeList(page);
-	await dialog.locator(`[data-theme-id="${theme}"]`).click();
-	await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-	await page.keyboard.press("Escape");
-	await expect(dialog).toBeHidden();
+/** Every discovered theme, read from the Light and Dark lists; the current theme comes back after. */
+async function readThemeOptions(page: Page): Promise<ThemeOption[]> {
+	const dialog = await openAppearance(page);
+	const mode =
+		(await dialog.getByTestId("theme-mode-light").getAttribute("aria-selected")) === "true"
+			? "light"
+			: "dark";
+	const other: Appearance = mode === "light" ? "dark" : "light";
+	const current = await readList(dialog, mode);
+	const active = current.find((option) => option.active);
+	if (!active) throw new Error("No active theme");
+	await dialog.getByTestId(`theme-mode-${other}`).click();
+	const opposite = (await readList(dialog, other)).map((option) => ({ ...option, active: false }));
+	await dialog.getByTestId(`theme-mode-${mode}`).click();
+	await dialog.getByTestId(`theme-option-${active.id}`).click();
+	await expect(page.locator("html")).toHaveAttribute("data-theme", active.id);
+	await closeSettings(page);
+	return [...current, ...opposite];
+}
+
+/** Applies a theme from its mode's list and returns the contrast the Contrast control shows for it. */
+async function pickTheme(page: Page, theme: ThemeOption): Promise<"normal" | "high"> {
+	const dialog = await openAppearance(page);
+	await dialog.getByTestId(`theme-mode-${theme.appearance}`).click();
+	await dialog.getByTestId(`theme-option-${theme.id}`).click();
+	await expect(page.locator("html")).toHaveAttribute("data-theme", theme.id);
+	await expect(dialog.getByTestId(`theme-option-${theme.id}`)).toHaveAttribute(
+		"aria-selected",
+		"true",
+	);
+	const high = await dialog.getByTestId("contrast-high").getAttribute("aria-selected");
+	await closeSettings(page);
+	return high === "true" ? "high" : "normal";
+}
+
+function themeById(options: readonly ThemeOption[], id: string | undefined): ThemeOption {
+	const theme = options.find((option) => option.id === id);
+	if (!theme) throw new Error(`No theme ${id}`);
+	return theme;
 }
 
 async function restoreSystemPairLight(
 	page: Page,
 	light: string,
-	fixedAppearance: ThemeOption["appearance"],
+	fixedAppearance: Appearance,
 ): Promise<void> {
-	const dialog = page.getByTestId("settings-dialog");
-	if (!(await dialog.isVisible())) await openAppearance(page);
+	const dialog = await openAppearance(page);
 	await dialog.getByTestId("theme-mode-system").click();
-	const trigger = dialog.getByTestId("system-theme-light-trigger");
-	if (!(await trigger.isVisible())) await expandDisclosure(dialog.getByTestId("theme-pair-toggle"));
-	await trigger.click();
-	await page.getByTestId(`system-theme-light-option-${light}`).click();
+	await dialog.getByTestId(`theme-option-${light}`).click();
+	await expect(dialog.getByTestId(`theme-option-${light}`)).toHaveAttribute(
+		"aria-selected",
+		"true",
+	);
 	await dialog.getByTestId(`theme-mode-${fixedAppearance}`).click();
-	await page.keyboard.press("Escape");
-	await expect(dialog).toBeHidden();
+	await closeSettings(page);
 }
 
 async function expectEditorMatchesTheme(page: Page): Promise<void> {
@@ -104,15 +126,15 @@ test("appearance switches a discovered theme and persists it across reload", asy
 	expect(defaultTheme).toBeTruthy();
 	await expect(page.locator("html")).toHaveAttribute("data-theme", defaultTheme ?? "");
 
-	const target = options.find((option) => option.id !== defaultTheme)?.id;
+	const target = options.find((option) => option.id !== defaultTheme);
 	expect(target).toBeTruthy();
-	await pickTheme(page, target ?? "");
+	await pickTheme(page, themeById(options, target?.id));
 
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await expect(page.locator("html")).toHaveAttribute("data-theme", target ?? "");
+	await expect(page.locator("html")).toHaveAttribute("data-theme", target?.id ?? "");
 
-	await pickTheme(page, defaultTheme ?? "");
+	await pickTheme(page, themeById(options, defaultTheme));
 });
 
 test("system mode follows each client and retains its explicit pair", async ({ page }) => {
@@ -122,28 +144,25 @@ test("system mode follows each client and retains its explicit pair", async ({ p
 
 	const options = await readThemeOptions(page);
 	const fixed = options.find((option) => option.active);
-	const initialLight = options.find(
-		(option) => option.appearance === "light" && option.contrast === fixed?.contrast,
-	);
-	const alternateLight = options.find(
-		(option) => option.appearance === "light" && option.id !== initialLight?.id,
-	);
 	expect(fixed).toBeDefined();
-	expect(initialLight).toBeDefined();
-	expect(alternateLight).toBeDefined();
 
 	const dialog = await openAppearance(page);
 	await dialog.getByTestId("theme-mode-system").click();
+	const lights = await readList(dialog, "light");
+	await expect(dialog.getByTestId("theme-list-dark").getByRole("option").first()).toBeVisible();
+	const initialLight = lights.find((option) => option.active);
+	const alternateLight = lights.find((option) => !option.active);
+	expect(initialLight).toBeDefined();
+	expect(alternateLight).toBeDefined();
 	const peer = await page.context().newPage();
 	try {
 		await expect(page.locator("html")).toHaveAttribute("data-theme", initialLight?.id ?? "");
 		await expect(dialog.getByTestId("system-theme-current")).toContainText("Light");
-		await expandDisclosure(dialog.getByTestId("theme-pair-toggle"));
-		await expect(dialog.getByTestId("system-theme-light-trigger")).toHaveAccessibleName(
-			`Light theme: ${initialLight?.label}`,
+		await expect(dialog.getByTestId(`theme-option-${fixed?.id}`)).toHaveAttribute(
+			"aria-selected",
+			"true",
 		);
-		await dialog.getByTestId("system-theme-light-trigger").click();
-		await page.getByTestId(`system-theme-light-option-${alternateLight?.id}`).click();
+		await dialog.getByTestId(`theme-option-${alternateLight?.id}`).click();
 		await expect(page.locator("html")).toHaveAttribute("data-theme", alternateLight?.id ?? "");
 
 		await page.emulateMedia({ colorScheme: "dark" });
@@ -175,10 +194,9 @@ test("Monaco opens files and re-themes under every discovered manifest", async (
 	const options = await readThemeOptions(page);
 	const defaultTheme = options.find((option) => option.active)?.id;
 	expect(defaultTheme).toBeTruthy();
-	expect(options.some((option) => option.contrast === "high")).toBe(true);
 	const mountTheme = options.find((option) => option.appearance === "light") ?? options[0];
 	expect(mountTheme).toBeDefined();
-	await pickTheme(page, mountTheme?.id ?? "");
+	await pickTheme(page, themeById(options, mountTheme?.id));
 
 	await revealWorkbenchTool(page, "files");
 	const notes = page.getByTestId("file-node").filter({ hasText: "notes.txt" });
@@ -186,12 +204,14 @@ test("Monaco opens files and re-themes under every discovered manifest", async (
 	await notes.dblclick();
 	await expect(page.getByTestId("editor-pane")).toContainText("plain-text-fixture");
 
+	const contrasts = new Set<string>();
 	for (const option of options) {
-		await pickTheme(page, option.id);
-		await expect(page.locator("html")).toHaveAttribute("data-theme-contrast", option.contrast);
+		const contrast = await pickTheme(page, option);
+		contrasts.add(contrast);
+		await expect(page.locator("html")).toHaveAttribute("data-theme-contrast", contrast);
 		await expect(page.getByTestId("error-boundary-fallback")).toHaveCount(0);
 		await expectEditorMatchesTheme(page);
-		if (option.contrast === "high") {
+		if (contrast === "high") {
 			const selectedText = await page.locator("html").evaluate((root) => ({
 				browser: getComputedStyle(root).getPropertyValue("--selection-text").trim(),
 				editor: getComputedStyle(root).getPropertyValue("--editor-selection-text").trim(),
@@ -201,7 +221,8 @@ test("Monaco opens files and re-themes under every discovered manifest", async (
 		}
 	}
 
-	await pickTheme(page, defaultTheme ?? "");
+	expect([...contrasts].sort()).toEqual(["high", "normal"]);
+	await pickTheme(page, themeById(options, defaultTheme));
 	await expect(page.getByTestId("editor-pane")).toContainText("plain-text-fixture");
 });
 
@@ -222,29 +243,24 @@ test("Monaco keeps syntax colours across a light/dark swap", async ({ page }) =>
 	writeFileSync(join(workspace.worktreePath, "swap.ts"), "export const answer = 42;\n");
 	writeFileSync(join(workspace.worktreePath, "later.ts"), "export const later = 7;\n");
 	const options = await readThemeOptions(page);
-	const light = options.find(
-		(option) => option.appearance === "light" && option.contrast === "normal",
-	);
-	const dark = options.find(
-		(option) => option.appearance === "dark" && option.contrast === "normal",
-	);
+	const light = themeById(options, "light");
+	const dark = themeById(options, "dark");
 	const defaultTheme = options.find((option) => option.active)?.id;
-	expect(light && dark).toBeTruthy();
-	await pickTheme(page, light?.id ?? "");
+	await pickTheme(page, light);
 
 	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "swap.ts" }).dblclick();
 	await expect(page.getByTestId("editor-pane")).toContainText("answer");
 	const before = await keywordToken(page);
 
-	await pickTheme(page, dark?.id ?? "");
+	await pickTheme(page, dark);
 	await expect.poll(async () => (await keywordToken(page)).color).not.toBe(before.color);
 	const after = await keywordToken(page);
 
 	await page.getByTestId("file-node").filter({ hasText: "later.ts" }).dblclick();
 	await expect(page.locator('[data-testid="editor-pane"]:visible')).toContainText("later");
 	expect(await keywordToken(page)).toEqual(after);
-	await pickTheme(page, defaultTheme ?? "");
+	await pickTheme(page, themeById(options, defaultTheme));
 });
 
 test("an editor preloaded before a theme swap opens in the current theme", async ({ page }) => {
@@ -253,15 +269,10 @@ test("an editor preloaded before a theme swap opens in the current theme", async
 	writeFileSync(join(workspace.worktreePath, "swap.ts"), "export const answer = 42;\n");
 	const options = await readThemeOptions(page);
 	const defaultTheme = options.find((option) => option.active)?.id;
-	const light = options.find(
-		(option) => option.appearance === "light" && option.contrast === "normal",
-	);
-	const dark = options.find(
-		(option) => option.appearance === "dark" && option.contrast === "normal",
-	);
-	expect(light && dark).toBeTruthy();
-	await pickTheme(page, dark?.id ?? "");
-	await pickTheme(page, light?.id ?? "");
+	const light = themeById(options, "light");
+	const dark = themeById(options, "dark");
+	await pickTheme(page, dark);
+	await pickTheme(page, light);
 
 	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "swap.ts" }).dblclick();
@@ -269,11 +280,11 @@ test("an editor preloaded before a theme swap opens in the current theme", async
 	await expectEditorMatchesTheme(page);
 	const first = await keywordToken(page);
 
-	await pickTheme(page, dark?.id ?? "");
+	await pickTheme(page, dark);
 	await expect.poll(async () => (await keywordToken(page)).color).not.toBe(first.color);
-	await pickTheme(page, light?.id ?? "");
+	await pickTheme(page, light);
 	await expect.poll(async () => (await keywordToken(page)).color).toBe(first.color);
-	await pickTheme(page, defaultTheme ?? "");
+	await pickTheme(page, themeById(options, defaultTheme));
 });
 
 test("selected workspace tabs keep their surface and edge marker, and rail entries their surface, under every manifest", async ({
@@ -305,7 +316,7 @@ test("selected workspace tabs keep their surface and edge marker, and rail entri
 	}
 
 	for (const theme of options) {
-		await pickTheme(page, theme.id);
+		await pickTheme(page, theme);
 		const state = await page.evaluate(() => {
 			const tabs = Array.from(
 				document.querySelectorAll<HTMLElement>(
@@ -342,5 +353,5 @@ test("selected workspace tabs keep their surface and edge marker, and rail entri
 		await expect(toolButton).toHaveCSS("background-color", state.expectedFill);
 		await expect(tool.getByTestId("rail-selection-indicator")).toHaveCount(0);
 	}
-	await pickTheme(page, defaultTheme ?? "");
+	await pickTheme(page, themeById(options, defaultTheme));
 });

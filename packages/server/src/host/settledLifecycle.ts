@@ -34,6 +34,21 @@ export function stampSessionActivity(record: SessionStateRecord): void {
 	recordWorkspaceActivity(record.workspaceId);
 }
 
+export function stampTerminalActivity(workspaceId: string | null, data: string): void {
+	if (!workspaceId) return;
+	for (let i = 0; i < data.length; i += 3) {
+		if (
+			data[i] === "\u001b" &&
+			data[i + 1] === "[" &&
+			(data[i + 2] === "I" || data[i + 2] === "O")
+		) {
+			continue;
+		}
+		recordWorkspaceActivity(workspaceId);
+		return;
+	}
+}
+
 /**
  * Rows whose review state can still change the partition: live rows every pass, idle-settled rows at
  * most every 30 minutes (a PR opened from outside ThinkRail must still surface), parked and complete

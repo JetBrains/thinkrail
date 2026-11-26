@@ -56,6 +56,11 @@ export interface ResourceFileReviewProps {
 	children: (review: SurfaceReview | undefined) => ReactNode;
 }
 
+export interface ResourceOpenInBrowserProps {
+	workspaceId: string;
+	path: string;
+}
+
 export interface ResourceHost {
 	markdown: ResourceMarkdown;
 	code: ResourceCodeHost;
@@ -72,6 +77,7 @@ export interface ResourceHost {
 	): () => void;
 	FileReview: ComponentType<ResourceFileReviewProps>;
 	ReviewSend: ComponentType<ResourceReviewSendProps>;
+	OpenInBrowser?: ComponentType<ResourceOpenInBrowserProps>;
 }
 
 export type MarkdownOutlineSide = "left" | "right";
@@ -112,6 +118,10 @@ export function useResourcePreferences(): ResourcePreferences {
 
 export function useResourceScope(): ResourceScope | null {
 	return useContext(ResourceScopeContext);
+}
+
+export function useFocusHome(): boolean {
+	return useContext(ResourceEnvironmentContext)?.focusHome === true;
 }
 
 export function useResourceEnvironment(): ResourceEnvironment {

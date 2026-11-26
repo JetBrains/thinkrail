@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import {
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
+	EXTENSION_QUERY_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
+	KEYBINDINGS_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
 	type Project,
+	PULL_REQUEST_REVIEW_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	type SessionStateRecord,
 	TOOL_RESPONSE_PROTOCOL_VERSION,
@@ -18,12 +21,16 @@ import {
 	applyWorkspaceListRefresh,
 	mergeSessionStateRecords,
 	supportsChangeMutations,
+	supportsExtensionQuery,
 	supportsHostUpdateRun,
+	supportsKeybindings,
 	supportsPlanReview,
 	supportsPlanSummaryGeneration,
+	supportsPullRequestReview,
 	supportsRichAnchors,
 	supportsToolResponses,
 	supportsUserThemes,
+	updateKeybindings,
 } from "./wireTransport";
 
 test("tool responses go to session.respondToTool only from a v93 host; older hosts take the ask answer", () => {
@@ -32,10 +39,63 @@ test("tool responses go to session.respondToTool only from a v93 host; older hos
 	expect(supportsToolResponses(null)).toBe(false);
 });
 
+test("extension queries are sent only to a v130 host", () => {
+	expect(supportsExtensionQuery(EXTENSION_QUERY_PROTOCOL_VERSION)).toBe(true);
+	expect(supportsExtensionQuery(EXTENSION_QUERY_PROTOCOL_VERSION - 1)).toBe(false);
+	expect(supportsExtensionQuery(null)).toBe(false);
+});
+
 test("user theme files are read only from a host at or beyond their capability version", () => {
 	expect(supportsUserThemes(USER_THEMES_PROTOCOL_VERSION)).toBe(true);
 	expect(supportsUserThemes(USER_THEMES_PROTOCOL_VERSION - 1)).toBe(false);
 	expect(supportsUserThemes(null)).toBe(false);
+});
+
+test("keybindings are written only to a host at or beyond their capability version", () => {
+	expect(supportsKeybindings(KEYBINDINGS_PROTOCOL_VERSION)).toBe(true);
+	expect(supportsKeybindings(KEYBINDINGS_PROTOCOL_VERSION + 1)).toBe(true);
+	expect(supportsKeybindings(KEYBINDINGS_PROTOCOL_VERSION - 1)).toBe(false);
+	expect(supportsKeybindings(null)).toBe(false);
+});
+
+test("the pull-request review mode is offered only by a host that lists pull requests", () => {
+	expect(supportsPullRequestReview(PULL_REQUEST_REVIEW_PROTOCOL_VERSION)).toBe(true);
+	expect(supportsPullRequestReview(PULL_REQUEST_REVIEW_PROTOCOL_VERSION - 1)).toBe(false);
+	expect(supportsPullRequestReview(null)).toBe(false);
+});
+
+describe("updateKeybindings", () => {
+	const requests: [string, unknown][] = [];
+	let spy: ReturnType<typeof spyOn> | null = null;
+	beforeEach(() => {
+		requests.length = 0;
+		const transport = {
+			request: (method: string, params: unknown) => {
+				requests.push([method, params]);
+				return Promise.resolve({});
+			},
+		} as unknown as ReturnType<typeof wireTransport.getTransport>;
+		spy = spyOn(wireTransport, "getTransport").mockReturnValue(transport);
+		useAppStore.setState({ keybindingOverrides: {} });
+	});
+	afterEach(() => {
+		spy?.mockRestore();
+		useAppStore.setState({ protocolVersion: null, keybindingOverrides: {} });
+	});
+
+	test("refuses an older host without sending anything", async () => {
+		useAppStore.setState({ protocolVersion: KEYBINDINGS_PROTOCOL_VERSION - 1 });
+		expect(await updateKeybindings({ "search.open": ["Mod+Alt+KeyS"] })).toBe(false);
+		expect(requests).toEqual([]);
+	});
+
+	test("sends the whole map as one settings update and leaves the store to the broadcast", async () => {
+		useAppStore.setState({ protocolVersion: KEYBINDINGS_PROTOCOL_VERSION });
+		const keybindings = { "search.open": ["Mod+Alt+KeyS"], "tab.close": [] };
+		expect(await updateKeybindings(keybindings)).toBe(true);
+		expect(requests).toEqual([["settings.update", { config: { keybindings } }]]);
+		expect(useAppStore.getState().keybindingOverrides).toEqual({});
+	});
 });
 
 test("host update execution is offered only by a host at or beyond the v70 capability", () => {

@@ -34,10 +34,19 @@ import {
 	CommandItem,
 	CommandList,
 } from "@thinkrail/ui/command";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
-import { type CSSProperties, forwardRef, useImperativeHandle, useMemo, useState } from "react";
+import {
+	type CSSProperties,
+	forwardRef,
+	type KeyboardEvent,
+	useImperativeHandle,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { ModelEffortPill, TONE_TEXT } from "./ModelEffortLabel";
 import {
 	CENTRAL_KIND_TAG,
@@ -73,6 +82,7 @@ import type { ModelPreferences } from "./useModelPreferences";
 
 export interface ModelEffortPickerHandle {
 	open: (query?: string) => void;
+	focus: () => void;
 }
 
 export interface DefaultPairOption {
@@ -98,7 +108,13 @@ export interface ModelEffortPickerProps {
 	defaultOption?: DefaultPairOption;
 	container?: HTMLElement | null;
 	className?: string;
+	canSetDefault?: boolean;
+	tabIndex?: number;
+	fitContainer?: boolean;
+	onTriggerKeyDown?: (event: KeyboardEvent<HTMLButtonElement>) => void;
 }
+
+const FIT_PADDING = 8;
 
 function rowKeywords(model: WireModel): string[] {
 	return [model.name, model.id, model.provider, ...model.thinkingLevels];
@@ -317,10 +333,15 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 			defaultOption,
 			container,
 			className,
+			canSetDefault = true,
+			tabIndex,
+			fitContainer = false,
+			onTriggerKeyDown,
 		},
 		handleRef,
 	) {
 		const t = useT();
+		const triggerRef = useRef<HTMLButtonElement>(null);
 		const [open, setOpen] = useState(false);
 		const [query, setQuery] = useState("");
 		const [showAll, setShowAll] = useState(false);
@@ -335,7 +356,10 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 			onRefresh(false);
 		};
 
-		useImperativeHandle(handleRef, () => ({ open: (q = "") => openWith(q) }));
+		useImperativeHandle(handleRef, () => ({
+			open: (q = "") => openWith(q),
+			focus: () => triggerRef.current?.focus(),
+		}));
 
 		const close = () => {
 			setOpen(false);
@@ -403,6 +427,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 							icon={favorite ? StarFill : StarLine}
 							size="s"
 							data-testid="model-favorite-toggle"
+							data-hint-reveal
 							data-favorite={favorite}
 							label={
 								favorite
@@ -465,8 +490,13 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 		return (
 			<Popover open={open} onOpenChange={(next) => (next ? openWith("") : close())}>
 				<PopoverTrigger
+					ref={triggerRef}
 					data-testid="model-selector"
 					data-open={open}
+					tabIndex={tabIndex}
+					onKeyDown={(event) => {
+						if (!isImeComposing(event.nativeEvent)) onTriggerKeyDown?.(event);
+					}}
 					className={cn(
 						"flex h-32 min-w-0 items-center gap-8 rounded-sm px-8 tr-text-ui text-text-default transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring data-[open=true]:bg-control-bg-selected",
 						className,
@@ -500,7 +530,13 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 				<PopoverContent
 					align="start"
 					container={container}
-					className="flex max-h-[var(--radix-popover-content-available-height)] w-[min(360px,calc(100vw-16px))] flex-col p-0"
+					{...(fitContainer && container
+						? { collisionBoundary: container, collisionPadding: FIT_PADDING }
+						: {})}
+					className={cn(
+						"flex max-h-[var(--radix-popover-content-available-height)] w-[min(360px,calc(100vw-16px))] flex-col p-0",
+						fitContainer && "max-w-[var(--radix-popover-content-available-width)]",
+					)}
 				>
 					<Command
 						className="min-h-0 flex-1 bg-transparent"
@@ -600,7 +636,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 						/>
 					) : null}
 					<div className="flex shrink-0 flex-wrap items-center gap-x-8 gap-y-4 border-border-default border-t px-8 py-4">
-						{preferences.supported && current ? (
+						{canSetDefault && preferences.supported && current ? (
 							<Button
 								variant="ghost"
 								size="s"

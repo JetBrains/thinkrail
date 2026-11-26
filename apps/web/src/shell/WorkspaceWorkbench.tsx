@@ -19,12 +19,25 @@ import {
 } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { prepareChatTitle } from "../chat/chatTitle";
+import type { SuggestionShortcut } from "../chat/SuggestionChips";
 import { useAutoPlanSummary } from "../chat/useChatTodos";
+import { AttentionDot } from "../components/AttentionDot";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { preloadedLazy } from "../components/preloadedLazy";
 import { QuietScrollArea } from "../components/QuietScrollArea";
-import { keybindingKeys } from "../keybindings";
-import { chatDisplayName, type LayoutAttention, layoutResourceIdentity } from "../lib";
+import {
+	keybindingAria,
+	keybindingKeys,
+	keybindingLabel,
+	type ResolvedKeybindings,
+	SUGGESTION_KEYS,
+} from "../keybindings";
+import {
+	type ChatAction,
+	chatDisplayName,
+	type LayoutAttention,
+	layoutResourceIdentity,
+} from "../lib";
 import { ArtifactsPanel } from "../panels/ArtifactsPanel";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
@@ -58,6 +71,7 @@ import {
 	selectDiffTabTargetRef,
 	selectRailPlanSessionId,
 	selectReviewDraftCount,
+	selectSessionNeedsAttention,
 	selectUnnamedChatFirstPrompts,
 	selectWorkspaceById,
 	selectWorkspaceNavTick,
@@ -75,11 +89,16 @@ import {
 	useDeletedChatPlacementReconciliation,
 	useWorkspaceChatCatalogReconciliation,
 } from "./chatReconciliation";
+import { releaseClosedTab } from "./closedTab";
+import { ExtensionPanelBody, useExtensionChatPane } from "./ExtensionPanelBody";
+import { useChatActions, useChatTabActions, useLeftRailFooter } from "./extensionEntryPoints";
+import { useResolvedKeybindings } from "./keybindingState";
 import {
 	collectAllGroups,
 	findPlacedResource,
 	findTabLocation,
 	isToolShowing,
+	type LayoutAuxiliaryRegion,
 	type LayoutCenterTab,
 	type LayoutTab,
 	type LayoutTabFocusRequest,
@@ -98,12 +117,18 @@ import {
 	workspaceProjectionReference,
 } from "./layoutState";
 import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./legacySelection";
-import { renderShortcutsRailButton } from "./ShortcutsDialog";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
 import { hasNativeShortcuts } from "./useAppShortcuts";
 import { useIdleEditorPreload } from "./useIdleEditorPreload";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
 import { registerTabCommands } from "./workbenchCommands";
+
+function ChatTabAttention({ workspaceId, sessionId }: { workspaceId: string; sessionId: string }) {
+	const needsAttention = useAppStore((state) =>
+		selectSessionNeedsAttention(state, workspaceId, sessionId),
+	);
+	return needsAttention ? <AttentionDot /> : null;
+}
 
 function PlanSummaryAutoDraft({
 	workspaceId,
@@ -218,13 +243,20 @@ function ChatResourceBody({
 	workspaceId,
 	tab,
 	onOpenFile,
+	landingChord,
+	suggestionShortcuts,
+	chatActions,
 }: {
 	workspaceId: string;
 	tab: Extract<LayoutCenterTab, { kind: "chat" }>;
 	onOpenFile: (path: string) => void;
+	landingChord: string;
+	suggestionShortcuts: readonly SuggestionShortcut[];
+	chatActions: readonly ChatAction[];
 }) {
 	const t = useT();
 	const available = useAppStore((state) => state.sessions[tab.sessionId] !== undefined);
+	const pane = useExtensionChatPane(workspaceId, tab.sessionId);
 	const [stalled, setStalled] = useState(false);
 	useEffect(() => {
 		if (available) return;
@@ -240,7 +272,15 @@ function ChatResourceBody({
 				resetKeys={[workspaceId, tab.id]}
 			>
 				<Suspense fallback={<MissingResource kind="chat" />}>
-					<ChatView sessionId={tab.sessionId} workspaceId={workspaceId} onOpenFile={onOpenFile} />
+					<ChatView
+						sessionId={tab.sessionId}
+						workspaceId={workspaceId}
+						onOpenFile={onOpenFile}
+						landingChord={landingChord}
+						suggestionShortcuts={suggestionShortcuts}
+						chatActions={chatActions}
+						pane={pane}
+					/>
 				</Suspense>
 			</ErrorBoundary>
 		);
@@ -339,16 +379,24 @@ function useTerminalReservation(workspaceId: string): void {
 	}, [connectionGeneration, pendingIntent, status, workspaceId]);
 }
 
-function workbenchChromeShortcuts(): WorkbenchChromeShortcuts {
+function workbenchChromeShortcuts(keybindings: ResolvedKeybindings): WorkbenchChromeShortcuts {
+	const keys = (id: string) => keybindingKeys(keybindings, id);
 	return {
 		hide: {
-			left: keybindingKeys("view.toggleLeft"),
-			right: keybindingKeys("view.toggleRight"),
-			bottom: keybindingKeys("view.toggleBottom"),
+			left: keys("view.toggleLeft"),
+			right: keys("view.toggleRight"),
+			bottom: keys("view.toggleBottom"),
 		},
-		tools: { projects: keybindingKeys("focus.projects"), files: keybindingKeys("view.files") },
-		terminal: keybindingKeys("focus.terminal"),
+		tools: { projects: keys("focus.projects"), files: keys("view.files") },
+		terminal: keys("focus.terminal"),
 	};
+}
+
+function suggestionShortcuts(keybindings: ResolvedKeybindings): SuggestionShortcut[] {
+	return SUGGESTION_KEYS.send.map((send, index) => ({
+		caps: keybindingKeys(keybindings, send),
+		aria: keybindingAria(keybindings, send, SUGGESTION_KEYS.edit[index] ?? ""),
+	}));
 }
 
 export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
@@ -400,7 +448,14 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		void ChatView.preload();
 	}, []);
 	const [focusRequest, setFocusRequest] = useState<LayoutTabFocusRequest | null>(null);
-	const [chromeShortcuts] = useState(workbenchChromeShortcuts);
+	const keybindings = useResolvedKeybindings();
+	const [nativeShortcuts] = useState(hasNativeShortcuts);
+	const chromeShortcuts = useMemo(() => workbenchChromeShortcuts(keybindings), [keybindings]);
+	const landingChord = keybindingLabel(keybindings, "region.next");
+	const chipShortcuts = useMemo(() => suggestionShortcuts(keybindings), [keybindings]);
+	const chatActions = useChatActions();
+	const chatTabActions = useChatTabActions(workspaceId, chatActions);
+	const railFooter = useLeftRailFooter();
 	const requestRenameChat = useCallback(
 		(sessionId: string, titleInput: string, currentTitle: string) => {
 			const prepared = prepareChatTitle(titleInput);
@@ -489,10 +544,15 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	);
 
 	const commit = useCallback(
-		(next: WorkspaceLayoutDocument, nextAttention?: LayoutAttention) => {
+		(
+			next: WorkspaceLayoutDocument,
+			nextAttention?: LayoutAttention,
+			panelsToRestore?: readonly LayoutAuxiliaryRegion[],
+		) => {
 			void commitWorkspaceLayout(workspaceId, next, {
 				...(document ? { baseDocument: document } : {}),
 				...(nextAttention ? { attention: nextAttention } : {}),
+				...(panelsToRestore ? { panelsToRestore } : {}),
 			}).catch(() => {});
 		},
 		[document, workspaceId],
@@ -638,7 +698,16 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const renderResourceBody = useCallback(
 		(tab: LayoutCenterTab | Extract<LayoutTab, { kind: "terminal" }>) => {
 			if (tab.kind === "chat") {
-				return <ChatResourceBody workspaceId={workspaceId} tab={tab} onOpenFile={openToolFile} />;
+				return (
+					<ChatResourceBody
+						workspaceId={workspaceId}
+						tab={tab}
+						onOpenFile={openToolFile}
+						landingChord={landingChord}
+						suggestionShortcuts={chipShortcuts}
+						chatActions={chatActions}
+					/>
+				);
 			}
 			if (tab.kind === "document") {
 				if (deletedSessions?.[tab.sourceId]) return <MissingResource kind="plan" />;
@@ -649,10 +718,17 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						resetKeys={[workspaceId, tab.id]}
 					>
 						<Suspense fallback={<MissingResource kind="plan" />}>
-							<PlanPane workspaceId={workspaceId} sessionId={tab.sourceId} />
+							<PlanPane
+								workspaceId={workspaceId}
+								sessionId={tab.sourceId}
+								landingChord={landingChord}
+							/>
 						</Suspense>
 					</ErrorBoundary>
 				);
+			}
+			if (tab.kind === "extension") {
+				return <ExtensionPanelBody workspaceId={workspaceId} tab={tab} />;
 			}
 			if (tab.kind === "terminal") {
 				const terminal = terminalByKey.get(tab.tabKey);
@@ -680,7 +756,17 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			}
 			return <EditorResourceBody workspaceId={workspaceId} tab={tab} />;
 		},
-		[deletedSessions, document, openToolFile, t, terminalByKey, workspaceId],
+		[
+			chatActions,
+			chipShortcuts,
+			deletedSessions,
+			document,
+			landingChord,
+			openToolFile,
+			t,
+			terminalByKey,
+			workspaceId,
+		],
 	);
 	const renderTabBody = useCallback(
 		(tab: LayoutCenterTab | Extract<LayoutTab, { kind: "terminal" }>) => (
@@ -697,7 +783,12 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					className="h-full"
 					viewportClassName="p-panel-inset"
 				>
-					<ProjectTree nativeShortcuts={hasNativeShortcuts()} />
+					<ProjectTree
+						newWorkspaceShortcut={keybindingKeys(keybindings, "workspace.new", {
+							browser: !nativeShortcuts,
+						})}
+						chatActions={chatActions}
+					/>
 				</QuietScrollArea>
 			),
 			specs: isChat ? (
@@ -755,7 +846,10 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	}, [
 		artifacts.failed,
 		artifacts.reload,
+		chatActions,
 		isChat,
+		keybindings,
+		nativeShortcuts,
 		railPlanSessionId,
 		review.failed,
 		specs.failed,
@@ -780,6 +874,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 
 	const renderTabAdornment = useCallback(
 		(tab: LayoutTab): ReactNode => {
+			if (tab.kind === "chat") {
+				return <ChatTabAttention workspaceId={workspaceId} sessionId={tab.sessionId} />;
+			}
 			if (tab.kind === "tool" && tab.tool === "artifacts" && artifactsUnseen) {
 				return (
 					<span
@@ -815,7 +912,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				</span>
 			) : null;
 		},
-		[artifactsUnseen, reviewDraftCount, reviewFlagByPath, t],
+		[artifactsUnseen, reviewDraftCount, reviewFlagByPath, t, workspaceId],
 	);
 
 	const renderEmptyCenter = useCallback(
@@ -945,7 +1042,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				{...(focusRequest ? { focusRequest } : {})}
 				registerTabCommands={registerTabCommands}
 				chromeShortcuts={chromeShortcuts}
-				renderLeftRailFooter={renderShortcutsRailButton}
+				leftRailFooter={railFooter}
 				renderTabBody={renderTabBody}
 				renderTabAdornment={renderTabAdornment}
 				renderToolBody={renderToolBody}
@@ -957,6 +1054,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				readNavigationTick={() => selectWorkspaceNavTick(useAppStore.getState(), workspaceId)}
 				{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
 				chatFirstPrompts={chatFirstPrompts}
+				{...(chatTabActions ? { chatActions: chatTabActions } : {})}
 				onRequestClose={(tab, prepare) => {
 					if (tab.kind === "terminal") {
 						const close = () => {
@@ -1009,21 +1107,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 									? { document: current, attention: currentAttention }
 									: undefined,
 							);
-							if (tab.kind === "chat") {
-								state.closeChatToHistory(tab.sessionId, false, workspaceId, false);
-							} else if (
-								tab.kind === "file" ||
-								tab.kind === "diff" ||
-								tab.kind === "changes" ||
-								tab.kind === "document"
-							) {
-								for (const cache of state.tabsByWorkspace[workspaceId] ?? []) {
-									const resource = toLayoutTab(cache);
-									if (resource && layoutResourceIdentity(resource) === closedIdentity) {
-										state.closeTab(cache.id, false, false, workspaceId);
-									}
-								}
-							}
+							releaseClosedTab(workspaceId, tab);
 						})
 						.catch(() => {});
 				}}

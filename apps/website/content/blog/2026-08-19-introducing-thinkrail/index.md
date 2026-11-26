@@ -20,6 +20,7 @@ We believe ThinkRail can make Pi more accessible without compromising its power.
 Download the stable desktop application for your platform:
 
 - [macOS — Apple Silicon (.dmg)](https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-darwin-arm64.dmg)
+- [macOS — Intel (.dmg)](https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-darwin-x64.dmg)
 - [Windows — x64 (.zip)](https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-windows-x64.zip) — unzip it, then run Setup with its adjacent payload
 - [Linux — x64 (.tar.gz)](https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-linux-x64.tar.gz)
 - [Linux — ARM64 (.tar.gz)](https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-linux-arm64.tar.gz)

@@ -5,6 +5,7 @@ import type {
 	AskUserQuestionItem,
 	AskUserQuestionOption,
 } from "@thinkrail/pi-ask-user-question/core";
+import { CARD_KEYS } from "./keys";
 
 export function parseQuestions(args: Record<string, unknown>): AskUserQuestionItem[] {
 	const qs = (args as Partial<AskUserQuestionArgs>).questions;
@@ -142,6 +143,10 @@ export function hasPreview(target: {
 	return !!target.previewFile || !!target.preview?.trim();
 }
 
+export function hasOptionPreviews(question: AskUserQuestionItem): boolean {
+	return !question.multiSelect && question.options.some(hasPreview);
+}
+
 export interface RecapState {
 	selectedLabels: string[];
 	customAnswer: string | null;
@@ -164,23 +169,53 @@ export type ChoiceKeyAction =
 	| { type: "select" }
 	| { type: "note" }
 	| { type: "discuss" }
+	| { type: "interact" }
+	| { type: "compare" }
 	| { type: "none" };
+
+const COMMAND_ACTIONS: Readonly<Record<string, ChoiceKeyAction>> = {
+	[CARD_KEYS.discuss]: { type: "discuss" },
+	[CARD_KEYS.interact]: { type: "interact" },
+	[CARD_KEYS.compare]: { type: "compare" },
+};
 
 export function choiceKeyAction(
 	key: string,
+	command: string | null,
 	index: number,
 	count: number,
 	otherIndex: number,
 ): ChoiceKeyAction {
 	if (count <= 0) return { type: "none" };
+	if (command !== null) return COMMAND_ACTIONS[command] ?? { type: "none" };
 	if (key === "ArrowDown") return { type: "move", index: (index + 1) % count };
 	if (key === "ArrowUp") return { type: "move", index: (index - 1 + count) % count };
 	if (key === "Home") return { type: "move", index: 0 };
 	if (key === "End") return { type: "move", index: otherIndex };
 	if (key === "Enter") return { type: "select" };
 	if (key === " " || key === "Spacebar") return { type: "note" };
-	if (key === "d") return { type: "discuss" };
 	return { type: "none" };
+}
+
+export type FootControl = "skip" | "primary";
+
+export type FootTarget = FootControl | "other" | "first" | "stay";
+
+export function footKeyAction(
+	key: string,
+	at: FootControl,
+	primaryEnabled: boolean,
+): FootTarget | null {
+	const primary = primaryEnabled ? "primary" : "stay";
+	if (at === "skip") {
+		if (key === "ArrowUp") return "other";
+		if (key === "ArrowDown") return primaryEnabled ? "primary" : "first";
+		if (key === "ArrowRight") return primary;
+		return key === "ArrowLeft" ? "stay" : null;
+	}
+	if (key === "ArrowUp" || key === "ArrowLeft") return "skip";
+	if (key === "ArrowDown") return "first";
+	return key === "ArrowRight" ? "stay" : null;
 }
 
 export function paneOptionIndex(
@@ -288,8 +323,34 @@ export function nudgeShowsOnPage(
 	return !!nudge && nudge.question === page && !answered;
 }
 
-export function questionPageForKey(key: string, current: number, last: number): number | null {
+export function questionPageForKey(
+	key: string,
+	current: number,
+	last: number,
+	edges = false,
+): number | null {
 	if (key === "ArrowLeft") return Math.max(0, current - 1);
 	if (key === "ArrowRight") return Math.min(last, current + 1);
+	if (edges && key === "Home") return 0;
+	if (edges && key === "End") return last;
 	return null;
+}
+
+export type PageKeyTarget =
+	| { readonly kind: "page"; readonly page: number }
+	| { readonly kind: "submit" }
+	| { readonly kind: "needsChoice" };
+
+export function pageKeyTarget(
+	key: string,
+	current: number,
+	last: number,
+	{ edges = false, canSubmit }: { edges?: boolean; canSubmit: boolean },
+): PageKeyTarget | null {
+	if (key === "ArrowRight" && current >= last) {
+		return canSubmit ? { kind: "submit" } : { kind: "needsChoice" };
+	}
+	if (last <= 0) return null;
+	const page = questionPageForKey(key, current, last, edges);
+	return page === null ? null : { kind: "page", page };
 }

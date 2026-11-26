@@ -14,6 +14,7 @@ import {
 	latestPendingInteraction,
 	type PendingInteraction,
 } from "./interactionState";
+import { currentToolRegistry, type ToolRegistry } from "./toolRegistry";
 import type { ChatTurn, ToolResultState } from "./types";
 
 export type ItemChangeSet =
@@ -257,35 +258,37 @@ interface GlanceInputs {
 
 const glanceByTurns = new WeakMap<
 	ChatTurn[],
-	Omit<GlanceInputs, "turns" | "hostState"> & { glance: PlanGlance }
+	Omit<GlanceInputs, "turns" | "hostState"> & { registry: ToolRegistry; glance: PlanGlance }
 >();
 
-function transcriptGlance({
-	isStreaming,
-	turns,
-	toolResponses,
-	toolResults,
-}: GlanceInputs): PlanGlance {
+function transcriptGlance(
+	{ isStreaming, turns, toolResponses, toolResults }: GlanceInputs,
+	registry: ToolRegistry,
+): PlanGlance {
 	const cached = glanceByTurns.get(turns);
 	if (
 		cached?.isStreaming === isStreaming &&
 		cached.toolResponses === toolResponses &&
-		cached.toolResults === toolResults
+		cached.toolResults === toolResults &&
+		cached.registry === registry
 	) {
 		return cached.glance;
 	}
 	const glance = planGlance(
 		isStreaming,
-		deriveInteractionStates(turns, toolResponses, toolResults),
+		deriveInteractionStates(turns, toolResponses, toolResults, registry),
 	);
-	glanceByTurns.set(turns, { isStreaming, toolResponses, toolResults, glance });
+	glanceByTurns.set(turns, { isStreaming, toolResponses, toolResults, registry, glance });
 	return glance;
 }
 
-export function sessionGlance(inputs: GlanceInputs): PlanGlance {
+export function sessionGlance(
+	inputs: GlanceInputs,
+	registry: ToolRegistry = currentToolRegistry(),
+): PlanGlance {
 	return inputs.hostState
 		? hostSessionGlance(inputs.hostState, "waiting")
-		: transcriptGlance(inputs);
+		: transcriptGlance(inputs, registry);
 }
 
 export function shouldNudgeOnAdd(glance: PlanGlance): boolean {
@@ -311,11 +314,14 @@ export function lastAgentText(rt: { turns: ChatTurn[] }): string | undefined {
 	return undefined;
 }
 
-export function pendingInteraction(rt: {
-	turns: ChatTurn[];
-	toolResponses: Record<string, unknown>;
-	toolResults: Record<string, ToolResultState>;
-}): PendingInteraction | undefined {
-	const states = deriveInteractionStates(rt.turns, rt.toolResponses, rt.toolResults);
-	return latestPendingInteraction(rt.turns, rt.toolResults, states);
+export function pendingInteraction(
+	rt: {
+		turns: ChatTurn[];
+		toolResponses: Record<string, unknown>;
+		toolResults: Record<string, ToolResultState>;
+	},
+	registry: ToolRegistry = currentToolRegistry(),
+): PendingInteraction | undefined {
+	const states = deriveInteractionStates(rt.turns, rt.toolResponses, rt.toolResults, registry);
+	return latestPendingInteraction(rt.turns, rt.toolResults, states, registry);
 }

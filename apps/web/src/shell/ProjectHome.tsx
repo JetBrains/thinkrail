@@ -2,10 +2,11 @@ import { useT } from "@thinkrail/locales/react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
 import { type ReactNode, useState } from "react";
 import { QuietScrollArea } from "../components/QuietScrollArea";
-import { keybindingKeys } from "../keybindings";
 import { ProjectTree } from "../panels/ProjectTree";
 import { WelcomePanel } from "../panels/WelcomePanel";
 import { selectOnboardingActive, useAppStore } from "../store";
+import { useChatActions, useLeftRailFooter } from "./extensionEntryPoints";
+import { useKeybindingKeys } from "./keybindingState";
 import {
 	AuxiliaryPaneHeader,
 	AuxiliaryPaneHideButton,
@@ -15,7 +16,6 @@ import {
 	DEFAULT_LAYOUT_PRESET_ID,
 	resolveLayoutPreset,
 } from "./layout";
-import { renderShortcutsRailButton } from "./ShortcutsDialog";
 import { hasNativeShortcuts } from "./useAppShortcuts";
 import type { CollapsibleRegion } from "./useCollapsibleRegion";
 
@@ -48,7 +48,11 @@ export function ProjectHome({
 	} = projects;
 	const t = useT();
 	const onboarding = useAppStore(selectOnboardingActive);
-	const [toggleShortcut] = useState(() => keybindingKeys("view.toggleLeft"));
+	const toggleShortcut = useKeybindingKeys("view.toggleLeft");
+	const [nativeShortcuts] = useState(hasNativeShortcuts);
+	const newWorkspaceShortcut = useKeybindingKeys("workspace.new", { browser: !nativeShortcuts });
+	const railFooter = useLeftRailFooter();
+	const chatActions = useChatActions();
 	const entry: AuxiliaryRailToolEntry = {
 		key: PROJECTS_RAIL_ENTRY_KEY,
 		region: "left",
@@ -80,7 +84,7 @@ export function ProjectHome({
 							onActivate={toggle}
 						/>
 					)}
-					footer={renderShortcutsRailButton}
+					footer={railFooter}
 				/>
 			)}
 			<ResizablePanelGroup
@@ -133,7 +137,10 @@ export function ProjectHome({
 										className="min-h-0 flex-1"
 										viewportClassName="p-panel-inset"
 									>
-										<ProjectTree nativeShortcuts={hasNativeShortcuts()} />
+										<ProjectTree
+											newWorkspaceShortcut={newWorkspaceShortcut}
+											chatActions={chatActions}
+										/>
 									</QuietScrollArea>
 								</div>
 							</section>
@@ -154,7 +161,9 @@ export function ProjectHome({
 					defaultSize={100 - PROJECTS_PANE_DEFAULT_PERCENT}
 					minSize={WELCOME_MIN_PERCENT}
 				>
-					<div className="h-full min-h-0 bg-container-content-bg">{main ?? <WelcomePanel />}</div>
+					<div data-main-area className="h-full min-h-0 bg-container-content-bg">
+						{main ?? <WelcomePanel />}
+					</div>
 				</ResizablePanel>
 			</ResizablePanelGroup>
 		</div>

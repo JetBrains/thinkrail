@@ -156,6 +156,13 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   connection and deletion fences. A new connection starts independently of an older generation's tail,
   workspaces do not block one another, and failed requests reject their callers without poisoning the queue
   or preventing a retry. This queue is transient transport coordination, not a second state owner.
+  A request without a workspace never takes this path (it rejects unsent): the user-level servers a host at
+  `MCP_USER_SERVERS_PROTOCOL_VERSION` manages with no workspace open (**`supportsUserMcp`**) go through
+  **`requestUserMcpList(method, params)`** — `mcp.list`, user-scope `add` / `update` / `remove` and
+  `mcp.setUserServer`, typed to carry no `workspaceId` — serialized on its own tail by the same rules and
+  connection fence, but returning the result to its caller only: it never installs into
+  `mcpByWorkspace`, whose projections are per-workspace chat status a user list must not leak into, and
+  never waits on or blocks a workspace's tail.
   **`watchMcpWorkspace(workspaceId, onRead?)`** reads once and then re-reads with bounded backoff
   (1 → 13 s, six attempts per streak) only while a live chat of that workspace still reports a server
   `starting`. The host's `mcpSessions.capture` continues after its caller times out and eventually publishes
@@ -178,11 +185,13 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
 
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
   skill-load-safe session request wrappers, `errorText`, `RequestError`, `RequestTimeoutError`, `wsErrorCode`, `requestMcpList`,
-  `watchMcpWorkspace`, `ConnectionStatus`,
+  `requestUserMcpList` + `UserMcpListMethod`, `supportsUserMcp` (v125), `watchMcpWorkspace`, `ConnectionStatus`,
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
   `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`,
-  `supportsUserThemes`, `supportsFonts`, `supportsExtensionSettings`, `supportsSpeech`, `openSpeechSocket`,
-  `hostUrl`, `uploadUserFont`, `supportsToolResponses`, `respondToTool`,
+  `supportsUserThemes`, `supportsFonts`, `supportsExtensionSettings`, `supportsKeybindings`,
+  `updateKeybindings`, `supportsExtensionQuery`, `supportsSpeech`, `openSpeechSocket`,
+  `hostUrl`, `uploadUserFont`, `supportsChatAttachments`, `uploadPromptFiles`, `attachmentFailureText`,
+  `supportsToolResponses`, `respondToTool`,
   `supportsTextSearch` (v112 — Find in Files asks `search.text` and listens on `search.textResults` only of a
   host that serves them; against an older host the palette hides the command and the window opened by the
   chord says the host needs an update),
@@ -193,11 +202,34 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   and `supportsHostUpdateRun` lets `Shell` inject it only for protocol v70+; `supportsUserThemes` (v92) is
   exported because `Shell` must drop user themes (cached or from an earlier host) once a host that cannot
   serve theme files has welcomed it; `supportsFonts` (v102) gates the same way for the font settings and the
-  custom-font snapshot (`fonts.list`, refreshed on every welcome and `fonts.changed`), and `uploadUserFont`
-  is the one binary upload — a `PUT` of the raw file to the host's `/fonts/` route with the upload guard
-  header, answered by that file's `UserFontFile` entry — while `hostUrl` resolves a host-relative path
+  custom-font snapshot (`fonts.list`, refreshed on every welcome and `fonts.changed`). There are two binary
+  uploads, each a `PUT` of the raw file under its route's guard header ([[submodule-server-host]]):
+  `uploadUserFont` to `/fonts/`, answered by that file's `UserFontFile` entry, and
+  `uploadPromptFiles(workspaceId | null, files, { signal?, onCopied? })`, which hands a prompt's file
+  attachments to the host in order (`CHAT_ATTACHMENTS_PROTOCOL_VERSION`, v129, gated by
+  `supportsChatAttachments`): picked bytes to `/attachments/`, a pasted local path through
+  `attachments.copyLocal`. It reports each written path through `onCopied`, reuses a file's `copied` path
+  instead of sending it again (a retry after a partial failure makes no `name-2.ext`), stops between files
+  and aborts the `fetch` on `signal`. A socket request can't be withdrawn, so on `signal` the
+  `copyLocal` wait ends at once while the host's copy runs on: its late answer still reports the path
+  (and a blob answer read before the abort reports too), and a retry of that file meanwhile joins the
+  running copy (keyed by workspace and file id) instead of starting another. It answers the paths or throws `AttachmentUploadError` — a host
+  refusal code, a non-JSON answer's HTTP status, an unreachable host or a failed socket request — which
+  `attachmentFailureText` words from the catalog, always naming the file — while `hostUrl` resolves a host-relative path
   (custom face URLs, and chat image references through `chat`'s `ChatMediaContext`) against the endpoint; `supportsExtensionSettings` (v105) lets `ExtensionsSettings`
-  offer per-extension setting switches only to a host that stores `extensionSettings`. `openSpeechSocket()`
+  offer per-extension setting switches only to a host that stores `extensionSettings`;
+  `supportsKeybindings` (`KEYBINDINGS_PROTOCOL_VERSION`, v123) gates the user's keybindings both ways —
+  `shell` ignores stored overrides below it — and `updateKeybindings(map)` is the one write: it resolves
+  `false` without sending to an older host (which would reject the unknown key), else sends the whole map as
+  one `settings.update { keybindings }` and resolves `true` once accepted, the store converging on the
+  `settings.changed` broadcast (no optimistic write); a host refusal rejects (`KEYBINDINGS_INVALID`); `supportsExtensionQuery` (v130) lets the shell's extension
+  panel body show its placeholder, and its `PanelHost` refuse a query locally, against a host without
+  `extension.query`.
+  `refreshExtensionCatalog(connectionGeneration?)` is the one `extension.list` path: every welcome from a
+  host at `INSTALLED_EXTENSIONS_PROTOCOL_VERSION` (v131) or newer, every `extensions.changed` push, and each
+  mount of the Extensions page (any host from v82, as before) call it; the latest request wins and only a
+  response for the current connection generation installs the store's `extensionCatalog` (a failure
+  installs `failed`). An older host is never asked at welcome, so its traffic is unchanged. `openSpeechSocket()`
   opens the dictation side socket (`/speech?protocol=`) on the same endpoint for [[submodule-web-speech]].
   It carries binary audio and never a request. `server.welcome`'s `speech` seed and every `speech.changed`
   push install the store's `speech` status whole; `supportsSpeech` (v107) gates the same way.

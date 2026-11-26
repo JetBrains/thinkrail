@@ -116,7 +116,8 @@ crowd out the task, which is what tells two runs apart. The detail body is the p
 plain-text command output for a command (this module's `CommandLogView`), the read-only subagent transcript pane for a subagent,
 and the server's status and calls for an MCP server. The
 roster is a listbox: clicking selects, `↑`/`↓` move the selection, `Esc` or the close control dismisses,
-and clicking the composer or header does **not** dismiss. Each option keeps its activity on a second
+and clicking the composer or header does **not** dismiss. The parent may veto an Escape dismissal through
+`onEscapeKeyDown` (the composer's own popup takes that Escape first). Each option keeps its activity on a second
 line and in its accessible name (`name: activity, state`), so two same-role subagents stay
 distinguishable; the option contains no control — its Stop is a sibling inside a presentational row
 wrapper, which carries the row's test ids and `data-selected`. **Stop all subagents** sits in the roster
@@ -157,7 +158,8 @@ a one-line teaser · an optional open action ("Open log" / "Transcript"). The co
 excerpt's last non-empty line with ANSI CSI sequences removed; a subagent teaser comes from the parent,
 which owns the report text. The teaser hides while expanded, gives way first at narrow widths, and keeps
 the code face for command output. The row is **controlled**: `expanded`, `onToggle` and `toggleRef` come
-from the parent's transcript fold state, and without `onToggle` there is nothing to expand. It never
+from the parent's transcript fold state, and without `onToggle` there is nothing to expand; the toggle
+carries `data-chat-item-toggle`, the marker the transcript's keyboard model clicks to expand a row. It never
 claims current authority — whether the open action exists is the parent's call from its own snapshot.
 Its status-dot ring is drawn against the transcript canvas, not the elevated roster surface.
 

@@ -8,6 +8,7 @@ export {
 	ResourceHostProvider,
 	type ResourceMarkdown,
 	type ResourceMarkdownProps,
+	type ResourceOpenInBrowserProps,
 	type ResourcePreferences,
 	ResourcePreferencesProvider,
 	type ResourceReviewSendProps,
@@ -20,9 +21,11 @@ export {
 	type AnchorDraft,
 	anchorLabel,
 	canonicalWorkspacePath,
+	type DiffSideLabels,
 	describeResource,
 	diffRendererCapabilities,
 	diffResourceMeta,
+	type FrameFocus,
 	type HunkActions,
 	type HunkTriage,
 	isPlaceable,
@@ -49,14 +52,21 @@ export {
 } from "./registry";
 export { SOURCE_RENDERER_ID } from "./renderers/code";
 export { createAskAgentRequest } from "./renderers/code/changeBlocks";
-export { registerBundledResourceRenderers } from "./renderers/register";
+export { HtmlViewportSwitch } from "./renderers/html/ViewportSwitch";
+export type { HtmlViewport } from "./renderers/html/viewport";
+export {
+	type BundledRendererOptions,
+	registerBundledResourceRenderers,
+} from "./renderers/register";
 export { ReviewDraftContext, type ReviewDraftPersistence } from "./renderers/reviewDraftState";
+export { REVIEW_SURFACE_COMMANDS, REVIEW_SURFACE_SCOPE } from "./support/cursorKeys";
 export {
 	FramedResourcePreview,
 	type FramedResourcePreviewProps,
 } from "./support/FramedResourcePreview";
 export { GuardedRendererDiff } from "./support/GuardedRendererDiff";
 export { surfaceLineCount, VIRTUALIZED_DIFF_LINES } from "./support/largeDiff";
+export { type OutputFileLabel, outputFileIcon, outputFileLabel } from "./support/outputFile";
 export { type RendererLayout, RendererToggles } from "./support/RendererToggles";
 export {
 	ResourcePreview,
@@ -69,6 +79,7 @@ export {
 	usePreloadResourceView,
 	useRendererSelection,
 } from "./support/rendererMount";
+export { focusReviewCard } from "./support/revealFocus";
 export { UnplacedReviewStrip } from "./support/UnplacedReviewStrip";
 export { useScrollViewState, viewStateScrollTop } from "./support/useScrollViewState";
 export { toggleActiveVimMode } from "./support/vimMode";

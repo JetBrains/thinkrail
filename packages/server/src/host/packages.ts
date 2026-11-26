@@ -1,7 +1,8 @@
 import type {
+	PackageInstallResult,
 	PiPackageResourceType,
 	PiPackageScope,
-	PiPackageSummary,
+	PiPackageSourceKind,
 	PiPackagesCatalog,
 } from "@thinkrail/contracts";
 import {
@@ -15,6 +16,11 @@ import {
 	piPackagesUpdate,
 } from "../agent";
 import { revealInFileManager } from "../editors";
+import {
+	type ExtensionSourceKind,
+	type InstalledExtensionRecord,
+	listExtensionCatalog,
+} from "../extensions";
 import { getProjects } from "../projects";
 import { getConfig, updateConfig } from "../settings";
 import { getWorkspace } from "../workspaces";
@@ -41,23 +47,58 @@ export function packagesList(params: {
 	});
 }
 
-/** A confirmed install turns the package on: its identity leaves `disabledPackages` before the row returns. */
 export async function packagesInstall(params: {
 	source: string;
 	scope: PiPackageScope;
 	workspaceId?: string;
-}): Promise<PiPackageSummary> {
-	const { identity, summary } = await piPackagesInstall(
+}): Promise<PackageInstallResult> {
+	const outcome = await piPackagesInstall(
 		target(params.workspaceId),
 		{ source: params.source, scope: params.scope },
 		disabledPackages,
 	);
+	if (outcome.installed === "extension") return installedExtensionResult(outcome.record);
+	const { identity, summary } = outcome;
 	const keys = new Set([identity, ...summary.switchKeys]);
 	const disabled = getConfig().disabledPackages;
 	if (disabled.some((entry) => keys.has(entry))) {
 		updateConfig({ disabledPackages: disabled.filter((entry) => !keys.has(entry)) });
 	}
-	return { ...summary, enabled: true };
+	return { ...summary, enabled: true, installed: "package" };
+}
+
+const PI_SOURCE_KIND: Record<ExtensionSourceKind, PiPackageSourceKind> = {
+	npm: "npm",
+	git: "git",
+	folder: "local",
+};
+
+async function installedExtensionResult(
+	record: InstalledExtensionRecord,
+): Promise<PackageInstallResult> {
+	const disabled = getConfig().disabledExtensions;
+	if (disabled.includes(record.name)) {
+		updateConfig({ disabledExtensions: disabled.filter((name) => name !== record.name) });
+	}
+	const catalog = await listExtensionCatalog(new Set(getConfig().disabledExtensions));
+	const extension = catalog.find(
+		(entry) => entry.kind === "installed" && entry.source === record.source,
+	);
+	return {
+		installed: "extension",
+		identity: record.name,
+		source: record.source,
+		kind: PI_SOURCE_KIND[record.sourceKind ?? "folder"],
+		scope: "user",
+		name: record.name,
+		...(record.version ? { version: record.version } : {}),
+		...(record.description ? { description: record.description } : {}),
+		...(record.root ? { installedPath: record.root } : {}),
+		switchKeys: [],
+		enabled: true,
+		resources: [],
+		...(extension ? { extension } : {}),
+	};
 }
 
 export async function packagesRemove(params: {

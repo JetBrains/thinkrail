@@ -21,15 +21,19 @@ import {
 	type HostEnvironment,
 	isComposerGrowthLimit,
 	isJbcentralQuotaRefreshSeconds,
+	isKeybindingChord,
 	isLineWidth,
 	isLocalePreference,
+	isPullRequestFilter,
 	isQuestionPanelHeight,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
 	isTerminalWindowsShell,
+	type KeybindingOverrides,
 	normalizeFontSettings,
 	normalizeThemePreference,
 	type Project,
+	type PullRequestFilter,
 	type SessionCompletion,
 	type TurnChangeSet,
 	type WireModel,
@@ -61,8 +65,18 @@ export {
 } from "./attributionProtocol";
 export type { InstallationRecord } from "./installation";
 
+/**
+ * The app state root. `THINKRAIL_DATA_DIR` relocates it (a supported override). Blank means unset; any other
+ * value is used as written, surrounding spaces included. A leading `~` is the home directory, since launchers
+ * that set it outside a shell never expand it.
+ */
 export function dataDir(): string {
-	return resolve(process.env.THINKRAIL_DATA_DIR ?? join(homedir(), ".thinkrail"));
+	const override = process.env.THINKRAIL_DATA_DIR;
+	if (!override?.trim()) return join(homedir(), ".thinkrail");
+	if (override === "~") return homedir();
+	if (override.startsWith("~/") || override.startsWith("~\\"))
+		return join(homedir(), override.slice(2));
+	return resolve(override);
 }
 
 /** Where chats without a project keep their folders; never a repository root for `project.open`. */
@@ -650,10 +664,43 @@ function storedExtensionSettings(value: unknown): ExtensionSettingValues {
 	return result;
 }
 
+function storedPullRequestFilters(value: unknown): Record<string, PullRequestFilter> {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+	return Object.fromEntries(
+		Object.entries(value).filter((entry): entry is [string, PullRequestFilter] =>
+			isPullRequestFilter(entry[1]),
+		),
+	);
+}
+
+function storedKeybindings(value: unknown): KeybindingOverrides {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+	const result: KeybindingOverrides = {};
+	for (const [id, chords] of Object.entries(value)) {
+		if (id.trim().length === 0 || !Array.isArray(chords)) continue;
+		const valid = [...new Set(chords.filter(isKeybindingChord))];
+		if (valid.length > 0 || chords.length === 0) result[id] = valid;
+	}
+	return result;
+}
+
+const CONFIG_VERSION = 1;
+const OLD_QUESTION_PANEL_HEIGHT_DEFAULT = 60;
+
+function storedQuestionPanelHeight(value: Record<string, unknown>): number {
+	const height = value.questionPanelHeight;
+	if (!isQuestionPanelHeight(height)) return DEFAULT_CONFIG.questionPanelHeight;
+	const version = typeof value.configVersion === "number" ? value.configVersion : 0;
+	return version < 1 && height === OLD_QUESTION_PANEL_HEIGHT_DEFAULT
+		? DEFAULT_CONFIG.questionPanelHeight
+		: height;
+}
+
 export function loadConfig(): AppConfig {
 	const value = readJson<Record<string, unknown> | null>("config.json", null, isRecord);
 	if (!value) return structuredClone(DEFAULT_CONFIG);
 	const extensions = { ...value };
+	delete extensions.configVersion;
 	delete extensions.chatMessageOrder;
 	delete extensions.layout;
 	delete extensions.themeMode;
@@ -677,9 +724,7 @@ export function loadConfig(): AppConfig {
 		composerGrowthLimit: isComposerGrowthLimit(value.composerGrowthLimit)
 			? value.composerGrowthLimit
 			: DEFAULT_CONFIG.composerGrowthLimit,
-		questionPanelHeight: isQuestionPanelHeight(value.questionPanelHeight)
-			? value.questionPanelHeight
-			: DEFAULT_CONFIG.questionPanelHeight,
+		questionPanelHeight: storedQuestionPanelHeight(value),
 		chatLineWidth: isLineWidth(value.chatLineWidth)
 			? value.chatLineWidth
 			: DEFAULT_CONFIG.chatLineWidth,
@@ -729,6 +774,7 @@ export function loadConfig(): AppConfig {
 		settleIdleDays: isSettleIdleDays(value.settleIdleDays)
 			? value.settleIdleDays
 			: DEFAULT_CONFIG.settleIdleDays,
+		disabledSubagents: storedNameList(value.disabledSubagents),
 		disabledExtensions: storedNameList(value.disabledExtensions),
 		extensionSettings: storedExtensionSettings(value.extensionSettings),
 		otherAgentSkills: typeof value.otherAgentSkills === "boolean" ? value.otherAgentSkills : true,
@@ -736,11 +782,13 @@ export function loadConfig(): AppConfig {
 		locale: isLocalePreference(value.locale) ? value.locale : DEFAULT_CONFIG.locale,
 		onboardingDismissed: value.onboardingDismissed === true,
 		...normalizeFontSettings(value),
+		keybindings: storedKeybindings(value.keybindings),
+		pullRequestFilters: storedPullRequestFilters(value.pullRequestFilters),
 	};
 }
 
 export function saveConfig(config: AppConfig): void {
-	writeJsonAtomic("config.json", config);
+	writeJsonAtomic("config.json", { ...config, configVersion: CONFIG_VERSION });
 }
 
 export function loadHostEnvironment(): HostEnvironment {
