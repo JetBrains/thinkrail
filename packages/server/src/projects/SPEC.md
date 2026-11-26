@@ -160,10 +160,10 @@ reports cancellation only after cleanup. Socket reconnect uses host request repl
 Git diagnostics are redacted before truncation: user-configured URL rewrites can introduce credentials,
 and truncating first can separate a secret suffix from the URL prefix needed to recognize it.
 
-- **Public surface (barrel):** `cloneProject`, `inspectCloneDestination`, `startProjectClone`, `cancelProjectClone`, `openProject`, `listProjects`, `listRecentProjects`,
+- **Public surface (barrel):** `cloneProject`, `validateCloneUrl`, `inspectCloneDestination`, `startProjectClone`, `cancelProjectClone`, `openProject`, `listProjects`, `listRecentProjects`,
   `assertOutsideChatsRoot`,
   `refreshRecentProjectFolders`, `closeProject`, `renameProject`, `moveProject`,
-  `getProjects`, `setProjectPublisher`, `setProjectPathGuard`, `inspectProjectPath`, `initProject`, `createProject`, `setProjectTrust`,
+  `getProjects`, `setProjectPublisher`, `setProjectPathGuard`, `resolveProjectPath`, `inspectProjectPath`, `initProject`, `createProject`, `setProjectTrust`,
   `setProjectSkillEnabled`, `setProjectGroupEnabled`, `acknowledgeProjectSkills`,
   `approveProjectMcpServer`, `setProjectMcpOverride`, `grantProjectMcpTool`, `revokeProjectMcpTool`,
   `setPiTrustSeed`.

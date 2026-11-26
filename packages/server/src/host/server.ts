@@ -80,6 +80,7 @@ import {
 	setModelListingPublisher,
 	setModelsFilePublisher,
 	setPiPackagesPublisher,
+	setProjectToolsHost,
 	setRequestReviewHandler,
 	setReviewCommentHandler,
 	setSessionCreatedPublisher,
@@ -241,6 +242,7 @@ import {
 	observeCurrentSetup,
 	setupObservation,
 } from "./productAnalytics";
+import { projectToolsHost } from "./projectTools";
 import {
 	heaviestReplayMethod,
 	type ReplayLoad,
@@ -1090,6 +1092,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}),
 	);
 	setWorkspaceToolsHost(workspaceToolsHost);
+	setProjectToolsHost(projectToolsHost);
 	reconcilePendingReviewsOnBoot();
 
 	setSettingsPublisher((config, appliedUpdate) => {
@@ -1391,6 +1394,7 @@ function restoreSeamDefaults(): void {
 	setReviewCommentHandler(null);
 	setRequestReviewHandler(null);
 	setTitleToolHost(null);
+	setProjectToolsHost(null);
 	setSettingsPublisher(null);
 	setSessionCreatedPublisher(() => {});
 	setSessionStatePublisher(() => {});

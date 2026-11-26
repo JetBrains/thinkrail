@@ -19,7 +19,7 @@ function invalid(message: string): never {
 	throw new CodedError("PROJECT_CLONE_INVALID", message);
 }
 
-function repositoryUrl(value: string): string {
+export function validateCloneUrl(value: string): string {
 	if (typeof value !== "string" || value.length > 8192) invalid("Enter a Git repository URL.");
 	const url = value.trim();
 	if (!url || /[\\\s\p{Cc}]/u.test(url)) invalid("Enter a valid Git repository URL.");
@@ -124,7 +124,7 @@ export async function cloneProject(
 	input: CloneInput,
 	signal?: AbortSignal,
 ): Promise<Project | null> {
-	const url = repositoryUrl(input.url);
+	const url = validateCloneUrl(input.url);
 	if (
 		input.depth !== undefined &&
 		(!Number.isInteger(input.depth) || input.depth < 1 || input.depth > 2_147_483_647)

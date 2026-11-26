@@ -1172,6 +1172,20 @@ re-opened transcripts provider-valid.
     side/separate/parallel-workspace cues, but only *suggest* splitting work the user did not ask to
     parallelize. Nothing else is built in by design: no waiting primitive (the agent decides how and whether
     to wait), no steering, stopping, archiving or merging of another workspace, and no cap or confirmation.
+    The **project tool** (`projectTools.ts`), **`open_project { repository }`**, is the step before
+    `start_workspace` when the repository is not an open project: always registered, top-level only, and
+    idempotent — a known project comes back as is, a host folder opens, a URL clones. It returns the
+    project (`OpenedProject`: id, name, slug, path, `outcome: open | opened | cloned`) and tells the agent
+    to pass the slug to `start_workspace`. It is a separate tool rather than a clone mode of
+    `start_workspace` so each call has one result and one failure (a combined call made retry ambiguous:
+    clone again, or only start?). The host seam `setProjectToolsHost({ plan, clone })` composes
+    `projects` + `git` + `settings` ([[submodule-server-host]]); the prompt stays here: between `plan` and
+    `clone` the tool asks **`selectForToolCall`** on its own call — anchored explicitly, with the repository
+    and destination as `toolInput`, because pi's `ctx.ui.confirm` anchors only while exactly one call runs
+    — with **Clone · Deny**. Deny, a dismissed prompt (a sent message cancels it) and Stop fail the call
+    with "nothing was cloned", so the agent does not go on to `start_workspace`. The two `partialResult`
+    stages (`approval`, `cloning`) carry `{ url, destination, notice }` for the card, and `notice` also
+    adds the default-folder sentence to the question.
     `readFinalAssistantTexts(workspaceId, cwd, sessionIds)` serves the status final messages. For a live
     entry it reads the entry's messages. Otherwise it lists the workspace's transcripts **once** and opens
     each match read-only, never through `attachDiskSession`, so a status check neither loads nor announces

@@ -122,6 +122,16 @@ export {
 	preparePiRuntimeGeneration,
 	settledAvailableModels,
 } from "./piRuntime";
+export {
+	type ClonePlan,
+	OPEN_PROJECT_TOOL_NAME,
+	type OpenedProject,
+	type OpenProjectOutcome,
+	type OpenProjectParams,
+	type OpenProjectPlan,
+	type ProjectToolsHost,
+	setProjectToolsHost,
+} from "./projectTools";
 export { piTrustsProjectPath, projectTrustSummary } from "./projectTrust";
 export { describeProviderAuth, type ProviderAuthFacts } from "./providerAuth";
 export {

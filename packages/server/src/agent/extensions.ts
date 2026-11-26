@@ -53,6 +53,7 @@ import {
 
 export { disabledPackages, setDisabledPackagesResolver };
 
+import { projectToolsExtension } from "./projectTools";
 import { requestReviewExtension } from "./requestReviewTool";
 import { reviewToolExtension } from "./reviewTool";
 import { decideSkill, type SkillAdmissionContext, sourceMayLoad } from "./skillAdmission";
@@ -604,6 +605,7 @@ export const HOST_INLINE_FACTORIES: readonly ExtensionFactory[] = [
 	setTitleExtension,
 	continueInWorkspaceExtension,
 	workspaceToolsExtension,
+	projectToolsExtension,
 	oversizedImageGuard,
 	artifactsGuard,
 	skillCatalog,
