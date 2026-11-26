@@ -142,7 +142,7 @@
     },
     "extension-examples/palette": {
       "name": "@thinkrail/example-extension-palette",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "devDependencies": {
         "@earendil-works/pi-coding-agent": "catalog:",
         "@remixicon/react": "catalog:",
@@ -208,7 +208,7 @@
     },
     "packages/extension-sdk": {
       "name": "@thinkrail/extension-sdk",
-      "version": "0.0.0",
+      "version": "1.0.0",
       "bin": {
         "thinkrail-extension": "./bin/thinkrail-extension.js",
       },

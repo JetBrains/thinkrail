@@ -75,7 +75,7 @@ cd <extension folder> && npm install --save-dev --omit=peer ~/thinkrail-extensio
 
 - `bun install` may run the checkout's own setup scripts (git hooks); it changes no tracked file, and
   nothing in the checkout needs editing.
-- The packed SDK says version `0.0.0`; that is expected — its API is still the checkout's (`"1.0"`), and
-  the manifest's `api` must equal it.
+- The packed SDK carries the checkout's version, which may be ahead of npm; that is expected — its API
+  is the checkout's (`"1.0"`), and the manifest's `api` must equal it.
 - `npm install --save-dev <tarball>` records a `file:` dev dependency in `package.json`; replace it with `"~<api>.0"`
   once the SDK is published, before sharing the extension.
