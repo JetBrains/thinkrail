@@ -1312,6 +1312,8 @@ export interface GithubAuthStatus {
 	connected: boolean;
 	login?: string;
 	scopes?: string[];
+	/** gh couldn't confirm its github.com account (e.g. no network): not a sign-out. */
+	unverified?: true;
 }
 
 export interface HostEnvironmentVar {

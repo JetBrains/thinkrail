@@ -32,6 +32,35 @@ test("settings shows the Local GitHub status block and degrades gh gracefully", 
 	await expect(dialog).toBeHidden();
 });
 
+test("a gh that couldn't confirm its account reads as a failed check in Settings, not as signed out", async ({
+	page,
+}) => {
+	await page.routeWebSocket(/\/ws(\?|$)/, (browser) => {
+		const server = browser.connectToServer();
+		browser.onMessage((message) => {
+			const frame = JSON.parse(String(message));
+			if (frame.method === "github.authStatus") {
+				browser.send(
+					JSON.stringify({
+						id: frame.id,
+						ok: true,
+						result: { connected: false, unverified: true },
+					}),
+				);
+			} else server.send(message);
+		});
+	});
+	await page.goto("/");
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-github").click();
+
+	const status = page.getByTestId("settings-gh-status");
+	await expect(status).toContainText("Couldn't check the GitHub CLI");
+	await expect(status).not.toHaveAttribute("data-connected");
+	await expect(status).not.toContainText("Not connected");
+});
+
 test("a toast over Settings can be dismissed without closing Settings, and Escape still steps out and closes Settings", async ({
 	page,
 	context,

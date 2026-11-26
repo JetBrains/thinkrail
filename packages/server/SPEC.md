@@ -128,7 +128,7 @@ the host from env via `bootHost` for dev/e2e.
 - `fs` → `persistence` (workspace lookup), `trash` (`claimAndTrashFile` — the Files tree's Delete, the same claim-then-trash path `changes` uses)
 - `changes` → `git` (the scope→range resolver + the original side's blob at its resolved oid), `fs` (path containment + byte identity), `persistence` (workspace lookup), `trash` (a revert that removes a file)
 - `turns` → `git` (`snapshotWorktree` + the `turn` scope's `gitStatus`), `persistence` (`turns.json`), `log`; it never imports `agent` — `host` feeds it the session event stream and resolves a session to its workspace, the same composition the run analytics observer uses
-- `github` → `subprocess` (both `gh auth status` probes run under the same bounded runner as `git`/`branch-review`)
+- `github` → `subprocess` (the `gh auth status` probe runs under the same bounded runner as `git`/`branch-review`)
 - `fonts` → `subprocess` (the installed-font query runs under the same bounded runner)
 - `speech` → `subprocess` (PATH probe, archive unpack), `persistence` (`dataDir`), `log`
 - `git`, `spec`, `watch`, `terminal`, `settings`, `locales`, `themes`, `fonts`, `analytics`, `feedback` → `persistence` (`locales` also → `@thinkrail/locales` root, external-style: catalog validation and file naming) (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external—the identity-bucketing vocabulary and delivery SDK)
