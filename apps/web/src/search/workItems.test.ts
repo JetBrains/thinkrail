@@ -108,6 +108,31 @@ describe("buildWorkItems", () => {
 		expect(chatRecord(true)).toEqual([]);
 	});
 
+	test("a row names where it lives as its emphasized location, and a chat without a project reads No project", () => {
+		const spans = (item: {
+			subtitle?: string;
+			subtitleEmphasis?: readonly (readonly [number, number])[];
+		}) => (item.subtitleEmphasis ?? []).map(([start, end]) => item.subtitle?.slice(start, end));
+		const inWorkspace = items([waiting]);
+		const chat = inWorkspace.find((item) => item.id === "chat:s-waiting");
+		expect(chat?.subtitle).toBe("Project One › Auth refresh");
+		expect(spans(chat ?? {})).toEqual(["Project One", "Auth refresh"]);
+		const row = inWorkspace.find((item) => item.id === "workspace:w1");
+		expect(row?.subtitle).toBe("Project One · auth-refresh");
+		expect(spans(row ?? {})).toEqual(["Project One"]);
+
+		const container: Project = { ...project, name: "Chats", kind: "chats" };
+		const projectless = items(
+			[waiting],
+			{},
+			{},
+			{ projects: [container], workspaces: { p1: [{ ...workspace, kind: "chat" }] } },
+		).find((item) => item.id === "chat:s-waiting");
+		expect(projectless?.subtitle).toBe("No project");
+		expect(spans(projectless ?? {})).toEqual(["No project"]);
+		expect(projectless?.preview?.()?.subtitle).toBe("No project");
+	});
+
 	test("an idle chat is listed only once its title is known", () => {
 		expect(items([record("s-idle")]).some((item) => item.kind === "chat")).toBe(false);
 		const titled = items([record("s-idle")], { "s-idle": "Spec review" });
@@ -220,6 +245,82 @@ describe("buildWorkItems", () => {
 			"chat:u2",
 			"chat:u3",
 			"chat:u-p2",
+		]);
+	});
+
+	test("within an urgency the newest activity leads, a chat without a project competing equally, and equal stamps follow the rail", () => {
+		const second: Project = { ...project, id: "p2", name: "Project Two", slug: "p2" };
+		const chats: Project = { ...project, id: "chats", name: "Chats", slug: "chats", kind: "chats" };
+		const row = (
+			id: string,
+			projectId: string,
+			lastActiveAt: number,
+			extra: Partial<Workspace> = {},
+		) => ({ ...workspace, id, projectId, lastActiveAt, ...extra }) satisfies Workspace;
+		const unreadIn = (sessionId: string, workspaceId: string, projectId: string) => ({
+			[sessionId]: {
+				...record(sessionId, {
+					completionUnread: true,
+					completion: { completionId: `c-${sessionId}`, outcome: "succeeded" },
+				}),
+				workspaceId,
+				projectId,
+			},
+		});
+		const result = buildWorkItems({
+			t: currentTranslator(),
+			state: {
+				...state([]),
+				projects: [project, chats, second],
+				workspaces: {
+					p1: [row("w-def", "p1", 100, { kind: "default" }), row("w1", "p1", 300)],
+					chats: [
+						row("c-old", "chats", 300, { kind: "chat" }),
+						row("c-new", "chats", 500, { kind: "chat" }),
+					],
+					p2: [row("w2", "p2", 300)],
+				},
+				sessionStateByWorkspace: {
+					"w-def": {
+						...unreadIn("u-def", "w-def", "p1"),
+						"s-waiting": { ...waiting, workspaceId: "w-def" },
+					},
+					w2: unreadIn("u-w2", "w2", "p2"),
+					w1: unreadIn("u-w1", "w1", "p1"),
+					"c-old": unreadIn("u-c-old", "c-old", "chats"),
+					"c-new": unreadIn("u-c-new", "c-new", "chats"),
+				},
+			},
+			contextProjectId: null,
+			firstPrompts: {},
+			transcriptPreviews: false,
+			navigateToProject: () => {},
+			navigateToWorkspace: () => {},
+		});
+		expect(waitingItems(result).map((item) => item.id)).toEqual([
+			"chat:s-waiting",
+			"chat:u-c-new",
+			"chat:u-c-old",
+			"chat:u-w1",
+			"chat:u-w2",
+			"chat:u-def",
+		]);
+		expect(result.filter((item) => item.kind === "workspace").map((item) => item.id)).toEqual([
+			"workspace:w1",
+			"workspace:w2",
+			"workspace:w-def",
+		]);
+	});
+
+	test("without activity stamps the order is the rail's: Default first, then the newest created", () => {
+		const older: Workspace = { ...workspace, id: "w-old" };
+		const newer: Workspace = { ...workspace, id: "w-new" };
+		const folder: Workspace = { ...workspace, id: "w-def", kind: "default" };
+		const result = items([], {}, {}, { workspaces: { p1: [folder, older, newer] } });
+		expect(result.filter((item) => item.kind === "workspace").map((item) => item.id)).toEqual([
+			"workspace:w-def",
+			"workspace:w-new",
+			"workspace:w-old",
 		]);
 	});
 });

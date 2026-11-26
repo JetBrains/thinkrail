@@ -16,6 +16,7 @@ import {
 	useState,
 } from "react";
 import { type LayoutAttention, readLayoutNavigationClock, tupleKey } from "../../lib";
+import type { AuxiliaryRailControlProps } from "./AuxiliaryRail";
 import type { AuxiliaryRailEntry } from "./auxiliaryPresentation";
 import {
 	type CenterSplitDirection,
@@ -88,6 +89,14 @@ export interface WorkbenchProps {
 		options?: { newPaneBelow?: boolean },
 	) => void;
 	onGestureCanceled?: () => void;
+	chromeShortcuts?: WorkbenchChromeShortcuts;
+	renderLeftRailFooter?: (control: AuxiliaryRailControlProps) => ReactNode;
+}
+
+export interface WorkbenchChromeShortcuts {
+	readonly hide: Readonly<Partial<Record<LayoutAuxiliaryRegion, readonly string[]>>>;
+	readonly tools: Readonly<Partial<Record<LayoutToolId, readonly string[]>>>;
+	readonly terminal: readonly string[];
 }
 
 export type DropTarget =
@@ -628,6 +637,7 @@ export interface SharedGroupProps {
 	registerChatRename: RegisterChatRename;
 	chatFirstPrompts: WorkbenchProps["chatFirstPrompts"];
 	canFocusAdjacentGroup: boolean;
+	chromeShortcuts: WorkbenchChromeShortcuts | undefined;
 }
 
 export const GroupTabBody = memo(function GroupTabBody({

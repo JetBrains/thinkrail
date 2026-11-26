@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { orderRegions, type RegionKind } from "./regions";
+import { flashesOnArrival, orderRegions, type RegionKind, regionKeyAction } from "./regions";
 
 const region = (name: string, kind: RegionKind, top: number, left: number) => ({
 	name,
@@ -46,5 +46,36 @@ describe("region ring order", () => {
 		expect(
 			names(orderRegions([region("projects", "home", 40, 40), region("topbar", "topbar", 0, 0)])),
 		).toEqual(["topbar", "projects"]);
+	});
+});
+
+describe("F6 rhythm", () => {
+	test("a first press with focus in the active region only lights its frame", () => {
+		expect(regionKeyAction({ flashVisible: false, focusInActiveRegion: true })).toBe("flash");
+	});
+
+	test("a press while the frame is still visible moves to the next region", () => {
+		expect(regionKeyAction({ flashVisible: true, focusInActiveRegion: true })).toBe("move");
+	});
+
+	test("focus outside the active region, on <body> or with none active, moves at once", () => {
+		expect(regionKeyAction({ flashVisible: false, focusInActiveRegion: false })).toBe("move");
+		expect(regionKeyAction({ flashVisible: true, focusInActiveRegion: false })).toBe("move");
+	});
+});
+
+describe("arrival frame", () => {
+	test("flashes when a key press brought focus into a different region", () => {
+		expect(flashesOnArrival("chat", "terminal", true)).toBe(true);
+		expect(flashesOnArrival(null, "topbar", true)).toBe(true);
+	});
+
+	test("never flashes after a pointer press", () => {
+		expect(flashesOnArrival("chat", "terminal", false)).toBe(false);
+		expect(flashesOnArrival(null, "topbar", false)).toBe(false);
+	});
+
+	test("never flashes for a move inside the same region", () => {
+		expect(flashesOnArrival("chat", "chat", true)).toBe(false);
 	});
 });

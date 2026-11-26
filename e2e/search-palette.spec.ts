@@ -153,6 +153,59 @@ test("the empty palette lists the chats waiting for you; arrows, Enter, click an
 	}
 });
 
+test("a chat without a project waits labelled No project, and a chat opened from the rail is Recent", async ({
+	page,
+}) => {
+	const repo = realpathSync(E2E_FIXTURE_REPO);
+	await openFixtureProject(page);
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	let chatSession: { id: string; path: string };
+	try {
+		const { workspace, sessionId } = await wire.request("chat.create", {});
+		await wire.request("session.dispose", { sessionId });
+		chatSession = seedWorkspaceSession(workspace.worktreePath, {
+			id: sessionId,
+			name: "Release notes draft",
+			messages: [
+				{ role: "user", text: "draft", timestamp: Date.now() - 2_000 },
+				{ role: "assistant", text: "drafted", timestamp: Date.now() - 1_000 },
+			],
+		});
+	} finally {
+		wire.close();
+	}
+	const seeded = seedAttention(repo);
+	try {
+		await page.reload();
+		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await openPalette(page);
+		const waiting = page.locator('[data-testid="search-section"][data-section="waiting"]');
+		const projectless = waiting
+			.getByTestId("search-row")
+			.filter({ hasText: "Release notes draft" });
+		await expect(projectless.getByTestId("search-row-subtitle")).toHaveText("No project");
+		await page.keyboard.press("Escape");
+		await expect(palette(page)).toBeHidden();
+
+		await page.getByTestId("chat-item").click();
+		await expect(page.getByTestId("scope-context")).toHaveAttribute("data-context", "chat");
+		await openPalette(page);
+		const recent = page.locator('[data-testid="search-section"][data-section="recent"]');
+		await expect(recent.locator('[data-item-id^="chat:"]')).toHaveCount(0);
+		await page.keyboard.press("Escape");
+
+		await defaultWorkspaceRow(page).click();
+		await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
+		await openPalette(page);
+		await expect(recent.getByTestId("search-row").first()).toContainText("Release notes draft");
+		await expect(
+			waiting.getByTestId("search-row").filter({ hasText: "Release notes draft" }),
+		).toHaveCount(0);
+	} finally {
+		for (const s of [...seeded, chatSession]) rmSync(s.path, { force: true });
+	}
+});
+
 test("typing finds chats by title, a paste is cut to the host's query length, and Escape clears before it closes", async ({
 	page,
 }) => {

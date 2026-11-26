@@ -92,9 +92,9 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   steered away from temporary folders ([[submodule-server-artifacts]], [[submodule-web-panels]]).
 - **Workbench** — a splittable layout of files, diffs, documents, chats, and terminals with movable side
   and bottom tool panels, kept local to each window ([[submodule-web-shell-layout]]). The region that holds
-  the keyboard stays at full contrast while the others are muted, and VS Code-style chords move between
-  regions, into the chat input, Projects, Files and the terminal, from one keybinding table that the
-  palette also shows ([[submodule-web-keybindings]]). Desktop source files also offer an optional,
+  the keyboard carries an accent line, a keyboard move briefly frames the region it lands in, and
+  VS Code-style chords move between regions, into the chat input, Projects, Files and the terminal, from
+  one keybinding table that the palette also shows ([[submodule-web-keybindings]]). Desktop source files also offer an optional,
   read-only Vim interaction layer with normal, insert and visual modes, directional search and repeat
   counts; its visible toggle and palette command never make the file editable
   ([[module-resource-renderers]], [[submodule-web-shell]]).

@@ -4,6 +4,7 @@ import { globalHotkeyCommand } from "./useGlobalHotkeys";
 const key = (
 	code: string,
 	overrides: Partial<{
+		key: string;
 		ctrlKey: boolean;
 		metaKey: boolean;
 		altKey: boolean;
@@ -12,6 +13,7 @@ const key = (
 	}> = {},
 ) => ({
 	code,
+	key: "",
 	ctrlKey: true,
 	metaKey: false,
 	altKey: false,
@@ -268,4 +270,18 @@ describe("tab chords", () => {
 			),
 		).toBeNull();
 	});
+});
+
+test("Mod+? opens the shortcuts on the typed question mark, never behind a modal", () => {
+	const withShortcuts = { ...all, onShortcuts: noop };
+	const question = key("Slash", { key: "?", shiftKey: true });
+	expect(globalHotkeyCommand(question, withShortcuts, false, "Linux")).toBe("shortcuts.open");
+	expect(
+		globalHotkeyCommand(key("Digit7", { key: "?", shiftKey: true }), withShortcuts, false, "Linux"),
+	).toBe("shortcuts.open");
+	expect(
+		globalHotkeyCommand(key("Slash", { key: ",", shiftKey: true }), withShortcuts, false, "Linux"),
+	).toBeNull();
+	expect(globalHotkeyCommand(question, withShortcuts, true, "Linux")).toBeNull();
+	expect(globalHotkeyCommand(question, all, false, "Linux")).toBeNull();
 });

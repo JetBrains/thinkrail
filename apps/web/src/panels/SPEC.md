@@ -80,9 +80,10 @@ treatment.
   **always-visible chevron** + folder/name + a collapsed-only plain workspace count + an **always-visible Create
   workspace `+` in a fixed right-edge column**. That `+` is the **same control as the Projects-header Add
   project `+`** — both are `IconButton` ghost `s`, so they render identically and their glyphs
-  line up on one vertical axis (both sit at the row's `pr-xs` right edge). The Create workspace `+` carries a
-  tooltip and accessible name naming the shell's `Mod+N` chord and its `Mod+Alt+N` browser alias through `lib`'s
-  `platformShortcutLabel` (see `submodule-web-shell` global chords); the context-menu item stays plain.
+  line up on one vertical axis (both sit at the row's `pr-xs` right edge). The Create workspace `+`'s tooltip
+  shows the one `workspace.new` chord that reaches this client as keycaps — `Mod+N` on the desktop, the
+  `Mod+Alt+N` alias in a browser — from `ProjectTree`'s `nativeShortcuts` prop, which the shell sets (see
+  `submodule-web-shell` global chords); the context-menu item stays plain.
   Long names truncate before the count/action; there is deliberately **no visible Close or overflow icon**.
   Hover highlights the full row and the highlight remains while its **project context menu** is open.
   Right-click opens that PR-#167-styled menu at the pointer without selecting/navigating; a scroll-cancelled
@@ -2261,7 +2262,18 @@ own section. The kebab menu (`plan-menu`, a
   chat that opens it; no relative age, since the order already says what is newest — the exact change time
   is the row's hover title) and **Other agent files · ignored** (one row per ignored output, a folder lazily
   expandable through `fs.readDir`, with its file count), hidden by the header's eye toggle. A row the host
-  marks `deleted` reads "Deleted, not by you" with Restore; opening it waits for the restore. The panel
+  marks `deleted` reads "Deleted, not by you" with Restore. Opening it — a click or a double click on its
+  name — restores it silently first (`artifactActions.openArtifact`): opening a file asks for its contents, so
+  the restore is implied. The click's center navigation is stamped before the restore, as any async open
+  stamps it at request time, so a click elsewhere while the restore runs keeps its tab. A row's restore (`restoreDeletedArtifact`, kept per workspace and path for the page's
+  life and shared by a click, `Mod+Enter` and both Restore controls) is reused, in flight or done, for as long
+  as the row shows the same deletion — a deleted row's `changedAt` is
+  when the host saw it gone, while a list refresh only replaces the object: a double click, a click in the
+  gap before the live snapshot, or a refresh in between never asks again (the host would refuse a row that
+  is already live), while a row deleted again right after its restore shows a newer deletion and gets a
+  fresh one. A failed restore is dropped at
+  once and opens nothing — not even a new file that has since taken the path — and Restore's error toast
+  says why. The panel
   **opens on This chat**: the attended chat's artifacts (`selectArtifactMentionTarget`), following it as the
   center switches chats; with no chat attended it shows all, and All chats is a click away but not
   remembered across mounts. Unattributed artifacts belong to no chat. Whenever the filter hides rows, a
@@ -2461,7 +2473,10 @@ menu has closed, because a closing menu returns focus to its row; disabled
   Plain-letter shortcuts (`V`, `J`, `N`, `P`) belong to the
   review tab the center is looking at (`ownsReviewShortcut`: the attention group's selected tab, no
   modal or menu layer open, no text-entry target, and no earlier handler consumed the event), so two review scopes split side by side cannot both answer
-  one keystroke. **Scale rules**:
+  one keystroke. These keys, and the trees' `F2` / `Delete` / `Mod+Enter` / project reorder, are compared
+  against the [[submodule-web-keybindings]] catalog's constants (`REVIEW_KEYS`, `TREE_KEYS`), which the
+  keyboard cheatsheet lists; the Prev / Next file buttons show `Alt+↓` / `Alt+↑` (`⌥↓` / `⌥↑` on a Mac)
+  as tooltip caps rather than in their label. **Scale rules**:
   a section whose file changed more than 400 lines, or whose path is a lock/generated file, mounts
   collapsed behind *Expand* / *Open as tab*; a scope with more than 50 files shows a dismissable notice
   offering *One file*; nothing switches mode on its own, because a review surface that re-arranges
@@ -2598,15 +2613,16 @@ menu has closed, because a closing menu returns focus to its row; disabled
     row label's prefix (a ~500 ms buffer; Space joins only a live buffer, otherwise it activates). Letters
     belong to a focused tree, so the Changes review's `V`/`J`/`N` do not fire from a focused Changes row.
     Enter is the button's own click; `Mod+Enter` is the row's double-click — Files, Specs and Artifacts open
-    kept, Changes opens its kept diff with `claimPreview`; rows without a double-click treat it as Enter.
+    kept (a deleted artifact restores first), Changes opens its kept diff with `claimPreview`; rows without a double-click treat it as Enter.
   - **Row keys live in each row**, through `treeRowKey`: Shift+F10 / the Menu key open the row's menu
     (context-menu rows through `openContextMenuFromKeyboard`, dropdown rows through `isContextMenuKey`,
     after which the menu returns focus to the row); **Delete** opens the menu's own confirmation (file,
     Remove workspace except on Default, Delete chat — a pending deletion retries directly —, Close project,
     an artifact's or ignored output's Delete — a deleted artifact discards its kept copy; nothing on Changes
     and Specs rows); **F2** renames a project, managed workspace or artifact where the
-    menu offers Rename (chats and ignored outputs have no rename). A pending chat and a deleted artifact stay
-    focusable (`aria-disabled`) so their Retry / Restore is reachable.
+    menu offers Rename (chats and ignored outputs have no rename). A pending chat stays
+    focusable (`aria-disabled`) so its Retry is reachable; a deleted artifact's name is enabled, since opening
+    it restores it.
   - **Inner row buttons leave the Tab order and the accessibility tree** (`treeRowControlProps`:
     `tabIndex=-1` and `aria-hidden` — a `tree` may own only treeitems, and these are pointer duplicates:
     chevrons, kebabs, Settle / Keep active, the project's Create workspace `+`, a creation's retry /
