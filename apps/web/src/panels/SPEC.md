@@ -705,7 +705,9 @@ a project picker, the prompt hero, and the reused
   base branch, so project skills and templates are the ones the created worktree will hold — a stale or
   untracked checkout neither hides nor adds any; both reads repeat after that base's `git.prefetch` succeeds
   (a moved tracking ref can bring new skills) and after a trust grant, through one refresh counter the
-  cancellation-safe effects depend on, so a late answer for a previous ref is dropped. Work in project folder
+  cancellation-safe effects depend on, so a late answer for a previous ref is dropped. Until the branch list
+  names that base (or fails), worktree mode reads nothing, so a pick can't start on the checkout catalog and
+  then be invalidated when the ref arrives. Work in project folder
   and older hosts omit `baseRef` and preview the **current checkout**. Personal/bundled skills and global
   templates join either way, project templates taking precedence. Selecting a skill inserts `/skill:<name> `;
   selecting a template reads `template.get({projectId, baseRef?, name})` (the picker's context key includes
