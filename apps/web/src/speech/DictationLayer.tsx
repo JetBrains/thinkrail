@@ -91,8 +91,7 @@ function followField(
 	};
 	place();
 	const resized = new ResizeObserver(schedule);
-	resized.observe(field);
-	resized.observe(document.documentElement);
+	for (let node: Element | null = field; node; node = node.parentElement) resized.observe(node);
 	if (container) resized.observe(container);
 	const removal = new MutationObserver(() => {
 		if (!field.isConnected) schedule();

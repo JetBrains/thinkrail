@@ -6,6 +6,7 @@ import {
 	closeSettings,
 	openSettingsSection,
 	openWorkspaceChat,
+	pressPlatformShortcut,
 	revealWorkbenchTool,
 } from "./fixtures/app";
 import { E2E_DATA_DIR, E2E_SPEECH_PORT } from "./fixtures/paths";
@@ -115,6 +116,35 @@ test("the composer shows its mic without focus; the first click offers the one-t
 	await expect(page.getByTestId("speech-offer")).toHaveCount(0);
 	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "offer");
 	expect(existsSync(join(SPEECH_DIR, "installed.json"))).toBe(false);
+});
+
+test("the resting composer mic follows the composer when a neighbouring pane opens or closes", async ({
+	page,
+}) => {
+	await openWorkspaceChat(page);
+	const input = page.getByTestId("chat-input");
+	await input.blur();
+	const micInsideComposer = async () => {
+		const [field, button] = await Promise.all([
+			input.boundingBox(),
+			composerMic(page).boundingBox(),
+		]);
+		if (!field || !button) return false;
+		return (
+			button.x >= field.x &&
+			button.x + button.width <= field.x + field.width &&
+			button.y >= field.y &&
+			button.y + button.height <= field.y + field.height
+		);
+	};
+	await expect.poll(micInsideComposer).toBe(true);
+	const before = await input.boundingBox();
+	await pressPlatformShortcut(page, "Shift+J");
+	await expect.poll(async () => (await input.boundingBox())?.y).not.toBe(before?.y);
+	await expect.poll(micInsideComposer).toBe(true);
+	await pressPlatformShortcut(page, "Shift+J");
+	await expect.poll(async () => (await input.boundingBox())?.y).toBe(before?.y);
+	await expect.poll(micInsideComposer).toBe(true);
 });
 
 test("dictation streams into the draft, locks it while listening, and never sends", async ({

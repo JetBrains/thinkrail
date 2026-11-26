@@ -120,7 +120,8 @@ extension had to adopt and wire up. It was replaced so voice is a property of th
   and served only one split pane. Each mic is one `FieldMic` with its own placement; the setup
   popover belongs to the field it was opened for. A mic's `data-mic-anchor` is `composer` or `field`.
 - **The mic** is rendered through a portal and re-placed against the field's rect whenever the field,
-  the page or its container resizes or anything scrolls (one `requestAnimationFrame` per burst; no idle
+  any of its ancestors (so a neighbouring pane opening moves a resting composer mic along) or its
+  container resizes, or anything scrolls (one `requestAnimationFrame` per burst; no idle
   frame loop, which kept the desktop renderer awake at 60 Hz): inside the right edge, at the bottom corner of a field 40 px or taller, centred vertically on a
   single line. A field narrower than 96 px, or one that left the page, gets no mic, though the chord
   still works on a narrow one. That decision is made where the mic is placed, not during render: a
