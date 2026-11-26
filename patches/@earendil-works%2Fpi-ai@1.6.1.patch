@@ -1,0 +1,37 @@
+diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
+index e54a4db070ccad890d530adf8fcda5e8acc31cd9..d52666519877cbd5331858d8ffc1115b5f54f64e 100644
+--- a/dist/api/anthropic-messages.js
++++ b/dist/api/anthropic-messages.js
+@@ -421,7 +421,9 @@ async function* iterateSseMessages(body, signal) {
+             }
+             yield* sse.push(value);
+         }
+-        yield* sse.end();
++        for (const event of sse.end()) {
++            yield { ...event, incomplete: true };
++        }
+     }
+     finally {
+         reader.releaseLock();
+@@ -440,8 +442,20 @@ async function* iterateAnthropicEvents(response, signal) {
+         if (!ANTHROPIC_MESSAGE_EVENTS.has(sse.event ?? "")) {
+             continue;
+         }
++        let trailingEvent;
++        if (sse.incomplete) {
++            try {
++                trailingEvent = JSON.parse(sse.data);
++            }
++            catch {
++                continue;
++            }
++            if (typeof trailingEvent !== "object" || trailingEvent === null) {
++                continue;
++            }
++        }
+         try {
+-            const event = parseJsonWithRepair(sse.data);
++            const event = trailingEvent ?? parseJsonWithRepair(sse.data);
+             if (event.type === "message_start") {
+                 sawMessageStart = true;
+             }
