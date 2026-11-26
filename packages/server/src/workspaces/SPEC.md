@@ -93,10 +93,12 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   have landed it while the fetch was in flight, and a create that would have succeeded must not lose that race;
   `Workspace.baseBranch` records **creation provenance** — the ref the worktree was cut from, which never
   moves afterwards (what the diff is measured *against* is the separate, re-pointable `diffBase`; see
-  `setWorkspaceDiffBase`); **branch name made unique
-  against refs, worktree dirs *and* the project's in-flight creations** — archiving leaves the branch behind and renaming frees a
-  branch name whose worktree directory stays occupied, so candidate names skip both, and a creation holds its
-  name from the first instant; allocation lists heads once (`for-each-ref`, compared case-insensitively — a
+  `setWorkspaceDiffBase`); **branch names skip existing refs, worktree dirs, paths owned in the registry,
+  and creation reservations.** Renaming frees the original branch name, but a registered workspace still
+  owns its path even when the directory is missing (#1529). Managed creation takes one registry snapshot
+  for allocation and applies the same ownership rule as the live creation guards: a workspace at the path,
+  or a project at or inside it. A creation reserves its branch name from the first instant. Allocation
+  lists heads once (`for-each-ref`, compared case-insensitively — a
   case-only twin is the same ref file on macOS/Windows) and stays synchronous so a name is reserved atomically
   (issue #1229: one `show-ref` per candidate blocked the event loop ~1 s at 100 `workspace-N` branches); path
   `dataDir/worktrees/<project-slug>/<branch>`; **seeds the per-workspace artifacts folder**
