@@ -12,7 +12,6 @@ export function applyLinuxWebKitRendererWorkaround(
 	if (platform !== "linux") return;
 	if (env[RENDERER_KEY] !== undefined) return;
 	env[RENDERER_KEY] = "1";
-	// Bun's process.env writes stay in JS; WebKitGTK reads the libc environment.
 	setNativeEnv(RENDERER_KEY, "1");
 }
 
@@ -27,5 +26,4 @@ function setLibcEnv(name: string, value: string): void {
 	}
 }
 
-// Must evaluate before any Electrobun import — see electrobun-compatibility.md.
 applyLinuxWebKitRendererWorkaround(process.env, process.platform);
