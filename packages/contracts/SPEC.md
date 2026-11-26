@@ -498,7 +498,7 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   name }` → `{ path }`, in place, refused with `ENTRY_EXISTS` when another entry holds the name) and
   `fs.move` (`fs.copy`'s params → `{ path }`, the Cut-and-Paste move, same or another workspace, refused
   with `ENTRY_EXISTS` instead of renaming, for a folder into itself, and with `MOVE_ACROSS_DEVICES` when
-  source and destination are on different file systems), and from **`FS_REVEAL_PROTOCOL_VERSION`** (v133)
+  source and destination are on different file systems), and from **`FS_REVEAL_PROTOCOL_VERSION`** (v134)
   `fs.reveal` (`{ workspaceId, path }` → ack: the host's OS file manager opens with that worktree entry
   selected — on the host's machine, which a remote browser does not see; a client hides the action from
   older hosts),

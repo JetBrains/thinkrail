@@ -334,7 +334,7 @@ treatment.
   every framed preview), then the **OS reveal** (below), then **Copy path** (absolute, through
   `fileTreeActions.copyWorkspacePath`, shared with the Artifacts and Specs menus) and **Copy relative
   path** (worktree-relative). The **OS reveal** (`RevealMenuItems.RevealInFileManagerMenuItem`, shown from
-  a host at `FS_REVEAL_PROTOCOL_VERSION`, v133) calls `fs.reveal`, so the host's file manager opens the
+  a host at `FS_REVEAL_PROTOCOL_VERSION`, v134) calls `fs.reveal`, so the host's file manager opens the
   entry's folder with the entry selected. Its label follows `hostPlatform` (*Reveal in Finder* / *Show in
   Explorer* / *Reveal in file manager* on Linux or an unknown host) because the name tells the user which
   app will open. A failure shows a toast. Like every host reveal, it happens on the host's machine, so a
