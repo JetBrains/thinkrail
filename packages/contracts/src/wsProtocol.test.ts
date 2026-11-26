@@ -44,6 +44,7 @@ import {
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
 	FS_MUTATIONS_PROTOCOL_VERSION,
+	FS_REVEAL_PROTOCOL_VERSION,
 	GITHUB_STAR_PROTOCOL_VERSION,
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
@@ -390,6 +391,13 @@ test("host search and its previews are pinned to v106", () => {
 	expect(WS_METHODS.searchPreview).toBe("search.preview");
 });
 
+test("revealing a worktree entry in the OS file manager is pinned to v134", () => {
+	expect(PROTOCOL_VERSION).toBe(134);
+	expect(FS_REVEAL_PROTOCOL_VERSION).toBe(134);
+	expect(FS_REVEAL_PROTOCOL_VERSION).toBeGreaterThan(PULL_REQUEST_REVIEW_PROTOCOL_VERSION);
+	expect(WS_METHODS.fsReveal).toBe("fs.reveal");
+});
+
 test("the community catalog is pinned to v132", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(132);
 	expect(EXTENSION_BROWSE_PROTOCOL_VERSION).toBe(132);
@@ -442,7 +450,7 @@ test("extension editor text is pinned to v115", () => {
 });
 
 test("pull request review methods are pinned to v133", () => {
-	expect(PROTOCOL_VERSION).toBe(133);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PULL_REQUEST_REVIEW_PROTOCOL_VERSION);
 	expect(PULL_REQUEST_REVIEW_PROTOCOL_VERSION).toBe(133);
 	expect(PULL_REQUEST_REVIEW_PROTOCOL_VERSION).toBeGreaterThan(EXTENSION_BROWSE_PROTOCOL_VERSION);
 	expect(WS_METHODS.prList).toBe("pr.list");

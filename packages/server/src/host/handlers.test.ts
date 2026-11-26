@@ -237,6 +237,19 @@ test("file mutation handlers invalidate watcher-ignored paths after success", as
 	expect(existsSync(directory)).toBe(false);
 });
 
+test("fs.reveal refuses entries outside the worktree or missing from it", async () => {
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify([{ id: "wa", projectId: "p1", name: "a", worktreePath: repo, createdAt: 1 }]),
+	);
+	await expect(
+		handleRequest("fs.reveal", { workspaceId: "wa", path: "../outside.md" }, CTX),
+	).rejects.toThrow(/escapes the worktree/);
+	await expect(
+		handleRequest("fs.reveal", { workspaceId: "wa", path: ".thinkrail/context/gone.md" }, CTX),
+	).rejects.toThrow(/Not found/);
+});
+
 test("user file mutations keep the artifact index honest", async () => {
 	const context = join(repo, ".thinkrail", "context");
 	mkdirSync(join(context, "mockups"), { recursive: true });

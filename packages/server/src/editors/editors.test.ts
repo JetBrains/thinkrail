@@ -1,12 +1,14 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, join, win32 } from "node:path";
+import { delimiter, dirname, join, win32 } from "node:path";
+import { pathToFileURL } from "node:url";
 import {
 	listAvailableEditors,
 	openEditor,
 	pathWhich,
 	revealInFileManager,
+	revealItemInFileManager,
 	type SpawnFn,
 	type WhichFn,
 } from "./editors";
@@ -213,5 +215,55 @@ describe("revealInFileManager", () => {
 			throw new Error("ENOENT");
 		};
 		expect(() => revealInFileManager(dir, throwingSpawn, "linux")).toThrow(/linux/);
+	});
+});
+
+describe("revealItemInFileManager", () => {
+	const dir = mkdtempSync(join(tmpdir(), "thinkrail reveal, item-"));
+	const file = join(dir, "report.md");
+	writeFileSync(file, "report");
+	const calls: { cmd: string[]; options: { windowsHide?: boolean } | undefined }[] = [];
+	const recording: SpawnFn = (cmd, options) => {
+		calls.push({ cmd, options });
+	};
+	afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+	test("macOS: open -R selects the entry in Finder", () => {
+		calls.length = 0;
+		revealItemInFileManager(file, recording, "darwin");
+		expect(calls.map((call) => call.cmd)).toEqual([["open", "-R", file]]);
+	});
+
+	test("Windows: explorer /select gets the path as its own backslashed argument", () => {
+		calls.length = 0;
+		revealItemInFileManager(file.replaceAll("\\", "/"), recording, "win32");
+		expect(calls.map((call) => call.cmd)).toEqual([
+			["explorer", "/select,", win32.normalize(file)],
+		]);
+	});
+
+	test("Linux: asks the FileManager1 service to select it, falling back to opening the parent", () => {
+		calls.length = 0;
+		revealItemInFileManager(file, recording, "linux");
+		const [sh, flag, script, name, uri, parent] = calls[0]?.cmd ?? [];
+		expect([sh, flag, name]).toEqual(["sh", "-c", "sh"]);
+		expect(script).toContain("org.freedesktop.FileManager1.ShowItems");
+		expect(script).toContain('|| exec xdg-open "$2"');
+		expect(uri).toBe(pathToFileURL(file).href.replaceAll(",", "%2C"));
+		expect(uri).not.toContain(",");
+		expect(parent).toBe(dirname(file));
+	});
+
+	test("launches with a visible window and rejects a missing entry before launching", () => {
+		for (const platform of ["darwin", "win32", "linux"] as const) {
+			calls.length = 0;
+			revealItemInFileManager(dir, recording, platform);
+			expect(calls[0]?.options).toEqual({ windowsHide: false });
+		}
+		calls.length = 0;
+		expect(() => revealItemInFileManager(join(dir, "gone.md"), recording, "darwin")).toThrow(
+			/Not found/,
+		);
+		expect(calls).toEqual([]);
 	});
 });
