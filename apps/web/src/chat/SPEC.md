@@ -1508,7 +1508,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
 - **Composer voice input** (`Composer`) has no mic of its own: [[submodule-web-speech]]'s page-level layer
   serves it like any field. The composer adds two things.
   - Its textarea carries `data-dictation-fallback`, so ⌘⇧Space reaches it when nothing else owns the
-    keyboard.
+    keyboard, and the layer keeps its mic shown even without focus.
   - It listens for the field's `thinkrail:dictation` event and holds `canSubmit` while listening, so the
     send pill is inert as well as Enter.
 - **Composer click target** (`Composer`) — a primary-button press inside the input shell outside a control

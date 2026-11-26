@@ -6,6 +6,7 @@ import {
 	closeSettings,
 	openSettingsSection,
 	openWorkspaceChat,
+	pressPlatformShortcut,
 	revealWorkbenchTool,
 } from "./fixtures/app";
 import { E2E_DATA_DIR, E2E_SPEECH_PORT } from "./fixtures/paths";
@@ -74,6 +75,12 @@ async function serveSlowModel(): Promise<() => Promise<void>> {
 }
 
 const mic = (page: Page) => page.getByTestId("speech-mic");
+const composerMic = (page: Page) =>
+	page.locator('[data-testid="speech-mic"][data-mic-anchor="composer"]');
+const listeningMic = (page: Page) =>
+	page.locator('[data-testid="speech-mic"][data-mic-state="listening"]');
+const fieldMic = (page: Page) =>
+	page.locator('[data-testid="speech-mic"][data-mic-anchor="field"]');
 
 async function openChat(page: Page): Promise<void> {
 	await openWorkspaceChat(page);
@@ -81,29 +88,63 @@ async function openChat(page: Page): Promise<void> {
 }
 
 async function installVoice(page: Page): Promise<void> {
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "offer");
-	await mic(page).click();
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "offer");
+	await composerMic(page).click();
 	const offer = page.getByTestId("speech-offer");
 	await expect(offer).toContainText("MB");
 	await offer.getByTestId("speech-offer-download").click();
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 20_000 });
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 20_000 });
 }
 
 test.beforeAll(async ({ baseURL }) => {
 	await removeVoiceInput(baseURL);
 });
 
-test("the first mic click offers the one-time download, and Not now leaves it uninstalled", async ({
+test("the composer shows its mic without focus; the first click offers the one-time download, and Not now leaves it uninstalled", async ({
 	page,
 }) => {
-	await openChat(page);
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "offer");
-	await mic(page).click();
+	await openWorkspaceChat(page);
+	const input = page.getByTestId("chat-input");
+	await input.blur();
+	await expect(input).not.toBeFocused();
+	await expect(composerMic(page)).toBeVisible();
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "offer");
+	await composerMic(page).click();
 	await expect(page.getByTestId("speech-offer")).toBeVisible();
+	await expect(input).toBeFocused();
 	await page.getByTestId("speech-offer-later").click();
 	await expect(page.getByTestId("speech-offer")).toHaveCount(0);
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "offer");
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "offer");
 	expect(existsSync(join(SPEECH_DIR, "installed.json"))).toBe(false);
+});
+
+test("the resting composer mic follows the composer when a neighbouring pane opens or closes", async ({
+	page,
+}) => {
+	await openWorkspaceChat(page);
+	const input = page.getByTestId("chat-input");
+	await input.blur();
+	const micInsideComposer = async () => {
+		const [field, button] = await Promise.all([
+			input.boundingBox(),
+			composerMic(page).boundingBox(),
+		]);
+		if (!field || !button) return false;
+		return (
+			button.x >= field.x &&
+			button.x + button.width <= field.x + field.width &&
+			button.y >= field.y &&
+			button.y + button.height <= field.y + field.height
+		);
+	};
+	await expect.poll(micInsideComposer).toBe(true);
+	const before = await input.boundingBox();
+	await pressPlatformShortcut(page, "Shift+J");
+	await expect.poll(async () => (await input.boundingBox())?.y).not.toBe(before?.y);
+	await expect.poll(micInsideComposer).toBe(true);
+	await pressPlatformShortcut(page, "Shift+J");
+	await expect.poll(async () => (await input.boundingBox())?.y).toBe(before?.y);
+	await expect.poll(micInsideComposer).toBe(true);
 });
 
 test("dictation streams into the draft, locks it while listening, and never sends", async ({
@@ -113,13 +154,15 @@ test("dictation streams into the draft, locks it while listening, and never send
 	const input = page.getByTestId("chat-input");
 	await installVoice(page);
 	await input.fill("Please");
-	await mic(page).click();
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "listening");
+	await input.blur();
+	await composerMic(page).click();
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "listening");
+	await expect(input).toBeFocused();
 	await expect(input).toHaveAttribute("readonly", "");
 	await expect(page.getByTestId("chat-send")).toBeDisabled();
 	await expect(input).toHaveValue(`Please ${FAKE_SPEECH_TEXT}`, { timeout: 15_000 });
-	await mic(page).click();
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
+	await composerMic(page).click();
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
 	await expect(input).not.toHaveAttribute("readonly", "");
 	await expect(input).toHaveValue(`Please ${FAKE_SPEECH_TEXT}`);
 	await expect(page.getByTestId("chat-send-pill")).toHaveAttribute("data-armed", "true");
@@ -131,19 +174,19 @@ test("the keyboard chord toggles dictation, keeping the text; the first Esc stop
 }) => {
 	await openChat(page);
 	const input = page.getByTestId("chat-input");
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready");
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "ready");
 	await input.fill("");
 	await page.getByTestId("chat-scroll").click();
 	await page.keyboard.press("ControlOrMeta+Shift+Space");
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "listening");
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "listening");
 	await expect(input).toBeFocused();
 	await expect(input).toHaveValue(/Hello/, { timeout: 15_000 });
 	await page.keyboard.press("ControlOrMeta+Shift+Space");
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
 	await page.keyboard.press("ControlOrMeta+Shift+Space");
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "listening");
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "listening");
 	await page.keyboard.press("Escape");
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
 	await expect(input).toBeFocused();
 	await expect(input).not.toHaveAttribute("readonly", "");
 	await expect(input).toHaveValue(/^Hello/);
@@ -153,12 +196,12 @@ test("the keyboard chord toggles dictation, keeping the text; the first Esc stop
 
 	// Switching apps blurs the field but leaves it as document.activeElement.
 	await page.keyboard.press("ControlOrMeta+Shift+Space");
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "listening");
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "listening");
 	await input.evaluate((field) => {
 		document.hasFocus = () => false;
 		field.dispatchEvent(new FocusEvent("blur"));
 	});
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
 	await input.evaluate(() => {
 		Reflect.deleteProperty(document, "hasFocus");
 	});
@@ -166,16 +209,16 @@ test("the keyboard chord toggles dictation, keeping the text; the first Esc stop
 
 test("clicking the mic while a model downloads cancels the download", async ({ page, baseURL }) => {
 	await openChat(page);
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready");
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "ready");
 	const stopServer = await serveSlowModel();
 	const wire = await hostWire(baseURL);
 	try {
 		await wire.request("speech.install", { model: "english" });
-		await expect(mic(page)).toHaveAttribute("data-mic-state", "installing");
-		await expect(mic(page)).toBeEnabled();
-		await expect(mic(page)).toHaveAttribute("aria-busy", "true");
-		await mic(page).click();
-		await expect(mic(page)).toHaveAttribute("data-mic-state", "ready");
+		await expect(composerMic(page)).toHaveAttribute("data-mic-state", "installing");
+		await expect(composerMic(page)).toBeEnabled();
+		await expect(composerMic(page)).toHaveAttribute("aria-busy", "true");
+		await composerMic(page).click();
+		await expect(composerMic(page)).toHaveAttribute("data-mic-state", "ready");
 		expect(existsSync(join(SPEECH_DIR, "models", "english.gguf"))).toBe(false);
 		expect(existsSync(join(SPEECH_DIR, "models", "english.gguf.partial"))).toBe(false);
 	} finally {
@@ -189,7 +232,7 @@ test("switching voice input off mid-download keeps the download's progress and C
 	baseURL,
 }) => {
 	await openChat(page);
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready");
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "ready");
 	const stopServer = await serveSlowModel();
 	const wire = await hostWire(baseURL);
 	try {
@@ -218,7 +261,7 @@ test("a dialog's field gets the mic inside the dialog and Enter cannot create mi
 	page,
 }) => {
 	await openChat(page);
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready");
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "ready");
 	const dialog = page.getByTestId("new-workspace-dialog");
 	await page.getByTestId("add-workspace").first().click();
 	await expect(dialog).toBeVisible();
@@ -237,10 +280,24 @@ test("a dialog's field gets the mic inside the dialog and Enter cannot create mi
 
 	await dialogMic.click();
 	await expect(dialogMic).toHaveAttribute("data-mic-state", "listening");
+	await prompt.evaluate((field) => {
+		field.addEventListener("thinkrail:dictation", (event) => {
+			if (event instanceof CustomEvent && event.detail?.listening === false) {
+				field.dataset.dictationEnded = "true";
+			}
+		});
+	});
+	const removedPrompt = await prompt.elementHandle();
 	await page.keyboard.press("Escape");
 	await expect(dialog).toBeHidden();
+	await expect
+		.poll(() => removedPrompt?.evaluate((field) => field.dataset.dictationEnded), {
+			timeout: 15_000,
+		})
+		.toBe("true");
+	await expect(listeningMic(page)).toHaveCount(0);
 	await page.getByTestId("chat-input").focus();
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
 });
 
 test("a review comment takes dictation and ⌘↩ cannot send it mid-dictation", async ({ page }) => {
@@ -255,7 +312,7 @@ test("a review comment takes dictation and ⌘↩ cannot send it mid-dictation",
 	const input = composer.getByTestId("review-composer-input");
 	await expect(input).toBeFocused();
 	const seeded = await input.inputValue();
-	const reviewMic = mic(page);
+	const reviewMic = fieldMic(page);
 	await reviewMic.click();
 	await expect(reviewMic).toHaveAttribute("data-mic-state", "listening");
 	await expect(input).toHaveValue(`${seeded}${FAKE_SPEECH_TEXT}`, { timeout: 15_000 });
@@ -271,7 +328,7 @@ test("a field removed mid-dictation ends it even without a blur, and a field tha
 	page,
 }) => {
 	await openChat(page);
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready");
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "ready");
 	await page.evaluate(() => {
 		const host = document.createElement("div");
 		host.id = "vanish-host";
@@ -282,15 +339,15 @@ test("a field removed mid-dictation ends it even without a blur, and a field tha
 	});
 	const narrow = page.locator("#ext-narrow");
 	await narrow.focus();
-	await expect(mic(page)).toBeHidden();
+	await expect(fieldMic(page)).toBeHidden();
 	await narrow.evaluate((field) => {
 		field.style.width = "240px";
 	});
-	await expect(mic(page)).toBeVisible();
+	await expect(fieldMic(page)).toBeVisible();
 
 	await page.locator("#ext-vanish").focus();
-	await mic(page).click();
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "listening");
+	await fieldMic(page).click();
+	await expect(fieldMic(page)).toHaveAttribute("data-mic-state", "listening");
 	await page.evaluate(() => {
 		// WebKit and Firefox fire no blur or focusout when a focused element is removed.
 		const swallow = (event: Event) => event.stopImmediatePropagation();
@@ -302,10 +359,11 @@ test("a field removed mid-dictation ends it even without a blur, and a field tha
 			window.removeEventListener("focusout", swallow, true);
 		}, 500);
 	});
-	await expect(mic(page)).toBeHidden();
+	await expect(fieldMic(page)).toBeHidden();
+	await expect(listeningMic(page)).toHaveCount(0, { timeout: 15_000 });
 	await page.waitForTimeout(600);
 	await page.getByTestId("chat-input").focus();
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
 	await page.evaluate(() => document.getElementById("vanish-host")?.remove());
 });
 
@@ -313,7 +371,7 @@ test("any field a page adds gets voice, with no code in it; passwords never do",
 	page,
 }) => {
 	await openChat(page);
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready");
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "ready");
 	await page.evaluate(() => {
 		const host = document.createElement("div");
 		host.id = "extension-host";
@@ -324,31 +382,31 @@ test("any field a page adds gets voice, with no code in it; passwords never do",
 	});
 	const input = page.locator("#ext-input");
 	await input.focus();
-	await mic(page).click();
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "listening");
+	await fieldMic(page).click();
+	await expect(fieldMic(page)).toHaveAttribute("data-mic-state", "listening");
 	await expect(input).toHaveValue(FAKE_SPEECH_TEXT, { timeout: 15_000 });
-	await mic(page).click();
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
+	await fieldMic(page).click();
+	await expect(fieldMic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
 	const rich = page.locator("#ext-rich");
 	await rich.click();
 	await page.keyboard.press("End");
 	await page.keyboard.press("ControlOrMeta+Shift+Space");
 	await expect(rich).toHaveText(`Note: ${FAKE_SPEECH_TEXT}`, { timeout: 15_000 });
 	await page.keyboard.press("ControlOrMeta+Shift+Space");
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
+	await expect(fieldMic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
 	await page.locator("#ext-secret").focus();
-	await expect(mic(page)).toBeHidden();
+	await expect(fieldMic(page)).toBeHidden();
 	await page.evaluate(() => document.getElementById("extension-host")?.remove());
 });
 
 test("the chord never reaches the composer behind an open dialog", async ({ page }) => {
 	await openChat(page);
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready");
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "ready");
 	await page.getByTestId("open-settings").click();
 	await expect(page.getByTestId("settings-dialog")).toBeVisible();
 	await page.keyboard.press("ControlOrMeta+Shift+Space");
 	await page.waitForTimeout(300);
-	await expect(mic(page)).toBeHidden();
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "ready");
 	await expect(page.getByTestId("chat-input")).not.toHaveAttribute("readonly", "");
 	await page.keyboard.press("Escape");
 });
@@ -373,7 +431,7 @@ test("turning voice input off stops a dictation, hides every mic and frees the c
 	const input = page.getByTestId("chat-input");
 	await input.fill("");
 	await page.keyboard.press("ControlOrMeta+Shift+Space");
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "listening");
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "listening");
 	try {
 		await setVoiceInput(baseURL, false);
 		await expect(mic(page)).toHaveCount(0);
@@ -388,14 +446,14 @@ test("turning voice input off stops a dictation, hides every mic and frees the c
 	}
 	await input.blur();
 	await input.focus();
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready");
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "ready");
 });
 
 test("Settings turns voice input off and back on, and Delete frees its files and brings the offer back", async ({
 	page,
 }) => {
 	await openChat(page);
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready");
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "ready");
 	await openSettingsSection(page, "voice");
 	const voice = page.getByTestId("settings-voice");
 	await expect(voice.getByTestId("settings-voice-status")).toContainText("Ready");
@@ -457,5 +515,5 @@ test("Settings turns voice input off and back on, and Delete frees its files and
 	await expect(page.getByTestId("settings-nav-keyboard")).toHaveAttribute("data-active", "true");
 	await closeSettings(page);
 	await page.getByTestId("chat-input").focus();
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "offer");
+	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "offer");
 });
