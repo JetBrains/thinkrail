@@ -2,6 +2,7 @@ import { RiArrowDownSLine as ChevronDown, RiAlertLine as TriangleAlert } from "@
 import type { PullRequestScope, PullRequestSummary } from "@thinkrail/contracts";
 import { localeOf, type Translator, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, type Ref, type RefObject, useEffect, useState } from "react";
@@ -190,6 +191,7 @@ function Filters({
 					container={container}
 					data-testid="pull-request-authors"
 					onKeyDown={(event) => {
+						if (isImeComposing(event.nativeEvent)) return;
 						if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
 						event.preventDefault();
 						const all = [
@@ -246,14 +248,14 @@ function AuthorPicker({
 				value={query}
 				onChange={(event) => setQuery(event.target.value)}
 				onKeyDown={(event) => {
-					if (event.key !== "Enter") return;
+					if (isImeComposing(event.nativeEvent) || event.key !== "Enter") return;
 					event.preventDefault();
 					const first = choices[0];
 					if (first !== undefined || !query.trim()) onPick(first);
 				}}
 				placeholder={t("chat.prCompletion.searchAuthors")}
 				aria-label={t("chat.prCompletion.searchAuthors")}
-				className="h-32 shrink-0 border-border-muted border-b bg-transparent px-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted"
+				className="h-32 shrink-0 border-border-muted border-b bg-transparent px-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:focus-ring-inset"
 			/>
 			<div
 				data-testid="pull-request-author-list"
