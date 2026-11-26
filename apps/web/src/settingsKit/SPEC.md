@@ -208,7 +208,9 @@ unit-tested on a fake DOM (`settingsFakeDom.test.ts`, which also parses static m
   keeps focus on Enter. A host echo never overwrites an edit in progress or rolls back to a value a newer
   in-flight save replaces, and a rejected save returns the field to the authoritative value. Esc reverts
   and prevents only when the draft differs from the value the host holds (or a newer in-flight save); a
-  clean field lets Esc through to the walk, which returns to the row.
+  clean field lets Esc through to the walk, which returns to the row. An optional `normalize` (the Projects
+  folder's trim) runs on a valid draft before that once-only check, so the value sent, the in-flight entry and
+  the host's echo are the same string; a draft that normalizes to what the host holds is only tidied.
 - **`SettingsList` / `useSettingsListRow(id)`** take the row ids; each `li` is a roving walk row, and the
   focused row (else the first) is the only one whose primary and buttons are tab stops. On the row Enter
   runs the primary and Space toggles the row's switch (the walk's rules), Delete (`settings.list.remove`)

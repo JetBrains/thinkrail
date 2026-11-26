@@ -1208,6 +1208,11 @@ test("the projects folder defaults to ~/thinkrail, is trimmed, and rejects blank
 	expect(() => updateConfig({ projectsFolder: "code" })).toThrow(
 		"projectsFolder must be an absolute host folder or start with ~/",
 	);
+	if (process.platform !== "win32") {
+		for (const foreign of ["C:\\code", "~\\code", "\\\\host\\share"]) {
+			expect(() => updateConfig({ projectsFolder: foreign })).toThrow("projectsFolder must be");
+		}
+	}
 	expect(() => updateConfig({ projectsFolder: 7 as unknown as string })).toThrow(
 		"projectsFolder must be",
 	);

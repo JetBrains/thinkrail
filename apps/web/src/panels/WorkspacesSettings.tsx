@@ -5,11 +5,9 @@ import {
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
-import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
-import { type KeyboardEvent, useId, useState } from "react";
+import { useId, useState } from "react";
 import {
-	focusUnitStop,
 	SETTINGS_INPUT,
 	SETTINGS_ROWS,
 	SettingsChoice,
@@ -117,24 +115,12 @@ export function WorkspacesSettings() {
 function ProjectsFolderRow({ value, reset, onCommit }: ProjectsFolderField) {
 	const t = useT();
 	const errorId = useId();
-	const { draft, invalid, dirty, submit, inputProps } = useSettingsDraft({
+	const { invalid, dirty, inputProps } = useSettingsDraft({
 		saved: value,
 		isValid: isProjectsFolder,
-		commit: (next) => (next === value ? undefined : onCommit(next)),
+		normalize: (draft) => draft.trim(),
+		commit: onCommit,
 	});
-	const commitTrimmed = () => {
-		if (invalid) inputProps.onBlur();
-		else submit(draft.trim());
-	};
-	const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-		if (event.key !== "Enter" || isImeComposing(event.nativeEvent)) {
-			inputProps.onKeyDown(event);
-			return;
-		}
-		event.preventDefault();
-		commitTrimmed();
-		if (!invalid) focusUnitStop<HTMLElement>(event.currentTarget);
-	};
 	return (
 		<SettingsRow
 			{...settingProps(t, SETTING.projectsFolder)}
@@ -146,8 +132,6 @@ function ProjectsFolderRow({ value, reset, onCommit }: ProjectsFolderField) {
 						spellCheck={false}
 						autoComplete="off"
 						{...inputProps}
-						onBlur={commitTrimmed}
-						onKeyDown={onKeyDown}
 						aria-label={t(SETTING.projectsFolder.label)}
 						aria-describedby={invalid ? errorId : undefined}
 						data-testid="projects-folder-input"
