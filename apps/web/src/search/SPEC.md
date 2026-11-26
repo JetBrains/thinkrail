@@ -24,7 +24,8 @@ the injected `PaletteStart`).
 
 - **Public surface:** `SearchPalette`, `SearchPaletteProps`, `PaletteHost`, `PaletteStart`, `PaletteAsk`,
   `initSearchPreferences`, `createDoubleShiftDetector`, `buildWorkItems`, `waitingItems`,
-  `commandItems`, `SearchScope`, `PaletteItem`, `PaletteFile`.
+  `commandItems`, `SearchScope`, `PaletteItem`, `PaletteFile`, `recentWorkspaces`, `RecentWorkspaces`,
+  `RecentSwitcher`, `RecentSwitcherProps`, `RECENT_SWITCHER_TEST_ID`.
 - **Allowed deps:** `contracts` (the shared matcher and the search DTOs), `commands`, `keybindings`
   (`LOCAL_KEY_DEFAULTS` for scope `palette`), `store`
   (`selectHostSearchAvailable` / `selectHostReachable`, the welcome generation, the location Recent
@@ -262,6 +263,19 @@ Escape, arrows, Enter and `Alt+n` do nothing to the palette, and Tab only stays 
 are disabled while offline or before the current welcome, and a command may carry its own disabled reason
 (Settle while an agent works or a chat needs you). The palette has one level: no pages, no per-row action
 panel — a row is a destination or a command.
+
+## Recent workspace switcher
+
+`Ctrl+Tab`'s list ([[submodule-web-shell]] binds the chord and owns its keys) is ordered here because
+the visit stamps are: `recentWorkspaces(items, state)` ranks the work items' workspaces by the same
+`lastUsed` stamps Recent reads, so the two lists always agree. A workspace counts the newest of its own
+and its chats' stamps (a visit stamps either, *Ranking*); a project workspace is its `workspace:` row and a
+chat without a project its `chat:` row, so a workspace is one row whichever chat was visited; the active
+workspace leads and is reported as `currentId`; unvisited workspaces, Project Home, rows pending deletion
+and a workspace without a palette row are left out; at most ten rows. Agent activity (`lastActiveAt`)
+does not reorder it — a tap must return to where the user just was. `RecentSwitcher` is the props-driven
+list (a fixed portal, no focus taken) drawing the palette's own `Row` (`Row.tsx`, shared so the two
+cannot drift), the current row noted "current".
 
 ## Preferences
 
