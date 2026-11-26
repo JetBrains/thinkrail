@@ -36,7 +36,7 @@ import {
 import { localScopesOf } from "./shortcutSurface";
 import { nativeShortcutPlatform } from "./useAppShortcuts";
 
-type ChordHandler = (binding: KeybindingId) => void;
+type ChordHandler = (binding: KeybindingId, event: KeyboardEvent) => void;
 
 type GlobalHotkeyActions = {
 	onProjects: ChordHandler;
@@ -58,6 +58,7 @@ type GlobalHotkeyActions = {
 	onSplitRight?: ChordHandler;
 	onMoveTab?: ChordHandler;
 	onShortcuts?: ChordHandler;
+	onRecentWorkspace?: ChordHandler;
 };
 
 const CHORD_ACTIONS = {
@@ -89,6 +90,8 @@ const CHORD_ACTIONS = {
 	"tab.moveToPreviousGroup": "onMoveTab",
 	"tab.moveToNextGroup": "onMoveTab",
 	"shortcuts.open": "onShortcuts",
+	"workspace.recentNext": "onRecentWorkspace",
+	"workspace.recentPrevious": "onRecentWorkspace",
 } as const satisfies Record<
 	Exclude<KeybindingId, "chat.history" | SuggestionKeybindingId>,
 	keyof GlobalHotkeyActions
@@ -274,7 +277,7 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 			if (route.kind === "panel") {
 				if (!event.repeat) openExtensionPanelHere(route.panel);
 			} else if (route.kind === "command") {
-				if (!event.repeat) current[CHORD_ACTIONS[route.id]]?.(route.id);
+				if (!event.repeat) current[CHORD_ACTIONS[route.id]]?.(route.id, event);
 			} else if (route.kind === "suggestion") {
 				const owner = chips();
 				if (!event.repeat && owner) runSuggestion(owner, route);
