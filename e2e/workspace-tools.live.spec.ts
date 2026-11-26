@@ -75,17 +75,19 @@ function persistedProjects(): Project[] {
 }
 
 function seedUpstream(): string {
-	const repo = join(E2E_DATA_DIR, "open-project-upstream", "widget");
-	rmSync(repo, { recursive: true, force: true });
-	mkdirSync(repo, { recursive: true });
-	git(repo, "init", "-b", "main");
-	git(repo, "config", "user.email", "e2e@thinkrail.test");
-	git(repo, "config", "user.name", "ThinkRail E2E");
-	git(repo, "config", "commit.gpgsign", "false");
-	writeFileSync(join(repo, "README.md"), "# widget\n");
-	git(repo, "add", "-A");
-	git(repo, "commit", "-m", "seed");
-	return repo;
+	const root = join(E2E_DATA_DIR, "open-project-upstream");
+	rmSync(root, { recursive: true, force: true });
+	const work = join(root, "work");
+	mkdirSync(work, { recursive: true });
+	git(work, "init", "-b", "main");
+	git(work, "config", "user.email", "e2e@thinkrail.test");
+	git(work, "config", "user.name", "ThinkRail E2E");
+	git(work, "config", "commit.gpgsign", "false");
+	writeFileSync(join(work, "README.md"), "# widget\n");
+	git(work, "add", "-A");
+	git(work, "commit", "-m", "seed");
+	git(root, "clone", "--quiet", "--bare", work, "widget.git");
+	return join(root, "widget.git");
 }
 
 test("a chat without a project clones a repository after approval and starts a workspace in it", {
@@ -109,7 +111,7 @@ test("a chat without a project clones a repository after approval and starts a w
 	await page
 		.getByTestId("chat-input")
 		.fill(
-			`I picked this repository: ${url}. Add it as a ThinkRail project, then start a workspace in it ` +
+			`I picked this repository: ${url} (a remote to clone, not a folder to open). Add it as a ThinkRail project, then start a workspace in it ` +
 				"whose task is: create a file NOTE.md whose only content is the line `opened marker`. " +
 				"Do nothing else.",
 		);
