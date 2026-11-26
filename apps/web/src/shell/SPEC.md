@@ -381,7 +381,7 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
 - **`Ctrl+Tab` / `Ctrl+Shift+Tab` switch recent workspaces** (`workspace.recentNext` / `recentPrevious`,
   [[submodule-web-keybindings]]), macOS Cmd+Tab / VS Code style. A tap returns to the previous workspace;
   holding the modifier and pressing Tab again shows the list and steps it (Shift+Tab, the reverse chord and
-  ↑/↓ step back); releasing every non-Shift modifier the chord was pressed with, or Enter, opens the
+  ↑ step back, ↓ forward); releasing every non-Shift modifier the chord was pressed with, or Enter, opens the
   highlighted row; Esc, the window losing focus (a non-capture `blur`, so focus moving inside the page
   during the hold never cancels) or a click outside cancel, and a row click opens it. The rows and their
   order are `search`'s `recentWorkspaces` (*Recent workspace switcher* there) over the palette's own work
