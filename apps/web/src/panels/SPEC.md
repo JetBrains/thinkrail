@@ -701,7 +701,7 @@ a project picker, the prompt hero, and the reused
   baseRef?})`**; whenever a leading slash token becomes active it also reads **`template.list({projectId,
   baseRef?})`**. It feeds both into the shared `prompt` module, so Create Workspace and live chat use the same
   filtering, menu, keyboard navigation, race-safe template pick, and Tab-through placeholder state machine.
-  In **New worktree** mode on a v134+ host (`REF_RESOURCE_PREVIEW_PROTOCOL_VERSION`) `baseRef` is the selected
+  In **New worktree** mode on a v135+ host (`REF_RESOURCE_PREVIEW_PROTOCOL_VERSION`) `baseRef` is the selected
   base branch, so project skills and templates are the ones the created worktree will hold — a stale or
   untracked checkout neither hides nor adds any; both reads repeat after that base's `git.prefetch` succeeds
   (a moved tracking ref can bring new skills) and after a trust grant, through one refresh counter the
