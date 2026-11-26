@@ -1334,7 +1334,7 @@ a project picker, the prompt hero, and the reused
     `nemo-speech` on PATH; focus returns to the Delete button on cancel and to the Voice input switch
     after deleting.
   The mic itself is not here: the page-level dictation layer ([[submodule-web-speech]]) shows it on
-  whichever text field has focus;
+  whichever text field has focus, and on every chat composer without focus;
   **`TerminalSettings`** — **Scrollback**, a cheap segmented choice (`store.terminalReplayKb`, five presets
   from Off to 1 MB; a valid non-preset host value selects none rather than a wrong preset;
   `settings.update { terminalReplayKb }`, applies to terminals opened from now on) and, on

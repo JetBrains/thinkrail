@@ -115,8 +115,8 @@ extension had to adopt and wire up. It was replaced so voice is a property of th
   start it with one click. Other fields stay focus-only, which keeps mics off every search box and
   settings input. Composers are found by a frame-coalesced `MutationObserver` scan (they do nothing
   themselves); a read-only or disabled one gets none, except the one being dictated into, which our
-  own lock makes read-only. Clicking an unfocused composer's mic focuses it first, as every mic press
-  does. A single mic that fell back to the composer on blur was rejected: it jumped between fields
+  own lock makes read-only. A start or setup press on an unfocused composer's mic focuses it first;
+  a stop or cancel-install press leaves focus where it is. A single mic that fell back to the composer on blur was rejected: it jumped between fields
   and served only one split pane. Each mic is one `FieldMic` with its own placement; the setup
   popover belongs to the field it was opened for. A mic's `data-mic-anchor` is `composer` or `field`.
 - **The mic** is rendered through a portal and re-placed against the field's rect whenever the field,
@@ -145,7 +145,8 @@ extension had to adopt and wire up. It was replaced so voice is a property of th
     disables the button.
   - Listening shows a danger-toned mic with a 4-bar level meter. `blocked` and `unavailable` show the
     mic-off icon with the reason.
-  - Pressing the mic never moves focus (`onMouseDown` prevents default), and the mic is never a Tab
+  - The mic never takes focus itself (`onMouseDown` prevents default); only a start or setup press
+    focuses its field. The mic is never a Tab
     stop (`tabIndex={-1}`); the chord is its keyboard path. As a Tab stop at the end of the dialog it
     was portaled into, the focus trap wrapped Shift+Tab onto it, stealing the search palette's
     Tab-cycled input focus. Dictation failures are toasts.
