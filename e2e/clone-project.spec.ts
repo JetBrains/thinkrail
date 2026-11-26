@@ -16,7 +16,7 @@ import {
 	PROJECTS_FOLDER_PROTOCOL_VERSION,
 	type WsParams,
 } from "@thinkrail/contracts";
-import { openAppFresh } from "./fixtures/app";
+import { closeSettings, openAppFresh, openSettingsSection } from "./fixtures/app";
 import { commitFile, git, gitText } from "./fixtures/git";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO, E2E_PICK_DIR_POINTER } from "./fixtures/paths";
 
@@ -126,6 +126,29 @@ test("a parent folder that does not exist yet previews cleanly and is created by
 	await expect(dialog).toHaveCount(0);
 	await expect(page.getByTestId("welcome-title")).toHaveText("source");
 	expect(gitText(destination, "rev-parse", "HEAD").trim()).toBe(fixture.head);
+});
+
+test("the projects folder set in Settings is where the Clone dialog starts, and a relative one is refused", async ({
+	page,
+}) => {
+	const fixture = seedRepository(root);
+	await openAppFresh(page);
+	const settings = await openSettingsSection(page, "workspaces");
+	const field = settings.getByTestId("projects-folder-input");
+	await expect(field).toHaveValue(DEFAULT_PROJECTS_FOLDER);
+	await field.fill("relative/folder");
+	await field.press("Enter");
+	await expect(field).toHaveAttribute("aria-invalid", "true");
+	await field.fill(`  ${fixture.parent}  `);
+	await field.press("Enter");
+	await expect(field).toHaveValue(fixture.parent);
+	await expect(field).toHaveAttribute("data-setting-clean", "");
+	await closeSettings(page);
+
+	await page.getByTestId("add-project-menu").click();
+	await page.getByTestId("menu-clone-project").click();
+	const dialog = page.getByTestId("clone-project-dialog");
+	await expect(dialog.getByTestId("clone-project-parent")).toHaveValue(fixture.parent);
 });
 
 test("hosts before the projects folder keep the clone parent at the home folder", async ({
