@@ -1198,13 +1198,16 @@ test("the settle idle window defaults to 7 days, accepts null for never, and rej
 	expect(getConfig().settleIdleDays).toBeNull();
 });
 
-test("the projects folder defaults to ~/thinkrail, is trimmed, and rejects blank paths", () => {
+test("the projects folder defaults to ~/thinkrail, is trimmed, and rejects blank or relative paths", () => {
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ projectsFolder: "  " }));
 	resetConfigCache();
 	expect(getConfig().projectsFolder).toBe("~/thinkrail");
 
 	const before = getConfig();
 	expect(() => updateConfig({ projectsFolder: " " })).toThrow("projectsFolder must be");
+	expect(() => updateConfig({ projectsFolder: "code" })).toThrow(
+		"projectsFolder must be an absolute host folder or start with ~/",
+	);
 	expect(() => updateConfig({ projectsFolder: 7 as unknown as string })).toThrow(
 		"projectsFolder must be",
 	);

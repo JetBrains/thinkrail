@@ -5,9 +5,11 @@ import {
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
-import { useId, useState } from "react";
+import { type KeyboardEvent, useId, useState } from "react";
 import {
+	focusUnitStop,
 	SETTINGS_INPUT,
 	SETTINGS_ROWS,
 	SettingsChoice,
@@ -102,7 +104,7 @@ export function WorkspacesSettings() {
 							reset: folderReset,
 							onCommit: (next) =>
 								saveSettings(
-									{ projectsFolder: next.trim() },
+									{ projectsFolder: next },
 									t("settings.workspaces.projectsFolder.changeFailed"),
 								),
 						}
@@ -115,11 +117,24 @@ export function WorkspacesSettings() {
 function ProjectsFolderRow({ value, reset, onCommit }: ProjectsFolderField) {
 	const t = useT();
 	const errorId = useId();
-	const { invalid, dirty, inputProps } = useSettingsDraft({
+	const { draft, invalid, dirty, submit, inputProps } = useSettingsDraft({
 		saved: value,
 		isValid: isProjectsFolder,
-		commit: (draft) => (draft.trim() === value ? undefined : onCommit(draft)),
+		commit: (next) => (next === value ? undefined : onCommit(next)),
 	});
+	const commitTrimmed = () => {
+		if (invalid) inputProps.onBlur();
+		else submit(draft.trim());
+	};
+	const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+		if (event.key !== "Enter" || isImeComposing(event.nativeEvent)) {
+			inputProps.onKeyDown(event);
+			return;
+		}
+		event.preventDefault();
+		commitTrimmed();
+		if (!invalid) focusUnitStop<HTMLElement>(event.currentTarget);
+	};
 	return (
 		<SettingsRow
 			{...settingProps(t, SETTING.projectsFolder)}
@@ -131,6 +146,8 @@ function ProjectsFolderRow({ value, reset, onCommit }: ProjectsFolderField) {
 						spellCheck={false}
 						autoComplete="off"
 						{...inputProps}
+						onBlur={commitTrimmed}
+						onKeyDown={onKeyDown}
 						aria-label={t(SETTING.projectsFolder.label)}
 						aria-describedby={invalid ? errorId : undefined}
 						data-testid="projects-folder-input"

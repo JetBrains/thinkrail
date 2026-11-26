@@ -1320,7 +1320,7 @@ a project picker, the prompt hero, and the reused
   **`WorkspacesSettings`** (the **Workspaces** section, listed only at
   `protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION`) — **Projects folder** (from
   `PROJECTS_FOLDER_PROTOCOL_VERSION`): a host-path text field (`useSettingsDraft`, committed on Enter/blur as
-  `settings.update { projectsFolder }`, a blank draft refused inline, Reset to `~/thinkrail`) naming where the
+  `settings.update { projectsFolder }`, a blank or relative draft refused inline, a padded one committed trimmed so the host's echo settles it, Reset to `~/thinkrail`) naming where the
   New project and Clone repository dialogs start and where an agent's `open_project` clones; and
   **Settle idle workspaces after**, an
   **expensive** choice of 1 / 3 / 7 (default) / 14 days / Never (a stray arrow must not settle workspaces),

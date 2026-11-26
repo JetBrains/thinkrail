@@ -4467,7 +4467,7 @@
 	"settings.workspaces.idle.threeDays": "A long weekend of silence parks a workspace.",
 	"settings.workspaces.projectsFolder.changeFailed": "Couldn't change the projects folder",
 	"settings.workspaces.projectsFolder.description": "Where new projects and cloned repositories go by default, including repositories an agent clones for you. The New project and Clone repository dialogs start here; you can still pick another folder in them.",
-	"settings.workspaces.projectsFolder.invalid": "Enter a folder path on the host.",
+	"settings.workspaces.projectsFolder.invalid": "Enter an absolute folder on the host, or one that starts with ~/.",
 	"settings.workspaces.projectsFolder.label": "Projects folder",
 	"settings.workspaces.title": "Settle idle workspaces after",
 	"shell.chatHistory.actionNamed": "{{action}}: {{title}}",

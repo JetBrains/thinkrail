@@ -670,8 +670,9 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   spawns queue — overridden only by `Workspace.subagentMaxConcurrentOverride`; **`settleIdleDays`** (default `7`, `null` = never; on the wire
   from `WORKSPACE_SETTLE_PROTOCOL_VERSION` = v78) is the idle window after which a quiet workspace settles
   into its project's shelf — a host-wide number because "how long is quiet" is a habit, not a project fact;
-  **`projectsFolder`** (default **`DEFAULT_PROJECTS_FOLDER`** = `~/thinkrail`, `isProjectsFolder`: a non-blank
-  string of at most 4096 characters without NUL, stored trimmed; on the wire from
+  **`projectsFolder`** (default **`DEFAULT_PROJECTS_FOLDER`** = `~/thinkrail`, `isProjectsFolder`: at most 4096
+  characters without NUL that, trimmed, is rooted — `~`, `~/…`, `/…`, a drive `C:\…` or a UNC `\\…` — so
+  every consumer can resolve it; stored trimmed; on the wire from
   **`PROJECTS_FOLDER_PROTOCOL_VERSION`** = v136) is the host folder new projects, dialog clones and agent
   clones start in — a malformed update is refused with **`PROJECTS_FOLDER_INVALID`** — and
   **`projectsFolderNoticeShown`** (default `false`) is the host-owned marker that the first agent clone told the

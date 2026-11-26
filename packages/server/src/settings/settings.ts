@@ -376,7 +376,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	) {
 		throw new CodedError(
 			"PROJECTS_FOLDER_INVALID",
-			"projectsFolder must be a non-empty host folder path",
+			"projectsFolder must be an absolute host folder or start with ~/",
 		);
 	}
 	if (runtimeUpdate.locale !== undefined && !isLocalePreference(runtimeUpdate.locale)) {

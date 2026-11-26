@@ -38,7 +38,8 @@ interval (`1–3600`, default 30), because those values govern host process cade
 ## Boundary
 
 - `projectsFolder` — the default parent for new projects and clones (dialogs and agent `open_project`): a
-  non-blank host path, trimmed on write, default `~/thinkrail`; a malformed update rejects with
+  rooted host path (`isProjectsFolder`: absolute or `~`-relative — a relative value would save and then fail
+  in every consumer), trimmed on write, default `~/thinkrail`; a malformed update rejects with
   `PROJECTS_FOLDER_INVALID`, a malformed stored value falls back to the default. `projectsFolderNoticeShown`
   is host-owned like `recentModels`: only `markProjectsFolderNoticeShown()` sets it, and it is not an update key.
 - `settleIdleDays` — the Settled-shelf idle window: a positive integer number of days (clamped to 1…365) or

@@ -1902,12 +1902,14 @@ export const SETTLE_IDLE_DAYS = { min: 1, max: 365, default: 7 } as const;
 export const DEFAULT_PROJECTS_FOLDER = "~/thinkrail";
 export const PROJECTS_FOLDER_MAX_LENGTH = 4096;
 
+const PROJECTS_FOLDER_ROOTED = /^(?:~(?:$|[\\/])|\/|[A-Za-z]:[\\/]|\\\\)/;
+
 export function isProjectsFolder(value: unknown): value is string {
 	return (
 		typeof value === "string" &&
-		value.trim().length > 0 &&
 		value.length <= PROJECTS_FOLDER_MAX_LENGTH &&
-		!value.includes("\0")
+		!value.includes("\0") &&
+		PROJECTS_FOLDER_ROOTED.test(value.trim())
 	);
 }
 

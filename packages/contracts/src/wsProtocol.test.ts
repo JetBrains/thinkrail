@@ -412,7 +412,20 @@ test("the projects folder and open_project are pinned to v136", () => {
 	expect(PROJECTS_FOLDER_PROTOCOL_VERSION).toBe(136);
 	expect(DEFAULT_CONFIG.projectsFolder).toBe(DEFAULT_PROJECTS_FOLDER);
 	expect(DEFAULT_CONFIG.projectsFolderNoticeShown).toBe(false);
-	expect(isProjectsFolder("~/thinkrail")).toBe(true);
+	for (const rooted of [
+		"~/thinkrail",
+		"~",
+		" ~/code ",
+		"/srv/code",
+		"C:\\code",
+		"D:/code",
+		"\\\\host\\share",
+	]) {
+		expect(isProjectsFolder(rooted)).toBe(true);
+	}
+	for (const relative of ["code", "./code", "../code", "~code", "C:code"]) {
+		expect(isProjectsFolder(relative)).toBe(false);
+	}
 	expect(isProjectsFolder("  ")).toBe(false);
 	expect(isProjectsFolder("~/a\0b")).toBe(false);
 	expect(isProjectsFolder("x".repeat(4097))).toBe(false);
