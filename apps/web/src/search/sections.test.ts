@@ -125,6 +125,10 @@ describe("buildSections", () => {
 				?.items.map((row) => row.item.id);
 		expect(recent(new Set())).toEqual(["chat:w9"]);
 		expect(recent(new Set(["waiting"]))).toBeUndefined();
+		const selected = sections("", { rootItems: waiting, waiting, learning, keep: "chat:w9" });
+		expect(selected.map((section) => section.id)).toEqual(["waiting", "recent", "actions"]);
+		expect(selected[0]?.items).toHaveLength(9);
+		expect(selected[1]?.items.map((row) => row.item.id)).toEqual(["chat:w9"]);
 	});
 
 	test("Recent lists where the user was by any route, newest first, never the place they are in now", () => {
