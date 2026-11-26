@@ -61,28 +61,36 @@ function firstIndex(recent: RecentWorkspaces, step: SwitcherStep): number {
 	return rows.length - 1;
 }
 
+function hasElsewhere(recent: Pick<RecentWorkspaces, "rows" | "currentId">): boolean {
+	return recent.rows.some((row) => row.id !== recent.currentId);
+}
+
 export function createRecentSwitcher(deps: RecentSwitcherDeps) {
 	let snapshot = CLOSED;
 	let held: HeldModifiers = { ctrl: false, meta: false, alt: false };
+	let elapsed = false;
+	let opening: SwitcherStep = 1;
 	let teardown: (() => void)[] = [];
 	const listeners = new Set<() => void>();
 
 	const publish = (next: RecentSwitcherSnapshot) => {
-		snapshot = next;
+		snapshot = { ...next, visible: next.open && elapsed && hasElsewhere(next) };
 		for (const listener of [...listeners]) listener();
 	};
 
 	const close = () => {
 		for (const stop of teardown) stop();
 		teardown = [];
+		elapsed = false;
 		deps.claimKeyboard(false);
 		publish(CLOSED);
 	};
 
 	const commit = (index = snapshot.index) => {
 		const row = snapshot.rows[index];
+		const current = snapshot.currentId;
 		close();
-		row?.run?.();
+		if (row && row.id !== current) row.run?.();
 	};
 
 	const move = (step: SwitcherStep) => {
@@ -118,11 +126,16 @@ export function createRecentSwitcher(deps: RecentSwitcherDeps) {
 		const recent = deps.load();
 		const selectedId = snapshot.rows[snapshot.index]?.id;
 		const kept = recent.rows.findIndex((row) => row.id === selectedId);
+		const index = !hasElsewhere(snapshot)
+			? firstIndex(recent, opening)
+			: kept === -1
+				? snapshot.index
+				: kept;
 		publish({
 			...snapshot,
 			rows: recent.rows,
 			currentId: recent.currentId,
-			index: kept === -1 ? Math.min(snapshot.index, Math.max(0, recent.rows.length - 1)) : kept,
+			index: Math.min(index, Math.max(0, recent.rows.length - 1)),
 		});
 	};
 
@@ -150,20 +163,19 @@ export function createRecentSwitcher(deps: RecentSwitcherDeps) {
 				return;
 			}
 			const recent = deps.load();
-			const elsewhere = recent.rows.filter((row) => row.id !== recent.currentId).length;
-			if (elsewhere === 0) return;
 			const index = firstIndex(recent, step);
 			if (!modifiers.ctrl && !modifiers.meta && !modifiers.alt) {
-				recent.rows[index]?.run?.();
+				if (hasElsewhere(recent)) recent.rows[index]?.run?.();
 				return;
 			}
 			held = modifiers;
+			opening = step;
 			snapshot = {
 				open: true,
 				visible: false,
 				rows: recent.rows,
 				currentId: recent.currentId,
-				index,
+				index: Math.min(index, Math.max(0, recent.rows.length - 1)),
 			};
 			deps.claimKeyboard(true);
 			listen("keydown", onKeyDown);
@@ -173,7 +185,8 @@ export function createRecentSwitcher(deps: RecentSwitcherDeps) {
 			teardown.push(deps.watch(refresh));
 			teardown.push(
 				deps.schedule(() => {
-					if (snapshot.open) publish({ ...snapshot, visible: true });
+					elapsed = true;
+					if (snapshot.open) publish(snapshot);
 				}, SHOW_DELAY_MS),
 			);
 			publish(snapshot);

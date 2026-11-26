@@ -151,11 +151,16 @@ describe("the recent workspace switcher", () => {
 		expect(h.switcher.getSnapshot().open).toBe(false);
 	});
 
-	test("nothing happens with no other workspace; without the current row the first row is next", () => {
+	test("with no other workspace loaded a tap opens nothing; without the current row the first row is next", () => {
 		const only = harness(["c"]);
 		only.start();
+		only.showTimers();
+		expect(only.switcher.getSnapshot()).toMatchObject({ open: true, visible: false });
+		only.release();
+		expect(only.opened).toEqual([]);
 		expect(only.switcher.getSnapshot().open).toBe(false);
-		expect(only.claims).toEqual([]);
+		only.switcher.start(1, { ctrl: false, meta: false, alt: false });
+		expect(only.opened).toEqual([]);
 		const away = harness(["b", "a"], null);
 		away.start();
 		expect(away.switcher.getSnapshot().index).toBe(0);
@@ -166,6 +171,17 @@ describe("the recent workspace switcher", () => {
 		h.switcher.start(1, { ctrl: false, meta: false, alt: false });
 		expect(h.opened).toEqual(["b"]);
 		expect(h.claims).toEqual([]);
+	});
+
+	test("a hold that began with nothing else loaded shows and picks a workspace the backfill brings", () => {
+		const h = harness(["c"]);
+		h.start();
+		h.showTimers();
+		expect(h.switcher.getSnapshot().visible).toBe(false);
+		h.setRows(["c", "b", "a"], "c");
+		expect(h.switcher.getSnapshot()).toMatchObject({ visible: true, index: 1 });
+		h.release();
+		expect(h.opened).toEqual(["b"]);
 	});
 
 	test("rows that change while open keep the selected workspace selected", () => {

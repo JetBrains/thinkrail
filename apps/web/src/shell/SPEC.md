@@ -389,8 +389,12 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   latest pick wins, a stale row is toasted, the chat input takes focus) and they refresh while open, the
   palette's workspace backfill listing collapsed projects meanwhile. `recentSwitcher.ts` is the store-free
   controller and `RecentSwitcherHost` its one wiring and mount. It opens on the row after the current one
-  (the reverse chord: the oldest), does nothing with no other workspace, and a chord rebound without a
-  held modifier switches at once. The list shows only after 150 ms of holding, so a tap never flashes it.
+  (the reverse chord: the oldest), and a chord rebound without a held modifier switches at once. With no
+  other workspace loaded yet (a collapsed project's list loads lazily, so after a restart the previous
+  workspace may have no row) a held chord still opens — invisible, with the backfill running — and the
+  list appears, on the row after the current one, once a list brings one; releasing with nothing else
+  opens nothing, and the in-flight lists still land for the next press. The list shows only after 150 ms
+  of holding, so a tap never flashes it.
   While open it holds the keyboard claim (*The claim*, below) and its own capture listener takes every key,
   so no app chord, palette or text field acts; it is shell-local state, not store state — nothing else
   opens it. Browsers keep Ctrl+Tab for their tabs, so it is a desktop-app gesture unless rebound.
