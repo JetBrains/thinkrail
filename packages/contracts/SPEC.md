@@ -657,7 +657,11 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   `submodule-server-terminal`'s shell-selection decision for what each value spawns.
   **`PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION`** pins v63's additive project-located `template.list` /
   `template.get` reads, allowing Create Workspace to preview global plus current-checkout project templates
-  without sending host paths; older hosts retain a global-only fallback. `themeMode` defaults to `"fixed"`
+  without sending host paths; older hosts retain a global-only fallback.
+  **`REF_RESOURCE_PREVIEW_PROTOCOL_VERSION`** (v133) adds an optional **`baseRef`** beside `projectId` on
+  those reads and on `skill.list`: the host answers from the project's resources as they are at that ref (what
+  a worktree cut from it will hold) instead of the current checkout, and falls back to the checkout when the
+  ref does not resolve. The dialog sends it only on a v133+ host; an older host would ignore it. `themeMode` defaults to `"fixed"`
   and no pair, preserving both legacy configs
   and the explicit Dark default; `subagentsEnabled` is the host-wide subagent default (`true` for current
   behavior), overridden only by `Workspace.subagentsOverride`; `subagentMaxConcurrent` (whole number in
@@ -1028,8 +1032,8 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   **`project.setTrust`** (persist a project's trust grant → the updated `Project`; gates its committed
   cross-agent skill aliases; `resources: true` also grants pi-level resource trust, see Project trust) /
   **`skill.list`** (a pre-session, skill-only `SlashCommandInfo[]` preview for a `projectId`, resolved from
-  that project's current checkout with its **project-scoped aliases gated by trust**; the eventual worktree
-  session is authoritative) / the **Skills-manager set** — **`project.aliasSkills`** (present committed alias
+  that project's current checkout — or, with v133's optional `baseRef`, its resources at that ref — with its
+  **project-scoped aliases gated by trust**; the eventual worktree session is authoritative) / the **Skills-manager set** — **`project.aliasSkills`** (present committed alias
   names, for the presence-gated notice's count) / **`project.acknowledgeSkills`** (confirm skills that
   appeared after trust) / **`project.setSkillEnabled`** (project baseline) / **`project.setGroupEnabled`**
   (turn a plugin / source tier / `@plugins` on/off at the baseline) / **`workspace.setSkillOverride`**

@@ -344,7 +344,10 @@ nudges `fsChanged`. Nothing cleans the folder: sent messages keep naming its fil
   the **Skills-manager set**: `skill.list` / `skills.state` / `project.skills` build
   the admission context from `projects` (+ the
   workspace's `skillOverrides` when workspace-scoped) and pass it into agent's `listSkillCommands`/
-  `listSkillCatalog`; the **MCP set** (`mcp.*`, `host/mcp.ts`) composes `agent`'s MCP
+  `listSkillCatalog`; `skill.list` and the project-located `template.list`/`template.get` with a `baseRef`
+  read from `workspaces`' `previewRefPaths(project, baseRef, [...PROJECT_SKILL_ROOTS, PROJECT_TEMPLATE_ROOT])`
+  folder instead of the project checkout (same admission, so trust gates are unchanged), falling back to the
+  checkout when the preview is `null`; the **MCP set** (`mcp.*`, `host/mcp.ts`) composes `agent`'s MCP
   service with `projects` (approvals, overrides, pi-level trust) and publishes `mcp.status` snapshots (topic
   subscribed only by clients at `MCP_PROTOCOL_VERSION` or later) plus `session.resourcesChanged`
   invalidations. Every request that names a workspace resolves it and its project; one without (user scope
