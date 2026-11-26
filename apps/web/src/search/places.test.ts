@@ -60,7 +60,7 @@ describe("currentPlaceIds", () => {
 		).toEqual(["workspace:c1"]);
 	});
 
-	test("a chat the palette does not list yet leaves its workspace as the place", () => {
+	test("a chat whose record shows no row leaves its workspace as the place; an unreported one stays the place", () => {
 		const empty = (fields: { title?: string; firstPrompt?: string }) =>
 			({
 				...inWorkspace("t-a"),
@@ -69,7 +69,7 @@ describe("currentPlaceIds", () => {
 		expect(currentPlaceIds(empty({ title: "" }))).toEqual(["workspace:w1"]);
 		expect(
 			currentPlaceIds({ ...inWorkspace("t-a"), sessionStateByWorkspace: {} } as PlaceState),
-		).toEqual(["workspace:w1"]);
+		).toEqual(["chat:a", "workspace:w1"]);
 		expect(currentPlaceIds(empty({ title: "Named" }))).toEqual(["chat:a", "workspace:w1"]);
 	});
 

@@ -30,7 +30,7 @@ function projectlessChat(state: PlaceState, workspaceId: string): string | undef
 
 function listedChat(state: PlaceState, workspaceId: string, sessionId: string): boolean {
 	const record = state.sessionStateByWorkspace[workspaceId]?.[sessionId];
-	if (!record) return false;
+	if (!record) return true;
 	return chatHasRow(
 		selectKnownChatTitle(state, workspaceId, sessionId),
 		selectReportedFirstPrompt(state, workspaceId, sessionId),
