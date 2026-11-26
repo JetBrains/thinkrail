@@ -80,10 +80,17 @@ afterEach(() => {
 	else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
 });
 
-test("review refresh covers live rows every pass and idle rows on a 30-minute pace, never parked or closed ones", () => {
+test("review refresh covers live and Default feature rows, paces idle rows, and skips parked or closed managed rows", () => {
 	const now = Date.now();
 	const rows = [
-		row({ id: "default", kind: "default", lastActiveAt: now }),
+		row({ id: "default-base", kind: "default", branch: "main", lastActiveAt: now }),
+		row({ id: "default-feature", kind: "default", lastActiveAt: now }),
+		row({ id: "default-idle", kind: "default", lastActiveAt: now - 40 * DAY_MS }),
+		row({
+			id: "default-merged",
+			kind: "default",
+			review: { kind: "pull-request", number: 5, state: "merged", changedAt: now - DAY_MS },
+		}),
 		row({ id: "parked", settledOverride: "settled", lastActiveAt: now }),
 		row({
 			id: "merged",
@@ -106,6 +113,9 @@ test("review refresh covers live rows every pass and idle rows on a 30-minute pa
 	];
 	const never = new Map<string, { branch: string; at: number }>();
 	expect(reviewRefreshRows(rows, now, never).map((r) => r.id)).toEqual([
+		"default-feature",
+		"default-idle",
+		"default-merged",
 		"incomplete-merged",
 		"pinned",
 		"open-stale",

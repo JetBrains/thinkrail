@@ -654,6 +654,12 @@ keeps the gh-less behaviour; `THINKRAIL_GH_OFFLINE` still keeps `pr.open` on the
 deletes the scenario and log and unsets the ssh config. The host caches repository merge settings per origin
 URL for the whole run, so a spec that sets its own repository settings names its own repository.
 
+`pr-refresh.live.spec.ts` (`@agent`) uses that same isolated GitHub seam: a real agent runs a single
+`gh pr merge` against the fake provider, which changes no worktree file. The topbar must show the merged
+PR after the turn settles without another focus event or ship action. Host unit probes cover the
+Default workspace's periodic pass, cached misses, coalesced settlements, branch switches, and failures;
+the live probe qualifies the agent-to-topbar path, not a real GitHub mutation.
+
 **Installed extensions** (`installed-extensions.spec.ts`, `extension-browse.spec.ts`) run the real published
 sample, `extension-examples/palette`, never npm or thinkrail.ai.
 - **Built before the host.** `bun run build:e2e` builds the web app and the sample (the SDK first, through

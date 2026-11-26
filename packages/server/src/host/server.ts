@@ -258,6 +258,7 @@ import { hostSearch, setSearchTextPublisher } from "./search";
 import {
 	REVIEW_REFRESH_INTERVAL_MS,
 	refreshOpenProjectReviews,
+	refreshReviewAfterAgentSettled,
 	stampSessionActivity,
 } from "./settledLifecycle";
 import { type SlowConsumerError, sendOrQuarantine, settleSlowConsumer } from "./socketSend";
@@ -1194,6 +1195,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		runObservation.observe(payload.sessionId, payload.event);
 		observeContinuation(payload.sessionId, payload.event);
 		void turnTracker.observe(payload.sessionId, payload.event);
+		if (payload.event.type === "agent_settled") {
+			void refreshReviewAfterAgentSettled(workspaceId).catch((error) =>
+				log.warn("settled review refresh failed", error),
+			);
+		}
 		const artifactEvent = artifactSessionEvent(payload.sessionId, payload.event);
 		if (artifactEvent) {
 			if (artifactEvent.type === "agent_start") void ensureWatch(workspaceId, { prewarm: true });
