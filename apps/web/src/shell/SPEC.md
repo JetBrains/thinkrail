@@ -105,6 +105,11 @@ which installs the bridges before any page script.
 
 ## Workbench behavior
 
+Chat tabs show the shared `AttentionDot` when their own normalized session state needs input or has an
+unread completion. A tab-local subscriber reads the store selector without invalidating the workbench's
+render callbacks. Selection alone does not clear the dot; the existing host state and completion-read
+acknowledgment remain authoritative. Tab markers do not move focus or change layout.
+
 `WorkspaceWorkbench` owns the idle editor preload (`useIdleEditorPreload`): when `panels/editorWarm`'s
 `useEditorWarm` allows it (not phone-class, not `saveData`), it schedules one `whenFilesTreeIdle` preload of the
 code view (2 s idle timeout, 1.5 s fallback delay), which also waits for a loading Files tree to paint. The

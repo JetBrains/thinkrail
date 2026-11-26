@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { compile, optimize } from "@tailwindcss/node";
 import { Scanner } from "@tailwindcss/oxide";
 import { ExtensionBuildError } from "./errors";
+import { toPosix } from "./paths";
 
 const require = createRequire(import.meta.url);
 
@@ -33,7 +34,7 @@ export function stylesheetInput({
 	assetsDir,
 }: Omit<StylesOptions, "outFile" | "minify">): string {
 	const template = readFileSync(new URL("extension.css", assetsDir), "utf8");
-	const source = relative(root, sourceDir) || ".";
+	const source = toPosix(relative(root, sourceDir)) || ".";
 	const input = template
 		.replace(`"tailwindcss/theme.css"`, cssString(require.resolve("tailwindcss/theme.css")))
 		.replace(

@@ -162,6 +162,8 @@ extension that value-imports it must still provide the SDK at runtime.
   prefixed utilities, pointing at the app's runtime variables. The app's `tr-*` typography classes are
   used unprefixed and come from the app's sheet.
 
+Every path the build reports (`files[].path`, the CLI summary and build-error messages) is relative to the extension folder and uses `/` on every platform, matching the manifest.
+
 ## Frozen API snapshots
 
 `api/<major>.<minor>.api.md` is the committed surface of one extension API version: the allow-list as
@@ -229,10 +231,11 @@ reprint-only toolchain diff; `--print` shows the current surface. The snapshot i
 
 Released with the portable pi packages ([[module-pi-extensions]] § Release): `scripts/pi-packages.ts`
 lists this package and every public `extension-examples/*` package as publishable (dependencies first, so
-the SDK precedes a sample). Until their first release changeset lands, the SDK and the palette sample are
-`private`, so `release:publish` skips them while `check:extension-packages` (`extensionPackages()`, which
-counts private ones too) still packs and verifies them; the changeset that publishes them also drops
-`private`. `.github/workflows/release-pi-packages.yml` runs the gate below and builds
+the SDK precedes a sample). A sample stays `private` until its first release changeset, so no version PR
+publishes it at `0.0.0`, while `check:extension-packages` (`extensionPackages()`, which counts private
+ones too) still packs and verifies it; the changeset that publishes it drops `private` in the same PR, as
+the SDK's and the palette sample's first-release changeset did. `release:pack` lists only public
+packages, so the bootstrap publish below also needs `private` gone. `.github/workflows/release-pi-packages.yml` runs the gate below and builds
 the SDK before `release:publish`, since a sample's `prepack` builds with the SDK's `dist/`. Each package
 needs the manual bootstrap publish (`bun run release:pack extension-sdk`, `… palette`) before Trusted
 Publishing can take over. `bun pm pack` runs `prepack` without `node_modules/.bin` on `PATH`, so a sample's

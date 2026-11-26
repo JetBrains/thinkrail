@@ -396,12 +396,10 @@ export function useWorkspaceChatCatalogReconciliation(
 					handledRouteSessionId === null &&
 					!autoOpenAlreadyAttempted &&
 					placed.size === 0 &&
-					toOpen.length === 0
+					toOpen.length === 0 &&
+					![...entry.previouslyPlaced].some((id) => authoritativeSessionIds.has(id))
 				) {
-					const fallbackIndex = toHistory.findIndex(
-						(summary) => !entry.previouslyPlaced.has(summary.sessionId),
-					);
-					const fallback = fallbackIndex < 0 ? undefined : toHistory.splice(fallbackIndex, 1)[0];
+					const fallback = toHistory.shift();
 					if (fallback) toOpen.push(fallback);
 				}
 				const navigation = entry.navigation;
