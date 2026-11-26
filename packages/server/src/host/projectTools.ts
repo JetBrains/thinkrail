@@ -27,6 +27,7 @@ import { getWorkspace, isChatsContainer } from "../workspaces";
 const REMOTE_READ_TIMEOUT_MS = 10_000;
 const MAX_NAME_SUFFIX = 99;
 const GITHUB_SHORTHAND = /^[A-Za-z0-9][\w.-]*\/[\w.-]+$/;
+const CASE_INSENSITIVE_HOSTS = new Set(["github.com"]);
 const PATH_LIKE = /^(?:~(?:$|[\\/])|\.{1,2}(?:$|[\\/])|\/|[A-Za-z]:[\\/]|\\\\)/;
 
 export interface ProjectToolsDeps {
@@ -73,12 +74,23 @@ function trimRepoPath(path: string): string {
 	return path.replace(/\/+$/, "").replace(/\.git$/i, "");
 }
 
+function knownRepositoryPath(path: string): string {
+	return trimRepoPath(path.replace(/^\/+/, "")).toLowerCase();
+}
+
+function exactPath(path: string): string {
+	return path.replace(/\/+$/, "") || "/";
+}
+
 export function repositoryKey(url: string): string | null {
 	const trimmed = url.trim();
 	if (!trimmed.includes("://")) {
 		const scp = /^(?:[^@/\s]+@)?([^:/\s]+):(.+)$/.exec(trimmed);
 		if (!scp?.[1] || !scp[2]) return null;
-		return `${scp[1].toLowerCase()}/${trimRepoPath(scp[2].replace(/^\/+/, "")).toLowerCase()}`;
+		const host = scp[1].toLowerCase();
+		return CASE_INSENSITIVE_HOSTS.has(host)
+			? `${host}/${knownRepositoryPath(scp[2])}`
+			: `scp:${host}:${exactPath(scp[2])}`;
 	}
 	let parsed: URL;
 	let pathname: string;
@@ -88,10 +100,12 @@ export function repositoryKey(url: string): string | null {
 	} catch {
 		return null;
 	}
-	const path = trimRepoPath(pathname);
-	if (parsed.protocol === "file:") return `file:${path}`;
-	if (!parsed.hostname || !path) return null;
-	return `${parsed.hostname.toLowerCase()}/${path.replace(/^\/+/, "").toLowerCase()}`;
+	if (parsed.protocol === "file:") return `file:${exactPath(pathname)}`;
+	const host = parsed.hostname.toLowerCase();
+	if (!host || exactPath(pathname) === "/") return null;
+	if (CASE_INSENSITIVE_HOSTS.has(host)) return `${host}/${knownRepositoryPath(pathname)}`;
+	const port = parsed.protocol === "ssh:" && parsed.port === "22" ? "" : parsed.port;
+	return `${parsed.protocol}//${host}${port ? `:${port}` : ""}${exactPath(pathname)}`;
 }
 
 export function repositoryFolderName(url: string): string {

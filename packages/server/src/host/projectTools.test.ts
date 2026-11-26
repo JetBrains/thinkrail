@@ -89,12 +89,29 @@ test("one repository matches across HTTPS, SSH, scp-style and .git spellings", (
 		expect(repositoryKey(spelling)).toBe(key);
 	}
 	expect(repositoryKey("https://gitlab.com/fastify/fastify")).not.toBe(key);
-	expect(repositoryKey("file:///srv/repos/widget.git")).toBe("file:/srv/repos/widget");
+	expect(repositoryKey("file:///srv/repos/widget.git")).toBe("file:/srv/repos/widget.git");
 	expect(repositoryKey("https://host/a%zz")).toBeNull();
 	expect(repositoryFolderName("git@github.com:fastify/fastify.git")).toBe("fastify");
 	expect(repositoryFolderName("file:///srv/repos/widget.git")).toBe("widget");
 	expect(repositoryFolderName("https://github.com/microsoft/TypeScript.git")).toBe("TypeScript");
 	expect(repositoryFolderName("https://host/a%zz")).toBe("repository");
+});
+
+test("other hosts and local paths keep ports, case and .git, so distinct repositories never collapse", () => {
+	const distinct = (a: string, b: string) => expect(repositoryKey(a)).not.toBe(repositoryKey(b));
+	distinct("http://git.example:8080/shared.git", "http://git.example:9090/shared.git");
+	distinct("https://git.example/Team/Repo.git", "https://git.example/team/repo.git");
+	distinct("https://git.example/team/repo.git", "https://git.example/team/repo");
+	distinct("https://git.example/team/repo", "ssh://git@git.example/team/repo");
+	distinct("git@git.example:team/repo", "git@git.example:Team/repo");
+	distinct("file:///srv/repos/widget", "file:///srv/repos/widget.git");
+	distinct("file:///srv/repos/Widget", "file:///srv/repos/widget");
+	expect(repositoryKey("https://GIT.example/team/repo/")).toBe(
+		repositoryKey("https://git.example/team/repo"),
+	);
+	expect(repositoryKey("ssh://git@git.example:22/team/repo")).toBe(
+		repositoryKey("ssh://git@git.example/team/repo"),
+	);
 });
 
 test("owner/repo means GitHub; paths need an explicit absolute, ~ or ./ start", () => {
@@ -139,6 +156,14 @@ test("the planned clone creates the folder, opens the project, and the next call
 	const reopened = await planOpenProject("s-1", { repository: url }, deps());
 	expect(reopened).toEqual({ kind: "ready", project: { ...cloned, outcome: "opened" } });
 	expect(listProjects().map((project) => project.id)).toEqual([cloned.projectId]);
+});
+
+test("a different repository whose path differs only by .git is cloned, not mistaken for the open one", async () => {
+	const plan = (await planOpenProject("s-1", { repository: url }, deps())) as ClonePlan;
+	await cloneOpenProject("s-1", plan, deps());
+	const sibling = repo(join(root, "upstream", "widget.git"));
+	const other = await planOpenProject("s-1", { repository: pathToFileURL(sibling).href }, deps());
+	expect(other).toMatchObject({ kind: "clone", name: "widget-2" });
 });
 
 test("a project whose upstream remote is the repository counts as that repository", async () => {
