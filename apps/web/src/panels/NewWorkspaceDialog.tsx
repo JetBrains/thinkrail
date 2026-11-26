@@ -198,16 +198,43 @@ export function NewWorkspaceDialog({
 
 	const focusPromptSelection = usePendingSelection(promptRef);
 
+	const [catalogRefresh, setCatalogRefresh] = useState(0);
+	const baseChosenFor = useRef<string | null>(null);
+	const prefetchBase = (ref: string) => {
+		if (!ref) return;
+		getTransport()
+			.request("git.prefetch", { projectId: selectedProjectId, ref })
+			.then(({ ok }) => {
+				if (ok) setCatalogRefresh((n) => n + 1);
+			})
+			.catch(() => {});
+	};
+
+	const {
+		branches,
+		failed: branchesFailed,
+		refreshing,
+		refresh: refreshBranches,
+	} = useBranchList(open && !chat ? selectedProjectId : null, (list) => {
+		if (baseChosenFor.current === selectedProjectId) return;
+		const initial = retryDraft?.baseRef ?? list.defaultBranch;
+		setBaseRef(initial);
+		prefetchBase(initial);
+	});
+
+	const selectBaseRef = (ref: string) => {
+		baseChosenFor.current = selectedProjectId;
+		setBaseRef(ref);
+		if (branches?.remote.includes(ref)) prefetchBase(ref);
+	};
 	const supportsProjectTemplatePreview =
 		protocolVersion !== null && protocolVersion >= PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION;
-	const previewRef =
+	const refPreview =
 		target === "worktree" &&
-		baseRef &&
 		protocolVersion !== null &&
-		protocolVersion >= REF_RESOURCE_PREVIEW_PROTOCOL_VERSION
-			? baseRef
-			: null;
-	const [catalogRefresh, setCatalogRefresh] = useState(0);
+		protocolVersion >= REF_RESOURCE_PREVIEW_PROTOCOL_VERSION;
+	const previewRef = refPreview && baseRef ? baseRef : null;
+	const previewPending = refPreview && !baseRef && !branchesFailed;
 	const loadTemplate = useCallback(
 		(name: string) => {
 			const location: TemplateReadLocation = supportsProjectTemplatePreview
@@ -256,7 +283,6 @@ export function NewWorkspaceDialog({
 	const prChipRef = useRef<HTMLButtonElement>(null);
 	const backdropRef = useRef<HTMLDivElement>(null);
 	const [prBase, setPrBase] = useState<{ number: number; baseRef: string } | null>(null);
-	const baseChosenFor = useRef<string | null>(null);
 	const pickPullRequest = (index: number) => {
 		const pr = pullRequests?.pick(index);
 		const argument = slashArgument(prompt, skillCommands);
@@ -350,7 +376,7 @@ export function NewWorkspaceDialog({
 	}, [open, scopeProjectId, previewRef]);
 
 	useEffect(() => {
-		if (!open) return;
+		if (!open || previewPending) return;
 		let cancelled = false;
 		void slashCommandCatalogOrEmpty(() =>
 			getTransport().request("skill.list", skillListParams(scopeProjectId, previewRef)),
@@ -360,10 +386,10 @@ export function NewWorkspaceDialog({
 		return () => {
 			cancelled = true;
 		};
-	}, [open, scopeProjectId, previewRef, catalogRefresh]);
+	}, [open, previewPending, scopeProjectId, previewRef, catalogRefresh]);
 
 	useEffect(() => {
-		if (!open || !slashActive) return;
+		if (!open || !slashActive || previewPending) return;
 		let cancelled = false;
 		const location: TemplateReadLocation = supportsProjectTemplatePreview
 			? { projectId: scopeProjectId, ...(previewRef ? { baseRef: previewRef } : {}) }
@@ -381,6 +407,7 @@ export function NewWorkspaceDialog({
 		};
 	}, [
 		open,
+		previewPending,
 		scopeProjectId,
 		previewRef,
 		catalogRefresh,
@@ -480,33 +507,6 @@ export function NewWorkspaceDialog({
 		};
 	}, [open, model, thinkingLevel]);
 
-	const prefetchBase = (ref: string) => {
-		if (!ref) return;
-		getTransport()
-			.request("git.prefetch", { projectId: selectedProjectId, ref })
-			.then(({ ok }) => {
-				if (ok) setCatalogRefresh((n) => n + 1);
-			})
-			.catch(() => {});
-	};
-
-	const selectBaseRef = (ref: string) => {
-		baseChosenFor.current = selectedProjectId;
-		setBaseRef(ref);
-		if (branches?.remote.includes(ref)) prefetchBase(ref);
-	};
-
-	const {
-		branches,
-		failed: branchesFailed,
-		refreshing,
-		refresh: refreshBranches,
-	} = useBranchList(open && !chat ? selectedProjectId : null, (list) => {
-		if (baseChosenFor.current === selectedProjectId) return;
-		const initial = retryDraft?.baseRef ?? list.defaultBranch;
-		setBaseRef(initial);
-		prefetchBase(initial);
-	});
 	const submitEnabled = !creating && !templatePending && attachedImages.pending === 0;
 
 	const uploadFiles = async (): Promise<string[] | null> => {
