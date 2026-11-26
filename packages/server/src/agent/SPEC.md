@@ -811,11 +811,15 @@ re-opened transcripts provider-valid.
     the manager bullet above). Pure over pi's `SessionManager` (compaction-aware via
     `buildSessionContext`; idempotent; appends only missing results from the active tail batch) —
     unit-tested against `SessionManager.inMemory`, including failed-attempt and historical-gap replay.
-  - `artifactsGuard` — keeps the agent's output in the workspace for the Artifacts tool
+  - `artifactsGuard` — defaults the agent's output to the workspace for the Artifacts tool
     ([[submodule-server-artifacts]]): a `before_agent_start` system-prompt section (`thinkrail-artifacts`)
-    telling the agent to put every non-code output it produces under `.thinkrail/context/` and never to
-    delete or move files out of it, and asking softly that it link each result in its final message and
-    keep scratch work in a `_`-prefixed folder such as `_work/` (both feed the artifact roles: a linked
+    telling the agent to put non-code output under `.thinkrail/context/` by default, while honoring an
+    explicit user-selected persistent path or directory, including one outside the workspace. Such
+    results are linked at their actual paths in the final message; files outside the artifacts folder
+    cannot be published through `present_files` and need not be copied there just to appear in Outputs.
+    The rule still forbids deleting or moving files out of the artifacts folder, and asks that it link
+    each result in its final message and keep scratch work in a `_`-prefixed folder such as `_work/`
+    (both feed the artifact roles: a linked
     path is a result, a `_` folder holds working files), plus a `tool_call` hook that blocks a `write` that would **create a new
     file** in a temporary folder (`/tmp`, `/var/tmp`, `os.tmpdir()`, `$TMPDIR`/`$TEMP`/`$TMP`, real paths
     included) outside the session's own folder, with a reason naming the `.thinkrail/context/` path to use.
