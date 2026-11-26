@@ -83,7 +83,8 @@ for the rare tie of two waiting chats in one workspace, which keeps the snapshot
 
 **Recent** is where the user has been, newest first, by any route — the rail, the topbar, a link, the
 palette — plus anything run from the palette: up to five rows by `lastUsed`, never the place the user is in
-now (`currentPlaceIds`, read when the palette opens) nor a row Waiting or Actions already shows.
+now (`currentPlaceIds`, read when the palette opens) nor a row Waiting or Actions already shows — a
+waiting chat behind Waiting's "Show N more" is not shown, so it stays in Recent until Waiting expands.
 `initSearchPreferences` watches the store's location (the active workspace's attention center chat tab;
 in a chat without a project, its one chat whatever tab shows and before its layout resolves, since the
 palette has no other row for it; else the workspace; else Project Home) and stamps a visit when the place changes.

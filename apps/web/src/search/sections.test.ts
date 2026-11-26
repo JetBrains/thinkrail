@@ -114,6 +114,19 @@ describe("buildSections", () => {
 		expect(ids).toContain("command:theme");
 	});
 
+	test("a waiting chat hidden behind Show more is still Recent, until Waiting expands to show it", () => {
+		const waiting = Array.from({ length: 10 }, (_, index) =>
+			chat(`w${index}`, `Waiting ${index}`, { attention: "needs-input" }),
+		);
+		const learning = recordVisit(EMPTY_LEARNING, ["chat:w9"], 1);
+		const recent = (expanded: ReadonlySet<string>) =>
+			sections("", { rootItems: waiting, waiting, learning, expanded })
+				.find((section) => section.id === "recent")
+				?.items.map((row) => row.item.id);
+		expect(recent(new Set())).toEqual(["chat:w9"]);
+		expect(recent(new Set(["waiting"]))).toBeUndefined();
+	});
+
 	test("Recent lists where the user was by any route, newest first, never the place they are in now", () => {
 		let learning = recordPick(EMPTY_LEARNING, "", "command:theme", 1);
 		learning = recordVisit(learning, ["chat:x1", "workspace:w1"], 2);

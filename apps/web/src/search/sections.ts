@@ -189,16 +189,6 @@ function emptyRootSections(input: SectionsInput): PaletteSection[] {
 	const { t } = input;
 	const { scope } = input.parsed;
 	if (scope === "all") {
-		const shown = new Set(
-			[...input.waiting, ...input.actions].map((item) => item.id).concat(input.currentPlaces ?? []),
-		);
-		const recent = input.rootItems
-			.filter((item) => !shown.has(item.id) && item.kind !== "more")
-			.map((item) => ({ item, usedAt: input.learning.lastUsed[item.id] }))
-			.filter((entry): entry is { item: PaletteItem; usedAt: number } => entry.usedAt !== undefined)
-			.sort((a, b) => b.usedAt - a.usedAt)
-			.slice(0, RECENT_LIMIT)
-			.map((entry) => plainRow(entry.item));
 		const waiting = cappedSection(
 			t,
 			"waiting",
@@ -209,6 +199,18 @@ function emptyRootSections(input: SectionsInput): PaletteSection[] {
 			input.keep ?? null,
 			WAITING_CAP,
 		);
+		const shown = new Set(
+			[...waiting.items.map((row) => row.item), ...input.actions]
+				.map((item) => item.id)
+				.concat(input.currentPlaces ?? []),
+		);
+		const recent = input.rootItems
+			.filter((item) => !shown.has(item.id) && item.kind !== "more")
+			.map((item) => ({ item, usedAt: input.learning.lastUsed[item.id] }))
+			.filter((entry): entry is { item: PaletteItem; usedAt: number } => entry.usedAt !== undefined)
+			.sort((a, b) => b.usedAt - a.usedAt)
+			.slice(0, RECENT_LIMIT)
+			.map((entry) => plainRow(entry.item));
 		return [
 			{ ...waiting, meta: t("search.group.waitingMeta") },
 			{ id: "recent", title: groupLabel(t, "recent"), items: recent },
