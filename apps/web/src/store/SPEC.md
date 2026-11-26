@@ -373,7 +373,8 @@ roster's catalog reads ([[submodule-web-panels]]).
     `selectSessionNeedsAttention` reads the same binary input-or-unread predicate as the workspace and
     project rollups, scoped to one workspace/session; an absent record has no attention signal.
     The record's `firstPrompt` is the preferred source of **`selectChatFirstPrompt`** (then the
-    `ClosedChat` row, then the loaded runtime's user turns through contracts' `firstPromptOfTexts` — the
+    `ClosedChat` row — those two are **`selectReportedFirstPrompt`**, the host-reported reading the search
+    palette's place rule uses — then the loaded runtime's user turns through contracts' `firstPromptOfTexts` — the
     same reading the host applies, so an optimistic `/skill:` send or a leading package yields the head the
     host will report; the runtime only until the host has reported one, since a hydrated runtime may start
     after a compaction); `selectChatTitle` folds it through `chatDisplayName`,

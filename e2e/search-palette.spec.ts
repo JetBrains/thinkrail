@@ -19,6 +19,7 @@ import {
 	enterDefaultWorkspace,
 	openFixtureProject,
 	pressPlatformShortcut,
+	worktreeRow,
 } from "./fixtures/app";
 import { resetKeybindings, setKeybindings } from "./fixtures/keybindings";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
@@ -207,6 +208,20 @@ test("a chat without a project waits labelled No project, and a chat opened from
 	} finally {
 		for (const s of [...seeded, chatSession]) rmSync(s.path, { force: true });
 	}
+});
+
+test("a workspace visited while its chat is still empty is Recent", async ({ page }) => {
+	await openFixtureProject(page);
+	const first = await createWorkspaceViaDialog(page);
+	const second = await createWorkspaceViaDialog(page);
+	await worktreeRow(page, first.name).click();
+	await expect(worktreeRow(page, first.name)).toHaveAttribute("data-active", "true");
+	await worktreeRow(page, second.name).click();
+	await expect(worktreeRow(page, second.name)).toHaveAttribute("data-active", "true");
+	await openPalette(page);
+	const recent = page.locator('[data-testid="search-section"][data-section="recent"]');
+	await expect(recent.locator(`[data-item-id="workspace:${first.id}"]`)).toBeVisible();
+	await expect(recent.locator(`[data-item-id="workspace:${second.id}"]`)).toHaveCount(0);
 });
 
 test("typing finds chats by title, a paste is cut to the host's query length, and Escape clears before it closes", async ({

@@ -1361,15 +1361,24 @@ export function selectKnownChatTitle(
 	return closed.find((chat) => chat.sessionId === sessionId)?.title ?? null;
 }
 
+export function selectReportedFirstPrompt(
+	state: Pick<ChatFirstPromptState, "sessionStateByWorkspace" | "closedChatsByWorkspace">,
+	workspaceId: string,
+	sessionId: string,
+): string | undefined {
+	return (
+		state.sessionStateByWorkspace[workspaceId]?.[sessionId]?.firstPrompt ??
+		state.closedChatsByWorkspace[workspaceId]?.find((chat) => chat.sessionId === sessionId)
+			?.firstPrompt
+	);
+}
+
 export function selectChatFirstPrompt(
 	state: ChatFirstPromptState,
 	workspaceId: string,
 	sessionId: string,
 ): string | undefined {
-	const reported =
-		state.sessionStateByWorkspace[workspaceId]?.[sessionId]?.firstPrompt ??
-		state.closedChatsByWorkspace[workspaceId]?.find((chat) => chat.sessionId === sessionId)
-			?.firstPrompt;
+	const reported = selectReportedFirstPrompt(state, workspaceId, sessionId);
 	if (reported) return reported;
 	const runtime = state.sessions[sessionId];
 	return runtime ? firstPromptOfTexts(userTurnTexts(runtime.turns)) : undefined;

@@ -80,6 +80,7 @@ import { useLocalLayoutState } from "./layoutState";
 import { LocationBar } from "./locationBar";
 import { NativeWindowControls } from "./NativeWindowControls";
 import { PROJECT_HOME_PROJECTS_REGION_ID, ProjectHome } from "./ProjectHome";
+import { RecentSwitcherHost, recentSwitcher } from "./RecentSwitcherHost";
 import { installRegionTracker, pressRegionKey } from "./regions";
 import { SearchPaletteHost } from "./SearchPaletteHost";
 import { ShortcutsDialogHost } from "./ShortcutsDialog";
@@ -247,6 +248,12 @@ function ShellLayout() {
 		onPreviousRegion: () => pressRegionKey(-1),
 		onComposer: focusChatComposer,
 		onFocusProjects: () => focusProjects(homeProjects.toggle),
+		onRecentWorkspace: (binding, event) =>
+			recentSwitcher.start(binding === "workspace.recentPrevious" ? -1 : 1, {
+				ctrl: event.ctrlKey,
+				meta: event.metaKey,
+				alt: event.altKey,
+			}),
 	});
 	return (
 		<div data-testid="shell" className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr]">
@@ -392,6 +399,7 @@ function ShellLayout() {
 				hasUpdateSettings={updates !== null}
 			/>
 			<FindInFilesHost />
+			<RecentSwitcherHost />
 			<ShortcutsDialogHost />
 			<NotificationPermissionPrompt />
 			<Toaster />
