@@ -207,7 +207,7 @@ export function NewWorkspaceDialog({
 		protocolVersion >= REF_RESOURCE_PREVIEW_PROTOCOL_VERSION
 			? baseRef
 			: null;
-	const [previewRefresh, setPreviewRefresh] = useState(0);
+	const [catalogRefresh, setCatalogRefresh] = useState(0);
 	const loadTemplate = useCallback(
 		(name: string) => {
 			const location: TemplateReadLocation = supportsProjectTemplatePreview
@@ -356,7 +356,7 @@ export function NewWorkspaceDialog({
 		return () => {
 			cancelled = true;
 		};
-	}, [open, scopeProjectId, previewRef, previewRefresh]);
+	}, [open, scopeProjectId, previewRef, catalogRefresh]);
 
 	useEffect(() => {
 		if (!open || !slashActive) return;
@@ -379,7 +379,7 @@ export function NewWorkspaceDialog({
 		open,
 		scopeProjectId,
 		previewRef,
-		previewRefresh,
+		catalogRefresh,
 		slashActive,
 		supportsProjectTemplatePreview,
 	]);
@@ -481,7 +481,7 @@ export function NewWorkspaceDialog({
 		getTransport()
 			.request("git.prefetch", { projectId: selectedProjectId, ref })
 			.then(({ ok }) => {
-				if (ok) setPreviewRefresh((n) => n + 1);
+				if (ok) setCatalogRefresh((n) => n + 1);
 			})
 			.catch(() => {});
 	};
@@ -637,10 +637,7 @@ export function NewWorkspaceDialog({
 				trustGrantParams(selectedProjectId, notice),
 			);
 			useAppStore.getState().applyProjectUpdated(updated);
-			const commands = await slashCommandCatalogOrEmpty(() =>
-				getTransport().request("skill.list", skillListParams(selectedProjectId, previewRef)),
-			);
-			setSkillCommands(commands);
+			setCatalogRefresh((n) => n + 1);
 		};
 		await trust()
 			.catch((err: unknown) => toast.error(errorText(err), t("panels.newWorkspace.trustFailed")))
