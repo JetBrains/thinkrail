@@ -250,9 +250,22 @@ test("a dialog's field gets the mic inside the dialog and Enter cannot create mi
 
 	await dialogMic.click();
 	await expect(dialogMic).toHaveAttribute("data-mic-state", "listening");
+	await prompt.evaluate((field) => {
+		field.addEventListener("thinkrail:dictation", (event) => {
+			if (event instanceof CustomEvent && event.detail?.listening === false) {
+				field.dataset.dictationEnded = "true";
+			}
+		});
+	});
+	const removedPrompt = await prompt.elementHandle();
 	await page.keyboard.press("Escape");
 	await expect(dialog).toBeHidden();
-	await expect(listeningMic(page)).toHaveCount(0, { timeout: 15_000 });
+	await expect
+		.poll(() => removedPrompt?.evaluate((field) => field.dataset.dictationEnded), {
+			timeout: 15_000,
+		})
+		.toBe("true");
+	await expect(listeningMic(page)).toHaveCount(0);
 	await page.getByTestId("chat-input").focus();
 	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
 });
