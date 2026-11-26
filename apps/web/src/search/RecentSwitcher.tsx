@@ -17,7 +17,6 @@ export interface RecentSwitcherProps {
 	readonly onActivate: (index: number) => void;
 }
 
-/** The held-chord workspace switcher's list; the shell owns its keys and what a pick does. */
 export function RecentSwitcher({
 	rows,
 	selectedIndex,

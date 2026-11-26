@@ -21,12 +21,10 @@ const workspaceBackfill = createPaletteBackfill({
 	concurrency: BACKFILL_CONCURRENCY,
 });
 
-/** Lists collapsed projects' workspaces while a work-item surface (palette, recent switcher) is open. */
 export function watchWorkspaceBackfill(): () => void {
 	return workspaceBackfill.watch();
 }
 
-/** The palette's work items, opened the way every palette pick opens: latest pick wins, then the chat input takes focus. */
 export function paletteWorkItems(
 	input: Omit<WorkItemsInput, "navigateToProject" | "navigateToWorkspace">,
 ): PaletteItem[] {

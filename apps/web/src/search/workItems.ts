@@ -125,7 +125,6 @@ function located(
 	return spans.length > 0 ? { subtitle: text, subtitleEmphasis: spans } : { subtitle: text };
 }
 
-/** Whether the palette lists a chat: it has a name, a first prompt, or something to show the user. */
 export function chatHasRow(
 	knownTitle: string | null,
 	firstPrompt: string | undefined,

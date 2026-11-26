@@ -1361,7 +1361,6 @@ export function selectKnownChatTitle(
 	return closed.find((chat) => chat.sessionId === sessionId)?.title ?? null;
 }
 
-/** The first prompt the host reported for a chat — its state record, else its closed-chat row. */
 export function selectReportedFirstPrompt(
 	state: Pick<ChatFirstPromptState, "sessionStateByWorkspace" | "closedChatsByWorkspace">,
 	workspaceId: string,

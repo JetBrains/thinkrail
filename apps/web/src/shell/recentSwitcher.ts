@@ -144,7 +144,6 @@ export function createRecentSwitcher(deps: RecentSwitcherDeps) {
 				listeners.delete(listener);
 			};
 		},
-		/** A press of a switcher chord: opens the list, or steps it while open. */
 		start(step: SwitcherStep, modifiers: HeldModifiers): void {
 			if (snapshot.open) {
 				move(step);

@@ -13,11 +13,9 @@ export const RECENT_WORKSPACE_LIMIT = 10;
 
 export interface RecentWorkspaces {
 	readonly rows: readonly PaletteItem[];
-	/** The row of the workspace the user is in, always first when present. */
 	readonly currentId: string | null;
 }
 
-/** Ranks the work items' workspaces by the user's visits: a workspace counts its own and its chats' stamps. */
 export function rankRecentWorkspaces(
 	items: readonly PaletteItem[],
 	state: RecentWorkspacesState,
