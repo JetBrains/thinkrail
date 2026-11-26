@@ -4,6 +4,7 @@ import {
 	RiStackLine as Boxes,
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
+	RiFileCopyLine as Copy,
 	RiFileTextLine as FileText,
 	RiListCheck3 as ListChecks,
 	RiNetworkLine as Network,
@@ -16,13 +17,23 @@ import {
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuSeparator,
+	ContextMenuTrigger,
+	openContextMenuFromKeyboard,
+} from "@thinkrail/ui/context-menu";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { useTreeItem } from "@thinkrail/ui/tree-item";
 import { cn } from "@thinkrail/ui/utils";
-import { useEffect, useMemo, useState } from "react";
+import { type ReactElement, useEffect, useMemo, useState } from "react";
 import { firstClickOnly } from "../lib";
 import { selectActiveEditorTab, useAppStore } from "../store";
+import { copyWorkspacePath } from "./fileTreeActions";
 import { KEYBOARD_OPEN, openFileInTab, treeOpenFocus } from "./openTabs";
+import { RevealInFileManagerMenuItem, RevealInFilesMenuItem } from "./RevealMenuItems";
 import {
 	buildSpecTree,
 	type SpecTreeNode,
@@ -165,89 +176,95 @@ function SpecNodeRow({
 
 	return (
 		<li role="none" data-focus-row={node.id}>
-			<div
-				className={cn(
-					"group flex h-panel-row min-w-0 items-stretch rounded-sm px-4 transition-colors",
-					isActive
-						? "bg-primary-subtle ring-1 ring-primary-muted ring-inset has-[:focus-visible]:ring-0"
-						: "hover:bg-control-bg-hovered",
+			<SpecNodeMenu workspaceId={workspaceId} path={node.path}>
+				{(menuOpen) => (
+					<div
+						className={cn(
+							"group flex h-panel-row min-w-0 items-stretch rounded-sm px-4 transition-colors",
+							isActive
+								? "bg-primary-subtle ring-1 ring-primary-muted ring-inset has-[:focus-visible]:ring-0"
+								: menuOpen
+									? "bg-control-bg-hovered"
+									: "hover:bg-control-bg-hovered",
+						)}
+					>
+						{children.length > 0 ? (
+							<button
+								type="button"
+								{...treeToggleProps(node.id)}
+								data-testid="spec-toggle"
+								aria-label={
+									expanded
+										? t("panels.specs.collapse", { title: node.title })
+										: t("panels.specs.expand", { title: node.title })
+								}
+								aria-expanded={expanded}
+								onClick={() => setExpanded((value) => !value)}
+								className="flex w-20 shrink-0 items-center justify-center self-stretch rounded-sm text-text-muted transition-colors hover:text-text-default focus-visible:focus-ring-inset"
+							>
+								<Chevron className="size-16" />
+							</button>
+						) : (
+							<span className="w-20 shrink-0" />
+						)}
+						<button
+							type="button"
+							{...treeItem}
+							data-testid="spec-node"
+							data-focus-row-primary
+							data-spec-id={node.id}
+							data-spec-type={node.type}
+							data-spec-role={trailingRole}
+							data-main-spec={isMainSpec ? "true" : undefined}
+							data-active={isActive}
+							data-depth={depth}
+							aria-label={t("panels.specs.open", {
+								title: node.title,
+								role: isMainSpec ? t("panels.specs.mainSpec") : role,
+							})}
+							title={`${node.title}\n${node.id} · ${node.type}`}
+							onClick={firstClickOnly(
+								(event) =>
+									void openFileInTab(
+										workspaceId,
+										node.path,
+										"preview",
+										undefined,
+										treeOpenFocus(event),
+									),
+							)}
+							onDoubleClick={() => void openFileInTab(workspaceId, node.path, "keep")}
+							className="flex min-w-0 flex-1 items-center gap-4 rounded-sm text-left focus-visible:focus-ring-inset"
+						>
+							<DocumentIcon
+								className={cn(
+									"size-14 shrink-0 transition-colors",
+									isMainSpec || isActive
+										? "text-primary"
+										: "text-text-muted group-hover:text-text-muted",
+								)}
+							/>
+							<span
+								className={cn(
+									"min-w-0 flex-1 truncate tr-text-ui transition-colors",
+									isActive ? "text-text-default" : "text-text-muted group-hover:text-text-default",
+								)}
+							>
+								{specDisplayTitle(node.title)}
+							</span>
+							<span
+								data-testid="spec-role"
+								className={cn(
+									"hidden shrink-0 text-right tr-text-eyebrow group-hover:block group-focus-within:block",
+									isMainSpec || isActive ? "text-primary" : "text-text-subtle",
+								)}
+							>
+								{trailingRole}
+							</span>
+						</button>
+					</div>
 				)}
-			>
-				{children.length > 0 ? (
-					<button
-						type="button"
-						{...treeToggleProps(node.id)}
-						data-testid="spec-toggle"
-						aria-label={
-							expanded
-								? t("panels.specs.collapse", { title: node.title })
-								: t("panels.specs.expand", { title: node.title })
-						}
-						aria-expanded={expanded}
-						onClick={() => setExpanded((value) => !value)}
-						className="flex w-20 shrink-0 items-center justify-center self-stretch rounded-sm text-text-muted transition-colors hover:text-text-default focus-visible:focus-ring-inset"
-					>
-						<Chevron className="size-16" />
-					</button>
-				) : (
-					<span className="w-20 shrink-0" />
-				)}
-				<button
-					type="button"
-					{...treeItem}
-					data-testid="spec-node"
-					data-focus-row-primary
-					data-spec-id={node.id}
-					data-spec-type={node.type}
-					data-spec-role={trailingRole}
-					data-main-spec={isMainSpec ? "true" : undefined}
-					data-active={isActive}
-					data-depth={depth}
-					aria-label={t("panels.specs.open", {
-						title: node.title,
-						role: isMainSpec ? t("panels.specs.mainSpec") : role,
-					})}
-					title={`${node.title}\n${node.id} · ${node.type}`}
-					onClick={firstClickOnly(
-						(event) =>
-							void openFileInTab(
-								workspaceId,
-								node.path,
-								"preview",
-								undefined,
-								treeOpenFocus(event),
-							),
-					)}
-					onDoubleClick={() => void openFileInTab(workspaceId, node.path, "keep")}
-					className="flex min-w-0 flex-1 items-center gap-4 rounded-sm text-left focus-visible:focus-ring-inset"
-				>
-					<DocumentIcon
-						className={cn(
-							"size-14 shrink-0 transition-colors",
-							isMainSpec || isActive
-								? "text-primary"
-								: "text-text-muted group-hover:text-text-muted",
-						)}
-					/>
-					<span
-						className={cn(
-							"min-w-0 flex-1 truncate tr-text-ui transition-colors",
-							isActive ? "text-text-default" : "text-text-muted group-hover:text-text-default",
-						)}
-					>
-						{specDisplayTitle(node.title)}
-					</span>
-					<span
-						data-testid="spec-role"
-						className={cn(
-							"hidden shrink-0 text-right tr-text-eyebrow group-hover:block group-focus-within:block",
-							isMainSpec || isActive ? "text-primary" : "text-text-subtle",
-						)}
-					>
-						{trailingRole}
-					</span>
-				</button>
-			</div>
+			</SpecNodeMenu>
 			{children.length > 0 && expanded && (
 				<ul
 					role="none"
@@ -266,5 +283,48 @@ function SpecNodeRow({
 				</ul>
 			)}
 		</li>
+	);
+}
+
+function SpecNodeMenu({
+	workspaceId,
+	path,
+	children,
+}: {
+	workspaceId: string;
+	path: string;
+	children: (menuOpen: boolean) => ReactElement;
+}) {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	return (
+		<ContextMenu open={open} onOpenChange={setOpen}>
+			<ContextMenuTrigger asChild onKeyDown={openContextMenuFromKeyboard}>
+				{children(open)}
+			</ContextMenuTrigger>
+			<ContextMenuContent data-testid="spec-actions">
+				<RevealInFileManagerMenuItem
+					workspaceId={workspaceId}
+					path={path}
+					testId="spec-reveal-os"
+				/>
+				<RevealInFilesMenuItem workspaceId={workspaceId} path={path} testId="spec-reveal" />
+				<ContextMenuSeparator />
+				<ContextMenuItem
+					data-testid="spec-copy-path"
+					onSelect={() => copyWorkspacePath(workspaceId, path, true)}
+				>
+					<Copy />
+					{t("panels.fileTree.copyPath")}
+				</ContextMenuItem>
+				<ContextMenuItem
+					data-testid="spec-copy-relative-path"
+					onSelect={() => copyWorkspacePath(workspaceId, path, false)}
+				>
+					<Copy />
+					{t("panels.fileTree.copyRelativePath")}
+				</ContextMenuItem>
+			</ContextMenuContent>
+		</ContextMenu>
 	);
 }

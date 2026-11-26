@@ -22,10 +22,9 @@ import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { TreeRow } from "@thinkrail/ui/tree-row";
 import { type ReactElement, useEffect, useMemo, useRef, useState } from "react";
 import { statusLetter } from "../chat/planView";
-import { copyText, fileName, firstClickOnly, joinWorkspacePath } from "../lib";
+import { fileName, firstClickOnly } from "../lib";
 import {
 	selectFilesTreeView,
-	selectWorkspaceById,
 	selectWorkspaceIsRunning,
 	supportsArtifacts,
 	type TabIntent,
@@ -35,9 +34,16 @@ import { getTransport } from "../transport";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { type ChangeMarks, statusMarkClass } from "./changesModel";
 import { holdEditorWarm, useEditorWarm, warmOnHover } from "./editorWarm";
-import { deleteEntry, pasteDestination, pasteInto, supportsFileMutations } from "./fileTreeActions";
+import {
+	copyWorkspacePath,
+	deleteEntry,
+	pasteDestination,
+	pasteInto,
+	supportsFileMutations,
+} from "./fileTreeActions";
 import { OpenInBrowserMenuItem } from "./OpenInBrowserButton";
 import { KEYBOARD_OPEN, type OpenTabOptions, openFileInTab, treeOpenFocus } from "./openTabs";
+import { RevealInFileManagerMenuItem } from "./RevealMenuItems";
 import { Tree, treeRowKey, useTreeKeys } from "./treeNavigation";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
@@ -359,10 +365,7 @@ function FileTreeMenu({
 	const mutations = useAppStore((s) => supportsFileMutations(s.protocolVersion));
 	const moves = useAppStore((s) => supportsArtifacts(s.protocolVersion));
 	const canPaste = useAppStore((s) => s.fileClipboard !== null);
-	const copyPath = (absolute: boolean) => {
-		const worktreePath = selectWorkspaceById(useAppStore.getState(), workspaceId)?.worktreePath;
-		void copyText(absolute ? joinWorkspacePath(worktreePath ?? "", path) : path);
-	};
+	const copyPath = (absolute: boolean) => copyWorkspacePath(workspaceId, path, absolute);
 	return (
 		<ContextMenu open={open} onOpenChange={setOpen}>
 			<ContextMenuTrigger
@@ -386,6 +389,11 @@ function FileTreeMenu({
 						testId="file-tree-open-in-browser"
 					/>
 				) : null}
+				<RevealInFileManagerMenuItem
+					workspaceId={workspaceId}
+					path={path}
+					testId="file-tree-reveal-os"
+				/>
 				<ContextMenuItem data-testid="file-copy-path" onSelect={() => copyPath(true)}>
 					<Copy />
 					{t("panels.fileTree.copyPath")}

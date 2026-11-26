@@ -331,8 +331,14 @@ treatment.
   a focused row) opens its menu: **Open in browser** first for an HTML file from a host at
   `BROWSER_VIEW_PROTOCOL_VERSION` (v122; `OpenInBrowserMenuItem`, also in the Artifacts row menu after
   Reveal, and `OpenInBrowserButton` in the file tab's toolbar and, through `ResourceHost.OpenInBrowser`, in
-  every framed preview), then **Copy path** (absolute, through `joinWorkspacePath`) and **Copy relative
-  path** (worktree-relative). "Open in browser" opens the host's `/view/` URL with `window.open(…,
+  every framed preview), then the **OS reveal** (below), then **Copy path** (absolute, through
+  `fileTreeActions.copyWorkspacePath`, shared with the Artifacts and Specs menus) and **Copy relative
+  path** (worktree-relative). The **OS reveal** (`RevealMenuItems.RevealInFileManagerMenuItem`, shown from
+  a host at `FS_REVEAL_PROTOCOL_VERSION`, v134) calls `fs.reveal`, so the host's file manager opens the
+  entry's folder with the entry selected. Its label follows `hostPlatform` (*Reveal in Finder* / *Show in
+  Explorer* / *Reveal in file manager* on Linux or an unknown host) because the name tells the user which
+  app will open. A failure shows a toast. Like every host reveal, it happens on the host's machine, so a
+  remote browser does not see it. The Files, Artifacts and Specs menus share this one item. "Open in browser" opens the host's `/view/` URL with `window.open(…,
   "noopener,noreferrer")`: a new tab on the web, the system browser on the desktop
   ([[submodule-server-host]] serves it sandboxed, [[module-desktop]] routes it to the OS). A compacted folder copies its deepest path, matching its label, and copying
   neither opens nor selects the row. The row stays highlighted while its menu is open. From a host at
@@ -2592,7 +2598,9 @@ own section. The kebab menu (`plan-menu`, a
   duplicate root, preview pane, or graph canvas. `FileTree` shares the same file gesture model
   (preview/keep) but keeps its own directory behaviour — a whole-row click toggles dirs, no collision
   there. File and folder rows also carry the copy-path, Copy / Paste and Delete context menu described with
-  `FilesPanel`.
+  `FilesPanel`. A spec row's context menu (right-click, Context Menu key, Shift+F10) is read-only: the OS
+  reveal, **Reveal in Files** (`RevealInFilesMenuItem` → `fileTreeActions.revealInFilesPanel`, the same
+  jump the Artifacts menu uses), and the two Copy paths. The row stays highlighted while its menu is open.
 - **`ArtifactsPanel` is the Artifacts tool's body** — a reader of the host's artifact index
   ([[submodule-server-artifacts]]). Like specs, the `artifacts.list` snapshot lands in the store
   (`artifactsByWorkspace`) through **`useWorkspaceArtifacts`**, which the workbench calls for every
@@ -2673,11 +2681,11 @@ own section. The kebab menu (`plan-menu`, a
   (`artifactRowParts.ArtifactEntryMenu`, shared by both views): Mention in chat
   (pastes `@<path> ` into the attended chat's composer through `pasteIntoComposer` and focuses it, closing the chat's history overlay as `Mod+L` does — run once the row
 menu has closed, because a closing menu returns focus to its row; disabled
-  without one), Reveal in Files, Open ‹chat› for an attributed row (the chip's action), the two Copy paths,
+  without one), the OS reveal and Reveal in Files (both from `RevealMenuItems`), Open ‹chat› for an attributed row (the chip's action), the two Copy paths,
   Copy / Cut (the shared Files clipboard; a cut pastes
   through `fs.move`), Rename (inline, `fs.rename`), Restore for a deleted row, and Delete — `fs.delete` for a
   live file, `artifacts.discard` for a kept copy, both behind a confirmation. A Tree folder's menu is
-  Mention in chat (`@<folder>/ `), Reveal in Files, the two Copy paths, Copy / Cut, Paste here (with a
+  Mention in chat (`@<folder>/ `), the OS reveal, Reveal in Files, the two Copy paths, Copy / Cut, Paste here (with a
   clipboard) and Rename — no Delete or Restore: removing or restoring a folder of kept copies one
   request per file would mean hundreds of reconciles and trash calls, and a host batch was not worth it
   yet. Each section is its own sidebar

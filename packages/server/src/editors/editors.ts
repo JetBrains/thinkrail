@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
-import { delimiter, win32 } from "node:path";
+import { delimiter, dirname, win32 } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { EditorInfo } from "@thinkrail/contracts";
 import { spawnDetached } from "@thinkrail/shared/spawn";
 
@@ -153,6 +154,38 @@ export function revealInFileManager(
 			: platform === "win32"
 				? ["explorer", win32.normalize(worktreePath)]
 				: ["xdg-open", worktreePath];
+	launchFileManager(cmd, spawn, platform);
+}
+
+const LINUX_SHOW_ITEM = [
+	"dbus-send --session --print-reply --dest=org.freedesktop.FileManager1 --type=method_call",
+	'/org/freedesktop/FileManager1 org.freedesktop.FileManager1.ShowItems array:string:"$1" string:""',
+	'>/dev/null 2>&1 || exec xdg-open "$2"',
+].join(" ");
+
+export function revealItemInFileManager(
+	path: string,
+	spawn: SpawnFn = defaultSpawn,
+	platform: NodeJS.Platform = process.platform,
+): void {
+	if (!existsSync(path)) throw new Error(`Not found: ${path}`);
+	const cmd =
+		platform === "darwin"
+			? ["open", "-R", path]
+			: platform === "win32"
+				? ["explorer", "/select,", win32.normalize(path)]
+				: [
+						"sh",
+						"-c",
+						LINUX_SHOW_ITEM,
+						"sh",
+						pathToFileURL(path).href.replaceAll(",", "%2C"),
+						dirname(path),
+					];
+	launchFileManager(cmd, spawn, platform);
+}
+
+function launchFileManager(cmd: string[], spawn: SpawnFn, platform: NodeJS.Platform): void {
 	try {
 		spawn(cmd, { windowsHide: false });
 	} catch {
