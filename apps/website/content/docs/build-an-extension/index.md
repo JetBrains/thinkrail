@@ -91,7 +91,7 @@ and `bugs` with your own.
 ```json
 {
 	"name": "@thinkrail/example-extension-palette",
-	"version": "0.0.0",
+	"version": "0.1.0",
 	"description": "A sample ThinkRail extension: the agent builds colour palettes from a base colour, and chat shows them as swatches with WCAG contrast ratings.",
 	"license": "Apache-2.0",
 	"type": "module",
@@ -138,7 +138,7 @@ and `bugs` with your own.
 		"typebox": "*"
 	},
 	"devDependencies": {
-		"@earendil-works/pi-coding-agent": "1.6.0",
+		"@earendil-works/pi-coding-agent": "1.6.1",
 		"@remixicon/react": "4.9.0",
 		"@thinkrail/extension-sdk": "~1.0.0",
 		"@types/bun": "1.4.4",

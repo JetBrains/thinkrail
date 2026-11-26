@@ -94,12 +94,14 @@ pushes nothing rather than opening a PR for another branch with this one's title
    the same host. Push failure → throws with git's stderr;
    a stderr matching the non-interactive-auth signatures (`Permission denied (publickey)`,
    `could not read Username/Password`, `Authentication failed`, `terminal prompts disabled`,
-   `Host key verification failed` — `isPushAuthFailure`) throws `CodedError("PUSH_AUTH_FAILED")`
+   `Host key verification failed`, GCM's `user interactivity has been disabled` — `isPushAuthFailure`) throws `CodedError("PUSH_AUTH_FAILED")`
    instead: the host pushes without a terminal, so git's credential prompts can never appear, and
    the client answers with setup guidance rather than a raw-stderr toast.
 2. Always pushes `--set-upstream origin <branch>` first — the branch is workspace-owned, so a plain
    push is correct; re-invocations push follow-up commits to the SAME branch (never a second PR).
-   The push runs with a **non-interactive env** (`pushGitEnv`): `GIT_TERMINAL_PROMPT=0`;
+   The push runs with a **non-interactive env** (`pushGitEnv`), layered through
+   `git.nonInteractiveGitEnv`: `GIT_TERMINAL_PROMPT=0` and `GCM_INTERACTIVE=never` prevent terminal and
+   Git Credential Manager GUI prompts while allowing cached credentials;
    **`LC_MESSAGES=C` with `LC_ALL` demoted to `LC_CTYPE`** (dropped, its value preserved as
    `LC_CTYPE` when none was set) so git's stderr stays English for the PUSH_AUTH_FAILED patterns on
    any host locale — while hooks and helpers spawned by the push keep their character encoding

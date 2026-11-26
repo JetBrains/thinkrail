@@ -1,6 +1,6 @@
 {
 	"name": "@thinkrail/example-extension-palette",
-	"version": "0.0.0",
+	"version": "0.1.0",
 	"description": "A sample ThinkRail extension: the agent builds colour palettes from a base colour, and chat shows them as swatches with WCAG contrast ratings.",
 	"license": "Apache-2.0",
 	"type": "module",
