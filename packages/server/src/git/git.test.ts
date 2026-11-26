@@ -155,7 +155,13 @@ test("untracked .DS_Store files are excluded at every depth without hiding other
 	seedWorkspace();
 	git(repo, "config", "core.excludesFile", join(dataDir, "no-global-excludes"));
 	mkdirSync(join(repo, "nested"));
-	for (const path of [".DS_Store", "nested/.DS_Store", ".env", ".DS_Store.backup", "nested/file.txt"]) {
+	for (const path of [
+		".DS_Store",
+		"nested/.DS_Store",
+		".env",
+		".DS_Store.backup",
+		"nested/file.txt",
+	]) {
 		writeFileSync(join(repo, path), "new\n");
 	}
 	const expected = [".DS_Store.backup", ".env", "nested/file.txt"];

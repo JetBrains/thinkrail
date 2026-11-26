@@ -426,6 +426,14 @@ function parseNameStatus(output: string): Array<{ code: string; path: string }> 
 	return parsed;
 }
 
+const UNTRACKED_FILE_ARGS = [
+	"ls-files",
+	"-z",
+	"--others",
+	"--exclude-standard",
+	"--exclude=.DS_Store",
+];
+
 export function gitUncommittedPaths(workspaceId: string): string[] {
 	const cwd = workspace(workspaceId).worktreePath;
 	const slow = { raw: true, timeoutMs: SLOW_GIT_TIMEOUT_MS };
@@ -435,7 +443,7 @@ export function gitUncommittedPaths(workspaceId: string): string[] {
 		{ ...slow, action: "read the changed files" },
 	);
 	if (!tracked.ok) throw diffFailure(tracked.err);
-	const untracked = git(cwd, ["ls-files", "-z", "--others", "--exclude-standard"], {
+	const untracked = git(cwd, UNTRACKED_FILE_ARGS, {
 		...slow,
 		action: "read the untracked files",
 	});
@@ -457,11 +465,7 @@ export async function gitStatus(workspaceId: string, scope?: GitDiffScope): Prom
 	}
 
 	if (range.untracked) {
-		const untracked = await gitAsync(
-			ws.worktreePath,
-			["ls-files", "-z", "--others", "--exclude-standard"],
-			{ raw: true },
-		);
+		const untracked = await gitAsync(ws.worktreePath, UNTRACKED_FILE_ARGS, { raw: true });
 		if (!untracked.ok) throw diffFailure(untracked.err);
 		const paths = nulFields(untracked.out).filter((path) => path !== "");
 		const counts = await untrackedLineCounts(ws.worktreePath, paths);
