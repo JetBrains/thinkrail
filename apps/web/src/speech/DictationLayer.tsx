@@ -193,14 +193,17 @@ function sameFields(a: readonly HTMLElement[], b: readonly HTMLElement[]): boole
 	return a.length === b.length && a.every((field, index) => field === b[index]);
 }
 
-/** The chat composers on the page, which show their mic without focus. */
+/** The eligible chat composers on the page, which show their mic without focus. */
 function useComposers(): HTMLElement[] {
 	const [composers, setComposers] = useState<HTMLElement[]>([]);
 	useEffect(() => {
 		let frame = 0;
 		const scan = () => {
 			frame = 0;
-			const next = Array.from(document.querySelectorAll<HTMLElement>(COMPOSER));
+			const dictating = dictatingElement();
+			const next = Array.from(document.querySelectorAll<HTMLElement>(COMPOSER)).filter(
+				(composer) => composer === dictating || dictationFieldOf(composer) === composer,
+			);
 			setComposers((prev) => (sameFields(prev, next) ? prev : next));
 		};
 		const schedule = () => {
@@ -212,7 +215,7 @@ function useComposers(): HTMLElement[] {
 			childList: true,
 			subtree: true,
 			attributes: true,
-			attributeFilter: ["data-dictation-fallback"],
+			attributeFilter: ["data-dictation-fallback", "readonly", "disabled", "contenteditable"],
 		});
 		return () => {
 			cancelAnimationFrame(frame);
@@ -321,7 +324,9 @@ function ActiveDictationLayer() {
 	if (loose && loose !== kept) setKept(loose);
 	const anchor = loose ?? (kept?.isConnected ? kept : null);
 	const resting =
-		field && isComposer(field) && !composers.includes(field) ? [...composers, field] : composers;
+		listening && isComposer(listening) && !composers.includes(listening)
+			? [...composers, listening]
+			: composers;
 
 	if (state.kind === "hidden") return null;
 
