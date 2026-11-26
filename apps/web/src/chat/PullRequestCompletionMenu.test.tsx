@@ -33,6 +33,8 @@ function completion(over: Partial<PullRequestCompletion> = {}): PullRequestCompl
 		setFilter: noop,
 		authors: [],
 		hasMore: false,
+		optionCount: 0,
+		pick: () => null,
 		loadingMore: false,
 		loadMore: noop,
 		retry: noop,
@@ -75,6 +77,8 @@ test("waiting rows come under their own heading, with number, title, tag, author
 	expect(markup).toMatch(/data-pr="9"[^>]*data-active="true"/);
 	expect(markup).toContain(`>${text("chat.prCompletion.draft")}<`);
 	expect(markup).toContain('data-testid="pull-request-more"');
+	const onMore = view(completion({ items: [pr(1)], hasMore: true }), 1);
+	expect(onMore).toMatch(/data-testid="pull-request-more"[^>]*data-active="true"/);
 });
 
 test("the filters show the remembered scope, drafts and author, and the notice sits above them", () => {

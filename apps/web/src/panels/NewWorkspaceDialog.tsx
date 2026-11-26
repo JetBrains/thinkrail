@@ -244,7 +244,7 @@ export function NewWorkspaceDialog({
 	const backdropRef = useRef<HTMLDivElement>(null);
 	const [prBase, setPrBase] = useState<{ number: number; baseRef: string } | null>(null);
 	const pickPullRequest = (index: number) => {
-		const pr = pullRequests?.items[index];
+		const pr = pullRequests?.pick(index);
 		const argument = slashArgument(prompt, skillCommands);
 		if (!pr || !argument) return;
 		const next = replaceSlashArgument(prompt, argument, pr.url);
@@ -257,7 +257,7 @@ export function NewWorkspaceDialog({
 	const prCompletion = useArgumentCompletion({
 		value: prompt,
 		commands: skillCommands,
-		itemCount: pullRequests?.items.length ?? 0,
+		itemCount: pullRequests?.optionCount ?? 0,
 		isComplete: (argument) =>
 			argument.command.argumentCompletion !== "pull-request" ||
 			isPullRequestArgumentComplete(argument.query),

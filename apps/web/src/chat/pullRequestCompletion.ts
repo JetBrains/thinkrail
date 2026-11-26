@@ -35,6 +35,10 @@ export interface PullRequestCompletion {
 	setFilter: (filter: PullRequestFilter) => void;
 	authors: string[];
 	hasMore: boolean;
+	/** Rows plus the Show more row the keyboard reaches when another page exists. */
+	optionCount: number;
+	/** The row at `index`; the Show more row loads the next page and returns `null`. */
+	pick: (index: number) => PullRequestSummary | null;
 	loadingMore: boolean;
 	loadMore: () => void;
 	retry: () => void;
@@ -221,15 +225,25 @@ export function usePullRequestCompletion(
 
 	if (!enabled) return null;
 	const found = lookup?.kind === "found" ? lookup.pullRequest : null;
+	const items = reference ? (found ? [found] : []) : rows;
+	const hasMore = !reference && next !== undefined;
 	return {
 		listing: reference ? { kind: "ready" } : listing,
-		items: reference ? (found ? [found] : []) : rows,
+		items,
 		waitingCount: reference ? 0 : rows.filter((pr) => pr.reviewRequested).length,
 		lookup: reference ? lookup : null,
 		filter,
 		setFilter,
 		authors: authorsOf(rows, filter.author),
-		hasMore: !reference && next !== undefined,
+		hasMore,
+		optionCount: items.length + (hasMore ? 1 : 0),
+		pick: (index) => {
+			if (hasMore && index === items.length) {
+				loadMore();
+				return null;
+			}
+			return items[index] ?? null;
+		},
 		loadingMore,
 		loadMore,
 		retry,

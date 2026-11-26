@@ -210,6 +210,50 @@ test("a filter chosen with the keyboard is remembered for the project's next ope
 	}
 });
 
+test("the keyboard reaches the next page and every author", async ({ page, baseURL }, testInfo) => {
+	await openFixtureProject(page);
+	const origin = githubProject(`acme/paged-${testInfo.repeatEachIndex}-${Date.now()}`);
+	try {
+		writeGhScenario({
+			prs: Array.from({ length: 25 }, (_, index) =>
+				pr(index + 1, {
+					title: `Change ${index + 1}`,
+					author: index === 0 ? "zed" : "octo",
+					updatedAt: `2026-03-${String(index + 1).padStart(2, "0")}T00:00:00Z`,
+				}),
+			),
+		});
+		const dialog = await openCreateDialog(page);
+		await page.mouse.move(0, 0);
+		await dialog.getByTestId("ws-prompt").fill(COMMAND);
+		const list = completion(page);
+		await expect(list.getByTestId("pull-request-option")).toHaveCount(20);
+		await page.keyboard.press("ArrowUp");
+		await expect(list.getByTestId("pull-request-more")).toHaveAttribute("data-active", "true");
+		await page.keyboard.press("Enter");
+		await expect(list.getByTestId("pull-request-option")).toHaveCount(25);
+		await expect(list.getByTestId("pull-request-more")).toHaveCount(0);
+
+		await page.keyboard.press("Tab");
+		for (let step = 0; step < 4; step += 1) await page.keyboard.press("ArrowRight");
+		await expect(page.getByTestId("pull-request-author")).toBeFocused();
+		await page.keyboard.press("Enter");
+		const authors = page.getByTestId("pull-request-author-option");
+		await expect(authors.first()).toBeFocused();
+		await page.keyboard.press("ArrowDown");
+		await page.keyboard.press("ArrowDown");
+		await expect(authors.nth(2)).toBeFocused();
+		await expect(authors.nth(2)).toHaveAttribute("data-author", "zed");
+		await page.keyboard.press("Enter");
+		await expect(page.getByTestId("pull-request-author")).toContainText("Author: zed");
+		await expect(list.getByTestId("pull-request-option")).toHaveCount(1);
+		await expect(dialog.getByTestId("ws-prompt")).toBeFocused();
+	} finally {
+		await forgetPullRequestFilters(baseURL);
+		origin.dispose();
+	}
+});
+
 test("the palette seeds the command, and the chat composer offers the same list with its notice", async ({
 	page,
 }) => {

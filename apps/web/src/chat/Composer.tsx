@@ -479,14 +479,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
 	const prChipRef = useRef<HTMLButtonElement>(null);
 	const pickPullRequest = (index: number) => {
-		const pr = pullRequests?.items[index];
+		const pr = pullRequests?.pick(index);
 		const argument = slashArgument(value, commands);
 		if (pr && argument) replaceDraft(replaceSlashArgument(value, argument, pr.url));
 	};
 	const prCompletion = useArgumentCompletion({
 		value,
 		commands,
-		itemCount: pullRequests?.items.length ?? 0,
+		itemCount: pullRequests?.optionCount ?? 0,
 		isComplete: (argument) =>
 			argument.command.argumentCompletion !== "pull-request" ||
 			isPullRequestArgumentComplete(argument.query),

@@ -118,6 +118,7 @@ function Filters({
 	const [authorsOpen, setAuthorsOpen] = useState(false);
 	const { filter, setFilter } = completion;
 	const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+		if (!event.currentTarget.contains(event.target as Node)) return;
 		if (event.key === "Tab" || event.key === "Escape") {
 			event.preventDefault();
 			event.stopPropagation();
@@ -186,6 +187,15 @@ function Filters({
 				<PopoverContent
 					align="start"
 					container={container}
+					data-testid="pull-request-authors"
+					onKeyDown={(event) => {
+						if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+						const options = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button")];
+						const at = options.indexOf(document.activeElement as HTMLButtonElement);
+						const step = event.key === "ArrowDown" ? 1 : -1;
+						options[(at + step + options.length) % options.length]?.focus();
+						event.preventDefault();
+					}}
 					className="max-h-[240px] w-[220px] overflow-y-auto p-4"
 				>
 					{[undefined, ...completion.authors].map((author) => (
@@ -348,10 +358,14 @@ function Body({
 					type="button"
 					tabIndex={-1}
 					data-testid="pull-request-more"
+					data-active={activeIndex === items.length ? true : undefined}
 					disabled={completion.loadingMore}
 					onMouseDown={(event) => event.preventDefault()}
 					onClick={completion.loadMore}
-					className="flex w-full rounded-sm px-8 py-4 text-left text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default"
+					className={cn(
+						"flex w-full rounded-sm px-8 py-4 text-left text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default",
+						activeIndex === items.length && "bg-control-bg-selected text-text-default",
+					)}
 				>
 					{completion.loadingMore
 						? t("chat.prCompletion.loadingMore")
