@@ -19,6 +19,7 @@ import {
 import { closeSettings, openAppFresh, openSettingsSection } from "./fixtures/app";
 import { commitFile, git, gitText } from "./fixtures/git";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO, E2E_PICK_DIR_POINTER } from "./fixtures/paths";
+import { E2eWire } from "./fixtures/wire";
 
 function parseFrame(message: string | Buffer): Record<string, unknown> {
 	return JSON.parse(message.toString()) as Record<string, unknown>;
@@ -56,9 +57,16 @@ test.beforeEach(() => {
 	root = realpathSync(mkdtempSync(join(E2E_DATA_DIR, "clone-project-")));
 });
 
-test.afterEach(() => {
+test.afterEach(async ({ baseURL }) => {
 	writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
 	rmSync(root, { recursive: true, force: true });
+	if (!baseURL) throw new Error("The projects folder reset needs the isolated host URL");
+	const wire = await E2eWire.connect(Number(new URL(baseURL).port));
+	try {
+		await wire.request("settings.update", { config: { projectsFolder: DEFAULT_PROJECTS_FOLDER } });
+	} finally {
+		wire.close();
+	}
 });
 
 test("Welcome clones a local repository at depth 1 and opens Project Home without an agent", async ({

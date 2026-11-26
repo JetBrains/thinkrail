@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSyn
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, test } from "@playwright/test";
-import type { Project, Workspace } from "@thinkrail/contracts";
+import { DEFAULT_PROJECTS_FOLDER, type Project, type Workspace } from "@thinkrail/contracts";
 import {
 	activeWorktreeRow,
 	expandActivityStep,
@@ -74,6 +74,19 @@ function persistedProjects(): Project[] {
 	return existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as Project[]) : [];
 }
 
+async function setProjectsFolder(url: string, projectsFolder: string): Promise<void> {
+	const wire = await E2eWire.connect(Number(new URL(url).port));
+	try {
+		await wire.request("settings.update", { config: { projectsFolder } });
+	} finally {
+		wire.close();
+	}
+}
+
+test.afterEach(async ({ baseURL }) => {
+	if (baseURL) await setProjectsFolder(baseURL, DEFAULT_PROJECTS_FOLDER);
+});
+
 function seedUpstream(): string {
 	const root = join(E2E_DATA_DIR, "open-project-upstream");
 	rmSync(root, { recursive: true, force: true });
@@ -98,12 +111,7 @@ test("a chat without a project clones a repository after approval and starts a w
 	const upstream = seedUpstream();
 	const folder = join(E2E_DATA_DIR, "open-project-clones");
 	rmSync(folder, { recursive: true, force: true });
-	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
-	try {
-		await wire.request("settings.update", { config: { projectsFolder: folder } });
-	} finally {
-		wire.close();
-	}
+	await setProjectsFolder(page.url(), folder);
 	await page.getByTestId("welcome-action").filter({ hasText: "Chat without a project" }).click();
 	await expect(page.getByTestId("scope-context")).toHaveAttribute("data-context", "chat");
 
