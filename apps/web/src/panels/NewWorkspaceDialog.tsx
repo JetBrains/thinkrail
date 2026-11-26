@@ -345,9 +345,13 @@ export function NewWorkspaceDialog({
 
 	useEffect(() => {
 		if (!open) return;
-		let cancelled = false;
 		setSkillCommands([]);
 		setTemplates([]);
+	}, [open, scopeProjectId, previewRef]);
+
+	useEffect(() => {
+		if (!open) return;
+		let cancelled = false;
 		void slashCommandCatalogOrEmpty(() =>
 			getTransport().request("skill.list", skillListParams(scopeProjectId, previewRef)),
 		).then((commands) => {
