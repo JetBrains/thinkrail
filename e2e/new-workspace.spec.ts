@@ -238,6 +238,9 @@ argument-hint: "[topic] [check]"
 Prepare $1 and verify \${2:-tests}.
 `,
 	);
+	const startSha = gitAs(E2E_FIXTURE_REPO, "rev-parse", "HEAD");
+	gitAs(E2E_FIXTURE_REPO, "add", "--", templateFile);
+	gitAs(E2E_FIXTURE_REPO, "commit", "--no-verify", "-q", "-m", "kickoff template");
 
 	try {
 		await openFixtureProject(page);
@@ -275,6 +278,7 @@ Prepare $1 and verify \${2:-tests}.
 			"Prepare parser and verify tests.",
 		);
 	} finally {
+		gitAs(E2E_FIXTURE_REPO, "reset", "-q", "--hard", startSha);
 		rmSync(templateFile, { force: true });
 	}
 });
@@ -453,6 +457,55 @@ test("opening New Workspace prefetches a stale default before create", async ({ 
 	await expect
 		.poll(() => refOid(repo, "refs/remotes/origin/main"), { timeout: 5_000 })
 		.toBe(newSha);
+});
+
+test("the start prompt previews skills from the base branch, not a stale checkout", async ({
+	page,
+}) => {
+	await openAppFresh(page);
+	const { root, repo, origin } = seedRemoteProject("base-ref-skills");
+	const skill = (name: string) =>
+		`---\nname: ${name}\ndescription: Skill ${name} for the base-ref preview.\n---\n\nDo it.\n`;
+	mkdirSync(join(repo, ".agents", "skills", "e2e-local"), { recursive: true });
+	writeFileSync(join(repo, ".agents", "skills", "e2e-local", "SKILL.md"), skill("e2e-local"));
+	gitAs(repo, "add", "-A");
+	gitAs(repo, "commit", "-m", "local skill");
+	git(repo, "push", "origin", "main");
+	const writer = join(root, "writer");
+	git(root, "clone", origin, writer);
+	mkdirSync(join(writer, ".agents", "skills", "e2e-upstream"), { recursive: true });
+	writeFileSync(
+		join(writer, ".agents", "skills", "e2e-upstream", "SKILL.md"),
+		skill("e2e-upstream"),
+	);
+	gitAs(writer, "add", "-A");
+	gitAs(writer, "commit", "--no-verify", "-m", "upstream skill");
+	git(writer, "push", "origin", "main");
+	mkdirSync(join(repo, ".agents", "skills", "e2e-untracked"), { recursive: true });
+	writeFileSync(
+		join(repo, ".agents", "skills", "e2e-untracked", "SKILL.md"),
+		skill("e2e-untracked"),
+	);
+
+	const dialog = await openPickedProjectWorkspaceDialog(page, repo);
+	await expect(dialog.getByTestId("ws-branch-picker")).toContainText("origin/main");
+	await dialog.getByTestId("ws-trust-project").click();
+	await expect(dialog.getByTestId("ws-trust-notice")).toBeHidden();
+	await expect(dialog).toContainText("from origin/main, the branch this workspace starts from");
+
+	const prompt = dialog.getByTestId("ws-prompt");
+	const row = (name: string) =>
+		dialog.getByTestId("slash-command").filter({ hasText: `/skill:${name}` });
+	await prompt.fill("/skill:e2e");
+	await expect(row("e2e-upstream")).toBeVisible();
+	await expect(row("e2e-local")).toBeVisible();
+	await expect(row("e2e-untracked")).toHaveCount(0);
+
+	await prompt.fill("");
+	await dialog.getByTestId("ws-target-default").click();
+	await prompt.fill("/skill:e2e");
+	await expect(row("e2e-untracked")).toBeVisible();
+	await expect(row("e2e-upstream")).toHaveCount(0);
 });
 
 test("opening New Workspace prefetches a missing default tracking ref", async ({ page }) => {

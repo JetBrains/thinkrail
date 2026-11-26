@@ -11,6 +11,7 @@ import {
 import {
 	type ModelDefault,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
+	REF_RESOURCE_PREVIEW_PROTOCOL_VERSION,
 	type SlashCommandInfo,
 	type TemplateInfo,
 	type TemplateReadLocation,
@@ -111,6 +112,10 @@ import { enterDefaultWorkspace } from "./defaultWorkspace";
 
 type WorkspaceTarget = "worktree" | "default" | "chat";
 
+function skillListParams(projectId: string, baseRef: string | null) {
+	return { projectId, ...(baseRef ? { baseRef } : {}) };
+}
+
 export function reconcileModel(
 	models: readonly WireModel[],
 	model: WireModel,
@@ -195,14 +200,22 @@ export function NewWorkspaceDialog({
 
 	const supportsProjectTemplatePreview =
 		protocolVersion !== null && protocolVersion >= PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION;
+	const previewRef =
+		target === "worktree" &&
+		baseRef &&
+		protocolVersion !== null &&
+		protocolVersion >= REF_RESOURCE_PREVIEW_PROTOCOL_VERSION
+			? baseRef
+			: null;
+	const [previewRefresh, setPreviewRefresh] = useState(0);
 	const loadTemplate = useCallback(
 		(name: string) => {
 			const location: TemplateReadLocation = supportsProjectTemplatePreview
-				? { projectId: scopeProjectId }
+				? { projectId: scopeProjectId, ...(previewRef ? { baseRef: previewRef } : {}) }
 				: {};
 			return getTransport().request("template.get", { ...location, name });
 		},
-		[scopeProjectId, supportsProjectTemplatePreview],
+		[scopeProjectId, previewRef, supportsProjectTemplatePreview],
 	);
 	const applyTemplate = useCallback(
 		(template: ParsedTemplate) => {
@@ -214,7 +227,7 @@ export function NewWorkspaceDialog({
 	);
 	const { pending: templatePending, pick: pickTemplate } = useTemplateCommandPicker({
 		draft: prompt,
-		contextKey: `${scopeProjectId}:${supportsProjectTemplatePreview ? "project" : "global"}`,
+		contextKey: `${scopeProjectId}:${supportsProjectTemplatePreview ? "project" : "global"}:${previewRef ?? ""}`,
 		load: loadTemplate,
 		onApply: applyTemplate,
 	});
@@ -336,20 +349,20 @@ export function NewWorkspaceDialog({
 		setSkillCommands([]);
 		setTemplates([]);
 		void slashCommandCatalogOrEmpty(() =>
-			getTransport().request("skill.list", { projectId: scopeProjectId }),
+			getTransport().request("skill.list", skillListParams(scopeProjectId, previewRef)),
 		).then((commands) => {
 			if (!cancelled) setSkillCommands(commands);
 		});
 		return () => {
 			cancelled = true;
 		};
-	}, [open, scopeProjectId]);
+	}, [open, scopeProjectId, previewRef, previewRefresh]);
 
 	useEffect(() => {
 		if (!open || !slashActive) return;
 		let cancelled = false;
 		const location: TemplateReadLocation = supportsProjectTemplatePreview
-			? { projectId: scopeProjectId }
+			? { projectId: scopeProjectId, ...(previewRef ? { baseRef: previewRef } : {}) }
 			: {};
 		getTransport()
 			.request("template.list", location)
@@ -362,7 +375,14 @@ export function NewWorkspaceDialog({
 		return () => {
 			cancelled = true;
 		};
-	}, [open, scopeProjectId, slashActive, supportsProjectTemplatePreview]);
+	}, [
+		open,
+		scopeProjectId,
+		previewRef,
+		previewRefresh,
+		slashActive,
+		supportsProjectTemplatePreview,
+	]);
 
 	const trustSummary = useProjectTrustSummary(selectedProjectId, open && !chat);
 
@@ -460,6 +480,9 @@ export function NewWorkspaceDialog({
 		if (!ref) return;
 		getTransport()
 			.request("git.prefetch", { projectId: selectedProjectId, ref })
+			.then(({ ok }) => {
+				if (ok) setPreviewRefresh((n) => n + 1);
+			})
 			.catch(() => {});
 	};
 
@@ -615,7 +638,7 @@ export function NewWorkspaceDialog({
 			);
 			useAppStore.getState().applyProjectUpdated(updated);
 			const commands = await slashCommandCatalogOrEmpty(() =>
-				getTransport().request("skill.list", { projectId: selectedProjectId }),
+				getTransport().request("skill.list", skillListParams(selectedProjectId, previewRef)),
 			);
 			setSkillCommands(commands);
 		};
@@ -903,6 +926,17 @@ export function NewWorkspaceDialog({
 							className="px-4 text-text-muted tr-text-metadata"
 						>
 							{t("panels.newWorkspace.namingHint")}
+						</p>
+					) : previewRef ? (
+						<p className="mt-4 text-text-muted tr-text-metadata">
+							<T
+								i18nKey="panels.newWorkspace.slashHintRef"
+								values={{ ref: previewRef }}
+								components={[
+									<span key="slash" className="tr-code-text" />,
+									<span key="ref" className="tr-code-text" />,
+								]}
+							/>
 						</p>
 					) : (
 						<p className="mt-4 text-text-muted tr-text-metadata">
