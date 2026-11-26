@@ -48,6 +48,123 @@ test("an id mirrored by several providers is ambiguous — never resolved by reg
 	});
 });
 
+const ANTHROPIC = [
+	"claude-haiku-4-5",
+	"claude-opus-4-1",
+	"claude-opus-4-5-20251101",
+	"claude-opus-4-5",
+	"claude-opus-5",
+	"claude-opus-5-5",
+	"claude-sonnet-4-20250514",
+	"claude-sonnet-3-7",
+].map((id) => ({ provider: "anthropic", id }));
+const OPENAI = ["gpt-5", "gpt-5.1", "gpt-5-mini", "gpt-5.4-mini", "gpt-5.5-pro"].map((id) => ({
+	provider: "openai",
+	id,
+}));
+const OPENROUTER = ["anthropic/claude-opus-4.5", "anthropic/claude-opus-5.5", "x-ai/grok-4"].map(
+	(id) => ({ provider: "openrouter", id }),
+);
+
+function modelError(model: string, availableModels: readonly { provider: string; id: string }[]) {
+	try {
+		toSpawnMapping(definition(), { cwd: "/tmp/x", availableModels, model });
+	} catch (error) {
+		return (error as Error).message;
+	}
+	throw new Error(`"${model}" resolved`);
+}
+
+test("informal names resolve case-insensitively on id words, newest of one family winning", () => {
+	for (const catalog of [[...ANTHROPIC, ...OPENAI], [...ANTHROPIC, ...OPENAI].reverse()]) {
+		const resolve = (ref: string) => resolveModelRef(ref, catalog)?.id;
+		expect(resolve("opus")).toBe("claude-opus-5-5");
+		expect(resolve("Opus")).toBe("claude-opus-5-5");
+		expect(resolve("anthropic/opus")).toBe("claude-opus-5-5");
+		expect(resolve("Anthropic/claude-opus")).toBe("claude-opus-5-5");
+		expect(resolve("opus 4.5")).toBe("claude-opus-4-5");
+		expect(resolve("opus-4")).toBe("claude-opus-4-5");
+		expect(resolve("son")).toBe("claude-sonnet-4-20250514");
+		expect(resolve("haiku")).toBe("claude-haiku-4-5");
+		expect(resolve("GPT 5.4 mini")).toBe("gpt-5.4-mini");
+		expect(resolve("gpt5.5 PRO")).toBe("gpt-5.5-pro");
+		expect(resolve("pus")).toBeUndefined();
+		expect(resolve("gpt")).toBeUndefined();
+	}
+	expect(resolveModelRef("claude-opus-4-5", ANTHROPIC)?.id).toBe("claude-opus-4-5");
+	expect(resolveModelRef("claude-opus-4-5-2", ANTHROPIC)?.id).toBe("claude-opus-4-5-20251101");
+	const dated = [
+		{ provider: "anthropic", id: "claude-opus-4-5-20250101" },
+		{ provider: "anthropic", id: "claude-opus-4-5-20251101" },
+	];
+	expect(resolveModelRef("opus", dated)?.id).toBe("claude-opus-4-5-20251101");
+	const mirrored = ANTHROPIC.map((model) => ({ ...model, provider: "anthropic-proxy" }));
+	expect(resolveModelRef("opus", [...ANTHROPIC, ...mirrored])).toBeUndefined();
+	expect(resolveModelRef("anthropic-proxy/opus", [...ANTHROPIC, ...mirrored])).toEqual({
+		provider: "anthropic-proxy",
+		id: "claude-opus-5-5",
+	});
+});
+
+test("informal names keep exact > prefix > word precedence and the thinking suffix", () => {
+	const catalog = [
+		{ provider: "openai", id: "opus-gpt" },
+		{ provider: "openai", id: "opus" },
+		...ANTHROPIC,
+	];
+	expect(resolveModelRef("opus", catalog)).toEqual({ provider: "openai", id: "opus" });
+	expect(resolveModelRef("opus-", catalog)).toEqual({ provider: "openai", id: "opus-gpt" });
+	for (const source of ["definition", "invocation"]) {
+		const model = "opus 4.5:high";
+		const mapping = toSpawnMapping(definition(source === "definition" ? { model } : {}), {
+			cwd: "/tmp/x",
+			availableModels: ANTHROPIC,
+			model,
+		});
+		expect(mapping.session.model).toEqual({ provider: "anthropic", id: "claude-opus-4-5" });
+		expect(mapping.session.thinkingLevel).toBe("high");
+	}
+	for (const model of ["opus:", "opus:turbo"]) {
+		expect(modelError(model, ANTHROPIC)).toContain("supported thinking suffixes");
+	}
+});
+
+test("a slash prefix naming no available provider is part of a bare id", () => {
+	const catalog = [...ANTHROPIC, ...OPENROUTER];
+	expect(resolveModelRef("x-ai/grok-4", catalog)).toEqual({
+		provider: "openrouter",
+		id: "x-ai/grok-4",
+	});
+	expect(resolveModelRef("grok", catalog)).toEqual({ provider: "openrouter", id: "x-ai/grok-4" });
+	expect(resolveModelRef("openrouter/opus", catalog)).toEqual({
+		provider: "openrouter",
+		id: "anthropic/claude-opus-5.5",
+	});
+	expect(resolveModelRef("anthropic/claude-opus-4.5", catalog)).toEqual({
+		provider: "anthropic",
+		id: "claude-opus-4-5",
+	});
+});
+
+test("an ambiguous name fails listing the newest candidate of each family as provider/id", () => {
+	expect(modelError("opus", [...ANTHROPIC, ...OPENROUTER])).toBe(
+		'Agent "scout" requests model "opus", which is ambiguous — it matches anthropic/claude-opus-5-5, openrouter/anthropic/claude-opus-5.5. Retry with one of them as "provider/id".',
+	);
+	expect(modelError("gpt", OPENAI)).toContain(
+		"it matches openai/gpt-5.1, openai/gpt-5.4-mini, openai/gpt-5.5-pro.",
+	);
+	const many = Array.from({ length: 23 }, (_, i) => ({ provider: `p${i}`, id: "same" }));
+	const message = modelError("same", many);
+	expect(message).toContain("p19/same (+3 more).");
+	expect(message).not.toContain("Available models");
+	const pinned = () =>
+		toSpawnMapping(definition({ model: "opus" }), {
+			cwd: "/tmp/x",
+			availableModels: [...ANTHROPIC, ...OPENROUTER],
+		});
+	expect(pinned).toThrow('pins model "opus", which is ambiguous — it matches anthropic/');
+});
+
 test("the child prompt is stable-first: body, then bridge, then env", () => {
 	const prompt = buildChildSystemPrompt(definition(), "/tmp/somewhere");
 	const body = prompt.indexOf("You are a scout.");
@@ -239,7 +356,7 @@ test("suffix bases retain exact matching, qualification and ambiguity safety", (
 	for (const availableModels of [mirrored, [...mirrored].reverse()]) {
 		for (const model of ["gpt-5:xhigh", "gpt:xhigh", "claude-:low"]) {
 			expect(() => toSpawnMapping(definition(), { cwd: "/tmp/x", availableModels, model })).toThrow(
-				'ambiguous — qualify it as "provider/id"',
+				'Retry with one of them as "provider/id"',
 			);
 		}
 		const mapping = toSpawnMapping(definition(), {
@@ -249,7 +366,16 @@ test("suffix bases retain exact matching, qualification and ambiguity safety", (
 		});
 		expect(mapping.session.model).toEqual({ provider: "proxy", id: "gpt-5" });
 	}
-	for (const model of ["openai/gpt:xhigh", "OPENAI/gpt-5:xhigh", " openai/gpt-5:xhigh"]) {
+	for (const model of ["openai/gpt:xhigh", "OPENAI/gpt-5:xhigh"]) {
+		const mapping = toSpawnMapping(definition(), {
+			cwd: "/tmp/x",
+			availableModels: AVAILABLE,
+			model,
+		});
+		expect(mapping.session.model).toEqual({ provider: "openai", id: "gpt-5" });
+		expect(mapping.session.thinkingLevel).toBe("xhigh");
+	}
+	for (const model of [" openai/gpt-5:xhigh", "openai/claude-opus-4-5:xhigh"]) {
 		expect(() =>
 			toSpawnMapping(definition(), { cwd: "/tmp/x", availableModels: AVAILABLE, model }),
 		).toThrow("not available");
