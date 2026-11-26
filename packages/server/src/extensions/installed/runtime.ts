@@ -23,6 +23,7 @@ import {
 } from "@thinkrail/extension-api/installed";
 import type { ServerExtension } from "@thinkrail/extension-api/server";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { packageInstallError } from "@thinkrail/shared/packageInstallError";
 import { logger } from "../../log";
 import {
 	type DeclarationsRead,
@@ -33,7 +34,7 @@ import {
 	writeDeclarations,
 	writeJsonAtomic,
 } from "./declarations";
-import { type ExtensionInstaller, piExtensionInstaller } from "./installer";
+import { type CommandOutput, type ExtensionInstaller, piExtensionInstaller } from "./installer";
 import { loadServerDescriptor } from "./loader";
 
 const log = logger("extensions");
@@ -633,12 +634,12 @@ export class InstalledExtensions {
 		return this.#evaluate(source, root, taken);
 	}
 
-	async #installFresh(source: string): Promise<InstallRef> {
+	async #installFresh(source: string, output?: CommandOutput): Promise<InstallRef> {
 		const dir = `${Date.now().toString(36)}-${randomBytes(4).toString("hex")}`;
 		this.#pending.add(dir);
 		mkdirSync(this.#installsDir, { recursive: true });
 		try {
-			const path = await this.#installer.install(source, join(this.#installsDir, dir));
+			const path = await this.#installer.install(source, join(this.#installsDir, dir), output);
 			return { dir, path };
 		} catch (error) {
 			this.#pending.delete(dir);
@@ -681,9 +682,9 @@ export class InstalledExtensions {
 		}
 		let install: InstallRef;
 		try {
-			install = await this.#installFresh(source);
+			install = await this.#installFresh(source, "capture");
 		} catch (error) {
-			throw new CodedError("PACKAGE_INSTALL_FAILED", messageOf(error));
+			throw packageInstallError(error);
 		}
 		const root = this.#installRoot(install);
 		const packageJson = root === undefined ? undefined : extensionPackageAt(root);
@@ -721,7 +722,9 @@ export class InstalledExtensions {
 			this.#updates = undefined;
 			await this.#reconcileNow();
 			const record = this.#records.find((entry) => entry.source === staged.source);
-			if (!record) throw new CodedError("PACKAGE_INSTALL_FAILED", `${staged.source} did not load.`);
+			if (!record) {
+				throw new CodedError("PACKAGE_INSTALLED_UNLISTED", `${staged.source} did not load.`);
+			}
 			return record;
 		});
 	}

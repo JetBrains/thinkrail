@@ -172,7 +172,7 @@ export async function piPackagesInstall(
 		return { installed: "extension", record: await extensions.adopt(staged) };
 	}
 	if (extensions && fetched) {
-		throw new CodedError("PACKAGE_INSTALL_FAILED", `${source} is no longer a ThinkRail extension.`);
+		throw new CodedError("PACKAGE_SOURCE_INVALID", `${source} is no longer a ThinkRail extension.`);
 	}
 	return {
 		installed: "package",

@@ -1519,14 +1519,16 @@ a project picker, the prompt hero, and the reused
   `protocolVersion >= EXTENSION_CATALOG_PROTOCOL_VERSION`) is one `SettingsPage` of rows, not cards, in up
   to six groups. Its description carries the page's only statement about chats — "Changes apply to open
   chats when their current turn ends."; there is no dynamic notice about which chats are pending.
-  **Packages** is the **Install an extension or pi package** row (`packages-install`, with two
+  **Install** (titled for its action: "Packages" did not cover the extensions it installs) is the
+  **Install an extension or pi package** row (`packages-install`, with two
   buttons from `GalleryLinks`: **Browse ThinkRail extensions** (`extensions-gallery-link`, the website's
   showcase, only when the host supports installed extensions) first, then **Browse the pi package
   gallery**; the install dialog's form repeats both in that order). **Built into ThinkRail** is the host-registry catalog, read from the store's
   `extensionCatalog` (`selectBuiltinExtensions`: every row of an older host, `kind: "builtin"` from v131) —
   `transport`'s `refreshExtensionCatalog` re-lists on each mount and each welcome while the page is open, so
   an older host or a page opened while disconnected still lands its rows, and a failure shows **Retry**,
-  which re-lists — rendered by
+  which re-lists and shows its busy state until the reply lands (a failure that repeats would otherwise
+  look like a click that did nothing) — rendered by
   the props-driven `ExtensionsCatalog` as one `SettingsRow` per entry — title (the web half's translated
   `title` when it declares one, `extensions`' `webExtensionTitle`, else the host's), description and its
   tools as visible text ("Tools: a, b", each `extension-tool-<tool>`) with a `@thinkrail/ui/switch`
@@ -1614,7 +1616,10 @@ a project picker, the prompt hero, and the reused
   progress log, no Cancel — pi has none) → **Installed** (name · version · description, chips for every
   tool / command / skill / prompt it added, and one line: "Installed globally — new chats have it now;
   open chats pick it up when idle"; no switch here — the row in the list is the only state control) or
-  **Failed** (the host's message,
+  **Failed** (`installFailureText`: for `PACKAGE_NOT_FOUND`, `PACKAGE_REGISTRY_UNREACHABLE` and
+  `PACKAGE_INSTALL_FAILED` one plain sentence — npm found no such package or dependency / the registry
+  could not be reached / the install stopped with an error — with the host's raw text, npm's own output
+  included, behind a closed **Details** toggle; for any other code the host's message as it is;
   "Nothing was added to your settings" only for the codes the host raises before it writes
   (`installFailureOutcome`), "It may have been added anyway — check the list" for any other error, Back /
   Retry; a `RequestTimeoutError` instead says to check the list, since the install may still complete). A package that installs but contributes nothing loadable
@@ -1693,11 +1698,14 @@ a project picker, the prompt hero, and the reused
   description and author ("No extensions match …") over one `SettingsList` (`extension-browse`) of listing
   rows — no preview image: an author-chosen image URL would expose every user's IP to its host, so Browse
   never reads a listing's `image` and no catalog entry makes the app request another origin (pinned by
-  `e2e/extension-browse.spec.ts`) — the primary: title, version, **Agent tools** /
+  `e2e/extension-browse.spec.ts`). A row shows, as plain text: title, version, **Agent tools** /
   **Chat cards** from `halves`, package name · author, description, and an **Installed** mark or an
-  incompatible mark (`extensionApiFit`) with its reason as visible text — which opens the install dialog's
-  confirm step with the listing's `npm:<name>` (inert, `aria-disabled`, when the listing cannot be installed),
-  with npm and repository links and **Install** as its buttons. An empty catalog is a row linking to the
+  incompatible mark (`extensionApiFit`) with its reason. It has no primary; its buttons, in the row's →
+  walk, are the npm and repository links and **Install**, which opens the install dialog's confirm step
+  with the listing's `npm:<name>` (absent when the listing cannot be installed). Rejected: a content-wide
+  primary that also opened the dialog (a second tab stop and click target for the same action as
+  Install), and Install as the primary (the walk keeps a primary out of → / ←, so the button would be
+  unreachable by arrows). An empty catalog is a row linking to the
   authoring guide (`https://thinkrail.ai/docs/build-an-extension/`); an unreachable, offline or invalid
   catalog — or a host that does not answer — is a notice row saying it cannot reach the catalog, that
   installed extensions keep working, with Retry as its button, while the rest of the page is unaffected.

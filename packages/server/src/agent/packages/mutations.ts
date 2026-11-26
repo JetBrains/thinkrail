@@ -11,6 +11,7 @@ import {
 	parsePiPackageInput,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { packageInstallError } from "@thinkrail/shared/packageInstallError";
 import { invalidatePiPackageCatalog } from "./catalog";
 import {
 	BUILTIN_PREFIX,
@@ -79,6 +80,7 @@ function assertToggleShape(toggle: PiResourceToggle): void {
 function openSettings(
 	ctx: PiPackageHostContext,
 	writeScope?: PiPackageScope,
+	commandOutput: "inherit" | "capture" = "inherit",
 ): {
 	settings: SettingsManager;
 	packageManager: DefaultPackageManager;
@@ -93,6 +95,7 @@ function openSettings(
 		agentDir: ctx.agentDir,
 		settingsManager: settings,
 		builtinExtensions: [...ctx.builtinExtensions],
+		commandOutput,
 	});
 	return { settings, packageManager };
 }
@@ -181,13 +184,13 @@ export function installPiPackage(
 			);
 		}
 		const local = target.scope === "project";
-		const { settings, packageManager } = openSettings(ctx, target.scope);
+		const { settings, packageManager } = openSettings(ctx, target.scope, "capture");
 		const heldBefore =
 			kind === "local" ? undefined : packageManager.getInstalledPath(source, target.scope);
 		try {
 			await packageManager.install(source, { local });
 		} catch (error) {
-			throw new CodedError("PACKAGE_INSTALL_FAILED", messageOf(error));
+			throw packageInstallError(error);
 		}
 		assertScopeWritable(ctx, target.scope);
 		const installedPath =
