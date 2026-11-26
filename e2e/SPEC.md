@@ -842,7 +842,11 @@ interactive with scripts only, Preview switching to static frames with same-orig
 available) that survives a reload. A huge comparison opts in through Show diff anyway while an unrelated file changes every 400 ms (each
 write its own watcher frame, past the 300 ms quiet flush), so updates keep landing inside the expensive first
 mount. These regressions need no provider,
-prompt submission, route mock, or screenshot. Extension on/off coverage (`extensions-settings.spec.ts`) drives the
+prompt submission, route mock, or screenshot. `extension-editor.spec.ts` installs a real pi command package
+and exercises composer replacement, paste and a `custom()` command that catches
+`EXTENSION_UI_UNSUPPORTED`, asks through the supported input dialog, and writes the answer into its
+composer. Cancelling that fallback leaves a draft typed while the dialog was open untouched; these
+commands make no provider request. Extension on/off coverage (`extensions-settings.spec.ts`) drives the
 real Settings → Extensions & skills switch of every shipped extension (`visualize`, `ask-user-question`,
 `web-access`, and the web-only `hint-mode` row the host catalog lacks) through `settings.update`, proves it
 survives a reload, and seeds a historical `visualize` call that must still render
