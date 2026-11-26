@@ -76,6 +76,8 @@ async function serveSlowModel(): Promise<() => Promise<void>> {
 const mic = (page: Page) => page.getByTestId("speech-mic");
 const composerMic = (page: Page) =>
 	page.locator('[data-testid="speech-mic"][data-mic-anchor="composer"]');
+const listeningMic = (page: Page) =>
+	page.locator('[data-testid="speech-mic"][data-mic-state="listening"]');
 const fieldMic = (page: Page) =>
 	page.locator('[data-testid="speech-mic"][data-mic-anchor="field"]');
 
@@ -250,6 +252,7 @@ test("a dialog's field gets the mic inside the dialog and Enter cannot create mi
 	await expect(dialogMic).toHaveAttribute("data-mic-state", "listening");
 	await page.keyboard.press("Escape");
 	await expect(dialog).toBeHidden();
+	await expect(listeningMic(page)).toHaveCount(0, { timeout: 15_000 });
 	await page.getByTestId("chat-input").focus();
 	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
 });
@@ -314,6 +317,7 @@ test("a field removed mid-dictation ends it even without a blur, and a field tha
 		}, 500);
 	});
 	await expect(fieldMic(page)).toBeHidden();
+	await expect(listeningMic(page)).toHaveCount(0, { timeout: 15_000 });
 	await page.waitForTimeout(600);
 	await page.getByTestId("chat-input").focus();
 	await expect(composerMic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
