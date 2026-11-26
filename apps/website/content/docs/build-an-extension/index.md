@@ -138,7 +138,7 @@ and `bugs` with your own.
 		"typebox": "*"
 	},
 	"devDependencies": {
-		"@earendil-works/pi-coding-agent": "1.6.0",
+		"@earendil-works/pi-coding-agent": "1.6.1",
 		"@remixicon/react": "4.9.0",
 		"@thinkrail/extension-sdk": "~1.0.0",
 		"@types/bun": "1.4.4",
