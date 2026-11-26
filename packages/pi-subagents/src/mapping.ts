@@ -17,7 +17,7 @@ type ModelMatch =
 	| { reason: "ambiguous"; candidates: ModelRef[] };
 
 const NUMBER_TOKEN = /^\d+$/;
-const DATE_TOKEN = /^\d{8}$/;
+const SNAPSHOT_DATE = /(?<![0-9])(?:\d{4}-\d{2}-\d{2}|\d{4,8})(?![0-9])/g;
 
 function tokens(text: string): string[] {
 	return text.toLowerCase().match(/[a-z]+|[0-9]+/g) ?? [];
@@ -43,21 +43,24 @@ function family(id: string): string {
 		.join("-");
 }
 
+function snapshot(id: string): { version: number[]; date: number } {
+	const dates = id.match(SNAPSHOT_DATE) ?? [];
+	return {
+		version: tokens(id.replace(SNAPSHOT_DATE, "-"))
+			.filter((token) => NUMBER_TOKEN.test(token))
+			.map(Number),
+		date: Number(dates.join("").replaceAll("-", "")),
+	};
+}
+
 function compareNewest(a: string, b: string): number {
-	const numbers = (id: string) => tokens(id).filter((token) => NUMBER_TOKEN.test(token));
-	const version = (id: string) =>
-		numbers(id)
-			.filter((token) => !DATE_TOKEN.test(token))
-			.map(Number);
-	const date = (id: string) => Number(numbers(id).find((token) => DATE_TOKEN.test(token)) ?? 0);
-	const [va, vb] = [version(a), version(b)];
-	for (let i = 0; i < Math.max(va.length, vb.length); i++) {
-		const diff = (vb[i] ?? 0) - (va[i] ?? 0);
+	const [sa, sb] = [snapshot(a), snapshot(b)];
+	for (let i = 0; i < Math.max(sa.version.length, sb.version.length); i++) {
+		const diff = (sb.version[i] ?? 0) - (sa.version[i] ?? 0);
 		if (diff !== 0) return diff;
 	}
-	const [da, db] = [date(a), date(b)];
-	if ((da === 0) !== (db === 0)) return da === 0 ? -1 : 1;
-	return db - da;
+	if ((sa.date === 0) !== (sb.date === 0)) return sa.date === 0 ? -1 : 1;
+	return sb.date - sa.date;
 }
 
 function pickCandidate(candidates: readonly ModelRef[]): ModelMatch {
@@ -94,13 +97,14 @@ function matchModelRef(ref: string, available: readonly ModelRef[]): ModelMatch 
 	}
 	if (text === "") return { reason: "missing" };
 	const refTokens = text.includes(":") ? [] : tokens(text);
-	const tiers: ((model: ModelRef) => boolean)[] = [
-		(model) => model.id === text,
-		(model) => model.id.startsWith(text),
-		(model) => refTokens.length > 0 && wordMatch(refTokens, model.id),
+	const tiers: (() => ModelRef[])[] = [
+		() => pool.filter((model) => model.id === text),
+		() => (pool === available ? [] : available.filter((model) => model.id === ref)),
+		() => pool.filter((model) => model.id.startsWith(text)),
+		() => (refTokens.length > 0 ? pool.filter((model) => wordMatch(refTokens, model.id)) : []),
 	];
-	for (const matches of tiers) {
-		const candidates = pool.filter(matches);
+	for (const tier of tiers) {
+		const candidates = tier();
 		if (candidates.length > 0) return pickCandidate(candidates);
 	}
 	return { reason: "missing" };

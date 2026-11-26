@@ -98,6 +98,12 @@ test("informal names resolve case-insensitively on id words, newest of one famil
 		{ provider: "anthropic", id: "claude-opus-4-5-20251101" },
 	];
 	expect(resolveModelRef("opus", dated)?.id).toBe("claude-opus-4-5-20251101");
+	const snapshots = ["gpt-4o-2024-11-20", "gpt-4o", "gpt-4o-2024-08-06", "gpt-4-0613"].map(
+		(id) => ({ provider: "openai", id }),
+	);
+	expect(resolveModelRef("gpt 4o", snapshots)?.id).toBe("gpt-4o");
+	expect(resolveModelRef("gpt-4o-2", snapshots)?.id).toBe("gpt-4o-2024-11-20");
+	expect(resolveModelRef("gpt-4", snapshots.slice(3))?.id).toBe("gpt-4-0613");
 	const mirrored = ANTHROPIC.map((model) => ({ ...model, provider: "anthropic-proxy" }));
 	expect(resolveModelRef("opus", [...ANTHROPIC, ...mirrored])).toBeUndefined();
 	expect(resolveModelRef("anthropic-proxy/opus", [...ANTHROPIC, ...mirrored])).toEqual({
@@ -141,6 +147,15 @@ test("a slash prefix naming no available provider is part of a bare id", () => {
 		id: "anthropic/claude-opus-5.5",
 	});
 	expect(resolveModelRef("anthropic/claude-opus-4.5", catalog)).toEqual({
+		provider: "openrouter",
+		id: "anthropic/claude-opus-4.5",
+	});
+	expect(resolveModelRef("anthropic/claude-opus-4", catalog)).toEqual({
+		provider: "anthropic",
+		id: "claude-opus-4-5",
+	});
+	const mirrored = [...catalog, { provider: "openrouter", id: "anthropic/claude-opus-4-5" }];
+	expect(resolveModelRef("anthropic/claude-opus-4-5", mirrored)).toEqual({
 		provider: "anthropic",
 		id: "claude-opus-4-5",
 	});
