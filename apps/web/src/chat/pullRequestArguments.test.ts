@@ -1,9 +1,10 @@
 import { expect, test } from "bun:test";
 import type { PullRequestSummary } from "@thinkrail/contracts";
 import {
-	authorsOf,
+	filterAuthors,
 	isPullRequestArgumentComplete,
 	isReferencedPullRequest,
+	mergeAuthors,
 	orderPullRequests,
 	pullRequestReferenceOf,
 } from "./pullRequestArguments";
@@ -54,6 +55,16 @@ test("the argument is complete once a reference is followed by whitespace", () =
 test("requested reviews come first and authors are listed once, with the chosen one kept", () => {
 	const rows = [pr(3, { author: "zed" }), pr(2, { reviewRequested: true, author: "ada" }), pr(1)];
 	expect(orderPullRequests(rows).map((row) => row.number)).toEqual([2, 3, 1]);
-	expect(authorsOf(rows)).toEqual(["ada", "octo", "zed"]);
-	expect(authorsOf([], "bob")).toEqual(["bob"]);
+	expect(
+		mergeAuthors([
+			["zed", "ada"],
+			["ada", "octo"],
+		]),
+	).toEqual(["zed", "ada", "octo"]);
+	expect(mergeAuthors([], "bob")).toEqual(["bob"]);
+	const authors = ["zed", "Afloat16", "mvanhorn", "adam", "ada"];
+	expect(filterAuthors(authors, "")).toEqual(authors);
+	expect(filterAuthors(authors, "ad")).toEqual(["adam", "ada"].sort((a, b) => a.length - b.length));
+	expect(filterAuthors(authors, "van")).toEqual(["mvanhorn"]);
+	expect(filterAuthors(authors, "qq")).toEqual([]);
 });

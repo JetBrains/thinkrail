@@ -244,16 +244,65 @@ test("the keyboard reaches the next page and every author", async ({ page, baseU
 		for (let step = 0; step < 4; step += 1) await page.keyboard.press("ArrowRight");
 		await expect(page.getByTestId("pull-request-author")).toBeFocused();
 		await page.keyboard.press("Enter");
+		const search = page.getByTestId("pull-request-author-search");
+		await expect(search).toBeFocused();
 		const authors = page.getByTestId("pull-request-author-option");
-		await expect(authors.first()).toBeFocused();
+		await expect(authors).toHaveCount(3);
+		await page.keyboard.press("ArrowDown");
 		await page.keyboard.press("ArrowDown");
 		await page.keyboard.press("ArrowDown");
 		await expect(authors.nth(2)).toBeFocused();
 		await expect(authors.nth(2)).toHaveAttribute("data-author", "zed");
+		await page.keyboard.press("ArrowUp");
+		await page.keyboard.press("ArrowUp");
+		await page.keyboard.press("ArrowUp");
+		await expect(search).toBeFocused();
+		await page.keyboard.type("ze");
+		await expect(authors).toHaveCount(1);
 		await page.keyboard.press("Enter");
 		await expect(page.getByTestId("pull-request-author")).toContainText("Author: zed");
 		await expect(list.getByTestId("pull-request-option")).toHaveCount(1);
 		await expect(dialog.getByTestId("ws-prompt")).toBeFocused();
+	} finally {
+		await forgetPullRequestFilters(baseURL);
+		origin.dispose();
+	}
+});
+
+test("the Author list holds everyone with an open pull request, loaded as needed", async ({
+	page,
+	baseURL,
+}, testInfo) => {
+	await openFixtureProject(page);
+	const origin = githubProject(`acme/authors-${testInfo.repeatEachIndex}-${Date.now()}`);
+	try {
+		writeGhScenario({
+			prs: Array.from({ length: 130 }, (_, index) =>
+				pr(index + 1, {
+					author: `dev${String(index + 1).padStart(3, "0")}`,
+					updatedAt: new Date(Date.UTC(2026, 0, 1) + index * 60_000).toISOString(),
+				}),
+			),
+		});
+		const dialog = await openCreateDialog(page);
+		await dialog.getByTestId("ws-prompt").fill(COMMAND);
+		await expect(completion(page).getByTestId("pull-request-option")).toHaveCount(20);
+		await page.getByTestId("pull-request-author").click();
+		const authors = page.getByTestId("pull-request-author-option");
+		await expect(authors).toHaveCount(101);
+		await page.getByTestId("pull-request-author-list").evaluate((list) => {
+			list.scrollTop = list.scrollHeight;
+		});
+		await expect(authors).toHaveCount(131);
+
+		await page.keyboard.press("Escape");
+		await page.getByTestId("pull-request-author").click();
+		await page.getByTestId("pull-request-author-search").fill("dev007");
+		await expect(authors).toHaveCount(1);
+		await authors.first().click();
+		await expect(page.getByTestId("pull-request-author")).toContainText("Author: dev007");
+		await expect(completion(page).locator('[data-pr="7"]')).toBeVisible();
+		await expect(completion(page).getByTestId("pull-request-option")).toHaveCount(1);
 	} finally {
 		await forgetPullRequestFilters(baseURL);
 		origin.dispose();

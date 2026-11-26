@@ -4,8 +4,9 @@ import { localeOf, type Translator, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { cn } from "@thinkrail/ui/utils";
-import { type KeyboardEvent, type Ref, type RefObject, useState } from "react";
+import { type KeyboardEvent, type Ref, type RefObject, useEffect, useState } from "react";
 import { ArgumentCompletionFrame, ArgumentCompletionMenu } from "../prompt";
+import { filterAuthors } from "./pullRequestArguments";
 import type { PullRequestCompletion } from "./pullRequestCompletion";
 
 const NOTICE = "px-8 py-8 text-text-muted tr-text-ui";
@@ -190,36 +191,107 @@ function Filters({
 					data-testid="pull-request-authors"
 					onKeyDown={(event) => {
 						if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-						const options = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button")];
-						const at = options.indexOf(document.activeElement as HTMLButtonElement);
-						const step = event.key === "ArrowDown" ? 1 : -1;
-						options[(at + step + options.length) % options.length]?.focus();
 						event.preventDefault();
+						const all = [
+							...event.currentTarget.querySelectorAll<HTMLElement>("[data-author-choice]"),
+						];
+						const at = all.indexOf(document.activeElement as HTMLElement);
+						const step = event.key === "ArrowDown" ? 1 : -1;
+						all[(at + step + all.length) % all.length]?.focus();
 					}}
-					className="max-h-[240px] w-[220px] overflow-y-auto p-4"
+					className="flex w-[240px] flex-col p-0"
 				>
-					{[undefined, ...completion.authors].map((author) => (
-						<button
-							key={author ?? ""}
-							type="button"
-							data-testid="pull-request-author-option"
-							data-author={author ?? ""}
-							onClick={() => {
-								const { author: _drop, ...rest } = filter;
-								setFilter(author ? { ...rest, author } : rest);
-								setAuthorsOpen(false);
-								onLeave();
-							}}
-							className={cn(
-								"flex w-full rounded-sm px-8 py-4 text-left tr-text-ui hover:bg-control-bg-hovered focus-visible:focus-ring-inset",
-								filter.author === author ? "text-primary" : "text-text-default",
-							)}
-						>
-							{author ?? t("chat.prCompletion.anyAuthor")}
-						</button>
-					))}
+					<AuthorPicker
+						authors={completion.authors}
+						current={filter.author}
+						onPick={(author) => {
+							const { author: _drop, ...rest } = filter;
+							setFilter(author ? { ...rest, author } : rest);
+							setAuthorsOpen(false);
+							onLeave();
+						}}
+					/>
 				</PopoverContent>
 			</Popover>
+		</div>
+	);
+}
+
+const AUTHOR_FILL = 30;
+
+function AuthorPicker({
+	authors,
+	current,
+	onPick,
+}: {
+	authors: PullRequestCompletion["authors"];
+	current: string | undefined;
+	onPick: (author: string | undefined) => void;
+}) {
+	const t = useT();
+	const [query, setQuery] = useState("");
+	const shown = filterAuthors(authors.names, query);
+	const { hasMore, loading, request } = authors;
+	const wantsMore =
+		hasMore && !loading && (authors.names.length === 0 || shown.length < AUTHOR_FILL);
+	useEffect(() => {
+		if (wantsMore) request();
+	}, [wantsMore, request]);
+	const choices: (string | undefined)[] = query.trim() ? shown : [undefined, ...shown];
+	return (
+		<div className="flex min-h-0 flex-col">
+			<input
+				data-author-choice
+				data-testid="pull-request-author-search"
+				value={query}
+				onChange={(event) => setQuery(event.target.value)}
+				onKeyDown={(event) => {
+					if (event.key !== "Enter") return;
+					event.preventDefault();
+					const first = choices[0];
+					if (first !== undefined || !query.trim()) onPick(first);
+				}}
+				placeholder={t("chat.prCompletion.searchAuthors")}
+				aria-label={t("chat.prCompletion.searchAuthors")}
+				className="h-32 shrink-0 border-border-muted border-b bg-transparent px-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted"
+			/>
+			<div
+				data-testid="pull-request-author-list"
+				className="max-h-[240px] overflow-y-auto p-4"
+				onScroll={(event) => {
+					const list = event.currentTarget;
+					if (list.scrollTop + list.clientHeight >= list.scrollHeight - 24 && hasMore) request();
+				}}
+			>
+				{choices.map((author) => (
+					<button
+						key={author ?? ""}
+						type="button"
+						data-author-choice
+						data-testid="pull-request-author-option"
+						data-author={author ?? ""}
+						onClick={() => onPick(author)}
+						className={cn(
+							"flex w-full rounded-sm px-8 py-4 text-left tr-text-ui hover:bg-control-bg-hovered focus-visible:focus-ring-inset",
+							current === author ? "text-primary" : "text-text-default",
+						)}
+					>
+						{author ?? t("chat.prCompletion.anyAuthor")}
+					</button>
+				))}
+				{loading ? (
+					<p
+						data-testid="pull-request-authors-loading"
+						className="px-8 py-4 text-text-muted tr-text-metadata"
+					>
+						{t("chat.prCompletion.loadingAuthors")}
+					</p>
+				) : choices.length === 0 ? (
+					<p className="px-8 py-4 text-text-muted tr-text-metadata">
+						{t("chat.prCompletion.noAuthors")}
+					</p>
+				) : null}
+			</div>
 		</div>
 	);
 }

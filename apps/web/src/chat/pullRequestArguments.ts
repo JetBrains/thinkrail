@@ -1,4 +1,4 @@
-import type { PullRequestSummary } from "@thinkrail/contracts";
+import { matchFields, type PullRequestSummary, parseMatchTerms } from "@thinkrail/contracts";
 
 export const REVIEW_PULL_REQUEST_PROMPT = "/skill:reviewing-a-pr ";
 
@@ -40,8 +40,22 @@ export function orderPullRequests(rows: readonly PullRequestSummary[]): PullRequ
 	return [...rows.filter((pr) => pr.reviewRequested), ...rows.filter((pr) => !pr.reviewRequested)];
 }
 
-export function authorsOf(rows: readonly PullRequestSummary[], current?: string): string[] {
-	const authors = new Set(rows.map((pr) => pr.author).filter(Boolean));
+/** Every author once, in the order the pages listed them (most recently active first), the chosen one kept. */
+export function mergeAuthors(pages: readonly (readonly string[])[], current?: string): string[] {
+	const authors = new Set(pages.flat().filter(Boolean));
 	if (current) authors.add(current);
-	return [...authors].sort((a, b) => a.localeCompare(b));
+	return [...authors];
+}
+
+/** The authors a typed name matches, best first — the same ranking as the slash menu. */
+export function filterAuthors(authors: readonly string[], query: string): string[] {
+	const terms = parseMatchTerms(query);
+	if (terms.length === 0) return [...authors];
+	return authors
+		.flatMap((author, index) => {
+			const match = matchFields(terms, [{ key: "login", text: author }]);
+			return match ? [{ author, index, tier: match.tier, score: match.score }] : [];
+		})
+		.sort((a, b) => a.tier - b.tier || b.score - a.score || a.index - b.index)
+		.map(({ author }) => author);
 }

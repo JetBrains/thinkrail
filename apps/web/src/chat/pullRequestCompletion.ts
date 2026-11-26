@@ -9,8 +9,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "../store";
 import { getTransport, rememberPullRequestFilter, supportsPullRequestReview } from "../transport";
 import {
-	authorsOf,
 	isReferencedPullRequest,
+	mergeAuthors,
 	orderPullRequests,
 	pullRequestReferenceOf,
 } from "./pullRequestArguments";
@@ -25,6 +25,15 @@ export type PullRequestListing =
 	| { kind: "ready" }
 	| { kind: "unavailable"; reason: PullRequestListProblem };
 
+export interface PullRequestAuthors {
+	/** Everyone with an open pull request loaded so far, most recently active first. */
+	names: string[];
+	loading: boolean;
+	hasMore: boolean;
+	/** Load the first page if none is loaded yet, else the next one. */
+	request: () => void;
+}
+
 export interface PullRequestCompletion {
 	listing: PullRequestListing;
 	/** What Enter picks, in display order: a looked-up PR alone, or the waiting rows then the rest. */
@@ -33,7 +42,7 @@ export interface PullRequestCompletion {
 	lookup: PullRequestLookup | null;
 	filter: PullRequestFilter;
 	setFilter: (filter: PullRequestFilter) => void;
-	authors: string[];
+	authors: PullRequestAuthors;
 	hasMore: boolean;
 	/** Rows plus the Show more row the keyboard reaches when another page exists. */
 	optionCount: number;
@@ -223,6 +232,8 @@ export function usePullRequestCompletion(
 		[pages, sizes, projectId],
 	);
 
+	const authors = usePullRequestAuthors(enabled ? projectId : null, filter.author);
+
 	if (!enabled) return null;
 	const found = lookup?.kind === "found" ? lookup.pullRequest : null;
 	const items = reference ? (found ? [found] : []) : rows;
@@ -234,7 +245,7 @@ export function usePullRequestCompletion(
 		lookup: reference ? lookup : null,
 		filter,
 		setFilter,
-		authors: authorsOf(rows, filter.author),
+		authors,
 		hasMore,
 		optionCount: items.length + (hasMore ? 1 : 0),
 		pick: (index) => {
@@ -248,4 +259,53 @@ export function usePullRequestCompletion(
 		loadMore,
 		retry,
 	};
+}
+
+function usePullRequestAuthors(
+	projectId: string | null,
+	current: string | undefined,
+): PullRequestAuthors {
+	const [state, setState] = useState<{
+		projectId: string | null;
+		pages: string[][];
+		next: string | null | undefined;
+	}>({ projectId, pages: [], next: undefined });
+	const [loading, setLoading] = useState(false);
+	const inFlight = useRef<string | null>(null);
+	const own = state.projectId === projectId ? state : { projectId, pages: [], next: undefined };
+
+	const request = useCallback(() => {
+		if (!projectId || own.next === null) return;
+		const cursor = own.next;
+		const key = `${projectId}\u0000${cursor ?? ""}`;
+		if (inFlight.current === key) return;
+		inFlight.current = key;
+		setLoading(true);
+		void getTransport()
+			.request("pr.authors", { projectId, ...(cursor ? { cursor } : {}) })
+			.then(
+				(page) => {
+					setState((previous) => {
+						const base =
+							previous.projectId === projectId
+								? previous
+								: { projectId, pages: [], next: undefined };
+						if (base.next !== cursor) return base;
+						return {
+							projectId,
+							pages: [...base.pages, page.authors],
+							next: page.nextCursor ?? null,
+						};
+					});
+				},
+				() => {},
+			)
+			.finally(() => {
+				if (inFlight.current === key) inFlight.current = null;
+				setLoading(false);
+			});
+	}, [projectId, own.next]);
+
+	const names = useMemo(() => mergeAuthors(own.pages, current), [own.pages, current]);
+	return { names, loading, hasMore: own.next !== null, request };
 }

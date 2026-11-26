@@ -1236,8 +1236,11 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   as `pr.list` pages of 20 without sizes, then one `pr.sizes` for the page; **Show more** (also the last row ↑/↓ reach, so Enter pages) fetches the
   next cursor; a number, `#N` or link goes to `pr.get` instead and is accepted only for the same
   repository. Rows: waiting for your review first, then the rest. The filter row (scope Waiting for me
-  / Mine / All open, Drafts, Author from the loaded rows) is a toolbar: Tab from the prompt enters it,
-  ←/→ move, the Author list takes ↑/↓, Tab or Escape returns; a change is remembered per project on the host
+  / Mine / All open, Drafts, Author) is a toolbar: Tab from the prompt enters it,
+  ←/→ move, Tab or Escape returns. The Author list holds everyone with an open pull request
+  (`pr.authors`, 100 pull requests a page, most recently active first), not only the loaded rows' authors: it
+  opens on a name search ranked like the slash menu, ↑/↓ walk the search and the names, scrolling to its
+  end loads the next page, and it keeps loading while a search shows fewer than 30 names; a change is remembered per project on the host
   (`rememberPullRequestFilter`) and seeds the next opening. Enter inserts the PR's link and a space; the
   argument then counts as complete and the menu stays closed for a focus note. The chat's menu carries a
   one-line notice that a workspace with work of its own reviews elsewhere (the skill hands off). Shift+Enter
