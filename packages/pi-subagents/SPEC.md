@@ -145,14 +145,34 @@ review and thread semantics stay outside this portable role.
 
 `toSpawnMapping`: definition + optional invocation model → `SessionOptions` + `RunOptions.maxTurns`.
 The effective reference follows definition pin → invocation model → parent inheritance. A pin discards
-the invocation reference, including its thinking suffix, without resolving it. References resolve
-against the session's available models (`provider/id` → exact id → unique prefix); no provider
-substitution, custom model synthesis or parent fallback is permitted for an unresolved selection.
+the invocation reference, including its thinking suffix, without resolving it. Both sources share one
+resolver over the session's available models; no provider substitution, custom model synthesis or
+parent fallback is permitted for an unresolved selection.
+
+Resolution tiers, the first with any candidate deciding (never falling through to a looser one):
+qualified exact `provider/id` → exact id → id prefix → informal word match. The text before the
+first `/` qualifies only when it names an available provider (any case); otherwise it is part of a
+bare id, so openrouter-style `vendor/model` ids resolve, and such an exact bare id beats a word match
+inside the provider its prefix happens to name. The word match exists because callers name models
+informally ("opus", "Opus 4.5", "gpt5") while real ids lead with the vendor (`claude-opus-…`): the
+reference's words (lowercased, split at non-alphanumerics and letter↔digit transitions) must equal a
+contiguous run of the id's words, the last one by prefix. Text containing `:` skips it, so the
+colon stays the thinking delimiter and `opus:` / `opus:turbo` keep the suffix hint.
+
+Several candidates are narrowed by family, never by registry order: they group by provider and family
+(the id's non-numeric parts; a size such as `8b`, `70b` or `32k` belongs to the family) and each
+group keeps its newest — highest version, then the undated alias over a dated snapshot
+(`20251101`, `2024-11-20`, `0613`), then the latest date. One survivor resolves ("opus" → the
+newest Claude Opus, user-settled 2026-11: `getAvailable()` lists every catalog model of a signed-in
+provider, so a strict rule would make every family name fail). Otherwise the reference is ambiguous:
+different providers, families or sizes are never chosen between.
+
 The invocation words `inherit`, `parent` and `default` (any case) are the parent-inheritance spelling
 models carry over from Claude Code. They and a blank value (empty or whitespace only) count as no
 invocation model and are never looked up: a word cannot name a model, and `""` cannot prefix-match
 every model and fail as ambiguous (#1352). Other invocation values are looked up as sent, surrounding
-whitespace included. A definition pin is not reinterpreted; the frontmatter parser drops a blank `model`.
+whitespace included. A definition pin is never read as a parent word; the frontmatter parser drops a
+blank `model`.
 
 Both definition and invocation model references accept one final `:<thinking>` suffix: `off`,
 `minimal`, `low`, `medium`, `high`, `xhigh` or `max`. Whole-reference resolution always comes first:
@@ -160,16 +180,18 @@ existing literal colon IDs and unique prefixes keep their meaning, and ambiguity
 a stripped reference. Only a missing whole reference permits suffix parsing; its nonempty base must
 resolve under the same rules, with no recursive stripping. Unknown suffixes remain literal unresolved
 references, with a syntax hint rather than silent default thinking. Missing and ambiguous selections
-have distinct diagnostics; provider qualification is suggested only for ambiguity. A missing
-selection lists the first 20 available `provider/id` refs, and a missing invocation reference also
-says that leaving `model` out uses the parent's model, so the next call can succeed. The exported
+have distinct diagnostics. An ambiguous selection lists its first 20 survivors (newest per family)
+as `provider/id` and asks for a retry with one of them, so a caller can recover or ask the user
+without guessing. A missing selection lists the first 20 available `provider/id` refs, and a
+missing invocation reference also says that leaving `model` out uses the parent's model, so the next call can succeed. The exported
 `resolveModelRef` remains identity-only and does not interpret suffixes.
 
 Thinking precedence is explicit definition `thinking` → suffix on the winning reference → live parent.
 Pi clamps the requested level to the selected model's capabilities; the extension neither duplicates
 that policy nor changes parent state. This is syntax compatibility, not adoption of Pi's CLI resolver:
-its fuzzy tie-breaking and custom-ID fallback would violate this package's ambiguity/availability
-contract. A separate per-call thinking argument is not part of this surface.
+its substring/display-name matching across families, lexicographic tie-breaking and custom-ID
+fallback would violate this package's ambiguity/availability contract; the only tie-break here is
+newest-within-one-provider-and-family. A separate per-call thinking argument is not part of this surface.
 
 Child system prompt = definition body → subagent bridge → env block (cwd, git branch, platform) —
 **stable material first** for KV-cache prefix reuse. The
@@ -204,7 +226,8 @@ user reason.
 
 ## Verification
 
-Unit suites in-package (`bun test`) pin literal-ID/suffix precedence, ambiguity, definition thinking,
+Unit suites in-package (`bun test`) pin literal-ID/suffix precedence, informal-name tiers, the
+newest-in-family tie-break (dates and sizes), ambiguity with listed candidates, definition thinking,
 Pi-clamped child thinking, parent isolation and failures before child creation, including a two-extension regression where one extension
 registers a synthetic provider and the zero-config subagents extension delegates through it. Public Pi
 session tests pin gated replay, real reload gaps, permanent closure, synchronous send failures,
@@ -258,7 +281,8 @@ commit/CI gate.
    cleanest base for a multi-pattern system, with gotgenes' KV-cache prompt ordering (stable
    material first) adopted within our own layout.
 8. **Per-call models are an unpinned-definition fallback.** `Agent.model` lets the parent choose any
-   unambiguous model available in its retained runtime generation when the definition has no `model`.
+   unambiguous model available in its retained runtime generation when the definition has no `model`,
+   by full ref or informal name (The mapping above).
    A definition pin silently wins over a supplied call value (user-settled) rather than failing or
    becoming overrideable; the tool's available-agent list exposes that pin so precedence is visible.
    Definition discovery is snapshotted per parent model turn, preventing a live edit from splitting
