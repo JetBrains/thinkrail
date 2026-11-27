@@ -18,7 +18,8 @@ user turned off, the UI language preference (`locale`), and the user's keyboard 
 select the defaults every new chat receives (unset model means pi's `settings.json` default when available, else the preferred available model — pi's provider default, else the first — among non-environment connections, then among all available connections; unset effort means medium);
 `reviewModel` / `reviewEffort`
 select the reviewer runtime (unset means that same new-chat default); `reviewAutoFix: false` records a `request_changes`
-verdict and waits instead of auto-sending a fix. **`favoriteModels`** is the picker's starred list in display
+verdict and waits instead of auto-sending a fix, and `reviewAutoFixRounds` (1–10, default 3, value-checked like
+`subagentMaxConcurrent`) caps the automatic fix rounds per plan step while it is on. **`favoriteModels`** is the picker's starred list in display
 order — a whole-list client write, validated as model-shaped entries and deduped by `sameModel`;
 **`recentModels`** is host-owned: `noteRecentModel(model)` (called by `host` on an explicit `session.create`
 model and every `session.setModel`) puts the model first, dedupes, caps at `RECENT_MODELS_LIMIT`, persists and
