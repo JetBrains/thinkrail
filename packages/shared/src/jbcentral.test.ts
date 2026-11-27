@@ -19,6 +19,8 @@ import {
 	watchJbcentralArtifact,
 } from "./jbcentral";
 
+const posix = test.skipIf(process.platform === "win32");
+
 const CENTRAL_BIN = "/opt/central/bin/central";
 
 function adapterDeps(overrides: JbcentralAdapterDependencies = {}): JbcentralAdapterDependencies {
@@ -43,7 +45,7 @@ describe("Central version inspection", () => {
 		expect(parseJbcentralVersion("prefix central 1.6.2")).toBeNull();
 	});
 
-	test("accepts the minimum version and reports artifact presence", async () => {
+	posix("accepts the minimum version and reports artifact presence", async () => {
 		const requests: string[][] = [];
 		const extensionPath = "/users/test/.pi/agent/extensions/jetbrains-central.ts";
 		const deps = adapterDeps({
@@ -66,55 +68,59 @@ describe("Central version inspection", () => {
 		expect(requests).toEqual([[CENTRAL_BIN, "--version"]]);
 	});
 
-	test("classifies below-minimum, newer, malformed, absent, and failed probes without raw output", async () => {
-		async function inspectOutput(stdout: string, exitCode = 0) {
-			return inspectJbcentral(
-				adapterDeps({
-					run: async () => ({ outcome: "exited", exitCode, stdout }),
-				}),
-			);
-		}
+	posix(
+		"classifies below-minimum, newer, malformed, absent, and failed probes without raw output",
+		async () => {
+			async function inspectOutput(stdout: string, exitCode = 0) {
+				return inspectJbcentral(
+					adapterDeps({
+						run: async () => ({ outcome: "exited", exitCode, stdout }),
+					}),
+				);
+			}
 
-		expect((await inspectOutput("central 1.3.9 (synthetic)")).status).toEqual({
-			state: "outdated",
-			version: "1.3.9",
-		});
-		expect((await inspectOutput("central 1.7.0 (synthetic)")).status).toEqual({
-			state: "supported",
-			version: "1.7.0",
-			configured: false,
-		});
-		const secretOutput = "synthetic-sensitive-version-output";
-		const malformed = await inspectOutput(secretOutput);
-		expect(malformed.status).toEqual({ state: "malformed-version" });
-		expect(JSON.stringify(malformed)).not.toContain(secretOutput);
-		expect((await inspectOutput(secretOutput, 2)).status).toEqual({
-			state: "probe-failed",
-			reason: "nonzero-exit",
-		});
-		expect(await inspectJbcentral(adapterDeps({ which: () => null, exists: () => false }))).toEqual(
-			{
+			expect((await inspectOutput("central 1.3.9 (synthetic)")).status).toEqual({
+				state: "outdated",
+				version: "1.3.9",
+			});
+			expect((await inspectOutput("central 1.7.0 (synthetic)")).status).toEqual({
+				state: "supported",
+				version: "1.7.0",
+				configured: false,
+			});
+			const secretOutput = "synthetic-sensitive-version-output";
+			const malformed = await inspectOutput(secretOutput);
+			expect(malformed.status).toEqual({ state: "malformed-version" });
+			expect(JSON.stringify(malformed)).not.toContain(secretOutput);
+			expect((await inspectOutput(secretOutput, 2)).status).toEqual({
+				state: "probe-failed",
+				reason: "nonzero-exit",
+			});
+			expect(
+				await inspectJbcentral(adapterDeps({ which: () => null, exists: () => false })),
+			).toEqual({
 				executablePath: null,
 				extensionPath: "/users/test/.pi/agent/extensions/jetbrains-central.ts",
 				artifactExists: false,
 				status: { state: "absent" },
-			},
-		);
-		expect(
-			(await inspectJbcentral(adapterDeps({ run: async () => ({ outcome: "timed-out" }) }))).status,
-		).toEqual({ state: "probe-failed", reason: "timed-out" });
-		expect(
-			(
-				await inspectJbcentral(
-					adapterDeps({
-						run: async () => {
-							throw new Error(secretOutput);
-						},
-					}),
-				)
-			).status,
-		).toEqual({ state: "probe-failed", reason: "launch-failed" });
-	});
+			});
+			expect(
+				(await inspectJbcentral(adapterDeps({ run: async () => ({ outcome: "timed-out" }) })))
+					.status,
+			).toEqual({ state: "probe-failed", reason: "timed-out" });
+			expect(
+				(
+					await inspectJbcentral(
+						adapterDeps({
+							run: async () => {
+								throw new Error(secretOutput);
+							},
+						}),
+					)
+				).status,
+			).toEqual({ state: "probe-failed", reason: "launch-failed" });
+		},
+	);
 });
 
 describe("Central status observation", () => {
@@ -289,7 +295,7 @@ describe("Central quota read", () => {
 });
 
 describe("Central command adapter", () => {
-	test("runs only reviewed action argv through the absolute executable", async () => {
+	posix("runs only reviewed action argv through the absolute executable", async () => {
 		const requests: Array<{
 			argv: readonly string[];
 			captureStdout: boolean;
@@ -464,12 +470,12 @@ ${script}
 		rmSync(binDir, { recursive: true, force: true });
 	});
 
-	test("parses a real child's bounded stdout", async () => {
+	posix("parses a real child's bounded stdout", async () => {
 		const { status } = await inspectJbcentral(realDeps("printf 'central 1.7.0 (real spawn)\n'"));
 		expect(status).toEqual({ state: "supported", version: "1.7.0", configured: false });
 	});
 
-	test("a real non-zero exit and a missing executable stay closed reasons", async () => {
+	posix("a real non-zero exit and a missing executable stay closed reasons", async () => {
 		expect((await inspectJbcentral(realDeps("exit 3"))).status).toEqual({
 			state: "probe-failed",
 			reason: "nonzero-exit",
@@ -485,7 +491,7 @@ ${script}
 		).toEqual({ state: "absent" });
 	});
 
-	test("stdout at the bound parses, and past it is refused rather than buffered", async () => {
+	posix("stdout at the bound parses, and past it is refused rather than buffered", async () => {
 		const atBound = await inspectJbcentral(realDeps(`printf 'central 1.6.2 '; printf '%4081s' ''`));
 		expect(atBound.status).toEqual({ state: "supported", version: "1.6.2", configured: false });
 
@@ -496,16 +502,20 @@ ${script}
 		expect(JSON.stringify(flood)).not.toContain("SYNTHETIC_FLOOD");
 	});
 
-	test("a child that outlives the version timeout is killed, and the timeout beats its exit code", async () => {
-		const started = Date.now();
-		const { status } = await inspectJbcentral(realDeps("sleep 20; exit 0"));
-		expect(status).toEqual({ state: "probe-failed", reason: "timed-out" });
-		expect(Date.now() - started).toBeLessThan(12_000);
-	}, 20_000);
+	posix(
+		"a child that outlives the version timeout is killed, and the timeout beats its exit code",
+		async () => {
+			const started = Date.now();
+			const { status } = await inspectJbcentral(realDeps("sleep 20; exit 0"));
+			expect(status).toEqual({ state: "probe-failed", reason: "timed-out" });
+			expect(Date.now() - started).toBeLessThan(12_000);
+		},
+		20_000,
+	);
 });
 
 describe("Central artifact watcher", () => {
-	test("re-arms from the nearest existing parent without reading the artifact", async () => {
+	posix("re-arms from the nearest existing parent without reading the artifact", async () => {
 		const extensionPath = "/users/test/.pi/agent/extensions/jetbrains-central.ts";
 		const existing = new Set(["/users/test"]);
 		const callbacks = new Map<string, (entry: string | null) => void>();
@@ -548,72 +558,82 @@ describe("Central artifact watcher", () => {
 		expect(invalidations).toBe(1);
 	});
 
-	test("re-checks the artifact once a new watch is live, so a write during re-arm is not left to the poll", async () => {
-		const extensionPath = "/users/test/.pi/agent/extensions/jetbrains-central.ts";
-		const existing = new Set(["/users/test"]);
-		const callbacks = new Map<string, (entry: string | null) => void>();
-		const watched: string[] = [];
-		let invalidations = 0;
-		const stop = watchJbcentralArtifact(
-			() => {
-				invalidations += 1;
-			},
-			adapterDeps({
-				exists: (path) => existing.has(path),
-				watchDirectory: (path, callback) => {
-					watched.push(path);
-					callbacks.set(path, callback);
-					return { close: () => {} };
+	posix(
+		"re-checks the artifact once a new watch is live, so a write during re-arm is not left to the poll",
+		async () => {
+			const extensionPath = "/users/test/.pi/agent/extensions/jetbrains-central.ts";
+			const existing = new Set(["/users/test"]);
+			const callbacks = new Map<string, (entry: string | null) => void>();
+			const watched: string[] = [];
+			let invalidations = 0;
+			const stop = watchJbcentralArtifact(
+				() => {
+					invalidations += 1;
 				},
-			}),
-		);
-		for (const path of [
-			"/users/test/.pi",
-			"/users/test/.pi/agent",
-			"/users/test/.pi/agent/extensions",
-		]) {
-			existing.add(path);
-		}
-		callbacks.get("/users/test")?.(".pi");
-		existing.add(extensionPath);
-		await new Promise((resolve) => setTimeout(resolve, 5));
-
-		expect(watched.at(-1)).toBe("/users/test/.pi/agent/extensions");
-		expect(invalidations).toBe(1);
-		stop();
-	});
-
-	test("re-arms deeper when a directory appears while the new watch is being installed", async () => {
-		const existing = new Set(["/users/test"]);
-		const callbacks = new Map<string, (entry: string | null) => void>();
-		const watched: string[] = [];
-		const stop = watchJbcentralArtifact(
-			() => {},
-			adapterDeps({
-				exists: (path) => existing.has(path),
-				watchDirectory: (path, callback) => {
-					watched.push(path);
-					callbacks.set(path, callback);
-					if (path === "/users/test/.pi") {
-						existing.add("/users/test/.pi/agent");
-						existing.add("/users/test/.pi/agent/extensions");
-					}
-					return { close: () => {} };
-				},
-			}),
-		);
-		existing.add("/users/test/.pi");
-		callbacks.get("/users/test")?.(".pi");
-		const deadline = Date.now() + 1_000;
-		while (watched.length < 3 && Date.now() < deadline) {
+				adapterDeps({
+					exists: (path) => existing.has(path),
+					watchDirectory: (path, callback) => {
+						watched.push(path);
+						callbacks.set(path, callback);
+						return { close: () => {} };
+					},
+				}),
+			);
+			for (const path of [
+				"/users/test/.pi",
+				"/users/test/.pi/agent",
+				"/users/test/.pi/agent/extensions",
+			]) {
+				existing.add(path);
+			}
+			callbacks.get("/users/test")?.(".pi");
+			existing.add(extensionPath);
 			await new Promise((resolve) => setTimeout(resolve, 5));
-		}
 
-		expect(watched).toEqual(["/users/test", "/users/test/.pi", "/users/test/.pi/agent/extensions"]);
-		stop();
-	});
+			expect(watched.at(-1)).toBe("/users/test/.pi/agent/extensions");
+			expect(invalidations).toBe(1);
+			stop();
+		},
+	);
 
-	test("ignores unrelated churn in a watched ancestor of the artifact directory", async () => {
+	posix(
+		"re-arms deeper when a directory appears while the new watch is being installed",
+		async () => {
+			const existing = new Set(["/users/test"]);
+			const callbacks = new Map<string, (entry: string | null) => void>();
+			const watched: string[] = [];
+			const stop = watchJbcentralArtifact(
+				() => {},
+				adapterDeps({
+					exists: (path) => existing.has(path),
+					watchDirectory: (path, callback) => {
+						watched.push(path);
+						callbacks.set(path, callback);
+						if (path === "/users/test/.pi") {
+							existing.add("/users/test/.pi/agent");
+							existing.add("/users/test/.pi/agent/extensions");
+						}
+						return { close: () => {} };
+					},
+				}),
+			);
+			existing.add("/users/test/.pi");
+			callbacks.get("/users/test")?.(".pi");
+			const deadline = Date.now() + 1_000;
+			while (watched.length < 3 && Date.now() < deadline) {
+				await new Promise((resolve) => setTimeout(resolve, 5));
+			}
+
+			expect(watched).toEqual([
+				"/users/test",
+				"/users/test/.pi",
+				"/users/test/.pi/agent/extensions",
+			]);
+			stop();
+		},
+	);
+
+	posix("ignores unrelated churn in a watched ancestor of the artifact directory", async () => {
 		const existing = new Set(["/users/test", "/users/test/.pi", "/users/test/.pi/agent"]);
 		const callbacks = new Map<string, (entry: string | null) => void>();
 		let invalidations = 0;
@@ -641,7 +661,7 @@ describe("Central artifact watcher", () => {
 		stop();
 	});
 
-	test("ignores siblings of the artifact inside the extension directory", async () => {
+	posix("ignores siblings of the artifact inside the extension directory", async () => {
 		const extensionPath = "/users/test/.pi/agent/extensions/jetbrains-central.ts";
 		const existing = new Set([
 			"/users/test",
@@ -682,7 +702,7 @@ describe("Central artifact watcher", () => {
 		stop();
 	});
 
-	test("drops a callback from a superseded watcher instead of reclassifying it", async () => {
+	posix("drops a callback from a superseded watcher instead of reclassifying it", async () => {
 		const existing = new Set(["/users/test", "/users/test/.pi", "/users/test/.pi/agent"]);
 		const callbacks = new Map<string, (entry: string | null) => void>();
 		let invalidations = 0;
@@ -713,7 +733,7 @@ describe("Central artifact watcher", () => {
 		stop();
 	});
 
-	test("treats an unnamed event on the artifact directory as a possible replacement", async () => {
+	posix("treats an unnamed event on the artifact directory as a possible replacement", async () => {
 		const extensionPath = "/users/test/.pi/agent/extensions/jetbrains-central.ts";
 		const existing = new Set([
 			"/users/test",
@@ -748,7 +768,7 @@ describe("Central artifact watcher", () => {
 		stop();
 	});
 
-	test("repairs a dropped add/remove event by polling artifact existence only", async () => {
+	posix("repairs a dropped add/remove event by polling artifact existence only", async () => {
 		const extensionPath = "/users/test/.pi/agent/extensions/jetbrains-central.ts";
 		const existing = new Set([
 			"/users/test",
@@ -790,7 +810,7 @@ describe("Central paths and install guidance", () => {
 		tempHome = undefined;
 	});
 
-	test("finds the installer fallback and ignores the legacy binary name", () => {
+	posix("finds the installer fallback and ignores the legacy binary name", () => {
 		tempHome = mkdtempSync(join(tmpdir(), "central-home-"));
 		const binDir = join(tempHome, ".local", "bin");
 		mkdirSync(binDir, { recursive: true });
@@ -815,7 +835,7 @@ describe("Central paths and install guidance", () => {
 		).toBeNull();
 	});
 
-	test("uses the global extension even with a custom PI agent directory", () => {
+	posix("uses the global extension even with a custom PI agent directory", () => {
 		const env = { HOME: "/home/person", USERPROFILE: "/home/person" };
 		expect(
 			jbcentralExtensionPath({ env: { ...env, PI_CODING_AGENT_DIR: "/tmp/custom-agent" } }),
