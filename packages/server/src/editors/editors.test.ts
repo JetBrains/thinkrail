@@ -221,8 +221,14 @@ describe("revealInFileManager", () => {
 describe("revealItemInFileManager", () => {
 	const dir = mkdtempSync(join(tmpdir(), "thinkrail reveal, item-"));
 	const file = join(dir, "report.md");
+	const commaFile = join(dir, "reveal,report.txt");
+	const unicodeFile = join(dir, "notlar,özet 2026.txt");
+	const folder = join(dir, "catalog,2026");
 	writeFileSync(file, "report");
-	const calls: { cmd: string[]; options: { windowsHide?: boolean } | undefined }[] = [];
+	writeFileSync(commaFile, "report");
+	writeFileSync(unicodeFile, "report");
+	mkdirSync(folder);
+	const calls: { cmd: string[]; options: Parameters<SpawnFn>[1] }[] = [];
 	const recording: SpawnFn = (cmd, options) => {
 		calls.push({ cmd, options });
 	};
@@ -234,13 +240,29 @@ describe("revealItemInFileManager", () => {
 		expect(calls.map((call) => call.cmd)).toEqual([["open", "-R", file]]);
 	});
 
-	test("Windows: explorer /select gets the path as its own backslashed argument", () => {
+	test("Windows: Explorer receives quoted selection paths verbatim, including commas and Unicode", () => {
 		calls.length = 0;
-		revealItemInFileManager(file.replaceAll("\\", "/"), recording, "win32");
-		expect(calls.map((call) => call.cmd)).toEqual([
-			["explorer", "/select,", win32.normalize(file)],
-		]);
+		for (const path of [file, commaFile, unicodeFile, folder]) {
+			revealItemInFileManager(path.replaceAll("\\", "/"), recording, "win32");
+		}
+		expect(calls).toEqual(
+			[file, commaFile, unicodeFile, folder].map((path) => ({
+				cmd: ["explorer", `/select,"${win32.normalize(path)}"`],
+				options: { windowsHide: false, windowsVerbatimArguments: true },
+			})),
+		);
 	});
+
+	test.skipIf(process.platform === "win32")(
+		"refuses embedded quotes before forming a verbatim Windows argument",
+		() => {
+			const quoted = join(dir, 'report"draft.md');
+			writeFileSync(quoted, "report");
+			calls.length = 0;
+			expect(() => revealItemInFileManager(quoted, recording, "win32")).toThrow(/double quote/);
+			expect(calls).toEqual([]);
+		},
+	);
 
 	test("Linux: asks the FileManager1 service to select it, falling back to opening the parent", () => {
 		calls.length = 0;
@@ -258,7 +280,10 @@ describe("revealItemInFileManager", () => {
 		for (const platform of ["darwin", "win32", "linux"] as const) {
 			calls.length = 0;
 			revealItemInFileManager(dir, recording, platform);
-			expect(calls[0]?.options).toEqual({ windowsHide: false });
+			expect(calls[0]?.options).toEqual({
+				windowsHide: false,
+				...(platform === "win32" ? { windowsVerbatimArguments: true } : {}),
+			});
 		}
 		calls.length = 0;
 		expect(() => revealItemInFileManager(join(dir, "gone.md"), recording, "darwin")).toThrow(

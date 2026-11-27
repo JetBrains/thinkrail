@@ -87,7 +87,10 @@ export async function pathWhich(
 	};
 }
 
-export type SpawnFn = (cmd: string[], options?: { windowsHide?: boolean }) => void;
+export type SpawnFn = (
+	cmd: string[],
+	options?: { windowsHide?: boolean; windowsVerbatimArguments?: boolean },
+) => void;
 
 export const defaultSpawn: SpawnFn = (cmd, options) => {
 	if (!spawnDetached(cmd, options)) throw new Error("Failed to launch the requested application");
@@ -169,11 +172,14 @@ export function revealItemInFileManager(
 	platform: NodeJS.Platform = process.platform,
 ): void {
 	if (!existsSync(path)) throw new Error(`Not found: ${path}`);
+	if (platform === "win32" && path.includes('"')) {
+		throw new Error("File manager item path contains a double quote");
+	}
 	const cmd =
 		platform === "darwin"
 			? ["open", "-R", path]
 			: platform === "win32"
-				? ["explorer", "/select,", win32.normalize(path)]
+				? ["explorer", `/select,"${win32.normalize(path)}"`]
 				: [
 						"sh",
 						"-c",
@@ -182,12 +188,19 @@ export function revealItemInFileManager(
 						pathToFileURL(path).href.replaceAll(",", "%2C"),
 						dirname(path),
 					];
-	launchFileManager(cmd, spawn, platform);
+	launchFileManager(cmd, spawn, platform, {
+		...(platform === "win32" ? { windowsVerbatimArguments: true } : {}),
+	});
 }
 
-function launchFileManager(cmd: string[], spawn: SpawnFn, platform: NodeJS.Platform): void {
+function launchFileManager(
+	cmd: string[],
+	spawn: SpawnFn,
+	platform: NodeJS.Platform,
+	options: Parameters<SpawnFn>[1] = {},
+): void {
 	try {
-		spawn(cmd, { windowsHide: false });
+		spawn(cmd, { windowsHide: false, ...options });
 	} catch {
 		throw new Error(`No file manager launcher available on this host (${platform}).`);
 	}

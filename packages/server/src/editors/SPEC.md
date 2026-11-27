@@ -31,8 +31,9 @@ worktree in the host's file manager — the workspace row's "Open in" menu.
   backslash-normalized path (it also opens Documents for a forward-slash path), and launches with
   `windowsHide: false` — `explorer` applies the hide flag to the folder window it opens.
   `revealItemInFileManager(path)` opens the containing folder with the entry (file or folder) **selected**:
-  `open -R` (macOS); `explorer /select, <path>` (Windows — the path is its own argv item so a path with
-  spaces survives Windows quoting, backslash-normalized); on Linux one detached `sh -c` asks the session's
+  `open -R` (macOS); `explorer /select,"<path>"` (Windows — the backslash-normalized path is explicitly
+  quoted and passed verbatim so Explorer treats commas as part of the path; embedded double quotes are
+  refused before launch); on Linux one detached `sh -c` asks the session's
   `org.freedesktop.FileManager1.ShowItems` (Nautilus, Dolphin, Nemo, …) through `dbus-send --print-reply`
   and `exec`s `xdg-open <parent>` when no file manager answers — still fire-and-forget, with commas in the
   file URI percent-encoded because `dbus-send` splits `array:string:` on them. Same up-front throw for a
