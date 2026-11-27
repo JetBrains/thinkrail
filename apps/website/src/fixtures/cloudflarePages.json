@@ -1,0 +1,127 @@
+{
+	"$comment": "Cloudflare Pages API v4 responses for thinkrail-website, shaped after the documented schema of GET /accounts/{account}/pages/projects/{project} and its /deployments?env=production list (newest first). Fields the gate does not read are trimmed. Not recorded from the live project.",
+	"project": {
+		"success": true,
+		"errors": [],
+		"messages": [],
+		"result": {
+			"id": "7b4f3c9e-0d55-4b0f-9a7e-2f0c1d2e3a4b",
+			"name": "thinkrail-website",
+			"subdomain": "thinkrail-website.pages.dev",
+			"production_branch": "main",
+			"domains": ["thinkrail-website.pages.dev", "thinkrail.ai"],
+			"canonical_deployment": {
+				"id": "c3d4e5f6-3333-4ccc-8ccc-333333333333",
+				"short_id": "c3d4e5f6",
+				"project_name": "thinkrail-website",
+				"environment": "production",
+				"url": "https://c3d4e5f6.thinkrail-website.pages.dev",
+				"created_on": "2026-11-19T12:17:41.000000Z",
+				"modified_on": "2026-11-19T12:18:30.000000Z",
+				"aliases": ["https://thinkrail.ai", "https://thinkrail-website.pages.dev"],
+				"is_skipped": false,
+				"latest_stage": {
+					"name": "deploy",
+					"status": "success",
+					"started_on": "2026-11-19T12:18:01.000000Z",
+					"ended_on": "2026-11-19T12:18:30.000000Z"
+				},
+				"deployment_trigger": {
+					"type": "ad_hoc",
+					"metadata": {
+						"branch": "main",
+						"commit_hash": "4f1e2d3c4b5a69788796a5b4c3d2e1f0a9b8c7d6",
+						"commit_message": "feat(website): list extensions from npm",
+						"commit_dirty": false
+					}
+				}
+			},
+			"latest_deployment": {
+				"id": "c3d4e5f6-3333-4ccc-8ccc-333333333333",
+				"short_id": "c3d4e5f6",
+				"environment": "production",
+				"url": "https://c3d4e5f6.thinkrail-website.pages.dev"
+			}
+		}
+	},
+	"deployments": {
+		"success": true,
+		"errors": [],
+		"messages": [],
+		"result": [
+			{
+				"id": "d4e5f6a7-4444-4ddd-8ddd-444444444444",
+				"short_id": "d4e5f6a7",
+				"project_name": "thinkrail-website",
+				"environment": "production",
+				"url": "https://d4e5f6a7.thinkrail-website.pages.dev",
+				"created_on": "2026-11-19T13:17:40.000000Z",
+				"is_skipped": false,
+				"latest_stage": {
+					"name": "deploy",
+					"status": "failure",
+					"started_on": "2026-11-19T13:18:00.000000Z",
+					"ended_on": "2026-11-19T13:18:09.000000Z"
+				},
+				"deployment_trigger": {
+					"type": "ad_hoc",
+					"metadata": {
+						"branch": "main",
+						"commit_hash": "4f1e2d3c4b5a69788796a5b4c3d2e1f0a9b8c7d6",
+						"commit_message": "feat(website): list extensions from npm",
+						"commit_dirty": false
+					}
+				}
+			},
+			{
+				"id": "c3d4e5f6-3333-4ccc-8ccc-333333333333",
+				"short_id": "c3d4e5f6",
+				"project_name": "thinkrail-website",
+				"environment": "production",
+				"url": "https://c3d4e5f6.thinkrail-website.pages.dev",
+				"created_on": "2026-11-19T12:17:41.000000Z",
+				"is_skipped": false,
+				"latest_stage": {
+					"name": "deploy",
+					"status": "success",
+					"started_on": "2026-11-19T12:18:01.000000Z",
+					"ended_on": "2026-11-19T12:18:30.000000Z"
+				},
+				"deployment_trigger": {
+					"type": "ad_hoc",
+					"metadata": {
+						"branch": "main",
+						"commit_hash": "4f1e2d3c4b5a69788796a5b4c3d2e1f0a9b8c7d6",
+						"commit_message": "feat(website): list extensions from npm",
+						"commit_dirty": false
+					}
+				}
+			},
+			{
+				"id": "b2c3d4e5-2222-4bbb-8bbb-222222222222",
+				"short_id": "b2c3d4e5",
+				"project_name": "thinkrail-website",
+				"environment": "production",
+				"url": "https://b2c3d4e5.thinkrail-website.pages.dev",
+				"created_on": "2026-11-19T11:17:39.000000Z",
+				"is_skipped": false,
+				"latest_stage": {
+					"name": "deploy",
+					"status": "success",
+					"started_on": "2026-11-19T11:17:58.000000Z",
+					"ended_on": "2026-11-19T11:18:27.000000Z"
+				},
+				"deployment_trigger": {
+					"type": "ad_hoc",
+					"metadata": {
+						"branch": "main",
+						"commit_hash": "0a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+						"commit_message": "docs(website): extension guide",
+						"commit_dirty": false
+					}
+				}
+			}
+		],
+		"result_info": { "page": 1, "per_page": 25, "count": 3, "total_count": 3, "total_pages": 1 }
+	}
+}

@@ -71,7 +71,7 @@ test("Sign in with ChatGPT offers only the models the ChatGPT backend serves", a
 	const chatgpt = runtime.getModels("openai-codex").map((model) => model.id);
 	const offered = modelIds(runtime, "openai");
 	expect(offered.length).toBeGreaterThan(0);
-	expect(offered).not.toContain("gpt-4");
+	expect(offered).not.toContain("gpt-4.1");
 	expect(offered.every((id) => chatgpt.includes(id))).toBe(true);
 	expect(preferredDefaultModel(settledAvailableModels(runtime))?.id).toBe(
 		PI_DEFAULT_MODEL_PER_PROVIDER["openai-codex"],
@@ -82,7 +82,7 @@ test("an OpenAI API key keeps the full OpenAI catalog", async () => {
 	const runtime = await runtimeWith({
 		openai: async () => ({ type: "api_key", key: "sk-test" }),
 	});
-	expect(modelIds(runtime, "openai")).toContain("gpt-4");
+	expect(modelIds(runtime, "openai")).toContain("gpt-4.1");
 });
 
 test("a proxy's advertised listing hides catalog models it does not serve, matching dated aliases", async () => {
@@ -102,7 +102,7 @@ test("a proxy's advertised listing hides catalog models it does not serve, match
 	runtime.registerProvider("openai", { baseUrl: `${openai}/v1`, apiKey: "wire-proxy" });
 	runtime.registerProvider("anthropic", { baseUrl: anthropic, apiKey: "wire-proxy" });
 	await runtime.refresh({ allowNetwork: false });
-	expect(modelIds(runtime, "openai")).toContain("gpt-4");
+	expect(modelIds(runtime, "openai")).toContain("gpt-4.1");
 	let published = 0;
 	setModelListingPublisher(() => {
 		published += 1;
@@ -161,7 +161,7 @@ test("an unreadable listing leaves the catalog unfiltered", async () => {
 
 	expect(await refreshModelListings(runtime, new Set(["openai"]))).toBe(false);
 
-	expect(modelIds(runtime, "openai")).toContain("gpt-4");
+	expect(modelIds(runtime, "openai")).toContain("gpt-4.1");
 });
 
 test("a stalled credential resolver cannot wedge listing refreshes past the deadline", async () => {

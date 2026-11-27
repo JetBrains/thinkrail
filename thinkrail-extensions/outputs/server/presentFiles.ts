@@ -23,12 +23,13 @@ export interface PresentFilesDetails {
 const DESCRIPTION =
 	"Publish finished files you made for the user to the Outputs list of the Artifacts tab, where they open them; the chat shows each as a clickable card. Only files inside the workspace's artifacts folder can be published.";
 
-const PROMPT_SNIPPET = "Publish the finished files you made for the user to their Outputs list";
+const PROMPT_SNIPPET = "Publish finished files in the artifacts folder to the user's Outputs list";
 
 function promptGuidelines(artifactsDir: string): string[] {
 	return [
-		`When a file you made for the user is ready — a report, a document, a mockup, a diagram, data they asked for — publish it with present_files before your final message. Publish only what the user should open: never scratch work, helpers, intermediate renders, scripts or the assets a deliverable loads (for an HTML mockup, publish the page, not its images or partial versions).`,
-		`present_files accepts only files inside \`${artifactsDir}\`; save a deliverable there first. A published file stays in Outputs and shows its latest version, so publish it again only when the user should look at it again.`,
+		`When a file you made for the user inside \`${artifactsDir}\` is ready — a report, a document, a mockup, a diagram, data they asked for — publish it with present_files before your final message. Publish only what the user should open: never scratch work, helpers, intermediate renders, scripts or the assets a deliverable loads (for an HTML mockup, publish the page, not its images or partial versions).`,
+		`By default, save deliverables inside \`${artifactsDir}\`. If the user explicitly requested another persistent destination, keep the file there and link its actual path in your final message; do not call present_files for it or copy it just to publish it. present_files accepts only files inside \`${artifactsDir}\`.`,
+		"A published file stays in Outputs and shows its latest version, so publish it again only when the user should look at it again.",
 	];
 }
 
@@ -82,7 +83,7 @@ export async function publishFiles(
 	}
 	if (refused.length) {
 		throw new Error(
-			`present_files: nothing was published, because these paths cannot be:\n${refused.join("\n")}\nSave each deliverable inside \`${files.artifactsDir}\`, then call present_files again.`,
+			`present_files: nothing was published, because these paths cannot be:\n${refused.join("\n")}\nOnly files inside \`${files.artifactsDir}\` can be published. If the user explicitly requested another persistent destination, keep the file there and link its actual path in your final message; do not copy it just to publish it. Otherwise save the deliverable inside \`${files.artifactsDir}\` first. Retry present_files only with files inside the artifacts folder.`,
 		);
 	}
 	return { files: [...published] };

@@ -51,6 +51,8 @@ export type KeybindingId =
 	| "view.files"
 	| "view.changes"
 	| "workspace.new"
+	| "workspace.recentNext"
+	| "workspace.recentPrevious"
 	| "search.open"
 	| "files.findInFiles"
 	| "chat.history"
@@ -97,6 +99,8 @@ export const KEYBINDINGS: Readonly<Record<KeybindingId, readonly [KeyChord, ...K
 		{ code: "KeyN", key: "N", mod: true },
 		{ code: "KeyN", key: "N", mod: true, alt: true },
 	],
+	"workspace.recentNext": [{ code: "Tab", key: "Tab", ctrl: true }],
+	"workspace.recentPrevious": [{ code: "Tab", key: "Tab", ctrl: true, shift: true }],
 	"search.open": [{ code: "KeyK", key: "K", mod: true }],
 	"files.findInFiles": [{ code: "KeyF", key: "F", mod: true, shift: true }],
 	"chat.history": [{ code: "KeyR", key: "R", ctrl: true }],

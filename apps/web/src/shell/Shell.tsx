@@ -10,6 +10,7 @@ import { IconButton } from "@thinkrail/ui/button";
 import { LocalKeymapProvider } from "@thinkrail/ui/local-keys";
 import { useEffect, useState } from "react";
 import { useContinuations } from "../chat/continuations";
+import { REVIEW_PULL_REQUEST_PROMPT } from "../chat/pullRequestArguments";
 import { openFindInFiles } from "../findInFiles";
 import {
 	applyFontPreference,
@@ -80,6 +81,7 @@ import { useLocalLayoutState } from "./layoutState";
 import { LocationBar } from "./locationBar";
 import { NativeWindowControls } from "./NativeWindowControls";
 import { PROJECT_HOME_PROJECTS_REGION_ID, ProjectHome } from "./ProjectHome";
+import { RecentSwitcherHost, recentSwitcher } from "./RecentSwitcherHost";
 import { installRegionTracker, pressRegionKey } from "./regions";
 import { SearchPaletteHost } from "./SearchPaletteHost";
 import { ShortcutsDialogHost } from "./ShortcutsDialog";
@@ -247,6 +249,12 @@ function ShellLayout() {
 		onPreviousRegion: () => pressRegionKey(-1),
 		onComposer: focusChatComposer,
 		onFocusProjects: () => focusProjects(homeProjects.toggle),
+		onRecentWorkspace: (binding, event) =>
+			recentSwitcher.start(binding === "workspace.recentPrevious" ? -1 : 1, {
+				ctrl: event.ctrlKey,
+				meta: event.metaKey,
+				alt: event.altKey,
+			}),
 	});
 	return (
 		<div data-testid="shell" className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr]">
@@ -388,10 +396,12 @@ function ShellLayout() {
 			<SurveyWindow />
 			<SearchPaletteHost
 				onNewWorkspace={(_projectId, initialPrompt) => openNewWork(initialPrompt)}
+				onReviewPullRequest={() => openNewWork(REVIEW_PULL_REQUEST_PROMPT)}
 				onToggleProjectsHome={homeProjects.toggle}
 				hasUpdateSettings={updates !== null}
 			/>
 			<FindInFilesHost />
+			<RecentSwitcherHost />
 			<ShortcutsDialogHost />
 			<NotificationPermissionPrompt />
 			<Toaster />

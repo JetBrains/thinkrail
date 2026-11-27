@@ -189,8 +189,14 @@ function emptyRootSections(input: SectionsInput): PaletteSection[] {
 	const { t } = input;
 	const { scope } = input.parsed;
 	if (scope === "all") {
+		const waitingRows = input.waiting.map(plainRow);
+		const waitingSection = (keep: string | null) =>
+			cappedSection(t, "waiting", waitingRows, true, input.expanded, 0, keep, WAITING_CAP);
+		const collapsed = waitingSection(null);
 		const shown = new Set(
-			[...input.waiting, ...input.actions].map((item) => item.id).concat(input.currentPlaces ?? []),
+			[...collapsed.items.map((row) => row.item), ...input.actions]
+				.map((item) => item.id)
+				.concat(input.currentPlaces ?? []),
 		);
 		const recent = input.rootItems
 			.filter((item) => !shown.has(item.id) && item.kind !== "more")
@@ -199,16 +205,11 @@ function emptyRootSections(input: SectionsInput): PaletteSection[] {
 			.sort((a, b) => b.usedAt - a.usedAt)
 			.slice(0, RECENT_LIMIT)
 			.map((entry) => plainRow(entry.item));
-		const waiting = cappedSection(
-			t,
-			"waiting",
-			input.waiting.map(plainRow),
-			true,
-			input.expanded,
-			0,
-			input.keep ?? null,
-			WAITING_CAP,
-		);
+		const keep = input.keep ?? null;
+		const waiting =
+			keep === null || recent.some((row) => row.item.id === keep)
+				? collapsed
+				: waitingSection(keep);
 		return [
 			{ ...waiting, meta: t("search.group.waitingMeta") },
 			{ id: "recent", title: groupLabel(t, "recent"), items: recent },

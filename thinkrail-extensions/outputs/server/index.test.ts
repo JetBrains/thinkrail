@@ -96,10 +96,13 @@ test("a path the host cannot list publishes nothing, and each refusal says why",
 	expect(message).toContain(
 		"- .thinkrail/context/../README.md: it is not inside the artifacts folder",
 	);
-	expect(message).toContain("Save each deliverable inside `.thinkrail/context/`");
 	await expect(publishFiles([join(root, "README.md")], root, files)).rejects.toThrow(
 		"it is not inside the artifacts folder",
 	);
+	expect(message).toContain("Only files inside `.thinkrail/context/` can be published");
+	expect(message).toContain("user explicitly requested another persistent destination");
+	expect(message).toContain("keep the file there and link its actual path");
+	expect(message).toContain("do not copy it just to publish it");
 });
 
 test("the published paths come from the result details only", () => {
@@ -123,4 +126,9 @@ test("the tool is registered with its guidance naming the artifacts folder", asy
 		cwd: root,
 	} as unknown as ExtensionToolContext);
 	expect(result?.details).toEqual({ files: [".thinkrail/context/report.md"] });
+	const guidance = tool?.promptGuidelines?.join("\n");
+	expect(guidance).toContain("By default");
+	expect(guidance).toContain("user explicitly requested another persistent destination");
+	expect(guidance).toContain("keep the file there and link its actual path");
+	expect(guidance).toContain("do not call present_files for it or copy it just to publish it");
 });

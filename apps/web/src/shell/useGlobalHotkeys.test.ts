@@ -189,6 +189,18 @@ describe("region and focus chords", () => {
 		}
 	});
 
+	test("Ctrl+Tab and Ctrl+Shift+Tab switch recent workspaces on every platform, the terminal included", () => {
+		const switching = { ...focus, onRecentWorkspace: noop };
+		for (const platform of ["Linux", "MacIntel"]) {
+			expect(route(key("Tab"), switching, false, platform)).toBe("workspace.recentNext");
+			expect(route(key("Tab", { shiftKey: true }), switching, false, platform, true)).toBe(
+				"workspace.recentPrevious",
+			);
+			expect(route(key("Tab"), switching, true, platform)).toBeNull();
+		}
+		expect(route(key("Tab", command), switching, false, "MacIntel")).toBeNull();
+	});
+
 	test("leave Ctrl+L to a focused terminal's shell, but take Cmd+L there on a Mac", () => {
 		expect(route(key("KeyL"), focus, false, "Linux", true)).toBeNull();
 		expect(route(key("KeyL"), focus, false, "Win32", true)).toBeNull();

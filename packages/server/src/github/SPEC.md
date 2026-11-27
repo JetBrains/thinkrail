@@ -28,7 +28,8 @@ Read-only local GitHub CLI (`gh`) auth status for the New-Workspace dialog's "Co
   failure `runBounded` exists to rule out (see `subprocess/SPEC.md`). A probe that TIMED OUT reports `null`/
   `{ connected: false }` (a transient network stall is not "signed out" — the silent compare fallback,
   never the sign-in dialog). `pr` consumes `ghSetupProblem` (after a failed gh flow only) so the client can
-  show setup guidance instead of silently degrading to the compare page.
+  show setup guidance instead of silently degrading to the compare page; `branch-review` does the same
+  after a failed pull-request listing, so the New Workspace picker can point at Settings › Integrations.
 - **Public surface (barrel):** `githubAuthStatus`, `githubRefresh`, `ghSetupProblem`.
 - **Allowed deps:** `contracts` (`GithubAuthStatus`); `subprocess` (`runBounded`, the bounded child both
   probes spawn under). No `git`/`projects` reach — it's a pure `gh` probe.

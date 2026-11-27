@@ -1,11 +1,24 @@
 import { describe, expect, it, jest, spyOn } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	utimesSync,
+	writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
 import {
+	createAgentSession,
 	DefaultPackageManager,
 	type InlineExtension,
+	ModelRuntime,
+	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { SPEC_SECTION } from "pi-spec-graph";
@@ -39,6 +52,8 @@ import {
 	setExtensionSettingsResolver,
 	setInstalledPackagesListener,
 	setSpecsEnabledResolver,
+	skillArgumentCompletion,
+	toSkillCommands,
 	withoutSpecRule,
 } from "./extensions";
 import { headlessSearchPolicy } from "./headlessSearch";
@@ -544,6 +559,176 @@ describe("buildResourceLoader", () => {
 			writeSkill(join(project, ".claude", "skills"), "repo-late", "committed, appeared late");
 			await loader.reload();
 			expect(loader.getSkills().skills.some((skill) => skill.name === "repo-late")).toBe(false);
+		} finally {
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	for (const excluding of [false, true]) {
+		for (const change of ["install", "upgrade", "remove"] as const) {
+			it(`reload re-reads installed Claude plugin paths after ${change} (exclusion branch: ${excluding})`, async () => {
+				const root = mkdtempSync(join(tmpdir(), "thinkrail-plugin-reload-"));
+				const project = join(root, "project");
+				const fixtureHome = join(root, "home");
+				const agentDir = join(root, "pi-agent");
+				const cache = join(fixtureHome, ".claude", "plugins", "cache", "market", "fixture");
+				const first = join(cache, "1.0.0");
+				const next = join(cache, "2.0.0");
+				const manifest = join(fixtureHome, ".claude", "plugins", "installed_plugins.json");
+				mkdirSync(project, { recursive: true });
+				mkdirSync(agentDir, { recursive: true });
+				writeSkill(join(first, "skills"), "plugin-widget", "first plugin version");
+				writeSkill(join(next, "skills"), "plugin-widget", "updated plugin version");
+				writeSkill(join(cache, "unlisted", "skills"), "unlisted-widget", "not installed");
+				writeSkill(join(first, "node_modules", "dep", "skills"), "dependency-widget", "not a root");
+				writeSkill(join(project, ".pi", "skills"), "native-widget", "native control");
+				const setInstalled = (installPath?: string): void => {
+					writeFileSync(
+						manifest,
+						JSON.stringify({
+							version: 2,
+							plugins: installPath ? { "fixture@market": [{ scope: "user", installPath }] } : {},
+						}),
+					);
+				};
+				setInstalled(change === "install" ? undefined : first);
+				const restore = stubSkillEnv(fixtureHome, agentDir);
+				try {
+					const loader = await buildResourceLoader(
+						project,
+						SettingsManager.create(project, agentDir, { projectTrusted: true }),
+						() => ctx(true),
+						excluding ? [join(agentDir, "extensions", "excluded.ts")] : [],
+					);
+					const widgets = () =>
+						loader
+							.getSkills()
+							.skills.filter((skill) => skill.name === "plugin-widget")
+							.map((skill) => skill.description);
+					expect(widgets()).toEqual(change === "install" ? [] : ["first plugin version"]);
+					setInstalled(change === "remove" ? undefined : change === "upgrade" ? next : first);
+					await loader.reload();
+					expect(widgets()).toEqual(
+						change === "remove"
+							? []
+							: [change === "upgrade" ? "updated plugin version" : "first plugin version"],
+					);
+					const names = loader.getSkills().skills.map((skill) => skill.name);
+					expect(names).toContain("native-widget");
+					expect(names).not.toContain("unlisted-widget");
+					expect(names).not.toContain("dependency-widget");
+				} finally {
+					restore();
+					rmSync(root, { recursive: true, force: true });
+				}
+			});
+		}
+	}
+
+	it("reload admits an installed Claude plugin only through current policy and retains project trust", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-plugin-admission-"));
+		const project = join(root, "project");
+		const fixtureHome = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(fixtureHome, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(fixtureHome, agentDir);
+		try {
+			let admission: SkillAdmissionContext = { ...ctx(false), otherAgentSkills: false };
+			const loader = await buildResourceLoader(
+				project,
+				SettingsManager.create(project, agentDir, { projectTrusted: false }),
+				() => admission,
+			);
+			const installPath = join(fixtureHome, ".claude", "plugins", "cache", "market", "fixture");
+			writeSkill(join(installPath, "skills"), "plugin-widget", "new plugin");
+			writeSkill(join(project, ".claude", "skills"), "project-widget", "untrusted project");
+			writeFileSync(
+				join(fixtureHome, ".claude", "plugins", "installed_plugins.json"),
+				JSON.stringify({ plugins: { "fixture@market": [{ scope: "user", installPath }] } }),
+			);
+			const hasPlugin = () =>
+				loader.getSkills().skills.some((skill) => skill.name === "plugin-widget");
+			await loader.reload();
+			expect(hasPlugin()).toBe(false);
+			admission = { ...admission, otherAgentSkills: true };
+			await loader.reload();
+			expect(hasPlugin()).toBe(true);
+			admission = { ...admission, disabledGroups: ["@plugins"] };
+			await loader.reload();
+			expect(hasPlugin()).toBe(false);
+			admission = { ...admission, overrides: { "plugin-widget": "on", "project-widget": "on" } };
+			await loader.reload();
+			expect(hasPlugin()).toBe(true);
+			expect(loader.getSkills().skills.some((skill) => skill.name === "project-widget")).toBe(
+				false,
+			);
+		} finally {
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("a live pi session refreshes installed Claude plugin skills without replacing the session or loader", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-plugin-session-"));
+		const project = join(root, "project");
+		const fixtureHome = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(fixtureHome, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(fixtureHome, agentDir);
+		try {
+			const faux = createFauxCore({ provider: "plugin-reload-probe", api: "plugin-reload-probe" });
+			const runtime = await ModelRuntime.create({
+				credentials: new InMemoryCredentialStore(),
+				modelsPath: null,
+				allowModelNetwork: false,
+			});
+			runtime.registerProvider(faux.provider, {
+				api: faux.api,
+				baseUrl: "http://faux.local",
+				apiKey: "fixture-only",
+				streamSimple: faux.streamSimple,
+				models: faux.models,
+			});
+			const settingsManager = SettingsManager.inMemory();
+			const loader = await buildResourceLoader(project, settingsManager, () => ctx(false));
+			const { session } = await createAgentSession({
+				cwd: project,
+				agentDir,
+				model: faux.getModel(),
+				modelRuntime: runtime,
+				settingsManager,
+				resourceLoader: loader,
+				sessionManager: SessionManager.inMemory(project),
+			});
+			try {
+				const sessionId = session.sessionId;
+				expect(session.systemPrompt).not.toContain("session-plugin-widget");
+				const installPath = join(fixtureHome, ".claude", "plugins", "cache", "market", "fixture");
+				const manifest = join(fixtureHome, ".claude", "plugins", "installed_plugins.json");
+				writeSkill(join(installPath, "skills"), "session-plugin-widget", "Session reload probe.");
+				writeFileSync(
+					manifest,
+					JSON.stringify({ plugins: { "fixture@market": [{ scope: "user", installPath }] } }),
+				);
+				await session.reload();
+				expect(session.systemPrompt).toContain("session-plugin-widget");
+				expect(session.resourceLoader).toBe(loader);
+				expect(session.sessionId).toBe(sessionId);
+
+				writeFileSync(manifest, JSON.stringify({ plugins: {} }));
+				await session.reload();
+				expect(session.systemPrompt).not.toContain("session-plugin-widget");
+				expect(session.resourceLoader).toBe(loader);
+				expect(session.sessionId).toBe(sessionId);
+				expect(faux.state.callCount).toBe(0);
+			} finally {
+				session.dispose();
+			}
 		} finally {
 			restore();
 			rmSync(root, { recursive: true, force: true });
@@ -1430,5 +1615,71 @@ describe("pi packages", () => {
 			restore();
 			rmSync(root, { recursive: true, force: true });
 		}
+	});
+});
+
+describe("skill argument completion", () => {
+	const skillFile = (frontmatter: string) => {
+		const dir = mkdtempSync(join(tmpdir(), "thinkrail-skill-arg-"));
+		const path = join(dir, "SKILL.md");
+		writeFileSync(
+			path,
+			`---\nname: probe\ndescription: Use when probing.\n${frontmatter}---\n\n# Probe\n`,
+		);
+		return { dir, path };
+	};
+
+	it("surfaces a declared pull-request argument on the skill's slash command", () => {
+		const { dir, path } = skillFile("argument-completion: pull-request\n");
+		try {
+			const [command] = toSkillCommands([
+				{
+					name: "probe",
+					description: "Use when probing.",
+					filePath: path,
+					baseDir: dir,
+					sourceInfo: { path, source: "local", scope: "user", origin: "top-level" },
+					disableModelInvocation: false,
+				},
+			]);
+			expect(command).toMatchObject({ name: "skill:probe", argumentCompletion: "pull-request" });
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("ignores an unknown kind, a missing key and an unreadable file", () => {
+		for (const frontmatter of ["argument-completion: issue\n", ""]) {
+			const { dir, path } = skillFile(frontmatter);
+			try {
+				expect(skillArgumentCompletion(path)).toBeNull();
+			} finally {
+				rmSync(dir, { recursive: true, force: true });
+			}
+		}
+		expect(skillArgumentCompletion(join(tmpdir(), "no-such-skill", "SKILL.md"))).toBeNull();
+	});
+
+	it("rereads a skill whose file changed", () => {
+		const { dir, path } = skillFile("");
+		try {
+			expect(skillArgumentCompletion(path)).toBeNull();
+			writeFileSync(
+				path,
+				"---\nname: probe\ndescription: x\nargument-completion: pull-request\n---\n",
+			);
+			const later = new Date(Date.now() + 5_000);
+			utimesSync(path, later, later);
+			expect(skillArgumentCompletion(path)).toBe("pull-request");
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("the bundled reviewing-a-pr skill declares a pull-request argument", () => {
+		const path = createRequire(import.meta.url).resolve(
+			"pi-thinkrail-workflow/skills/reviewing-a-pr/SKILL.md",
+		);
+		expect(skillArgumentCompletion(path)).toBe("pull-request");
 	});
 });

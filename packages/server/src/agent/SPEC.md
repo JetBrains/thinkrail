@@ -660,9 +660,14 @@ re-opened transcripts provider-valid.
     pi's own `emitError` sites omit it (`runner.js` message_end, `agent-session.js` command/`<runtime>`),
     and synthesising one there would record the *host's* stack — pointing the reader at
     `prepareSessionEntry` instead of the extension, which is the opposite of why the line exists.
-    **Members distinguish browser calls from terminal-only calls.** *Untranslatable* ones are inert no-ops and rightly so — they take a
-    TUI `Component` factory a web host cannot render (`setFooter`, `setHeader`, `setEditorComponent`,
-    `custom`, `setWidget`'s factory overload; the string-array overload **is** rendered).
+    **Members distinguish browser calls from terminal-only calls.** *Untranslatable* setters are inert
+    no-ops: they take a TUI `Component` factory a web host cannot render (`setFooter`, `setHeader`,
+    `setEditorComponent`, `setWidget`'s factory overload; the string-array overload **is** rendered).
+    `custom()` instead rejects with `CodedError("EXTENSION_UI_UNSUPPORTED")`, without invoking its factory
+    or registering a dialog. An extension can catch `error.code === "EXTENSION_UI_UNSUPPORTED"` and fall
+    back to `select`, `confirm`, `input` or `editor`; a supported dialog's user cancellation still resolves
+    its ordinary cancelled value. An uncaught rejection follows pi's existing extension error reporting,
+    not a fabricated cancellation. `ctx.mode` stays `"rpc"` and `ctx.hasUI` stays true.
     *Translatable* ones must behave: **`theme` is a real `Theme`** (`plainTextTheme`) whose every
     decorator returns its input unchanged. `setEditorText` and `pasteToEditor` publish fire-and-forget
     frames of their own kinds for that session's browser composer: a replacement (an empty string clears
@@ -806,11 +811,15 @@ re-opened transcripts provider-valid.
     the manager bullet above). Pure over pi's `SessionManager` (compaction-aware via
     `buildSessionContext`; idempotent; appends only missing results from the active tail batch) —
     unit-tested against `SessionManager.inMemory`, including failed-attempt and historical-gap replay.
-  - `artifactsGuard` — keeps the agent's output in the workspace for the Artifacts tool
+  - `artifactsGuard` — defaults the agent's output to the workspace for the Artifacts tool
     ([[submodule-server-artifacts]]): a `before_agent_start` system-prompt section (`thinkrail-artifacts`)
-    telling the agent to put every non-code output it produces under `.thinkrail/context/` and never to
-    delete or move files out of it, and asking softly that it link each result in its final message and
-    keep scratch work in a `_`-prefixed folder such as `_work/` (both feed the artifact roles: a linked
+    telling the agent to put non-code output under `.thinkrail/context/` by default, while honoring an
+    explicit user-selected persistent path or directory, including one outside the workspace. Such
+    results are linked at their actual paths in the final message; files outside the artifacts folder
+    cannot be published through `present_files` and need not be copied there just to appear in Outputs.
+    The rule still forbids deleting or moving files out of the artifacts folder, and asks that it link
+    each result in its final message and keep scratch work in a `_`-prefixed folder such as `_work/`
+    (both feed the artifact roles: a linked
     path is a result, a `_` folder holds working files), plus a `tool_call` hook that blocks a `write` that would **create a new
     file** in a temporary folder (`/tmp`, `/var/tmp`, `os.tmpdir()`, `$TMPDIR`/`$TEMP`/`$TMP`, real paths
     included) outside the session's own folder, with a reason naming the `.thinkrail/context/` path to use.
@@ -1282,8 +1291,10 @@ re-opened transcripts provider-valid.
     `.agents/skills`, so capped filesystem batches carry truthful skill-change evidence without making
     `watch` depend on `agent`. The fixed project/personal alias roots are registered as candidate skill paths
     **whether or not they exist yet**, so a `loader.reload()` picks up one a branch switch / pull / clone
-    creates mid-session (plugin dirs are the set installed at construction — a plugin added later
-    needs a fresh session); classification still only counts dirs that actually exist. Still never arbitrary
+    creates mid-session. Every reload also re-reads the installed Claude plugin manifest before refreshing
+    the existing loader's skill paths, so newly installed plugins appear, upgraded install paths replace old
+    ones, and removed plugins disappear even when their cache folders remain on disk. Current admission
+    applies before these paths reach pi; classification still only counts dirs that actually exist. Still never arbitrary
     dot-directory scanning, plugin caches, commands, or nested downward discovery. Pi remains the parser:
     vendor-only macros/hooks/models/subagents/metadata are not emulated. First-name-wins precedence is
     Pi native/configured/shared → ThinkRail-bundled → personal aliases → project aliases, so a repo can
@@ -1318,8 +1329,8 @@ re-opened transcripts provider-valid.
     The host resolves the context via the **`setSkillAdmissionResolver`** seam (keyed by `workspaceId`, fails
     closed); `buildResourceLoader` takes the resolver as a thunk and `skillsGate` re-resolves **both** the admission
     context (`getCtx`) **and** the live compatibility source set (fresh discovery) on every `loader.reload()`, so
-    `session.reloadResources` picks up a mid-session trust grant, skill/group toggle, **or a newly-appeared alias
-    dir** — and a late-appearing project alias is still classified + trust-gated, never slipping through as an
+    `session.reloadResources` picks up a mid-session trust grant, skill/group toggle, **a newly-appeared alias
+    dir or a changed plugin installation** — and a late-appearing project alias is still classified + trust-gated, never slipping through as an
     unclassified load. Personal and bundled resources are never trust-gated (only the enable/disable layer), and
     this gate is scoped to the compatibility aliases. pi-native project resources (`.pi/` settings, extensions,
     skills, prompts and themes, `SYSTEM.md`, ancestor `.agents/skills`) follow pi-level trust instead: pi gates
@@ -1438,7 +1449,8 @@ re-opened transcripts provider-valid.
   `delegationRootDir()` (the delegation embedding); the skill catalog helpers
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /
-  `isProjectSkillPath(relativePath)` (watch-classification predicate) /
+  `isProjectSkillPath(relativePath)` (watch-classification predicate) / `PROJECT_SKILL_ROOTS` (the
+  repo-relative `.<alias>/skills` roots that predicate matches, the list the host's base-ref preview extracts) /
   `mayHoldProjectSkills(relativePath)` (the folders a project skill can sit in: an alias folder like
   `.claude` and its `skills/` tree without dot-folders, which pi never scans);
   `reloadSessionResources(sessionId)` (active-chat reload; throws while the reload gate is blocked) +
@@ -1528,24 +1540,27 @@ context-budget limitations and their upgrade checks live in [[pi-compatibility]]
 
 Pi owns provider retry; the host never adds one. Pi retries only errors that match its retryable
 patterns: "Anthropic stream ended before message_stop" does, "Could not parse Anthropic SSE event" does
-not. `patches/@earendil-works%2Fpi-ai@1.6.0.patch` (root `patchedDependencies`, upstream
-earendil-works/pi#10390, #564) fixes two defects in pi-ai's `anthropic-messages` SSE parser that end a
-turn with that parse error. The two fixes have different outcomes:
+not. `patches/@earendil-works%2Fpi-ai@1.6.1.patch` (root `patchedDependencies`, upstream
+earendil-works/pi#10390, #564) fixes the remaining defect in pi-ai's `anthropic-messages` SSE parser
+that ends a turn with that parse error:
 
-- **Split CRLF.** A `\r\n` after an `event:` line, split across two network chunks, read as two line
-  breaks. The blank line dispatched the event without its `data:` line, so a complete, valid CRLF stream
-  failed. A trailing `\r` now waits for the next chunk, and the stream succeeds. The final drain still
-  ends a line on a lone `\r`.
 - **Cut-off stream.** The event that a cut left without its blank line was dispatched with empty or
   partial data. It is now parsed strictly, never "repaired", and dropped when empty, unparsable or not an
   object, so the cut ends with a retryable truncation error such as "stream ended before message_stop".
   An unfinished event that does parse is still yielded, so a stream missing the final blank line after
-  `message_stop` still succeeds.
+  `message_stop` still succeeds. The patch tags every event `SseDecoder.end()` returns as unfinished,
+  in `anthropic-messages.js` only: the decoder's final flush cannot complete a terminated event, and
+  the other providers sharing `utils/sse.js` keep upstream behavior.
+
+**Post-mortem, split CRLF.** A `\r\n` after an `event:` line, split across two network chunks, read as
+two line breaks, so a complete, valid CRLF stream failed. The patch held a trailing `\r` until the next
+chunk; pi-ai 1.6.1's shared `SseDecoder` carries the pending CR itself, so that half of the patch was
+dropped and its guard case moved to the "behavior the patch keeps" group.
 
 A finished but malformed event keeps the non-retryable parse error. Observed failures carry an empty
 `data=` and only the `event:` line in `raw=`. A split CRLF always leaves that signature and a random cut
-rarely does, so the split CRLF is likely what users hit. Unconfirmed: whether api.anthropic.com or a
-proxy on the path sends CRLF. The guard test and removal gate live in [[pi-compatibility]].
+rarely does, so the split CRLF (now fixed upstream) was likely what users hit. Unconfirmed: whether
+api.anthropic.com or a proxy on the path sends CRLF. The guard test and removal gate live in [[pi-compatibility]].
 
 ## Billing warnings
 
@@ -2033,6 +2048,10 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   pre-session catalog maps only `resourceLoader.getSkills()` through the same skill→command helper and
   applies the **same project-trust gate**, so New Workspace preview and a real session cannot disagree
   except for the accepted base-branch/current-checkout timing difference.
+- That skill→command helper (`toSkillCommands`) also reads each skill's ThinkRail frontmatter key
+  `argument-completion` (pi ignores it) and sets `SlashCommandInfo.argumentCompletion` for a known
+  kind (`pull-request`); the read is cached per file and modification time, and an unknown kind or an
+  unreadable file simply omits it. Both catalogs therefore agree on which commands take a pull request.
 - Dialog promises honor abort/timeout and are settled (+ dismissed in the UI) on session disposal — a
   bridged `uiContext` call must never hang.
 - **Prompt-template `/name` expansion** — typed-through references like `/name args` in a prompt ride

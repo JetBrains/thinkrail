@@ -24,6 +24,7 @@ import {
 	isKeybindingChord,
 	isLineWidth,
 	isLocalePreference,
+	isPullRequestFilter,
 	isQuestionPanelHeight,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
@@ -32,6 +33,7 @@ import {
 	normalizeFontSettings,
 	normalizeThemePreference,
 	type Project,
+	type PullRequestFilter,
 	type SessionCompletion,
 	type TurnChangeSet,
 	type WireModel,
@@ -63,8 +65,18 @@ export {
 } from "./attributionProtocol";
 export type { InstallationRecord } from "./installation";
 
+/**
+ * The app state root. `THINKRAIL_DATA_DIR` relocates it (a supported override). Blank means unset; any other
+ * value is used as written, surrounding spaces included. A leading `~` is the home directory, since launchers
+ * that set it outside a shell never expand it.
+ */
 export function dataDir(): string {
-	return resolve(process.env.THINKRAIL_DATA_DIR ?? join(homedir(), ".thinkrail"));
+	const override = process.env.THINKRAIL_DATA_DIR;
+	if (!override?.trim()) return join(homedir(), ".thinkrail");
+	if (override === "~") return homedir();
+	if (override.startsWith("~/") || override.startsWith("~\\"))
+		return join(homedir(), override.slice(2));
+	return resolve(override);
 }
 
 /** Where chats without a project keep their folders; never a repository root for `project.open`. */
@@ -652,6 +664,15 @@ function storedExtensionSettings(value: unknown): ExtensionSettingValues {
 	return result;
 }
 
+function storedPullRequestFilters(value: unknown): Record<string, PullRequestFilter> {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+	return Object.fromEntries(
+		Object.entries(value).filter((entry): entry is [string, PullRequestFilter] =>
+			isPullRequestFilter(entry[1]),
+		),
+	);
+}
+
 function storedKeybindings(value: unknown): KeybindingOverrides {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return {};
 	const result: KeybindingOverrides = {};
@@ -762,6 +783,7 @@ export function loadConfig(): AppConfig {
 		onboardingDismissed: value.onboardingDismissed === true,
 		...normalizeFontSettings(value),
 		keybindings: storedKeybindings(value.keybindings),
+		pullRequestFilters: storedPullRequestFilters(value.pullRequestFilters),
 	};
 }
 

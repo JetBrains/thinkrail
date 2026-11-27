@@ -22,7 +22,7 @@ import { dictationFieldOf } from "./field";
 import { dictationShortcutLabel, installDictationChord, installDictationEscape } from "./hotkey";
 import { BLOCKED_LABEL, speechErrorKey, UNAVAILABLE_LABEL } from "./labels";
 import { type MicState, micState } from "./micState";
-import type { DictationError } from "./session";
+import type { DictationError, DictationPhase } from "./session";
 
 const LEVEL_BARS = ["h-4", "h-6", "h-8", "h-12"] as const;
 const Busy = withIconClass(RiLoader4Line, "motion-safe:animate-spin");
@@ -91,8 +91,7 @@ function followField(
 	};
 	place();
 	const resized = new ResizeObserver(schedule);
-	resized.observe(field);
-	resized.observe(document.documentElement);
+	for (let node: Element | null = field; node; node = node.parentElement) resized.observe(node);
 	if (container) resized.observe(container);
 	const removal = new MutationObserver(() => {
 		if (!field.isConnected) schedule();
@@ -168,10 +167,68 @@ function OfferCard({
 	);
 }
 
+const COMPOSER = "[data-dictation-fallback]";
+
+/** A chat composer's resting mic, or the one that follows focus to any other field. */
+type MicAnchor = "composer" | "field";
+const fieldKeys = new WeakMap<HTMLElement, string>();
+let nextFieldKey = 0;
+
+function fieldKey(field: HTMLElement): string {
+	let key = fieldKeys.get(field);
+	if (!key) {
+		nextFieldKey += 1;
+		key = `mic-${nextFieldKey}`;
+		fieldKeys.set(field, key);
+	}
+	return key;
+}
+
+function isComposer(field: HTMLElement): boolean {
+	return field.matches(COMPOSER);
+}
+
+function sameFields(a: readonly HTMLElement[], b: readonly HTMLElement[]): boolean {
+	return a.length === b.length && a.every((field, index) => field === b[index]);
+}
+
+/** The eligible chat composers on the page, which show their mic without focus. */
+function useComposers(): HTMLElement[] {
+	const [composers, setComposers] = useState<HTMLElement[]>([]);
+	useEffect(() => {
+		let frame = 0;
+		const scan = () => {
+			frame = 0;
+			const dictating = dictatingElement();
+			const next = Array.from(document.querySelectorAll<HTMLElement>(COMPOSER)).filter(
+				(composer) => composer === dictating || dictationFieldOf(composer) === composer,
+			);
+			setComposers((prev) => (sameFields(prev, next) ? prev : next));
+		};
+		const schedule = () => {
+			if (frame === 0) frame = requestAnimationFrame(scan);
+		};
+		scan();
+		const observer = new MutationObserver(schedule);
+		observer.observe(document.documentElement, {
+			childList: true,
+			subtree: true,
+			attributes: true,
+			attributeFilter: ["data-dictation-fallback", "readonly", "disabled", "contenteditable"],
+		});
+		return () => {
+			cancelAnimationFrame(frame);
+			observer.disconnect();
+		};
+	}, []);
+	return composers;
+}
+
 /**
  * The page's one voice-input surface: it follows focus to whatever text field is active (the app's or
- * an extension's), shows a mic in that field's corner, and owns the dictation chord. Turned off in
- * Settings, it renders nothing and listens to nothing.
+ * an extension's) and shows a mic in that field's corner, keeps a mic on every chat composer even
+ * without focus, and owns the dictation chord. Turned off in Settings, it renders nothing and listens
+ * to nothing.
  */
 export function DictationLayer() {
 	const enabled = useAppStore((s) => s.voiceInputEnabled);
@@ -187,10 +244,10 @@ function ActiveDictationLayer() {
 	const snapshot = useDictationSnapshot();
 	const [availability] = useState(micAvailability);
 	const [focused, setFocused] = useState<HTMLElement | null>(null);
-	const [offerOpen, setOfferOpen] = useState(false);
+	const [offerFor, setOfferFor] = useState<HTMLElement | null>(null);
 	const [kept, setKept] = useState<HTMLElement | null>(null);
-	const [fits, setFits] = useState(true);
 	const lastFallback = useRef<HTMLElement | null>(null);
+	const composers = useComposers();
 	const dictating = useDictatingElement();
 	const state = micState(status, availability, blockedMicrophone(snapshot.error?.code));
 	const latest = useRef({ state });
@@ -232,7 +289,7 @@ function ActiveDictationLayer() {
 						return true;
 					}
 					setFocused(target);
-					if (current.kind === "offer") setOfferOpen(true);
+					if (current.kind === "offer") setOfferFor(target);
 					if (current.kind === "installing") cancelInstall();
 					return false;
 				},
@@ -257,28 +314,80 @@ function ActiveDictationLayer() {
 	}, [error, t]);
 
 	useEffect(() => {
-		if (state.kind === "ready" && offerOpen) setOfferOpen(false);
-	}, [state.kind, offerOpen]);
+		if (state.kind === "ready" && offerFor) setOfferFor(null);
+	}, [state.kind, offerFor]);
 
 	const listening = snapshot.phase !== "idle" ? dictating : null;
 	const field = listening ?? focused;
-	if (field && field !== kept) setKept(field);
-	const anchor = field ?? (kept?.isConnected ? kept : null);
-	const container = anchor ? layerContainer(anchor) : null;
+	const loose = field && !isComposer(field) ? field : null;
+	if (loose && loose !== kept) setKept(loose);
+	const anchor = loose ?? (kept?.isConnected ? kept : null);
+	const resting =
+		listening && isComposer(listening) && !composers.includes(listening)
+			? [...composers, listening]
+			: composers;
+
+	if (state.kind === "hidden") return null;
+
+	const mic = (target: HTMLElement, kind: MicAnchor, following: boolean) => (
+		<FieldMic
+			key={kind === "field" ? kind : fieldKey(target)}
+			field={target}
+			kind={kind}
+			following={following}
+			state={state}
+			active={listening === target}
+			phase={snapshot.phase}
+			level={snapshot.level}
+			offerOpen={offerFor === target}
+			onOfferOpenChange={(open) => setOfferFor(open ? target : null)}
+		/>
+	);
+
+	return (
+		<>
+			{anchor ? mic(anchor, "field", loose !== null) : null}
+			{resting.map((composer) => mic(composer, "composer", true))}
+		</>
+	);
+}
+
+function FieldMic({
+	field,
+	kind,
+	following,
+	state,
+	active,
+	phase,
+	level,
+	offerOpen,
+	onOfferOpenChange,
+}: {
+	field: HTMLElement;
+	kind: MicAnchor;
+	following: boolean;
+	state: Exclude<MicState, { kind: "hidden" }>;
+	active: boolean;
+	phase: DictationPhase;
+	level: number;
+	offerOpen: boolean;
+	onOfferOpenChange: (open: boolean) => void;
+}) {
+	const t = useT();
+	const [fits, setFits] = useState(true);
+	const container = layerContainer(field);
 	const micRef = useRef<HTMLDivElement>(null);
-	const following = state.kind !== "hidden" && field !== null;
 	const shown = following && fits;
-	if (!shown && offerOpen) setOfferOpen(false);
+	useEffect(() => {
+		if (!shown && offerOpen) onOfferOpenChange(false);
+	}, [shown, offerOpen, onOfferOpenChange]);
 	useLayoutEffect(() => {
 		const mic = micRef.current;
-		if (!mic || !field || !following) return;
+		if (!mic || !following) return;
 		return followField(mic, field, container, setFits);
 	}, [field, container, following]);
 
-	if (!anchor || state.kind === "hidden") return null;
-
-	const active = listening === anchor;
-	const starting = active && snapshot.phase === "connecting";
+	const starting = active && phase === "connecting";
 	const busy = state.kind === "installing" || starting;
 	const shortcut = dictationShortcutLabel();
 	const label =
@@ -303,9 +412,11 @@ function ActiveDictationLayer() {
 								: t("speech.mic.start", { shortcut });
 	const press = () => {
 		if (active) stopDictation();
-		else if (state.kind === "ready" || state.kind === "blocked") startDictation(anchor);
-		else if (state.kind === "offer") setOfferOpen(true);
-		else if (state.kind === "installing") cancelInstall();
+		else if (state.kind === "ready" || state.kind === "blocked") startDictation(field);
+		else if (state.kind === "offer") {
+			field.focus();
+			onOfferOpenChange(true);
+		} else if (state.kind === "installing") cancelInstall();
 	};
 
 	return createPortal(
@@ -318,8 +429,8 @@ function ActiveDictationLayer() {
 				container ? "absolute" : "fixed",
 			)}
 		>
-			{active && !starting ? <LevelMeter level={snapshot.level} /> : null}
-			<Popover open={offerOpen} onOpenChange={setOfferOpen}>
+			{active && !starting ? <LevelMeter level={level} /> : null}
+			<Popover open={offerOpen} onOpenChange={onOfferOpenChange}>
 				<PopoverAnchor asChild>
 					<IconButton
 						icon={
@@ -333,6 +444,7 @@ function ActiveDictationLayer() {
 						}
 						data-testid="speech-mic"
 						data-mic-state={active ? "listening" : state.kind}
+						data-mic-anchor={kind}
 						tabIndex={-1}
 						label={label}
 						tone={active ? "danger" : undefined}
@@ -361,10 +473,10 @@ function ActiveDictationLayer() {
 						<OfferCard
 							state={state}
 							onDownload={() => {
-								setOfferOpen(false);
+								onOfferOpenChange(false);
 								installSpeech(state.model);
 							}}
-							onLater={() => setOfferOpen(false)}
+							onLater={() => onOfferOpenChange(false)}
 						/>
 					</PopoverContent>
 				) : null}

@@ -11,12 +11,12 @@ Read the entry with `node <skill dir>/scripts/extensions.mjs status <folder>` (o
 | `"styles" needs a "web" half`, `declare "server", "web" or both`, `"api" must be a "major.minor" version`, `must be a relative path that stays inside the package`, `must name a … file`, `needs a valid npm package name` | the manifest breaks a rule in SKILL.md § 4 — fix `package.json` |
 | `is the name of a built-in extension` | rename the package (and both descriptors) |
 | `<file> is missing from the package` | not built, or a manifest path is wrong — run the build, check `dist/` |
-| `Failed to load extension: Cannot find module '@thinkrail/extension-sdk/server'` | `npm install --omit=peer` was not run in the folder |
+| `Failed to load extension: Cannot find module '@thinkrail/extension-sdk/server'` | replace the SDK value import with `import type { ServerExtension }` and `export default { … } satisfies ServerExtension` (server-half.md) |
 | `Failed to load extension: Cannot find module '<pkg>'` | add the package to `dependencies` and `npm install --omit=peer` |
 | `Failed to load extension: <your message>` | the server file threw while loading (top-level code) — fix it |
 | `ParseError` / `SyntaxError` | a syntax error in a server file |
 | `must be the package name` | the descriptor's `name` differs from `package.json` `name` — make them equal |
-| `does not default-export` / `defineServerExtension` | `server/index.ts` needs `export default defineServerExtension({ … })` |
+| `not a defineServerExtension descriptor` / `does not default-export` | `server/index.ts` needs `export default { … } satisfies ServerExtension` with a type-only SDK import |
 | `is already installed from <source>` | another declared folder or package has the same name: rename this one, or remove the other declaration |
 | `skill package … declares no pi.skills directories` / cannot resolve | fix `skillPackages` and `"pi": { "skills": [...] }` (server-half.md § Skills) |
 | `not a ThinkRail extension` | `package.json` has no `thinkrail` key |
@@ -70,12 +70,12 @@ it there:
 ```sh
 mkdir -p ~/thinkrail-extensions
 cd <checkout>/packages/extension-sdk && bun install && bun pm pack --filename ~/thinkrail-extensions/thinkrail-extension-sdk.tgz
-cd <extension folder> && npm install --omit=peer ~/thinkrail-extensions/thinkrail-extension-sdk.tgz
+cd <extension folder> && npm install --save-dev --omit=peer ~/thinkrail-extensions/thinkrail-extension-sdk.tgz
 ```
 
 - `bun install` may run the checkout's own setup scripts (git hooks); it changes no tracked file, and
   nothing in the checkout needs editing.
-- The packed SDK says version `0.0.0`; that is expected — its API is still the checkout's (`"1.0"`), and
-  the manifest's `api` must equal it.
-- `npm install <tarball>` records a `file:` dependency in `package.json`; replace it with `"~<api>.0"`
+- The packed SDK carries the checkout's version, which may be ahead of npm; that is expected — its API
+  is the checkout's (`"1.0"`), and the manifest's `api` must equal it.
+- `npm install --save-dev <tarball>` records a `file:` dev dependency in `package.json`; replace it with `"~<api>.0"`
   once the SDK is published, before sharing the extension.

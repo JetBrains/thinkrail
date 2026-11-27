@@ -142,8 +142,9 @@ A folder source is never copied: it loads from where it is, and nothing under it
   extension is then `stage`d: a folder is read in place; an npm/git source is installed into a fresh,
   pending `installs/<id>` (its second fetch) and its `package.json` read again. A `thinkrail` key gives a
   `StagedExtension`; otherwise the folder is removed and `undefined` returned. `adopt` records the
-  install, appends the source to `extensions.json` if absent and reconciles; `discard` drops a staged
-  folder.
+  install, appends the source to `extensions.json` if absent and reconciles, refusing with
+  `PACKAGE_INSTALLED_UNLISTED` when the source then has no row (it is declared, so something was added);
+  `discard` drops a staged folder.
 - **The status file is how an agent learns the outcome** (the `making-thinkrail-extensions` host skill
   reads it): a load failure, an incompatible `api` or a refused `extensions.json` is otherwise visible
   only in Settings and the host log, and an agent has files, not the wire. After every reconcile pass —
@@ -251,7 +252,9 @@ A folder source is never copied: it loads from where it is, and nothing under it
   `discoverAndLoadExtensions`, `createAgentSession` for the guard), `typebox` (`Type`, the guard),
   `@thinkrail/extension-api/installed` (the manifest reader), `@thinkrail/extension-api/server` (the
   descriptor types), `@thinkrail/contracts`,
-  `@thinkrail/shared/codedError`, `log`, Node `fs` / `path` / `os` / `crypto`.
+  `@thinkrail/shared/codedError`, `@thinkrail/shared/packageInstallError` (the dialog's install,
+  `stage`, captures npm's output and names the failure with it; reconcile installs and updates keep pi's
+  default output), `log`, Node `fs` / `path` / `os` / `crypto`.
 - **Forbidden:** the parent registry and its siblings (the skill resolver and the reserved names arrive
   as options), `agent`, `host`, `settings`, `persistence` (the data dir arrives as an option), spawning
   npm or git itself, writing inside a folder source or outside `<data dir>/extensions*`.

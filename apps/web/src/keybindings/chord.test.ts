@@ -191,6 +191,10 @@ describe("chordFromEvent", () => {
 		expect(reserved("KeyK", { ctrlKey: true }, LINUX)).toMatchObject({ browserReserved: false });
 		expect(isBrowserReservedChord("Ctrl+KeyT", LINUX)).toBe(true);
 		expect(isBrowserReservedChord("Ctrl+KeyT", MAC)).toBe(false);
+		for (const platform of [MAC, LINUX]) {
+			expect(isBrowserReservedChord("Ctrl+Tab", platform)).toBe(true);
+			expect(isBrowserReservedChord("Ctrl+Shift+Tab", platform)).toBe(true);
+		}
 	});
 });
 

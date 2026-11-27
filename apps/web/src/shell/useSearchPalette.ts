@@ -11,7 +11,6 @@ import { availableSettings, useSettingsCatalogContext } from "../panels/settings
 import { settingsNavGroups } from "../panels/settingsNav";
 import {
 	canSettleWorkspace,
-	goToProjectHome,
 	markWorkspaceRead,
 	markWorkspaceUnread,
 	openWorkspaceIn,
@@ -21,7 +20,6 @@ import {
 	useEditors,
 } from "../panels/workspaceActions";
 import {
-	buildWorkItems,
 	commandItems,
 	type PaletteAsk,
 	type PaletteHost,
@@ -56,7 +54,7 @@ import {
 	useAppStore,
 	workspaceName,
 } from "../store";
-import { errorText, getTransport, supportsTextSearch } from "../transport";
+import { errorText, supportsPullRequestReview, supportsTextSearch } from "../transport";
 import {
 	focusCenterGroup,
 	focusChatComposer,
@@ -78,7 +76,6 @@ import { useResolvedKeybindings } from "./keybindingState";
 import { collectCenterGroups } from "./layout";
 import { readNativePageZoomBridge } from "./nativePageZoom";
 import { type HostHitTargets, openHostHit } from "./openHostHit";
-import { createPaletteBackfill } from "./paletteBackfill";
 import {
 	buildCommands,
 	buildSettingsItems,
@@ -89,20 +86,13 @@ import { paletteNavigator } from "./paletteNavigation";
 import { focusAdjacentRegion } from "./regions";
 import { hasNativeShortcuts } from "./useAppShortcuts";
 import { activeTabActions, runActiveTabAction } from "./workbenchCommands";
+import { paletteWorkItems, watchWorkspaceBackfill } from "./workItemsSource";
 
 const LOCAL_SCOPES: readonly SearchScope[] = ["all", "work", "commands"];
 const HOST_SCOPES: readonly SearchScope[] = ["all", "work", "files", "specs", "commands"];
 const CHAT_SCOPES: readonly SearchScope[] = ["all", "work", "files", "commands"];
-const BACKFILL_CONCURRENCY = 4;
-
-const paletteBackfill = createPaletteBackfill({
-	listWorkspaces: (projectId) =>
-		getTransport().request("workspace.list", { projectId, includeDiffStats: false }),
-	concurrency: BACKFILL_CONCURRENCY,
-});
-
 function useWorkspaceBackfill(): void {
-	useEffect(() => paletteBackfill.watch(), []);
+	useEffect(watchWorkspaceBackfill, []);
 }
 
 const hostHitTargets: HostHitTargets = {
@@ -130,6 +120,7 @@ export async function askTheAgent(
 
 export interface SearchPaletteOptions {
 	readonly openNewWorkspace: (projectId: string | null, initialPrompt?: string) => boolean;
+	readonly openReviewPullRequest: () => boolean;
 	readonly toggleProjectsHome: () => void;
 	readonly pickAndOpenProject: () => Promise<void>;
 	readonly enterHostPath: () => void;
@@ -265,6 +256,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			t,
 			contextProjectId: contextRepoProject?.id ?? null,
 			canStartChat,
+			reviewAvailable: supportsPullRequestReview(protocolVersion),
 			activeWorkspace,
 			editors,
 			historyAvailable: historySessionId !== null,
@@ -285,6 +277,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			extensionPanels: openablePanels,
 			actions: {
 				newWorkspace: options.openNewWorkspace,
+				reviewPullRequest: () => void options.openReviewPullRequest(),
 				newProjectlessChat: () => void startProjectlessChat(),
 				openDefaultWorkspace: (projectId) =>
 					void enterDefaultWorkspace(projectId, paletteNavigator.beginPick()),
@@ -322,7 +315,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				runTabAction: runActiveTabAction,
 			},
 		};
-		const workItems = buildWorkItems({
+		const workItems = paletteWorkItems({
 			t,
 			state: {
 				projects,
@@ -335,14 +328,6 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			contextProjectId: contextProject?.id ?? null,
 			firstPrompts,
 			transcriptPreviews: hostSearch,
-			navigateToProject: (projectId) => {
-				paletteNavigator.beginPick();
-				goToProjectHome(projectId);
-			},
-			navigateToWorkspace: (workspace, sessionId) =>
-				void paletteNavigator.navigateToWorkspace(workspace, sessionId).then((opened) => {
-					if (opened) store().requestComposerFocus(workspace.id, sessionId);
-				}),
 		});
 		const rootItems: PaletteItem[] = [
 			...commandItems(t, buildCommands(deps), online),

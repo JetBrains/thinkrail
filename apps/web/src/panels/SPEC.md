@@ -331,8 +331,14 @@ treatment.
   a focused row) opens its menu: **Open in browser** first for an HTML file from a host at
   `BROWSER_VIEW_PROTOCOL_VERSION` (v122; `OpenInBrowserMenuItem`, also in the Artifacts row menu after
   Reveal, and `OpenInBrowserButton` in the file tab's toolbar and, through `ResourceHost.OpenInBrowser`, in
-  every framed preview), then **Copy path** (absolute, through `joinWorkspacePath`) and **Copy relative
-  path** (worktree-relative). "Open in browser" opens the host's `/view/` URL with `window.open(…,
+  every framed preview), then the **OS reveal** (below), then **Copy path** (absolute, through
+  `fileTreeActions.copyWorkspacePath`, shared with the Artifacts and Specs menus) and **Copy relative
+  path** (worktree-relative). The **OS reveal** (`RevealMenuItems.RevealInFileManagerMenuItem`, shown from
+  a host at `FS_REVEAL_PROTOCOL_VERSION`, v134) calls `fs.reveal`, so the host's file manager opens the
+  entry's folder with the entry selected. Its label follows `hostPlatform` (*Reveal in Finder* / *Show in
+  Explorer* / *Reveal in file manager* on Linux or an unknown host) because the name tells the user which
+  app will open. A failure shows a toast. Like every host reveal, it happens on the host's machine, so a
+  remote browser does not see it. The Files, Artifacts and Specs menus share this one item. "Open in browser" opens the host's `/view/` URL with `window.open(…,
   "noopener,noreferrer")`: a new tab on the web, the system browser on the desktop
   ([[submodule-server-host]] serves it sandboxed, [[module-desktop]] routes it to the OS). A compacted folder copies its deepest path, matching its label, and copying
   neither opens nor selects the row. The row stays highlighted while its menu is open. From a host at
@@ -636,9 +642,11 @@ resources stop loading, running subagents stop and open chats reload only when `
 pre-session half of the user's skill settings; the chat header opens the same dialog in workspace mode
 (with Reload).
 
-**`NewWorkspaceDialog`** is the start-working surface: **a target control** (a two-option segment — a
-native radio group, `fieldset` + sr-only `legend` over visually-hidden radio inputs, so assistive tech
-hears one mutually-exclusive choice — both always visible: the two-mode model in one glance) chooses **where** the work runs, and the header is
+**`NewWorkspaceDialog`** is the start-working surface: **a target control** (a segment of up to three
+options — a native radio group, `fieldset` + sr-only `legend` over visually-hidden radio inputs, so
+assistive tech hears one mutually-exclusive choice: **Isolated workspace** and **Project folder** when a
+repository project is open and **Chat without a project** where a chat can start — every available mode
+visible at once) chooses **where** the work runs, and the header is
 **mode-aware** so it always names the operation truthfully: **Isolated workspace** → title **“Create
 workspace”**, description **“A separate checkout on its own new branch. Files, chats, changes, and
 terminals stay scoped to it.”**; **Project folder** → title **“Work in project folder”**, description
@@ -689,13 +697,21 @@ a project picker, the prompt hero, and the reused
   runnable by the held model by asking the host for pi's clamp (**`model.clampThinking`**) rather than
   deciding locally, so an explicit switch and a refresh that shrank a model's set resolve the same way
   pi would. `model.default` needs no adjustment: the host already returns a self-consistent pair.
-  On open and project-picker changes, the dialog reads **`skill.list({projectId})`**; whenever a leading
-  slash token becomes active it also reads **`template.list({projectId})`**. It feeds both into the shared
-  `prompt` module, so Create Workspace and live chat use the same filtering, menu, keyboard navigation,
-  race-safe template pick, and Tab-through placeholder state machine. Skills come from the selected project's
-  **current checkout** plus personal/bundled sources; templates merge global + current-checkout project scope
-  with project precedence. Selecting a skill inserts `/skill:<name> `; selecting a template reads
-  `template.get({projectId, name})`, replaces the complete draft with its body, and activates its placeholders.
+  On open and on project-picker, target and base-branch changes, the dialog reads **`skill.list({projectId,
+  baseRef?})`**; whenever a leading slash token becomes active it also reads **`template.list({projectId,
+  baseRef?})`**. It feeds both into the shared `prompt` module, so Create Workspace and live chat use the same
+  filtering, menu, keyboard navigation, race-safe template pick, and Tab-through placeholder state machine.
+  In **New worktree** mode on a v135+ host (`REF_RESOURCE_PREVIEW_PROTOCOL_VERSION`) `baseRef` is the selected
+  base branch, so project skills and templates are the ones the created worktree will hold — a stale or
+  untracked checkout neither hides nor adds any; both reads repeat after that base's `git.prefetch` succeeds
+  (a moved tracking ref can bring new skills) and after a trust grant, through one refresh counter the
+  cancellation-safe effects depend on, so a late answer for a previous ref is dropped. Until the branch list
+  names that base (or fails), worktree mode reads nothing, so a pick can't start on the checkout catalog and
+  then be invalidated when the ref arrives. Work in project folder
+  and older hosts omit `baseRef` and preview the **current checkout**. Personal/bundled skills and global
+  templates join either way, project templates taking precedence. Selecting a skill inserts `/skill:<name> `;
+  selecting a template reads `template.get({projectId, baseRef?, name})` (the picker's context key includes
+  the ref), replaces the complete draft with its body, and activates its placeholders.
   Up/Down navigate, Enter/Tab select, Escape dismisses the menu; outside an open menu Tab/Shift+Tab cycle active
   template slots and Escape ends that session. Submission mirrors edited repeated slots and removes untouched
   markers before the finalized text becomes the first prompt. While a selected template body is loading,
@@ -703,8 +719,10 @@ a project picker, the prompt hero, and the reused
   invalidates an in-flight pick, so a response from the previous checkout cannot populate the next project's
   prompt. The first prompt is snapshotted before asynchronous workspace creation begins.
   Listing/get failures preserve the draft and degrade to whichever source remains available. Extension commands and `/compact` stay absent because no live
-  session exists. A caption under the prompt marks the catalog as **from the current checkout** (the created
-  worktree's session is authoritative if the selected base branch differs). When the selected project ships anything
+  session exists. A caption under the prompt names the catalog's source: **`from <baseRef>, the branch this
+  workspace starts from`** when `baseRef` travels, else **from the current checkout** (the created
+  workspace's session is authoritative). The trust notice below still counts the **current checkout's** gated resources
+  — a base branch that adds the repo's first gated skill is previewed without it until trust is granted. When the selected project ships anything
   still **untrusted** (the same `useProjectTrustSummary` + `deriveProjectTrustNotice` pair as the Welcome
   notice — counts and kinds, never names), a **trust notice** shows a *Trust project* button — the repo's
   skills and pi resources stay withheld until granted (`project.setTrust` from the same `trustGrantParams`,
@@ -738,6 +756,16 @@ a project picker, the prompt hero, and the reused
   missing API key) surfaces as an `error` turn, after the user's message, in the chat the handoff opens; a
   failed chat start toasts instead. `retryDraft` (Edit & retry) reopens the dialog prefilled with the failed
   creation's prompt, images, model + effort and base branch.
+  **Reviewing a pull request** has no mode of its own: typing `/skill:reviewing-a-pr ` in the prompt
+  (the skill declares a pull-request argument) opens the shared pull-request completion
+  (`chat/PullRequestCompletionMenu` over `chat/pullRequestCompletion`, [[submodule-web-chat]]) above the
+  prompt instead of the slash menu, with the dialog as the author dropdown's container. Picking one
+  inserts its link after the command, sets **From** to the PR's `baseRef` (prefetched as a picked remote
+  base is; a branch list that arrives later never replaces a base chosen for the same project) and says so next to the picker ("base of #N") until another base is chosen; the command and
+  the link are tinted through a backdrop behind the transparent textarea. The palette's **Review a pull
+  request…** row opens the dialog with the command seeded, so the list is already open. The workspace
+  is created like any other prompt — `workspace.startCreate` from the chosen base with the prompt as the
+  kickoff, the agent naming it.
   **`WorkspaceCreation.tsx`** renders a creation in the two places the user waits: `WorkspaceCreationRow`
   under its project in `ProjectTree` — inside the live list right after the Default row(s), newest first,
   i.e. exactly where its workspace lands, so the handoff never moves the row (spinner + `Creating… N%` + a `<progress>` bar while running; failed:
@@ -1322,7 +1350,7 @@ a project picker, the prompt hero, and the reused
     `nemo-speech` on PATH; focus returns to the Delete button on cancel and to the Voice input switch
     after deleting.
   The mic itself is not here: the page-level dictation layer ([[submodule-web-speech]]) shows it on
-  whichever text field has focus;
+  whichever text field has focus, and on every chat composer without focus;
   **`TerminalSettings`** — **Scrollback**, a cheap segmented choice (`store.terminalReplayKb`, five presets
   from Off to 1 MB; a valid non-preset host value selects none rather than a wrong preset;
   `settings.update { terminalReplayKb }`, applies to terminals opened from now on) and, on
@@ -1519,14 +1547,16 @@ a project picker, the prompt hero, and the reused
   `protocolVersion >= EXTENSION_CATALOG_PROTOCOL_VERSION`) is one `SettingsPage` of rows, not cards, in up
   to six groups. Its description carries the page's only statement about chats — "Changes apply to open
   chats when their current turn ends."; there is no dynamic notice about which chats are pending.
-  **Packages** is the **Install an extension or pi package** row (`packages-install`, with two
+  **Install** (titled for its action: "Packages" did not cover the extensions it installs) is the
+  **Install an extension or pi package** row (`packages-install`, with two
   buttons from `GalleryLinks`: **Browse ThinkRail extensions** (`extensions-gallery-link`, the website's
   showcase, only when the host supports installed extensions) first, then **Browse the pi package
   gallery**; the install dialog's form repeats both in that order). **Built into ThinkRail** is the host-registry catalog, read from the store's
   `extensionCatalog` (`selectBuiltinExtensions`: every row of an older host, `kind: "builtin"` from v131) —
   `transport`'s `refreshExtensionCatalog` re-lists on each mount and each welcome while the page is open, so
   an older host or a page opened while disconnected still lands its rows, and a failure shows **Retry**,
-  which re-lists — rendered by
+  which re-lists and shows its busy state until the reply lands (a failure that repeats would otherwise
+  look like a click that did nothing) — rendered by
   the props-driven `ExtensionsCatalog` as one `SettingsRow` per entry — title (the web half's translated
   `title` when it declares one, `extensions`' `webExtensionTitle`, else the host's), description and its
   tools as visible text ("Tools: a, b", each `extension-tool-<tool>`) with a `@thinkrail/ui/switch`
@@ -1614,7 +1644,10 @@ a project picker, the prompt hero, and the reused
   progress log, no Cancel — pi has none) → **Installed** (name · version · description, chips for every
   tool / command / skill / prompt it added, and one line: "Installed globally — new chats have it now;
   open chats pick it up when idle"; no switch here — the row in the list is the only state control) or
-  **Failed** (the host's message,
+  **Failed** (`installFailureText`: for `PACKAGE_NOT_FOUND`, `PACKAGE_REGISTRY_UNREACHABLE` and
+  `PACKAGE_INSTALL_FAILED` one plain sentence — npm found no such package or dependency / the registry
+  could not be reached / the install stopped with an error — with the host's raw text, npm's own output
+  included, behind a closed **Details** toggle; for any other code the host's message as it is;
   "Nothing was added to your settings" only for the codes the host raises before it writes
   (`installFailureOutcome`), "It may have been added anyway — check the list" for any other error, Back /
   Retry; a `RequestTimeoutError` instead says to check the list, since the install may still complete). A package that installs but contributes nothing loadable
@@ -1693,11 +1726,14 @@ a project picker, the prompt hero, and the reused
   description and author ("No extensions match …") over one `SettingsList` (`extension-browse`) of listing
   rows — no preview image: an author-chosen image URL would expose every user's IP to its host, so Browse
   never reads a listing's `image` and no catalog entry makes the app request another origin (pinned by
-  `e2e/extension-browse.spec.ts`) — the primary: title, version, **Agent tools** /
+  `e2e/extension-browse.spec.ts`). A row shows, as plain text: title, version, **Agent tools** /
   **Chat cards** from `halves`, package name · author, description, and an **Installed** mark or an
-  incompatible mark (`extensionApiFit`) with its reason as visible text — which opens the install dialog's
-  confirm step with the listing's `npm:<name>` (inert, `aria-disabled`, when the listing cannot be installed),
-  with npm and repository links and **Install** as its buttons. An empty catalog is a row linking to the
+  incompatible mark (`extensionApiFit`) with its reason. It has no primary; its buttons, in the row's →
+  walk, are the npm and repository links and **Install**, which opens the install dialog's confirm step
+  with the listing's `npm:<name>` (absent when the listing cannot be installed). Rejected: a content-wide
+  primary that also opened the dialog (a second tab stop and click target for the same action as
+  Install), and Install as the primary (the walk keeps a primary out of → / ←, so the button would be
+  unreachable by arrows). An empty catalog is a row linking to the
   authoring guide (`https://thinkrail.ai/docs/build-an-extension/`); an unreachable, offline or invalid
   catalog — or a host that does not answer — is a notice row saying it cannot reach the catalog, that
   installed extensions keep working, with Retry as its button, while the rest of the page is unaffected.
@@ -2572,7 +2608,9 @@ own section. The kebab menu (`plan-menu`, a
   duplicate root, preview pane, or graph canvas. `FileTree` shares the same file gesture model
   (preview/keep) but keeps its own directory behaviour — a whole-row click toggles dirs, no collision
   there. File and folder rows also carry the copy-path, Copy / Paste and Delete context menu described with
-  `FilesPanel`.
+  `FilesPanel`. A spec row's context menu (right-click, Context Menu key, Shift+F10) is read-only: the OS
+  reveal, **Reveal in Files** (`RevealInFilesMenuItem` → `fileTreeActions.revealInFilesPanel`, the same
+  jump the Artifacts menu uses), and the two Copy paths. The row stays highlighted while its menu is open.
 - **`ArtifactsPanel` is the Artifacts tool's body** — a reader of the host's artifact index
   ([[submodule-server-artifacts]]). Like specs, the `artifacts.list` snapshot lands in the store
   (`artifactsByWorkspace`) through **`useWorkspaceArtifacts`**, which the workbench calls for every
@@ -2653,11 +2691,11 @@ own section. The kebab menu (`plan-menu`, a
   (`artifactRowParts.ArtifactEntryMenu`, shared by both views): Mention in chat
   (pastes `@<path> ` into the attended chat's composer through `pasteIntoComposer` and focuses it, closing the chat's history overlay as `Mod+L` does — run once the row
 menu has closed, because a closing menu returns focus to its row; disabled
-  without one), Reveal in Files, Open ‹chat› for an attributed row (the chip's action), the two Copy paths,
+  without one), the OS reveal and Reveal in Files (both from `RevealMenuItems`), Open ‹chat› for an attributed row (the chip's action), the two Copy paths,
   Copy / Cut (the shared Files clipboard; a cut pastes
   through `fs.move`), Rename (inline, `fs.rename`), Restore for a deleted row, and Delete — `fs.delete` for a
   live file, `artifacts.discard` for a kept copy, both behind a confirmation. A Tree folder's menu is
-  Mention in chat (`@<folder>/ `), Reveal in Files, the two Copy paths, Copy / Cut, Paste here (with a
+  Mention in chat (`@<folder>/ `), the OS reveal, Reveal in Files, the two Copy paths, Copy / Cut, Paste here (with a
   clipboard) and Rename — no Delete or Restore: removing or restoring a folder of kept copies one
   request per file would mean hundreds of reconciles and trash calls, and a host batch was not worth it
   yet. Each section is its own sidebar

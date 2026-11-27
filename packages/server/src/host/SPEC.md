@@ -150,7 +150,11 @@ nudges `fsChanged`. Nothing cleans the folder: sent messages keep naming its fil
   handler settled, and a result settling after a reconnect went to the dead socket and sat until the next
   `resume`, so enough slow requests filled the namespace and refused every later request from that window.
   Abandoned work is still running work, so it stays bounded (the tracked ceiling below). Each `ack`/`resume`
-  that abandons running work logs one `warn` with the per-method counts; `RequestAbandonedError`
+  that abandons running work logs its per-method counts at `debug`. A host-wide summary logs the accumulated
+  counts at `warn` every 60 seconds when nonempty, and flushes the final partial interval on stop. Counts
+  clear after each summary; reconnects and new client keys share the same interval. This keeps routine
+  polling cancellation from flooding normal support logs (#1448), without losing the affected methods or
+  their frequency. The summary retains counts, never request ids or payloads. `RequestAbandonedError`
   (`code: "REQUEST_ABANDONED"`, tagged with the method) is reported once per method per launch and for at most
   10 methods, because it shares the `request` source's fixed per-launch report budget with genuine handler
   failures and the overflow report, and a reload's new client key must not renew it. Requests that settle
@@ -340,7 +344,10 @@ nudges `fsChanged`. Nothing cleans the folder: sent messages keep naming its fil
   the **Skills-manager set**: `skill.list` / `skills.state` / `project.skills` build
   the admission context from `projects` (+ the
   workspace's `skillOverrides` when workspace-scoped) and pass it into agent's `listSkillCommands`/
-  `listSkillCatalog`; the **MCP set** (`mcp.*`, `host/mcp.ts`) composes `agent`'s MCP
+  `listSkillCatalog`; `skill.list` and the project-located `template.list`/`template.get` with a `baseRef`
+  read from `workspaces`' `previewRefPaths(project, baseRef, [...PROJECT_SKILL_ROOTS, PROJECT_TEMPLATE_ROOT])`
+  folder instead of the project checkout (same admission, so trust gates are unchanged), falling back to the
+  checkout when the preview is `null`; the **MCP set** (`mcp.*`, `host/mcp.ts`) composes `agent`'s MCP
   service with `projects` (approvals, overrides, pi-level trust) and publishes `mcp.status` snapshots (topic
   subscribed only by clients at `MCP_PROTOCOL_VERSION` or later) plus `session.resourcesChanged`
   invalidations. Every request that names a workspace resolves it and its project; one without (user scope
@@ -885,7 +892,7 @@ nudges `fsChanged`. Nothing cleans the folder: sent messages keep naming its fil
   the handler (`REPOSITORY_ONLY_METHODS` — git, changes, reviews, pull requests, turns, diff stats and
   base, and the plan's review doors `todo.review` / `startReview` / `reviewAll` / `requestFix`, which
   would reach a git-backed review snapshot — plus project close/rename/trust/skills,
-  `workspace.create`/`listExisting`, `git.listBranches`/`prefetch`); **the capability matrix of a chat
+  `workspace.create`/`listExisting`, `git.listBranches`/`prefetch`, `pr.list`/`pr.get`/`pr.sizes`/`pr.authors`); **the capability matrix of a chat
   is files, terminal and Plan, never git, review or specs**: `fs.readDir` lists a chat's folder without
   the git-ignore decoration, the `/blob` route answers 404 for a chat before any git, the
   Agent-review resolver handed to `agent` answers `false` for a chat (so its sessions get neither
@@ -993,7 +1000,8 @@ inotify watch per folder; background runs in big repositories would otherwise ex
 and settle do not depend on it. `setArtifactsPublisher` fans
 the index's change out as the pathless `workspace.artifactsChanged` nudge to v121+ sockets of that
 workspace. `fs.delete`, `fs.rename` and `fs.move` run their mutation inside `withUserRemoval` (a move locks
-both workspaces in id order), `fs.copy` and `fs.move` first call `prepareArtifactsDestination` for their
+both workspaces in id order); `fs.reveal` resolves its path through `fs`'s `resolveWorktreeEntry` (contained,
+never `.git`) before handing it to `editors.revealItemInFileManager`; `fs.copy` and `fs.move` first call `prepareArtifactsDestination` for their
 destination folder, and `workspace.remove` / `chat.delete` call `removeWorkspaceArtifacts` once the
 workspace or chat record is gone.
 
@@ -1016,7 +1024,12 @@ enabled/confirmed choice before entering analytics attribution.
   `workspaces` writers: the normalized session-state publisher stamps `recordWorkspaceActivity(record.workspaceId)`
   whenever a record reports `execution: "running"` (a user prompt flips it, so both user and agent turns
   count — and the writer's one-per-minute coalescing makes a streaming agent cheap), an accepted
-  `terminal.write` stamps the owning workspace (a displaced/no-op write does not), and the repo-metadata
+  `terminal.write` stamps the owning workspace only when the accepted chunk contains input other than
+  complete terminal focus reports (`ESC[I` / `ESC[O`); an empty chunk or a displaced/no-op write does not.
+  `stampTerminalActivity` leaves all bytes for the PTY and skips the activity writer entirely for pure
+  focus reports, including its coalesced high-water mark. Mixed input, other escape sequences and partial
+  focus sequences still count; xterm emits each focus report as one data event, so there is no cross-write
+  parser or buffering that could swallow an Escape key. The repo-metadata
   callback calls `recordWorkspaceHead`, with `watch`'s watch-started nudge wired to `seedWorkspaceHead` so
   first admission seeds and watcher recreation detects a HEAD move made while unwatched. Reading a result, selecting a workspace, or opening
   files never stamps — "looking is not working" is the user-visible rule. `workspace.settle` /

@@ -73,6 +73,7 @@ interface PackedManifest {
 	bin?: Record<string, string>;
 	exports?: Record<string, string | Record<string, string>>;
 	dependencies?: Record<string, string>;
+	devDependencies?: Record<string, string>;
 	peerDependencies?: Record<string, string>;
 	thinkrail?: Record<string, string>;
 }
@@ -89,7 +90,7 @@ function assertPackedPackage(pkg: PiPackage, tarball: string, scratch: string, s
 	const shipped = files(dir).map((path) => relative(dir, path));
 	const tests = shipped.filter((path) => /\.test\.[cm]?[jt]sx?$/.test(path));
 	if (tests.length > 0) fail(`${pkg.name} ships tests: ${tests.join(", ")}`);
-	for (const section of ["dependencies", "peerDependencies"] as const) {
+	for (const section of ["dependencies", "devDependencies", "peerDependencies"] as const) {
 		for (const [name, version] of Object.entries(manifest[section] ?? {})) {
 			if (/^(?:workspace|catalog):/.test(version))
 				fail(`${pkg.name}: ${section}.${name} was packed as "${version}"`);
@@ -117,9 +118,11 @@ function assertPackedPackage(pkg: PiPackage, tarball: string, scratch: string, s
 		assertApiVersion(manifest.version, sharedApi(dir));
 		return;
 	}
-	if (manifest.dependencies?.["@thinkrail/extension-sdk"] !== sdkVersion) {
-		fail(`${pkg.name} must depend on @thinkrail/extension-sdk ${sdkVersion} exactly`);
+	if (manifest.devDependencies?.["@thinkrail/extension-sdk"] !== sdkVersion) {
+		fail(`${pkg.name} must use @thinkrail/extension-sdk ${sdkVersion} as a dev dependency`);
 	}
+	if (manifest.dependencies?.["@thinkrail/extension-sdk"] !== undefined)
+		fail(`${pkg.name} must not install the SDK's build toolchain at runtime`);
 	const singletons = Object.keys(manifest.dependencies ?? {}).filter((name) =>
 		/^(?:@earendil-works\/|typebox$)/.test(name),
 	);
@@ -196,10 +199,10 @@ export default defineWebExtension({
 `;
 
 const SERVER = `import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { defineServerExtension } from "@thinkrail/extension-sdk/server";
+import type { ServerExtension } from "@thinkrail/extension-sdk/server";
 import { Type } from "typebox";
 
-export default defineServerExtension({
+export default {
 	name: "thinkrail-ext-gate",
 	extensions: [
 		(pi: ExtensionAPI) => {
@@ -216,7 +219,7 @@ export default defineServerExtension({
 	],
 	sessionExtensions: (session) => [() => void session.setting("loud")],
 	settings: { loud: { type: "boolean", default: false, title: "Loud", description: "Shout the city." } },
-});
+} satisfies ServerExtension;
 `;
 
 const LOADER = `const [bundle, manifestPath, mode] = process.argv.slice(2);
@@ -352,10 +355,16 @@ try {
 				title: "Gate",
 			},
 			dependencies: Object.fromEntries(
-				[...tarballs].map(([pkg, tarball]) => [pkg.name, `file:${tarball}`]),
+				[...tarballs]
+					.filter(([pkg]) => pkg !== sdk)
+					.map(([pkg, tarball]) => [pkg.name, `file:${tarball}`]),
 			),
 			peerDependencies: { "@earendil-works/pi-coding-agent": "*", typebox: "*" },
-			devDependencies: { ...devDependencies, typescript5: `npm:typescript@${TYPESCRIPT_5}` },
+			devDependencies: {
+				...devDependencies,
+				[sdk.name]: `file:${tarballs.get(sdk)}`,
+				typescript5: `npm:typescript@${TYPESCRIPT_5}`,
+			},
 		}),
 	);
 	write("web/index.tsx", WEB);
@@ -394,6 +403,44 @@ try {
 	const manifest = join(sdkDir, "assets/shared-modules.json");
 	assertLoads(fixture, join(fixture, "dist/web.js"), manifest, "thinkrail-ext-gate");
 	const servers = [join(fixture, "server/index.ts")];
+	const runtime = join(scratch, "installed-runtime");
+	mkdirSync(join(runtime, "server"), { recursive: true });
+	writeFileSync(
+		join(runtime, "package.json"),
+		JSON.stringify({
+			name: "thinkrail-extension-runtime-gate",
+			private: true,
+			type: "module",
+			dependencies: {
+				...Object.fromEntries(samples.map((pkg) => [pkg.name, `file:${tarballs.get(pkg)}`])),
+				typebox: pinned("typebox"),
+			},
+		}),
+	);
+	run(
+		"npm",
+		["install", "--omit=dev", "--legacy-peer-deps", "--no-audit", "--no-fund", "--loglevel=error"],
+		runtime,
+	);
+	const installed = Object.keys(
+		(
+			JSON.parse(readFileSync(join(runtime, "package-lock.json"), "utf8")) as {
+				packages: Record<string, unknown>;
+			}
+		).packages,
+	);
+	for (const name of [
+		sdk.name,
+		"rolldown",
+		"tailwindcss",
+		"@tailwindcss/node",
+		"@tailwindcss/oxide",
+	]) {
+		if (installed.some((path) => path.endsWith(`node_modules/${name}`)))
+			fail(`the installed extensions pull in the build-only package ${name}`);
+	}
+	writeFileSync(join(runtime, "server/index.ts"), SERVER);
+	servers.push(join(runtime, "server/index.ts"));
 
 	for (const sample of samples) {
 		const dir = join(fixture, "node_modules", sample.name);
@@ -406,6 +453,7 @@ try {
 		if (web) {
 			assertBundle(sample.name, join(dir, web));
 			assertLoads(fixture, join(dir, web), manifest, sample.name);
+			assertLoads(fixture, join(runtime, "node_modules", sample.name, web), manifest, sample.name);
 		}
 		if (styles) {
 			const build =
@@ -418,7 +466,10 @@ try {
 			if (!prefix) fail(`${sample.name} declares styles but its build script names no --prefix`);
 			assertStylesheet(sample.name, join(dir, styles), prefix);
 		}
-		if (server) servers.push(join(dir, server));
+		if (server) {
+			servers.push(join(dir, server));
+			servers.push(join(runtime, "node_modules", sample.name, server));
+		}
 	}
 
 	for (const server of servers) {

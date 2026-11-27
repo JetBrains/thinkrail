@@ -32,18 +32,32 @@ This package carries extension API **1.0**:
 		"title": "Weather"
 	},
 	"scripts": { "build": "thinkrail-extension build --prefix weather" },
-	"dependencies": { "@thinkrail/extension-sdk": "~1.0.0" },
 	"peerDependencies": { "@earendil-works/pi-coding-agent": "*", "typebox": "*" },
-	"devDependencies": { "@types/react": "^19.3.0", "typescript": "^5.9.0" }
+	"devDependencies": { "@thinkrail/extension-sdk": "~1.0.0", "@types/react": "^19.3.0", "typescript": "^5.9.0" }
 }
 ```
 
-- Depend on `~1.0.0`, never a caret range: the SDK's `major.minor` is the extension API it builds, and
+- Keep the SDK in `devDependencies`, using `~1.0.0`, never a caret range: the SDK's `major.minor` is the extension API it builds, and
   a bundle built by a later minor needs a ThinkRail that provides that minor.
 - `server` is TypeScript source, loaded by ThinkRail as pi loads extensions. Keep pi and typebox as
   peer dependencies: ThinkRail provides them.
 - `web` and `styles` are what `thinkrail-extension build` writes. The web entry is `web/index.tsx`
   (or `--entry <file>`); its default export is a `defineWebExtension` descriptor.
+
+Use a type-only SDK import for the server descriptor:
+
+```ts
+import type { ServerExtension } from "@thinkrail/extension-sdk/server";
+
+export default {
+	name: "thinkrail-ext-weather",
+	extensions: [],
+} satisfies ServerExtension;
+```
+
+The SDK and its bundler/CSS toolchain are needed only while developing and building the extension.
+The existing `defineServerExtension` helper remains available; value-importing it requires the SDK
+in runtime dependencies.
 
 ## Building
 

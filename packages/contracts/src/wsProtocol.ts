@@ -56,6 +56,11 @@ import type {
 	ProviderStatusReport,
 	ProviderWarning,
 	PrPreview,
+	PullRequestAuthorPage,
+	PullRequestFilter,
+	PullRequestPage,
+	PullRequestSizeEntry,
+	PullRequestSummary,
 	ResourceHistoryCursor,
 	ResourceHistoryPage,
 	ResourceKind,
@@ -143,11 +148,14 @@ export interface TerminalTabsPush {
 }
 
 export type TemplateReadLocation =
-	| { workspaceId: string; projectId?: never }
-	| { projectId: string; workspaceId?: never }
-	| { workspaceId?: never; projectId?: never };
+	| { workspaceId: string; projectId?: never; baseRef?: never }
+	| { projectId: string; workspaceId?: never; baseRef?: string }
+	| { workspaceId?: never; projectId?: never; baseRef?: never };
 
-export const PROTOCOL_VERSION = 132;
+export const PROTOCOL_VERSION = 135;
+export const REF_RESOURCE_PREVIEW_PROTOCOL_VERSION = 135;
+export const FS_REVEAL_PROTOCOL_VERSION = 134;
+export const PULL_REQUEST_REVIEW_PROTOCOL_VERSION = 133;
 export const EXTENSION_BROWSE_PROTOCOL_VERSION = 132;
 export const INSTALLED_EXTENSIONS_PROTOCOL_VERSION = 131;
 export const EXTENSION_QUERY_PROTOCOL_VERSION = 130;
@@ -468,12 +476,17 @@ export const WS_METHODS = {
 	prReady: "pr.ready",
 	prMerge: "pr.merge",
 	prReopen: "pr.reopen",
+	prList: "pr.list",
+	prGet: "pr.get",
+	prSizes: "pr.sizes",
+	prAuthors: "pr.authors",
 	fsReadDir: "fs.readDir",
 	fsReadFile: "fs.readFile",
 	fsCopy: "fs.copy",
 	fsDelete: "fs.delete",
 	fsRename: "fs.rename",
 	fsMove: "fs.move",
+	fsReveal: "fs.reveal",
 	artifactsList: "artifacts.list",
 	artifactsRestore: "artifacts.restore",
 	artifactsDiscard: "artifacts.discard",
@@ -1150,6 +1163,19 @@ export interface WsMethodMap {
 		params: { workspaceId: string; branch: string; number: number };
 		result: Ack;
 	};
+	"pr.list": {
+		params: { projectId: string; filter: PullRequestFilter; query?: string; cursor?: string };
+		result: PullRequestPage;
+	};
+	"pr.get": { params: { projectId: string; number: number }; result: PullRequestSummary | null };
+	"pr.authors": {
+		params: { projectId: string; cursor?: string };
+		result: PullRequestAuthorPage;
+	};
+	"pr.sizes": {
+		params: { projectId: string; numbers: number[] };
+		result: PullRequestSizeEntry[];
+	};
 	"pr.open": {
 		params: {
 			workspaceId: string;
@@ -1191,6 +1217,7 @@ export interface WsMethodMap {
 		};
 		result: { path: string };
 	};
+	"fs.reveal": { params: { workspaceId: string; path: string }; result: Ack };
 	"artifacts.list": { params: { workspaceId: string }; result: WorkspaceArtifactsSnapshot };
 	"artifacts.restore": { params: { workspaceId: string; path: string }; result: Ack };
 	"artifacts.discard": { params: { workspaceId: string; path: string }; result: Ack };
@@ -1283,7 +1310,7 @@ export interface WsMethodMap {
 		result: { closed: boolean; busy: boolean };
 	};
 	"dialog.selectDirectory": { params: Record<string, never>; result: { path: string | null } };
-	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };
+	"skill.list": { params: { projectId: string; baseRef?: string }; result: SlashCommandInfo[] };
 	"skills.state": { params: { workspaceId: string }; result: SkillCatalogEntry[] };
 	"extension.list": { params: Record<string, never>; result: ExtensionCatalogEntry[] };
 	"extension.query": { params: ExtensionQueryParams; result: unknown };
@@ -1690,11 +1717,14 @@ export type WsErrorCode =
 	| "PACKAGE_UNTRUSTED"
 	| "PACKAGE_UNKNOWN"
 	| "PACKAGE_INSTALL_FAILED"
+	| "PACKAGE_NOT_FOUND"
+	| "PACKAGE_REGISTRY_UNREACHABLE"
 	| "PACKAGE_INSTALLED_UNLISTED"
 	| "PACKAGE_REMOVE_FAILED"
 	| "PACKAGE_UPDATE_FAILED"
 	| "PACKAGE_SETTINGS_WRITE_FAILED"
 	| "EXTENSION_SCOPE_UNSUPPORTED"
+	| "EXTENSION_UI_UNSUPPORTED"
 	| "EXTENSION_UNKNOWN"
 	| "EXTENSIONS_FILE_INVALID"
 	| "EXTENSION_CATALOG_OFFLINE"

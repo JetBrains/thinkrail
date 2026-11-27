@@ -31,8 +31,10 @@ Settings → Extensions & skills; while it is off, Artifacts opens on Smart inst
   workspace file check, because a file the index never lists would be "published" yet absent from
   Outputs; one batch means one bounded walk per call, not one per path, which blocked the host's event
   loop for seconds on a large folder. Every path must pass. Otherwise the
-  **whole call fails**, naming every refused path and why, and telling the agent to save it in the artifacts
-  folder — a half-published set would leave the agent unsure what the user sees. `details.files` holds the
+  **whole call fails**, naming every refused path and why. The guidance explains that publication
+  requires the artifacts folder, but an explicit user-selected persistent destination elsewhere stays
+  there and is linked directly in the final message, without copying it just to publish. A half-published
+  set would leave the agent unsure what the user sees. `details.files` holds the
   names the index lists them under, deduplicated.
 - `./web` registers `present_files` with `chrome: "bare"`: one card per published file (type icon,
   display name, type) opening it through `onOpenFile`; running and error states are its own. The name/type
@@ -49,7 +51,9 @@ Settings → Extensions & skills; while it is off, Artifacts opens on Smart inst
   and the Outputs view, which vanilla pi does not have.
 - **Claude's name and shape** (`present_files`, `filepaths`): models already know when to call it.
 - **Guidance rides on the tool** (`promptGuidelines`): publish what the user should open, never scratch
-  work, helpers, partial versions or a deliverable's assets; only files in the artifacts folder. A
+  work, helpers, partial versions or a deliverable's assets; only files in the artifacts folder. That
+  folder is the default destination; the user's explicit persistent destination takes precedence, and
+  files saved elsewhere are handed off by their actual paths without calling `present_files`. A
   switched-off extension therefore leaves no instruction behind. The host's own "link each result in your
   final message" rule stays — it feeds Smart.
 - **Only the artifacts folder.** It is where the index, kept copies and restore already work; a project
@@ -62,4 +66,5 @@ Settings → Extensions & skills; while it is off, Artifacts opens on Smart inst
 registered guidance; `web/presented.test.ts` the card list's reader. `e2e/artifacts.spec.ts` renders a
 seeded `present_files` call as cards that open the file, and the Outputs view through a wire-marked
 snapshot. `e2e/outputs.live.spec.ts` (`@agent`) asks a real agent for a mockup with a draft and checks
-that it published only the page — one card, one Outputs row, one divider artifact.
+that it published only the page — one card, one Outputs row, one divider artifact — and that an explicit
+destination elsewhere in the workspace is honored without a duplicate artifact or a publication call.
