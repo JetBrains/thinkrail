@@ -1,5 +1,9 @@
 import { afterEach, expect, test } from "bun:test";
-import { AGENT_REVIEW_SETTING_PROTOCOL_VERSION, type WireModel } from "@thinkrail/contracts";
+import {
+	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
+	REVIEW_FIX_ROUNDS_SETTING_PROTOCOL_VERSION,
+	type WireModel,
+} from "@thinkrail/contracts";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useAppStore } from "@/store";
@@ -63,4 +67,22 @@ test("a chosen pair is Changed and its Reset clears model and effort together", 
 	expect(tag(html, "review-autofix-toggle")).toContain('tabindex="0"');
 	expect(CHAT_PAIR_RESET).toEqual({ defaultModel: null, defaultEffort: null });
 	expect(REVIEW_PAIR_RESET).toEqual({ reviewModel: null, reviewEffort: null });
+});
+
+test("the fix-rounds row is hidden against an older host and disabled while auto-fix is off", () => {
+	withState({ protocolVersion: REVIEW_FIX_ROUNDS_SETTING_PROTOCOL_VERSION - 1 });
+	expect(render()).not.toContain('data-setting-id="auto-fix-rounds"');
+
+	withState({ protocolVersion: REVIEW_FIX_ROUNDS_SETTING_PROTOCOL_VERSION, reviewAutoFix: false });
+	const off = render();
+	expect(off).toContain('data-setting-id="auto-fix-rounds"');
+	expect(tag(off, "review-autofix-rounds-input")).toContain(' disabled=""');
+	expect(tag(off, "review-autofix-rounds-input")).toContain('value="3"');
+	expect(off).not.toContain('data-testid="settings-reset-auto-fix-rounds"');
+
+	withState({ reviewAutoFix: true, reviewAutoFixRounds: 5 });
+	const on = render();
+	expect(tag(on, "review-autofix-rounds-input")).not.toContain(' disabled=""');
+	expect(tag(on, "review-autofix-rounds-input")).toContain('value="5"');
+	expect(tag(on, "settings-reset-auto-fix-rounds")).toContain("data-setting-reset");
 });

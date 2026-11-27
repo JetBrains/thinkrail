@@ -67,6 +67,7 @@ import {
 	isProjectsFolder,
 	isPullRequestFilter,
 	isQuestionPanelHeight,
+	isReviewAutoFixRounds,
 	isSettleIdleDays,
 	isSubagentCompletionMessage,
 	isSubagentMaxConcurrent,
@@ -1307,6 +1308,7 @@ interface AppState {
 	favoriteModels: WireModel[];
 	recentModels: WireModel[];
 	reviewAutoFix: boolean;
+	reviewAutoFixRounds: number;
 	agentReviewEnabled: boolean;
 	disabledExtensions: string[];
 	extensionSettings: ExtensionSettingValues;
@@ -1794,6 +1796,9 @@ function configPatch(config: AppConfig) {
 		favoriteModels: config.favoriteModels ?? DEFAULT_CONFIG.favoriteModels,
 		recentModels: config.recentModels ?? DEFAULT_CONFIG.recentModels,
 		reviewAutoFix: config.reviewAutoFix ?? DEFAULT_CONFIG.reviewAutoFix,
+		reviewAutoFixRounds: isReviewAutoFixRounds(config.reviewAutoFixRounds)
+			? config.reviewAutoFixRounds
+			: DEFAULT_CONFIG.reviewAutoFixRounds,
 		agentReviewEnabled: config.agentReviewEnabled ?? DEFAULT_CONFIG.agentReviewEnabled,
 		disabledExtensions: Array.isArray(config.disabledExtensions)
 			? config.disabledExtensions
@@ -2809,6 +2814,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	favoriteModels: DEFAULT_CONFIG.favoriteModels,
 	recentModels: DEFAULT_CONFIG.recentModels,
 	reviewAutoFix: DEFAULT_CONFIG.reviewAutoFix,
+	reviewAutoFixRounds: DEFAULT_CONFIG.reviewAutoFixRounds,
 	agentReviewEnabled: DEFAULT_CONFIG.agentReviewEnabled,
 	disabledExtensions: DEFAULT_CONFIG.disabledExtensions,
 	extensionSettings: DEFAULT_CONFIG.extensionSettings,

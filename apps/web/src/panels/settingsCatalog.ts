@@ -15,6 +15,7 @@ import {
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PROJECTS_FOLDER_PROTOCOL_VERSION,
 	QUESTION_PANEL_PROTOCOL_VERSION,
+	REVIEW_FIX_ROUNDS_SETTING_PROTOCOL_VERSION,
 	SUBAGENT_CATALOG_PROTOCOL_VERSION,
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	USER_THEMES_PROTOCOL_VERSION,
@@ -93,6 +94,14 @@ export const SETTING = {
 		label: "settings.models.autoFix",
 		description: "settings.models.autoFixDescription",
 		keywords: ["review"],
+	},
+	autoFixRounds: {
+		id: "auto-fix-rounds",
+		section: SettingsSection.Models,
+		label: "settings.models.autoFixRounds",
+		description: "settings.models.autoFixRoundsDescription",
+		keywords: ["review", "rounds", "limit"],
+		requiresProtocolVersion: REVIEW_FIX_ROUNDS_SETTING_PROTOCOL_VERSION,
 	},
 	contextWindow: {
 		id: "context-window",
