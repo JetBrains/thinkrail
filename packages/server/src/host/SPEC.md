@@ -650,12 +650,15 @@ nudges `fsChanged`. Nothing cleans the folder: sent messages keep naming its fil
     fails before any prompt. A URL's **repository key** treats spellings as one repository only where the
     host is known to: on `github.com` (`CASE_INSENSITIVE_HOSTS`) HTTPS, SSH and scp forms, letter case and a
     trailing `.git` collapse to `github.com/owner/repo`; any other host keeps its scheme, port (SSH's 22
-    excepted) and path exactly, minus a trailing slash, and a `file:` URL keeps its real path — two servers on
-    different ports, or local `widget` and `widget.git`, are different repositories (PR #1535 review: the
-    first, lossy key returned the wrong project to `start_workspace`). The key is compared with every remote URL — not just `origin`, since a
+    excepted), SSH user (scp or `ssh://` form — `alice@host:shared.git` and `bob@host:shared.git` can be
+    different repositories) and path exactly, minus a trailing slash, and a `file:` URL keeps its real path —
+    two servers on different ports, or local `widget` and `widget.git`, are different repositories (PR #1535
+    review: the first, lossy key returned the wrong project to `start_workspace`). The key is compared with every remote URL — not just `origin`, since a
     fork clone keeps the original as `upstream` — of the open and recent projects (the Chats container
     excluded): an open match returns `open`, a closed one is reopened. Otherwise the destination is
-    `<projectsFolder>/<repo>`, or the first free `<repo>-N` past unrelated folders; an existing folder
+    `<projectsFolder>/<repo>`, or the first free `<repo>-N` past unrelated folders; a repository named like a
+    Windows device (`con`, `nul`, `com1`, …) gets `<repo>-repo` and a name is capped at 200 characters, because
+    the tool has no destination override and the clone door refuses those names; an existing folder
     there with a matching remote is opened instead. A clone plan carries `notice` while
     `projectsFolderNoticeShown` is unset and marks it at once, so the explanation is shown once per host.
     `clone` runs `cloneProject` (full history, pi's signal) and reports a Stop as "nothing was cloned".

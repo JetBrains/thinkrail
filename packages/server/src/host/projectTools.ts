@@ -1,5 +1,5 @@
 import { join, resolve } from "node:path";
-import type { Project } from "@thinkrail/contracts";
+import { isWindowsDeviceName, type Project } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	type ClonePlan,
@@ -26,6 +26,7 @@ import { getWorkspace, isChatsContainer } from "../workspaces";
 
 const REMOTE_READ_TIMEOUT_MS = 10_000;
 const MAX_NAME_SUFFIX = 99;
+const MAX_FOLDER_NAME_LENGTH = 200;
 const GITHUB_SHORTHAND = /^[A-Za-z0-9][\w.-]*\/[\w.-]+$/;
 const CASE_INSENSITIVE_HOSTS = new Set(["github.com"]);
 const PATH_LIKE = /^(?:~(?:$|[\\/])|\.{1,2}(?:$|[\\/])|\/|[A-Za-z]:[\\/]|\\\\)/;
@@ -85,12 +86,11 @@ function exactPath(path: string): string {
 export function repositoryKey(url: string): string | null {
 	const trimmed = url.trim();
 	if (!trimmed.includes("://")) {
-		const scp = /^(?:[^@/\s]+@)?([^:/\s]+):(.+)$/.exec(trimmed);
-		if (!scp?.[1] || !scp[2]) return null;
-		const host = scp[1].toLowerCase();
-		return CASE_INSENSITIVE_HOSTS.has(host)
-			? `${host}/${knownRepositoryPath(scp[2])}`
-			: `scp:${host}:${exactPath(scp[2])}`;
+		const scp = /^(?:([^@/\s]+)@)?([^:/\s]+):(.+)$/.exec(trimmed);
+		if (!scp?.[2] || !scp[3]) return null;
+		const host = scp[2].toLowerCase();
+		if (CASE_INSENSITIVE_HOSTS.has(host)) return `${host}/${knownRepositoryPath(scp[3])}`;
+		return `scp:${scp[1] ? `${scp[1]}@` : ""}${host}:${exactPath(scp[3])}`;
 	}
 	let parsed: URL;
 	let pathname: string;
@@ -104,8 +104,10 @@ export function repositoryKey(url: string): string | null {
 	const host = parsed.hostname.toLowerCase();
 	if (!host || exactPath(pathname) === "/") return null;
 	if (CASE_INSENSITIVE_HOSTS.has(host)) return `${host}/${knownRepositoryPath(pathname)}`;
-	const port = parsed.protocol === "ssh:" && parsed.port === "22" ? "" : parsed.port;
-	return `${parsed.protocol}//${host}${port ? `:${port}` : ""}${exactPath(pathname)}`;
+	const ssh = parsed.protocol === "ssh:";
+	const port = ssh && parsed.port === "22" ? "" : parsed.port;
+	const user = ssh && parsed.username ? `${decodeURIComponent(parsed.username)}@` : "";
+	return `${parsed.protocol}//${user}${host}${port ? `:${port}` : ""}${exactPath(pathname)}`;
 }
 
 export function repositoryFolderName(url: string): string {
@@ -119,8 +121,10 @@ export function repositoryFolderName(url: string): string {
 	}
 	const name = (trimRepoPath(path).split("/").pop() ?? "")
 		.replace(/[/\\<>:"|?*\p{Cc}]/gu, "-")
+		.slice(0, MAX_FOLDER_NAME_LENGTH)
 		.replace(/^[. ]+|[. ]+$/g, "");
-	return name || "repository";
+	if (!name) return "repository";
+	return isWindowsDeviceName(name) ? `${name}-repo` : name;
 }
 
 function opened(project: Project, outcome: OpenProjectOutcome): OpenedProject {

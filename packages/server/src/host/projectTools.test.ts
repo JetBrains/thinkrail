@@ -95,6 +95,10 @@ test("one repository matches across HTTPS, SSH, scp-style and .git spellings", (
 	expect(repositoryFolderName("file:///srv/repos/widget.git")).toBe("widget");
 	expect(repositoryFolderName("https://github.com/microsoft/TypeScript.git")).toBe("TypeScript");
 	expect(repositoryFolderName("https://host/a%zz")).toBe("repository");
+	for (const device of ["con", "aux", "nul", "com1", "LPT3"]) {
+		expect(repositoryFolderName(`https://github.com/acme/${device}.git`)).toBe(`${device}-repo`);
+	}
+	expect(repositoryFolderName(`https://git.example/${"x".repeat(300)}`)).toHaveLength(200);
 });
 
 test("other hosts and local paths keep ports, case and .git, so distinct repositories never collapse", () => {
@@ -111,6 +115,12 @@ test("other hosts and local paths keep ports, case and .git, so distinct reposit
 	);
 	expect(repositoryKey("ssh://git@git.example:22/team/repo")).toBe(
 		repositoryKey("ssh://git@git.example/team/repo"),
+	);
+	distinct("alice@code.example:shared.git", "bob@code.example:shared.git");
+	distinct("ssh://alice@code.example/shared.git", "ssh://bob@code.example/shared.git");
+	distinct("code.example:shared.git", "alice@code.example:shared.git");
+	expect(repositoryKey("git@github.com:fastify/fastify.git")).toBe(
+		repositoryKey("ssh://someone@github.com/fastify/fastify"),
 	);
 });
 
@@ -221,6 +231,12 @@ test("one project with a malformed remote URL does not break matching for the ot
 	openProject(broken);
 	const plan = await planOpenProject("s-1", { repository: url }, deps());
 	expect(plan).toMatchObject({ kind: "clone", name: "widget" });
+});
+
+test("a repository named like a Windows device still gets a folder it can be cloned into", async () => {
+	const device = repo(join(root, "upstream", "con"));
+	const plan = await planOpenProject("s-1", { repository: pathToFileURL(device).href }, deps());
+	expect(plan).toMatchObject({ kind: "clone", name: "con-repo" });
 });
 
 test("a malformed repository is refused before any prompt", async () => {
