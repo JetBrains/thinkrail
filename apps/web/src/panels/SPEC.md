@@ -1493,7 +1493,11 @@ a project picker, the prompt hero, and the reused
   below `AGENT_REVIEW_SETTING_PROTOCOL_VERSION` (v68), where a host could store the field while still
   registering the tool — and **Automatic fix cycle** (`review-autofix-toggle`, `review-autofix-row`, over
   `store.reviewAutoFix`) — off means a `request_changes` verdict records findings and waits (the host
-  gates its auto-fix cycle on it, see `submodule-server-todos`).
+  gates its auto-fix cycle on it, see `submodule-server-todos`). Below it, **Automatic fix rounds**
+  (`review-autofix-rounds-row`, `review-autofix-rounds-input`, over `store.reviewAutoFixRounds`) is a
+  1–10 number field with Reset that caps the fix-and-re-review rounds per step; it stays visible but
+  disabled while `reviewAutoFix` is off, and is hidden below `REVIEW_FIX_ROUNDS_SETTING_PROTOCOL_VERSION`
+  (v136), whose host would reject the unknown key.
 
   At v76, **`ModelContextSettings`** adds the **GPT context window** group (the pi CLI / restart note as its
   description): **All GPT models**, one cheap Default / 1M / Custom choice over the rows the contracts'
