@@ -112,6 +112,27 @@ test("informal names resolve case-insensitively on id words, newest of one famil
 	});
 });
 
+test("model sizes name different families, never newer versions", () => {
+	const sized = [
+		"meta-llama/llama-3.1-70b-instruct",
+		"meta-llama/llama-3.1-8b-instruct",
+		"mistralai/ministral-14b-2512",
+		"mistralai/ministral-8b-2512",
+		"qwen/qwen3-235b-a22b",
+		"qwen/qwen2.5-1.5b-instruct",
+		"qwen/qwen2.5-7b-instruct",
+	].map((id) => ({ provider: "openrouter", id }));
+	for (const ref of ["llama 3.1", "meta-llama/llama-3.1", "ministral", "qwen2.5"]) {
+		expect(resolveModelRef(ref, sized)).toBeUndefined();
+	}
+	expect(modelError("llama 3.1", sized)).toContain(
+		"it matches openrouter/meta-llama/llama-3.1-70b-instruct, openrouter/meta-llama/llama-3.1-8b-instruct.",
+	);
+	expect(resolveModelRef("llama 3.1 8b", sized)?.id).toBe("meta-llama/llama-3.1-8b-instruct");
+	expect(resolveModelRef("ministral 14b", sized)?.id).toBe("mistralai/ministral-14b-2512");
+	expect(resolveModelRef("qwen3", sized)?.id).toBe("qwen/qwen3-235b-a22b");
+});
+
 test("informal names keep exact > prefix > word precedence and the thinking suffix", () => {
 	const catalog = [
 		{ provider: "openai", id: "opus-gpt" },

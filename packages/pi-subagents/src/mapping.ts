@@ -37,17 +37,21 @@ function wordMatch(refTokens: readonly string[], id: string): boolean {
 	return false;
 }
 
+function idParts(id: string): string[] {
+	return id.toLowerCase().match(/\d+(?:\.\d+)?[bmkt](?![a-z])|[a-z]+|[0-9]+/g) ?? [];
+}
+
 function family(id: string): string {
-	return tokens(id)
-		.filter((token) => !NUMBER_TOKEN.test(token))
+	return idParts(id)
+		.filter((part) => !NUMBER_TOKEN.test(part))
 		.join("-");
 }
 
 function snapshot(id: string): { version: number[]; date: number } {
 	const dates = id.match(SNAPSHOT_DATE) ?? [];
 	return {
-		version: tokens(id.replace(SNAPSHOT_DATE, "-"))
-			.filter((token) => NUMBER_TOKEN.test(token))
+		version: idParts(id.replace(SNAPSHOT_DATE, "-"))
+			.filter((part) => NUMBER_TOKEN.test(part))
 			.map(Number),
 		date: Number(dates.join("").replaceAll("-", "")),
 	};
