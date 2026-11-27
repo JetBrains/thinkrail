@@ -29,6 +29,7 @@ import {
 } from "../reviews";
 import { getConfig } from "../settings";
 import {
+	AUTO_CYCLES_TERMINAL,
 	approveTodoReview,
 	cancelTodoReview,
 	listTodos,
@@ -169,7 +170,7 @@ export function composeText(result: PlanReviewResult, outcome: VerdictOutcome): 
 	const head = `Review verdict: REQUEST_CHANGES — step "${result.itemTitle}".`;
 	const next = outcome.canAutoFix
 		? "Fix each finding below NOW without asking the user: set the step back to in_progress (todo_update), apply the fixes, mark it done, then call request_review again."
-		: "The automated fix cycle is spent or auto-fix is off: do NOT fix now. Report these findings to the user and wait for their direction.";
+		: "The automatic fix rounds are spent or auto-fix is off: do NOT fix now. Report these findings to the user and wait for their direction.";
 	return `${head} ${next}${rationale}${findings}`;
 }
 
@@ -253,20 +254,21 @@ async function unfileFindings(
 	for (const f of filed) await deleteComment(params.workspaceId, f.id).catch(() => {});
 }
 
-/** Own the whole button-path critical section: file the reviewer's findings, record cycle 1, select
+/** Own the whole button-path critical section: file the reviewer's findings, record the round, select
  * them, and mark them `sent` — all in ONE `withReviewLock` hold — then deliver the structured
  * `todo-review-fix` message to the worker chat. Filing and reservation share the lock so no interleaved
  * Review send can mark the just-filed drafts `sent` in a gap and leave the worker a generic request with
  * no canonical ids (which would strand a later approve). Failure semantics split on whether filing
  * completed: a *filing* failure throws (nothing recorded yet, so the caller cancels the review — and
- * `fileFindings` already compensated its partial persist); any *post-filing* failure records cycle 2 to
- * give the auto cycle back, rolls any marked findings to draft, and returns the terminal outcome. The
- * caller must not have recorded the cycle before calling this. See host/SPEC.md and planReview.SPEC.md. */
+ * `fileFindings` already compensated its partial persist); any *post-filing* failure records
+ * AUTO_CYCLES_TERMINAL to end the automatic rounds, rolls any marked findings to draft, and returns the terminal outcome.
+ * The caller must not have recorded the round before calling this. See host/SPEC.md and planReview.SPEC.md. */
 async function deliverFixToWorker(
 	params: ReviewParams,
 	note: string,
 	reviewedSha: string,
 	raw: ReviewFixComment[],
+	round: number,
 	record: (autoCycles: number) => { item: Todo },
 	capture: AdditionalAnalyticsCapture | null,
 	recordGuide: () => Promise<void>,
@@ -281,7 +283,7 @@ async function deliverFixToWorker(
 			filed = (await fileFindings(params, reviewedSha, raw, capture)).filed;
 			let item: Todo;
 			try {
-				item = record(1).item;
+				item = record(round).item;
 			} catch (err) {
 				await unfileFindings(params, filed, false);
 				throw err;
@@ -321,7 +323,7 @@ async function deliverFixToWorker(
 			`Fix send failed: ${err instanceof Error ? err.message : String(err)} — the findings stay in Review for you.`,
 			"error",
 		);
-		record(2);
+		record(AUTO_CYCLES_TERMINAL);
 		return { kind: "changes", canAutoFix: false, findings: filed };
 	} finally {
 		releaseItemFix(params.sessionId, params.id);
@@ -373,7 +375,10 @@ async function recordVerdict(
 	}
 	decided("changes_requested");
 	const spent = todoReviewAutoCycles(params) ?? 0;
-	const canAutoFix = getConfig().reviewAutoFix !== false && spent < 1;
+	const { reviewAutoFix, reviewAutoFixRounds } = getConfig();
+	const canAutoFix =
+		reviewAutoFix !== false && spent !== AUTO_CYCLES_TERMINAL && spent < reviewAutoFixRounds;
+	const round = spent + 1;
 	const note = result.summary || DEFAULT_FIX_NOTE;
 	const record = (autoCycles: number) =>
 		recordAgentChangesRequested({
@@ -382,13 +387,13 @@ async function recordVerdict(
 			autoCycles,
 		});
 	if (!canAutoFix) {
-		// Auto-fix off / cycle spent: file + record under the lock so a concurrent send can't mark one
+		// Auto-fix off / rounds spent: file + record under the lock so a concurrent send can't mark one
 		// draft `sent` between two writes (defeating fileFindings' compensation), and a record-write failure
 		// deletes the just-filed drafts rather than stranding them past the cancel. See planReview.SPEC.md.
 		const findings = await withReviewLock(params.workspaceId, async () => {
 			const { filed } = await fileFindings(params, reviewedSha, result.findings, capture);
 			try {
-				record(2);
+				record(AUTO_CYCLES_TERMINAL);
 			} catch (err) {
 				await unfileFindings(params, filed, false);
 				throw err;
@@ -399,7 +404,7 @@ async function recordVerdict(
 		return { kind: "changes", canAutoFix: false, findings };
 	}
 	if (!deliverFix) {
-		// Tool path: file the findings, mark them sent to the worker, and record the cycle as one locked
+		// Tool path: file the findings, mark them sent to the worker, and record the round as one locked
 		// transaction, so a concurrent clear or a non-draft collision can't strand open findings whose
 		// canonical ids the worker never received. `fileFindings` compensates a mid-loop persist failure;
 		// a mark failure deletes the just-filed drafts; a record failure rolls the sent findings back and
@@ -418,7 +423,7 @@ async function recordVerdict(
 				throw err;
 			}
 			try {
-				record(1);
+				record(round);
 			} catch (err) {
 				await unfileFindings(params, filed, true);
 				throw err;
@@ -431,14 +436,15 @@ async function recordVerdict(
 	}
 	// Button path: when we win the fix claim, deliverFixToWorker files + records + marks-sent + sends as
 	// one transaction (see its doc) so an interleaved Review send can't strand the findings; it records
-	// the cycle itself. If we lost the claim (another fix is in flight) we only file the findings for the
-	// user, under the lock, and record the terminal cycle here. See planReview.SPEC.md.
+	// the round itself. If we lost the claim (another fix is in flight) we only file the findings for the
+	// user, under the lock, and record the terminal mark here. See planReview.SPEC.md.
 	if (claimItemFix(params.sessionId, params.id))
 		return deliverFixToWorker(
 			params,
 			note,
 			reviewedSha,
 			result.findings,
+			round,
 			record,
 			capture,
 			recordGuide,
@@ -446,7 +452,7 @@ async function recordVerdict(
 	const findings = await withReviewLock(params.workspaceId, async () => {
 		const { filed } = await fileFindings(params, reviewedSha, result.findings, capture);
 		try {
-			record(2);
+			record(AUTO_CYCLES_TERMINAL);
 		} catch (err) {
 			await unfileFindings(params, filed, false);
 			throw err;
@@ -563,8 +569,8 @@ export function startPlanReview(
 	return started;
 }
 
-/** After a fix lands (the worker re-marks the step done), re-review exactly the items still inside their
- * one auto cycle — see host/SPEC.md ("auto re-review") for why `unreviewed` counts as a fresh delta.
+/** After a fix lands (the worker re-marks the step done), re-review exactly the items whose automatic fix
+ * round was delivered and not yet re-reviewed (`autoCycles` > 0; terminal is negative) — see host/SPEC.md ("auto re-review") for why `unreviewed` counts as a fresh delta.
  * Eligible items are enqueued onto the plan's serial chain even while another review runs; the per-item
  * claim dedupes, so a fix landing mid-review is not dropped. */
 export async function maybeAutoReReview(
@@ -578,7 +584,7 @@ export async function maybeAutoReReview(
 		for (const item of items) {
 			const r = item.review;
 			if (r?.reviewing || item.status !== "done") continue;
-			if (todoReviewAutoCycles({ workspaceId, sessionId, id: item.id }) !== 1) continue;
+			if ((todoReviewAutoCycles({ workspaceId, sessionId, id: item.id }) ?? 0) <= 0) continue;
 			const freshCommitDelta =
 				r?.state === "changes_requested" && (r.unreviewedShas?.length ?? 0) > 0;
 			if (!freshCommitDelta && r?.state !== "unreviewed") continue;
