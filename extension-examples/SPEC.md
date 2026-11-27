@@ -22,7 +22,8 @@ deterministic and need no network and no API key.
 - **Allowed deps:** the public entries of `@thinkrail/extension-sdk` ([[module-extension-sdk]]) —
   `./server`, `./web`, `./resources`, `./ui/button`, `./ui/theme`, `./ui/utils`, and of those only the
   names extension API v1 allow-lists (the SDK's declarations hold nothing else, so `tsc` enforces it) —
-  and its build command; React and its types; ordinary npm
+  and its build command as a dev dependency; server halves import SDK types only and default-export
+  descriptors with `satisfies ServerExtension`. React and its types; ordinary npm
   packages declared exactly. pi packages and `typebox` are peer dependencies (dev dependencies for the
   repository's own tests), as the installed-extension contract requires.
 - **Forbidden:** every other `@thinkrail/*` package (the host, `contracts`, `ui`, `extension-api`,

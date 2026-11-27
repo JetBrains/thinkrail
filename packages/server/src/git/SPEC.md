@@ -110,10 +110,15 @@ ref off the workspace-create critical path.
   `--end-of-options`: the `origin/<b>` shorthand goes through git's disambiguation and can resolve to a
   tag or a local branch of that name, so the call sites would have raced over different objects. "One way"
   is literal — no caller re-spells the `rev-parse` by hand;
-  **`nonInteractiveGitEnv()`** — the default environment both runners spawn under (`git`'s options are only
+  **`nonInteractiveGitEnv(base = process.env)`** — the default environment both runners spawn under (`git`'s options are only
   `raw` and `timeoutMs`; `gitAsync` alone accepts an `opts.env` override, e.g. `pr`'s non-interactive push, which layers its
-  own SSH batch-mode settings): `process.env` plus `GIT_TERMINAL_PROMPT=0`, and **nothing else** by default.
-  It reads no config and rewrites none of the user's ssh setup on its own;
+  own SSH batch-mode settings): the supplied environment plus `GIT_TERMINAL_PROMPT=0` and
+  `GCM_INTERACTIVE=never`. Git's terminal-prompt switch does not disable Git Credential Manager's GUI
+  authentication or account picker; the GCM-specific switch makes background fetches fail when login
+  would require interaction instead of opening repeated dialogs. `never` is recognized by both legacy
+  and current GCM. Cached credential lookup remains enabled, inherited interactive flags are overridden,
+  and the caller's environment is not mutated. It reads no config and rewrites none of the user's SSH setup;
+  interactive commands the user runs in a terminal retain that terminal's own environment;
   **Request-path reads run through `gitAsync`** — `resolveDiffRange` (its `resolvedOriginalOid` too),
   `gitStatus` (its live branch too), `gitDiffFile`, `listCommits`,
   `listBranches`, `prefetchBranch`, `countPushDivergence`, the host's branch-status `published` probe

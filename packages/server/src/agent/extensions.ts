@@ -1,3 +1,4 @@
+import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,6 +12,7 @@ import {
 	type InlineExtension,
 	type LoadExtensionsResult,
 	type PathMetadata,
+	parseFrontmatter,
 	type ResourceDiagnostic,
 	type ResourceLoader,
 	type SettingsManager,
@@ -19,6 +21,7 @@ import {
 import type {
 	ExtensionSettingValues,
 	SkillCatalogEntry,
+	SlashArgumentCompletion,
 	SlashCommandInfo,
 } from "@thinkrail/contracts";
 import specGraphExtension, { SPEC_SECTION } from "pi-spec-graph";
@@ -227,14 +230,13 @@ function resolveSkillInputs(
 	skillsOverride: ReturnType<typeof skillsGate>;
 	refreshSkillPaths: (disabled: ReadonlySet<string>) => void;
 } {
-	const roots = compatibilityRoots(cwd);
 	const additionalSkillPaths: string[] = [];
 	const refreshSkillPaths = (current: ReadonlySet<string>): void => {
 		additionalSkillPaths.splice(
 			0,
 			additionalSkillPaths.length,
 			...bundledSkillPaths(current),
-			...admittedRoots(roots, getCtx()).map((source) => source.path),
+			...admittedRoots(compatibilityRoots(cwd), getCtx()).map((source) => source.path),
 		);
 	};
 	refreshSkillPaths(disabled);
@@ -245,13 +247,44 @@ function resolveSkillInputs(
 	};
 }
 
+const ARGUMENT_COMPLETIONS: ReadonlySet<string> = new Set<SlashArgumentCompletion>([
+	"pull-request",
+]);
+const argumentCompletionCache = new Map<
+	string,
+	{ mtimeMs: number; value: SlashArgumentCompletion | null }
+>();
+
+export function skillArgumentCompletion(filePath: string): SlashArgumentCompletion | null {
+	try {
+		const { mtimeMs } = statSync(filePath);
+		const hit = argumentCompletionCache.get(filePath);
+		if (hit && hit.mtimeMs === mtimeMs) return hit.value;
+		const declared = parseFrontmatter(readFileSync(filePath, "utf8")).frontmatter[
+			"argument-completion"
+		];
+		const value =
+			typeof declared === "string" && ARGUMENT_COMPLETIONS.has(declared)
+				? (declared as SlashArgumentCompletion)
+				: null;
+		argumentCompletionCache.set(filePath, { mtimeMs, value });
+		return value;
+	} catch {
+		return null;
+	}
+}
+
 export function toSkillCommands(skills: readonly Skill[]): SlashCommandInfo[] {
-	return skills.map((skill) => ({
-		name: `skill:${skill.name}`,
-		description: skill.description,
-		source: "skill" as const,
-		sourceInfo: skill.sourceInfo,
-	}));
+	return skills.map((skill) => {
+		const argumentCompletion = skillArgumentCompletion(skill.filePath);
+		return {
+			name: `skill:${skill.name}`,
+			description: skill.description,
+			source: "skill" as const,
+			sourceInfo: skill.sourceInfo,
+			...(argumentCompletion ? { argumentCompletion } : {}),
+		};
+	});
 }
 
 const noneDisabled = (): ReadonlySet<string> => new Set();

@@ -1,5 +1,5 @@
 import { expect, it } from "bun:test";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { piExtensionInstaller, pruneHostOwnedDependencies } from "./installer";
 import { tempDir } from "./testFixtures";
@@ -27,4 +27,16 @@ it("fetches with the user's pi npm command", async () => {
 	await expect(
 		piExtensionInstaller(() => [missing]).install("npm:left-pad", join(tempDir(), "install")),
 	).rejects.toThrow(missing);
+});
+
+it("hands npm's own output back in the error when asked to capture it", async () => {
+	const npm = join(tempDir(), "fake-npm.mjs");
+	writeFileSync(npm, 'process.stderr.write("npm error code E404\\n"); process.exit(1);');
+	await expect(
+		piExtensionInstaller(() => [process.execPath, npm]).install(
+			"npm:nope-pkg",
+			join(tempDir(), "install"),
+			"capture",
+		),
+	).rejects.toThrow("npm error code E404");
 });

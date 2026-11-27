@@ -9,7 +9,6 @@ import {
 	RiDeleteBinLine,
 	RiEditLine,
 	RiFileLine,
-	RiFolderOpenLine,
 	RiImageLine,
 	RiListCheck3,
 	RiPagesLine,
@@ -25,13 +24,13 @@ import {
 	openContextMenuFromKeyboard,
 } from "@thinkrail/ui/context-menu";
 import { type KeyboardEvent, type ReactElement, useRef, useState } from "react";
-import { copyText, joinWorkspacePath } from "../lib";
-import { selectChatTitle, selectWorkspaceById, supportsArtifacts, useAppStore } from "../store";
-import { mentionArtifact, revealArtifact, selectArtifactMentionTarget } from "./artifactActions";
+import { selectChatTitle, supportsArtifacts, useAppStore } from "../store";
+import { mentionArtifact, selectArtifactMentionTarget } from "./artifactActions";
 import type { ArtifactRow } from "./artifactsModel";
-import { pasteInto } from "./fileTreeActions";
+import { copyWorkspacePath, pasteInto } from "./fileTreeActions";
 import { OpenInBrowserMenuItem } from "./OpenInBrowserButton";
 import { openChatInTab } from "./openChat";
+import { RevealInFileManagerMenuItem, RevealInFilesMenuItem } from "./RevealMenuItems";
 import { treeRowControlProps, treeRowKey, useTreeKeys } from "./treeNavigation";
 
 export type RequestRemoval = (path: string, kept: boolean) => void;
@@ -102,10 +101,7 @@ export function ArtifactEntryMenu({
 	const canMention = useAppStore((s) => selectArtifactMentionTarget(s, workspaceId) !== null);
 	const mutations = useAppStore((s) => supportsArtifacts(s.protocolVersion));
 	const canPasteHere = useAppStore((s) => folder && s.fileClipboard !== null);
-	const copyPath = (absolute: boolean) => {
-		const worktreePath = selectWorkspaceById(useAppStore.getState(), workspaceId)?.worktreePath;
-		void copyText(absolute ? joinWorkspacePath(worktreePath ?? "", path) : path);
-	};
+	const copyPath = (absolute: boolean) => copyWorkspacePath(workspaceId, path, absolute);
 	const clip = (cut: boolean) =>
 		useAppStore
 			.getState()
@@ -153,13 +149,12 @@ export function ArtifactEntryMenu({
 							<RiAtLine />
 							{t("panels.artifacts.mention")}
 						</ContextMenuItem>
-						<ContextMenuItem
-							data-testid="artifact-reveal"
-							onSelect={() => revealArtifact(workspaceId, path)}
-						>
-							<RiFolderOpenLine />
-							{t("panels.artifacts.reveal")}
-						</ContextMenuItem>
+						<RevealInFileManagerMenuItem
+							workspaceId={workspaceId}
+							path={path}
+							testId="artifact-reveal-os"
+						/>
+						<RevealInFilesMenuItem workspaceId={workspaceId} path={path} testId="artifact-reveal" />
 						{folder ? null : (
 							<OpenInBrowserMenuItem
 								workspaceId={workspaceId}

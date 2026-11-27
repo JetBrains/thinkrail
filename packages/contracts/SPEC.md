@@ -70,6 +70,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   code, so it needs no protocol bump. One code is named by the client and never sent by the host:
   **`FRAME_TOO_LARGE`**, a request refused before sending because its frame exceeds `WS_MAX_FRAME_BYTES`
   (below) — the composer hands that prompt back to its draft instead of losing it.
+  **`EXTENSION_UI_UNSUPPORTED`** is also used locally: the host's in-process extension UI rejects
+  `custom()` with this code so an extension can choose a supported dialog instead of treating absent
+  terminal UI as user cancellation. It adds no WS method, payload or capability; an uncaught extension
+  error still follows pi's existing notification path.
   Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
@@ -293,7 +297,10 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   - the cheap-win mirrors (declared in the Node-only `pi-coding-agent`): **`SessionStats`** + **`ContextUsage`**
     (tokens/cost/context bar — display only) and **`SlashCommandInfo`** + **`SlashCommandSourceInfo`** (the
     command autocomplete rows, returned by live `session.getCommands`, skill-only pre-session `skill.list`,
-    and mapped prompt-template listings), and **`SkillCatalogEntry`** + **`SkillDecision`** (`load`/`untrusted`/`pending-ack`/
+    and mapped prompt-template listings; the additive optional `argumentCompletion` (v133, today only
+    `"pull-request"`) is ThinkRail's, not pi's: the host reads a skill's `argument-completion`
+    frontmatter key so a prompt can offer the argument — an older host omits it and prompts send the
+    command as typed), and **`SkillCatalogEntry`** + **`SkillDecision`** (`load`/`untrusted`/`pending-ack`/
     `disabled`) — the workspace Skills manager's `skills.state` rows; the additive optional `manualOnly`
     marks pi's `disable-model-invocation` skills, which pi never lists in the prompt (an older host omits it).
   - **`ExtensionCatalogEntry`** (`{ name, title, description?, enabled, tools, hasParentExtensions?, hasChildExtensions, settings?, apiVersion? }`) — one
@@ -491,7 +498,10 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   name }` → `{ path }`, in place, refused with `ENTRY_EXISTS` when another entry holds the name) and
   `fs.move` (`fs.copy`'s params → `{ path }`, the Cut-and-Paste move, same or another workspace, refused
   with `ENTRY_EXISTS` instead of renaming, for a folder into itself, and with `MOVE_ACROSS_DEVICES` when
-  source and destination are on different file systems),
+  source and destination are on different file systems), and from **`FS_REVEAL_PROTOCOL_VERSION`** (v134)
+  `fs.reveal` (`{ workspaceId, path }` → ack: the host's OS file manager opens with that worktree entry
+  selected — on the host's machine, which a remote browser does not see; a client hides the action from
+  older hosts),
   the **Artifacts** tool's wire from the same version: `artifacts.list` (`{ workspaceId }` →
   **`WorkspaceArtifactsSnapshot`**: `dir` (the artifacts folder, `.thinkrail/context`; agents write mockups to
   its **`WORKSPACE_MOCKUP_DIR`**, `.thinkrail/context/mockups`, the one name the host's mockup check and the
@@ -618,7 +628,8 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   fileLineWidthBounded, voiceInputEnabled, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
   favoriteModels, recentModels, reviewAutoFix, agentReviewEnabled, subagentsEnabled, subagentMaxConcurrent,
   jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, disabledExtensions, extensionSettings, otherAgentSkills,
-  onboardingDismissed, interfaceFont, codeFont, codeFontSize, codeLigatures, fontWeightOffset, keybindings }` — an extensible
+  onboardingDismissed, interfaceFont, codeFont, codeFontSize, codeLigatures, fontWeightOffset, keybindings,
+  pullRequestFilters }` — an extensible
   bag; the five font fields join at v102 and normalize together through `normalizeFontSettings` (host load, web
   store, fonts runtime); the line-width fields join the wire at protocol v61, `terminalWindowsShell` at v62, and
   `voiceInputEnabled` (default `true`) with voice input at v107, and `questionPanelHeight`
@@ -646,7 +657,11 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   `submodule-server-terminal`'s shell-selection decision for what each value spawns.
   **`PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION`** pins v63's additive project-located `template.list` /
   `template.get` reads, allowing Create Workspace to preview global plus current-checkout project templates
-  without sending host paths; older hosts retain a global-only fallback. `themeMode` defaults to `"fixed"`
+  without sending host paths; older hosts retain a global-only fallback.
+  **`REF_RESOURCE_PREVIEW_PROTOCOL_VERSION`** (v135) adds an optional **`baseRef`** beside `projectId` on
+  those reads and on `skill.list`: the host answers from the project's resources as they are at that ref (what
+  a worktree cut from it will hold) instead of the current checkout, and falls back to the checkout when the
+  ref does not resolve. The dialog sends it only on a v135+ host; an older host would ignore it. `themeMode` defaults to `"fixed"`
   and no pair, preserving both legacy configs
   and the explicit Dark default; `subagentsEnabled` is the host-wide subagent default (`true` for current
   behavior), overridden only by `Workspace.subagentsOverride`; `subagentMaxConcurrent` (whole number in
@@ -662,7 +677,10 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   [[submodule-server-extensions]]); `extensionSettings` (`ExtensionSettingValues`, default `{}`, on the wire from
   `EXTENSION_SETTINGS_PROTOCOL_VERSION` = v105) maps extension name → setting key → boolean for the settings
   an `ExtensionCatalogEntry` declares — an absent key means the descriptor's `default`, and
-  `settings.update { extensionSettings }` merges per key; `keybindings` (`KeybindingOverrides`, default `{}`,
+  `settings.update { extensionSettings }` merges per key; `pullRequestFilters` (default `{}`, from v133)
+  maps a project id to the pull-request completion's last `PullRequestFilter` (`isPullRequestFilter`
+  validates one; `DEFAULT_PULL_REQUEST_FILTER` is all open including drafts), and
+  `settings.update { pullRequestFilters }` merges per project, `null` forgetting one; `keybindings` (`KeybindingOverrides`, default `{}`,
   on the wire from **`KEYBINDINGS_PROTOCOL_VERSION`** = v123) maps a command id — the app's or a web
   extension's — to the user's chords, replacing its defaults (`[]` unbinds, an absent id keeps them); an
   update replaces the whole map, unknown ids are kept, and a malformed value is refused with
@@ -997,11 +1015,25 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   queued it (merge queue / auto-merge), in which case the branch is never deleted; a merge that landed while
   the branch deletion failed is a success with the reason), and **`workspace.deleteRemoteBranch`** (`{ workspaceId,
   branch }` → `Ack`; `PUSH_AUTH_FAILED` as for a push) /
+  the v133 **pull-request reads** (`PULL_REQUEST_REVIEW_PROTOCOL_VERSION`, gating the prompts'
+  pull-request completion so a newer client sends the command as typed against an older host):
+  **`pr.list`** (`{ projectId, filter: { scope: "review-requested" | "mine" | "all", drafts, author? },
+  query?, cursor? }` → `PullRequestPage { pullRequests, nextCursor?, unavailable? }` — one page of the
+  project's open GitHub pull requests matching the filter and the typed words, most recently updated
+  first, each a `PullRequestSummary` with `baseRef` already resolved on the local remote and
+  `reviewRequested` for the signed-in `gh` user, **without `size`**; when it cannot list, an empty page
+  with the reason — `missing` / `unauthenticated` (the `GhSetupProblem` pair), `not-github`, or
+  `failed`), **`pr.authors`** (`{ projectId, cursor? }` → `PullRequestAuthorPage { authors, nextCursor? }`,
+  the logins of the open pull requests' authors, 100 pull requests a page, each login once per page —
+  the client merges pages; an empty page when it cannot read), **`pr.sizes`** (`{ projectId, numbers }` → `PullRequestSizeEntry[]`, the diff stats of the
+  rows on screen, leaving out any it could not read) and **`pr.get`** (`{ projectId, number }` →
+  `PullRequestSummary | null` with `size`, in any state, `null` when it does not exist or cannot be
+  read; `reviewRequested` is always `false` there) /
   **`project.setTrust`** (persist a project's trust grant → the updated `Project`; gates its committed
   cross-agent skill aliases; `resources: true` also grants pi-level resource trust, see Project trust) /
   **`skill.list`** (a pre-session, skill-only `SlashCommandInfo[]` preview for a `projectId`, resolved from
-  that project's current checkout with its **project-scoped aliases gated by trust**; the eventual worktree
-  session is authoritative) / the **Skills-manager set** — **`project.aliasSkills`** (present committed alias
+  that project's current checkout — or, with v135's optional `baseRef`, its resources at that ref — with its
+  **project-scoped aliases gated by trust**; the eventual worktree session is authoritative) / the **Skills-manager set** — **`project.aliasSkills`** (present committed alias
   names, for the presence-gated notice's count) / **`project.acknowledgeSkills`** (confirm skills that
   appeared after trust) / **`project.setSkillEnabled`** (project baseline) / **`project.setGroupEnabled`**
   (turn a plugin / source tier / `@plugins` on/off at the baseline) / **`workspace.setSkillOverride`**
@@ -1500,11 +1532,14 @@ and what it loaded, never pi's own types.
   edit, a chat load that installed something, an update, or a package or extension switch.
 - Error codes: `PACKAGE_SOURCE_INVALID` (also an unsupported `type` / `scope`, validated at the boundary),
   `PACKAGE_OFFLINE` (npm/git only; local installs work offline), `PACKAGE_UNTRUSTED`, `PACKAGE_UNKNOWN`,
-  `PACKAGE_INSTALL_FAILED`, `PACKAGE_REMOVE_FAILED`, `PACKAGE_UPDATE_FAILED`,
+  `PACKAGE_INSTALL_FAILED` (with its two named causes, `PACKAGE_NOT_FOUND` — npm found no such package
+  or dependency — and `PACKAGE_REGISTRY_UNREACHABLE`; all three carry pi's text, npm's output included),
+  `PACKAGE_REMOVE_FAILED`, `PACKAGE_UPDATE_FAILED`,
   `PACKAGE_SETTINGS_WRITE_FAILED`, and `PACKAGE_INSTALLED_UNLISTED` — the declaration was persisted but
   the host could not produce the row; of the install codes only `PACKAGE_SOURCE_INVALID`,
-  `PACKAGE_OFFLINE`, `PACKAGE_UNTRUSTED`, `PACKAGE_INSTALL_FAILED` and `PACKAGE_SETTINGS_WRITE_FAILED`
-  are raised before anything is written, and a client may claim "nothing was added" only for those.
+  `PACKAGE_OFFLINE`, `PACKAGE_UNTRUSTED`, the three install-failure codes and `PACKAGE_SETTINGS_WRITE_FAILED`
+  are raised before anything is written, and a client may claim "nothing was added" only for those. A
+  client that does not know a newer code shows the message and makes no such claim.
 
 ## Installed extensions
 

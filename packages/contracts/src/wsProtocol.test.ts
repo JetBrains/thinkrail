@@ -44,6 +44,7 @@ import {
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
 	FS_MUTATIONS_PROTOCOL_VERSION,
+	FS_REVEAL_PROTOCOL_VERSION,
 	GITHUB_STAR_PROTOCOL_VERSION,
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
@@ -76,7 +77,9 @@ import {
 	PROJECT_TRUST_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	PROVIDER_WARNINGS_PROTOCOL_VERSION,
+	PULL_REQUEST_REVIEW_PROTOCOL_VERSION,
 	QUESTION_PANEL_PROTOCOL_VERSION,
+	REF_RESOURCE_PREVIEW_PROTOCOL_VERSION,
 	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	RESOURCE_META_PROTOCOL_VERSION,
 	REVIEW_ACTIONS_PROTOCOL_VERSION,
@@ -389,8 +392,20 @@ test("host search and its previews are pinned to v106", () => {
 	expect(WS_METHODS.searchPreview).toBe("search.preview");
 });
 
+test("revealing a worktree entry in the OS file manager is pinned to v134", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FS_REVEAL_PROTOCOL_VERSION);
+	expect(FS_REVEAL_PROTOCOL_VERSION).toBe(134);
+	expect(FS_REVEAL_PROTOCOL_VERSION).toBeGreaterThan(PULL_REQUEST_REVIEW_PROTOCOL_VERSION);
+	expect(WS_METHODS.fsReveal).toBe("fs.reveal");
+});
+
+test("base-branch skill and template previews are pinned to v135", () => {
+	expect(PROTOCOL_VERSION).toBe(135);
+	expect(REF_RESOURCE_PREVIEW_PROTOCOL_VERSION).toBe(135);
+});
+
 test("the community catalog is pinned to v132", () => {
-	expect(PROTOCOL_VERSION).toBe(132);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(132);
 	expect(EXTENSION_BROWSE_PROTOCOL_VERSION).toBe(132);
 	expect(WS_METHODS.extensionsBrowse).toBe("extensions.browse");
 });
@@ -438,6 +453,16 @@ test("the question panel height setting is pinned to v114", () => {
 test("extension editor text is pinned to v115", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION);
 	expect(EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION).toBe(115);
+});
+
+test("pull request review methods are pinned to v133", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PULL_REQUEST_REVIEW_PROTOCOL_VERSION);
+	expect(PULL_REQUEST_REVIEW_PROTOCOL_VERSION).toBe(133);
+	expect(PULL_REQUEST_REVIEW_PROTOCOL_VERSION).toBeGreaterThan(EXTENSION_BROWSE_PROTOCOL_VERSION);
+	expect(WS_METHODS.prList).toBe("pr.list");
+	expect(WS_METHODS.prGet).toBe("pr.get");
+	expect(WS_METHODS.prSizes).toBe("pr.sizes");
+	expect(WS_METHODS.prAuthors).toBe("pr.authors");
 });
 
 test("turning off server-side fallback is pinned to v126", () => {

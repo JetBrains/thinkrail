@@ -164,6 +164,18 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 		bindings: ["chat.history"],
 	},
 	{
+		id: "workspace.recentNext",
+		title: "shortcuts.recentWorkspaceNext",
+		surface: "general",
+		bindings: ["workspace.recentNext"],
+	},
+	{
+		id: "workspace.recentPrevious",
+		title: "shortcuts.recentWorkspacePrevious",
+		surface: "general",
+		bindings: ["workspace.recentPrevious"],
+	},
+	{
 		id: "region.next",
 		title: "shortcuts.nextRegion",
 		surface: "general",

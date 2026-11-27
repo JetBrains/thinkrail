@@ -6,7 +6,7 @@ const LINE_NUMBER = (line: string, type: string | null) =>
 const COLLAPSED_CONTEXT = "[data-unmodified-lines]";
 const DELETIONS_SIDE = "[data-deletions]";
 const GUTTER_UTILITY_CELL = "[data-column-number]:has([data-gutter-utility-slot])";
-const HIGHLIGHTED_TOKEN = `${LINE} [style*="--code-"]`;
+const HIGHLIGHTED_TOKEN = `${LINE} [style*="--code-"]:not([style*="--code-foreground"])`;
 const WORKER_SCRIPT = /\/assets\/worker-[^/]*\.js$/;
 
 export async function holdPierreWorkers(

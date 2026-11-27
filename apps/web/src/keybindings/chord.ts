@@ -14,6 +14,8 @@ const BROWSER_RESERVED = [
 	"Mod+KeyQ",
 	"Mod+Tab",
 	"Mod+Shift+Tab",
+	"Ctrl+Tab",
+	"Ctrl+Shift+Tab",
 	"Mod+Shift+KeyT",
 	"Mod+Shift+KeyN",
 	"Mod+Shift+KeyW",

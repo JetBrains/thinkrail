@@ -16,6 +16,19 @@ export default function (pi) {
     description: "Replace the composer draft",
     handler: async (_args, ctx) => { ctx.ui.setEditorText("Extension draft 中文\\nnext line"); },
   });
+  pi.registerCommand("fixture-custom-fallback", {
+    description: "Use a supported dialog when custom terminal UI is unavailable",
+    handler: async (_args, ctx) => {
+      let answer;
+      try {
+        answer = await ctx.ui.custom(() => { throw new Error("Terminal factory must not run"); });
+      } catch (error) {
+        if (error?.code !== "EXTENSION_UI_UNSUPPORTED") throw error;
+        answer = await ctx.ui.input("Fallback draft");
+      }
+      if (answer !== undefined) ctx.ui.setEditorText(answer);
+    },
+  });
   pi.registerCommand("fixture-editor-later", {
     description: "Edit the composer once the marker file appears",
     handler: async (args, ctx) => {
@@ -105,6 +118,24 @@ test("an installed extension replaces and pastes into its own chat's composer", 
 			await page.getByTestId("chat-send").click();
 			await expect(input).toHaveValue("Extension draft 中文\nnext line");
 			await shot(page, "extension-editor", "replaced-draft");
+		});
+
+		await test.step("custom UI falls back to an input dialog without confusing cancellation", async () => {
+			await runCommand(page, "/fixture-custom-fallback");
+			const prompt = page.getByTestId("ext-ui-prompt");
+			await expect(prompt).toHaveAttribute("data-kind", "input");
+			await expect(prompt.getByTestId("ext-ui-title")).toHaveText("Fallback draft");
+			await prompt.getByTestId("ext-ui-input").fill("Fallback draft 中文");
+			await prompt.getByTestId("ext-ui-submit").click();
+			await expect(prompt).toHaveCount(0);
+			await expect(input).toHaveValue("Fallback draft 中文");
+
+			await runCommand(page, "/fixture-custom-fallback");
+			await expect(prompt).toHaveAttribute("data-kind", "input");
+			await input.fill("Kept while the dialog was open");
+			await prompt.getByTestId("ext-ui-cancel").click();
+			await expect(prompt).toHaveCount(0);
+			await expect(input).toHaveValue("Kept while the dialog was open");
 		});
 
 		await test.step("pasteToEditor inserts at the caret of the focused composer", async () => {

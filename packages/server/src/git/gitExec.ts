@@ -70,8 +70,10 @@ export function setSyncGitTimeoutForTests(timeoutMs: number | undefined): void {
 	syncTimeoutMs = timeoutMs ?? SYNC_TIMEOUT_MS;
 }
 
-export function nonInteractiveGitEnv(): Record<string, string | undefined> {
-	return { ...process.env, GIT_TERMINAL_PROMPT: "0" };
+export function nonInteractiveGitEnv(
+	base: Record<string, string | undefined> = process.env,
+): Record<string, string | undefined> {
+	return { ...base, GIT_TERMINAL_PROMPT: "0", GCM_INTERACTIVE: "never" };
 }
 
 function syncDeadline(timeoutMs: number | null | undefined) {

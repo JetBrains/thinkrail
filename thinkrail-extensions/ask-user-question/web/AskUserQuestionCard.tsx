@@ -224,7 +224,8 @@ export function AskUserQuestionCard({
 			const card = cardRef.current;
 			if (!card) return;
 			bodyRef.current?.scrollTo({ top: 0 });
-			focusCurrentQuestionPage(card);
+			if (!activeQuestionPage(card).contains(document.activeElement))
+				focusCurrentQuestionPage(card);
 			revealActiveTab(card);
 		});
 		return () => cancelAnimationFrame(frame);

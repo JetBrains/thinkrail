@@ -69,6 +69,11 @@ interval (`1–3600`, default 30), because those values govern host process cade
   boolean values, or the whole mutation is rejected; it is **merged per key** into the stored map, so a
   Settings switch never resets an extension's other settings. Like `disabledExtensions`, undeclared names
   and keys are kept and inert — the registry's descriptors decide what a key means.
+- `pullRequestFilters` maps a project id → the pull-request completion's last `PullRequestFilter`
+  (v133; absent means `{}`). An update must map non-blank ids to valid filters or `null`, or the whole
+  mutation is rejected; it is **merged per project** (`null` forgets one), so two windows remembering
+  filters for different projects never overwrite each other. Malformed stored entries are dropped on
+  load. A closed project's entry is kept and inert.
 - `keybindings` maps a command id to the user's chords (`[]` = unbound; absent = the command's defaults);
   absent means `{}`. Settings checks **shape and grammar only** (`contracts`' `isKeybindingOverrides`):
   non-blank ids, lists of `isKeybindingChord` strings; a malformed value rejects the whole mutation with

@@ -71,6 +71,6 @@ describe("the host opens pi settings only through createPiSettings", () => {
 			}
 		};
 		walk(src);
-		expect(offenders).toEqual(["agent/packages/settingsView.ts"]);
+		expect(offenders).toEqual([join("agent", "packages", "settingsView.ts")]);
 	});
 });

@@ -188,3 +188,44 @@ test("a failed automatic Specs update keeps the previous tree until Retry succee
 	await expect(added).toBeVisible();
 	expect(failure.wasInjected()).toBe(true);
 });
+
+test("a spec row's menu reveals the spec in the OS file manager and in Files", async ({ page }) => {
+	const reveals: unknown[] = [];
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		const server = ws.connectToServer();
+		ws.onMessage((message) => {
+			const raw = typeof message === "string" ? message : message.toString();
+			const frame = JSON.parse(raw) as { id?: string; method?: string; params?: unknown };
+			if (frame.id && frame.method === "fs.reveal") {
+				reveals.push(frame.params);
+				ws.send(JSON.stringify({ id: frame.id, ok: true, result: { ok: true } }));
+				return;
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => ws.send(message));
+	});
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+
+	const child = page.locator('[data-testid="spec-node"][data-spec-id="sample-module"]');
+	await child.click({ button: "right" });
+	const menu = page.getByTestId("spec-actions");
+	const label =
+		process.platform === "darwin"
+			? "Reveal in Finder"
+			: process.platform === "win32"
+				? "Show in Explorer"
+				: "Reveal in file manager";
+	await expect(menu.getByTestId("spec-reveal-os")).toHaveText(label);
+	await expect(menu.getByTestId("spec-copy-path")).toBeVisible();
+	await expect(menu.getByTestId("spec-copy-relative-path")).toBeVisible();
+	await menu.getByTestId("spec-reveal-os").click();
+	await expect
+		.poll(() => reveals)
+		.toEqual([{ workspaceId: workspace.id, path: "module-a/SPEC.md" }]);
+
+	await child.click({ button: "right" });
+	await page.getByTestId("spec-actions").getByTestId("spec-reveal").click();
+	await expect(page.getByTestId("tab-files")).toHaveAttribute("data-active", "true");
+});

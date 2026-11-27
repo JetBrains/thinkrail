@@ -1,4 +1,9 @@
-import type { SlashCommandInfo, TemplateInfo } from "@thinkrail/contracts";
+import {
+	matchFields,
+	parseMatchTerms,
+	type SlashCommandInfo,
+	type TemplateInfo,
+} from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
@@ -24,16 +29,29 @@ export function slashCommandQuery(value: string): string | null {
 	return value.startsWith("/") && !/\s/.test(value) ? value.slice(1) : null;
 }
 
+const SKILL_PREFIX = "skill:";
+
 export function matchSlashCommands<T extends SlashCommandItem>(
 	value: string,
 	commands: readonly T[],
 ): T[] {
 	const query = slashCommandQuery(value);
 	if (query === null) return [];
-	const normalized = query.toLowerCase();
+	const terms = parseMatchTerms(query);
 	return commands
-		.filter((command) => command.name.toLowerCase().includes(normalized))
-		.slice(0, MAX_MATCHES);
+		.flatMap((command, index) => {
+			const short = command.name.startsWith(SKILL_PREFIX)
+				? command.name.slice(SKILL_PREFIX.length)
+				: command.name;
+			const match = matchFields(terms, [
+				{ key: "name", text: short },
+				{ key: "full", text: command.name, secondary: true },
+			]);
+			return match ? [{ command, index, tier: match.tier, score: match.score }] : [];
+		})
+		.sort((a, b) => a.tier - b.tier || b.score - a.score || a.index - b.index)
+		.slice(0, MAX_MATCHES)
+		.map(({ command }) => command);
 }
 
 export function selectedSlashCommandValue(command: SlashCommandItem): string {

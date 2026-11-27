@@ -12,7 +12,6 @@ import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { cn } from "@thinkrail/ui/utils";
 import { extensionApiFit } from "@/extensions";
 import {
-	SETTINGS_LIST_PRIMARY,
 	SETTINGS_ROW_FOCUS,
 	SETTINGS_ROW_INSET,
 	SETTINGS_ROWS,
@@ -85,7 +84,7 @@ export function ExtensionBrowseCard({
 	onInstall: (entry: ExtensionBrowseEntry) => void;
 }) {
 	const t = useT();
-	const { rowProps, primaryProps, sideProps } = useSettingsListRow(entry.name);
+	const { rowProps, sideProps } = useSettingsListRow(entry.name);
 	const title = entry.title ?? entry.name;
 	const fit = extensionApiFit(entry.api);
 	const installable = !entry.installed && fit === "compatible";
@@ -100,14 +99,7 @@ export function ExtensionBrowseCard({
 				SETTINGS_ROW_FOCUS,
 			)}
 		>
-			<button
-				type="button"
-				{...primaryProps}
-				{...(installable
-					? { "aria-haspopup": "dialog" as const, onClick: () => onInstall(entry) }
-					: { "aria-disabled": true })}
-				className={cn(SETTINGS_LIST_PRIMARY, "min-w-[12rem]")}
-			>
+			<div className="flex min-w-[12rem] flex-1 flex-col items-start gap-2 px-4 py-2">
 				<span className="flex min-w-0 max-w-full flex-wrap items-center gap-x-8 gap-y-4">
 					<span className="wrap-anywhere tr-title-compact text-text-default">{title}</span>
 					<span className="tr-text-metadata text-text-muted">{entry.version}</span>
@@ -159,7 +151,7 @@ export function ExtensionBrowseCard({
 						{t("settings.extensionBrowse.incompatibleHint", { api: entry.api })}
 					</span>
 				)}
-			</button>
+			</div>
 			<div className="ml-auto flex shrink-0 flex-wrap items-center gap-8 self-center">
 				<ExternalLink
 					href={entry.npm}
@@ -180,6 +172,7 @@ export function ExtensionBrowseCard({
 						variant="outline"
 						size="m"
 						{...sideProps}
+						aria-haspopup="dialog"
 						data-testid="extension-browse-install"
 						onClick={() => onInstall(entry)}
 					>

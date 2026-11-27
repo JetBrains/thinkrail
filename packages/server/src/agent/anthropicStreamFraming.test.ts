@@ -107,6 +107,14 @@ describe("pi-ai's Anthropic SSE framing: defects the patch fixes (earendil-works
 		expect(result.errorMessage).toBe("Anthropic stream ended before message_stop");
 		expect(isRetryableAssistantError(result)).toBe(true);
 	});
+});
+
+describe("pi-ai's Anthropic SSE framing: behavior the patch keeps", () => {
+	test("B: a cut between two events stays the retryable truncation error", async () => {
+		const { result } = await run([encode(head)]);
+		expect(result.errorMessage).toBe("Anthropic stream ended before message_stop");
+		expect(isRetryableAssistantError(result)).toBe(true);
+	});
 
 	test("C: a complete CRLF stream parses however its bytes are split across chunks", async () => {
 		const bytes = encode(complete.replace(/\n/g, "\r\n"));
@@ -125,14 +133,6 @@ describe("pi-ai's Anthropic SSE framing: defects the patch fixes (earendil-works
 				events: completeEvents,
 			});
 		}
-	});
-});
-
-describe("pi-ai's Anthropic SSE framing: behavior the patch keeps", () => {
-	test("B: a cut between two events stays the retryable truncation error", async () => {
-		const { result } = await run([encode(head)]);
-		expect(result.errorMessage).toBe("Anthropic stream ended before message_stop");
-		expect(isRetryableAssistantError(result)).toBe(true);
 	});
 
 	test("D: a stream without the final blank line after message_stop still succeeds", async () => {

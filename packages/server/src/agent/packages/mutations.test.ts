@@ -128,6 +128,27 @@ describe("pi package mutations", () => {
 		}
 	});
 
+	it("names a package npm cannot find from npm's captured output, adding nothing", async () => {
+		const npm = join(root, "fake-npm.mjs");
+		writeFileSync(
+			npm,
+			[
+				'if (process.argv.includes("install")) {',
+				'\tprocess.stderr.write("npm error code E404\\nnpm error 404 Not Found - GET https://registry.npmjs.org/nope-pkg - Not found\\n");',
+				"\tprocess.exit(1);",
+				"}",
+				'process.stdout.write(process.argv.includes("root") ? process.cwd() : "{}");',
+			].join("\n"),
+		);
+		writeFileSync(settingsPath, JSON.stringify({ npmCommand: [process.execPath, npm] }));
+		const error = await installPiPackage(ctx, { source: "npm:nope-pkg", scope: "user" }).catch(
+			(caught: unknown) => caught,
+		);
+		expect(errorCodeOf(error)).toBe("PACKAGE_NOT_FOUND");
+		expect((error as Error).message).toContain("npm error 404 Not Found");
+		expect(readSettings(settingsPath).packages).toBeUndefined();
+	});
+
 	it("surfaces a swallowed settings write error as a coded error", async () => {
 		let flushed = false;
 		const flush = spyOn(SettingsManager.prototype, "flush").mockImplementation(async () => {

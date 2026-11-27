@@ -87,8 +87,8 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   `objects`, `logs`, `lfs` or `hooks` sends no nudge for its commits; an edit of the global excludes or a
   linked worktree's shared `info/exclude` waits for the next nudge; ignored folders inside a nested repo,
   and a folder that becomes ignored after it is watched, stay watched until the watcher restarts; a
-  worktree with more non-ignored folders than `max_user_watches` still fails, and each later read retries
-  the walk up to the limit, as the recursive watch did.
+  worktree with more non-ignored folders than `max_user_watches` still fails. Repeated starts for that
+  worktree use the ENOSPC cooldown below instead of walking up to the limit on every read.
 - **On Linux watchers close in the background and never share a path.** One queue closes 256 watchers per
   event-loop turn for all stopped trees, because closing a large tree in one loop blocked the host for
   seconds; a new watch that hits `ENOSPC` first closes up to 4 of those batches and retries. Bun shares
@@ -170,13 +170,22 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   `agent`'s pure project-skill path classifier and `git`'s ignore check at wiring time (the publisher-tee
   pattern). A missing classifier degrades concrete events to `skillChange: "unknown"`, never false-clean.
 - **Self-healing per read (out-of-band worktree churn is normal — e2e resets, `rm -rf` in a terminal):**
-  every `ensureWatch` re-stats the root and **re-creates the watcher when the inode changed** (a
+  every `ensureWatch` re-stats the root and **re-creates the watcher when its path or inode changed** (a
   deleted+recreated path leaves the old stream silently following a dead inode), **reaps zombie
   watchers** whose workspace record no longer exists (a resurrected path-based stream would keep
-  publishing for a forgotten id), and **retries a failed start on the next read** (no sticky failure
-  marker). A watcher that errors mid-flight (ENOSPC, root deleted) is warn-logged and dropped —
-  panels fall back to read-on-demand until a later read re-creates it. No idle-stop (bounded by
-  workspaces actually visited plus the capped prewarm tier).
+  publishing for a forgotten id), and **retries a failed start on the next read**, except when the
+  watcher quota is exhausted. A watcher that errors mid-flight is warn-logged and dropped — panels
+  fall back to read-on-demand until a later read re-creates it. **ENOSPC uses one per-workspace
+  cooldown for the same root path and inode:** 30 seconds after the first failed attempt, doubled on
+  repeated failures up to five minutes. Reads during that interval return the existing conservative
+  startup fallback immediately; they do not start a watcher, walk the tree or emit another failure
+  warning. There is no background retry timer: the first read after the deadline retries. The error
+  retains its code through both recursive-watch errors and the Linux directory walk. A successful
+  initial walk clears the failure streak; another error then starts at 30 seconds. A changed root,
+  missing root/workspace, `stopWatch` or `stopAllWatches` clears the cooldown. Errors from a retired
+  watcher cannot stop its replacement or change that replacement's retry state. Other errors still
+  retry on the next read. No idle-stop (bounded by workspaces actually visited plus the capped
+  prewarm tier). This is host retry control; it adds no watcher-status UI or protocol field.
 - **Watch-started nudge (third seam):** the moment a watcher entry is created (real or prewarm), before any
   event can reach the repo-metadata nudge, `setWatchStartedPublisher(workspaceId)` fires once — the host
   uses it to take the worktree's HEAD baseline, so the first git-metadata event of a watcher is judged

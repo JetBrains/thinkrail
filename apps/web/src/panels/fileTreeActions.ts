@@ -1,11 +1,33 @@
-import { FS_MUTATIONS_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import { FS_MUTATIONS_PROTOCOL_VERSION, FS_REVEAL_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
-import { fileName } from "../lib";
-import { type FileClipboard, toast, useAppStore } from "../store";
+import { copyText, fileName, joinWorkspacePath } from "../lib";
+import { type FileClipboard, selectWorkspaceById, toast, useAppStore } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
 
 export function supportsFileMutations(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= FS_MUTATIONS_PROTOCOL_VERSION;
+}
+
+export function supportsFsReveal(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= FS_REVEAL_PROTOCOL_VERSION;
+}
+
+export function copyWorkspacePath(workspaceId: string, path: string, absolute: boolean): void {
+	const worktreePath = selectWorkspaceById(useAppStore.getState(), workspaceId)?.worktreePath;
+	void copyText(absolute ? joinWorkspacePath(worktreePath ?? "", path) : path);
+}
+
+export function revealInFilesPanel(workspaceId: string, path: string): void {
+	const store = useAppStore.getState();
+	store.setFilesMode("all");
+	store.revealInFiles(workspaceId, path);
+	store.requestToolView(workspaceId, "files");
+}
+
+export function revealInFileManager(workspaceId: string, path: string): void {
+	void getTransport()
+		.request("fs.reveal", { workspaceId, path })
+		.catch((error) => toast.error(errorText(error), t("panels.reveal.failed")));
 }
 
 export function pasteDestination(path: string, kind: "dir" | "file"): string {

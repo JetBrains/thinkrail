@@ -370,8 +370,11 @@ roster's catalog reads ([[submodule-web-panels]]).
     (contracts' `isSessionWorking`, so a chat idle on background commands or subagents still reads as
     running),
     unread-finished, and project/workspace rollups—no stored precedence or second running slice.
+    `selectSessionNeedsAttention` reads the same binary input-or-unread predicate as the workspace and
+    project rollups, scoped to one workspace/session; an absent record has no attention signal.
     The record's `firstPrompt` is the preferred source of **`selectChatFirstPrompt`** (then the
-    `ClosedChat` row, then the loaded runtime's user turns through contracts' `firstPromptOfTexts` — the
+    `ClosedChat` row — those two are **`selectReportedFirstPrompt`**, the host-reported reading the search
+    palette's place rule uses — then the loaded runtime's user turns through contracts' `firstPromptOfTexts` — the
     same reading the host applies, so an optimistic `/skill:` send or a leading package yields the head the
     host will report; the runtime only until the host has reported one, since a hydrated runtime may start
     after a compaction); `selectChatTitle` folds it through `chatDisplayName`,
@@ -628,7 +631,9 @@ roster's catalog reads ([[submodule-web-panels]]).
   **`notificationsEnabled: boolean`** (the attention-notification master toggle),
   **`subagentsEnabled: boolean`**, **`subagentMaxConcurrent: number`**, **`disabledExtensions: string[]`**
   (defaulting to `[]` so a pre-v82 host reads as "all on"), **`extensionSettings: ExtensionSettingValues`**
-  (defaulting to `{}` so a pre-v105 host reads as "every declared default"), **`keybindingOverrides:
+  (defaulting to `{}` so a pre-v105 host reads as "every declared default"),
+  **`pullRequestFilters: Record<string, PullRequestFilter>`** (valid entries only; written through
+  `transport`'s `rememberPullRequestFilter`, which sends one project's filter), **`keybindingOverrides:
   KeybindingOverrides`** (the host's `keybindings` map as sent, any non-object `{}`; the resolver in
   [[submodule-web-keybindings]] drops what it cannot use and `shell` ignores it below v123),
   **`jbcentralQuotaEnabled: boolean`**,

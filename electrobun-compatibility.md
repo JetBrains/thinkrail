@@ -67,6 +67,17 @@ stays the list of what it re-checks.
   or #142 ships a webview focus call. Verify on a Linux display, without the helper, that a fresh window
   reports `hasFocus=true` and the first key (xdotool ↓) reaches the page; `webviewFocus.test.ts` goes with
   the helper.
+- **Linux WebKit DMA-BUF renderer.** Owner [[module-desktop]], `linuxWebKitRenderer.ts`, `entry.ts`.
+  On NVIDIA Wayland, WebKitGTK's DMA-BUF renderer fails to create GBM buffers (`Failed to create GBM
+  buffer … Invalid argument`, `X11 Error: GLXBadWindow`) as Electrobun loads and again when the main
+  window is created, so the window stays blank (white, or solid gray). `entry.ts` imports this module
+  before `deepLinkBootstrap.ts`, which loads `electrobun/main/events`. On import the module sets
+  `WEBKIT_DISABLE_DMABUF_RENDERER=1` when the variable is absent, in `process.env` and through libc
+  `setenv` (Bun does not forward `process.env` writes to the native environment). A value the user already exported,
+  including `0`, is preserved. `LIBGL_ALWAYS_SOFTWARE` and `WEBKIT_DISABLE_COMPOSITING_MODE` stay
+  CI-only Xvfb flags. **Removal gate:** drop it once a packaged Linux desktop on NVIDIA Wayland creates
+  its GBM buffers and paints the UI with the variable unset. Verify `linuxWebKitRenderer.test.ts` and
+  `buildConfig.test.ts` (entry order).
 - **Edge-triggered menu commands and Command-Q key state.** Owner [[module-desktop]], `repeatGate.ts`,
   `quitShortcut.ts`, `keyState.ts`. **Removal gate:** menu actions carry a key-repeat flag and their
   trigger (key or pointer). Verify `repeatGate.test.ts`, `quitShortcut.test.ts`, `keyState.test.ts`.
@@ -124,7 +135,8 @@ stays the list of what it re-checks.
   qualification.
 - **Cold-launch `open-url` listener before the SDK.** Owner [[module-desktop]], `entry.ts`,
   `deepLinkBootstrap.ts`. `open-url` has no replay, and `electrobun/main` installs the native URL handler
-  that delivers a cold-launch link while it loads, so `entry.ts` imports the bootstrap's listener first.
+  that delivers a cold-launch link while it loads, so `entry.ts` imports the bootstrap's listener before
+  `index.ts` loads `electrobun/main`. The DMA-BUF workaround is imported ahead of the bootstrap.
   **Removal gate:** Electrobun replays or buffers `open-url` for a listener added after startup. Verify
   `buildConfig.test.ts` (entry order), `deepLinkBootstrap.test.ts` and a cold launch from a
   `thinkrail://` link.

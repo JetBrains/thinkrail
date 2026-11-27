@@ -135,6 +135,19 @@ test("loading and failure render no rows, and a failure offers Retry", () => {
 		<ExtensionsCatalog entries="failed" disabled={[]} onToggle={() => {}} onRetry={() => {}} />,
 	);
 	expect(retry).toMatch(/data-testid="extensions-retry"[^>]*>Retry</);
+	expect(retry).not.toContain('aria-busy="true"');
+	const retrying = renderToStaticMarkup(
+		<ExtensionsCatalog
+			entries="failed"
+			disabled={[]}
+			onToggle={() => {}}
+			onRetry={() => {}}
+			retrying
+		/>,
+	);
+	expect(retrying).toMatch(
+		/aria-busy="true"[^>]*data-testid="extensions-retry"|data-testid="extensions-retry"[^>]*aria-busy="true"/,
+	);
 });
 
 const ASK: ExtensionCatalogEntry = {

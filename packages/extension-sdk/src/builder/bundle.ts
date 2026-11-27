@@ -16,6 +16,7 @@ import {
 	isSharedSpecifier,
 	jsxDevRuntimeSource,
 } from "./hostModules";
+import { toPosix } from "./paths";
 
 const HOST = "\0thinkrail-host:";
 const RUNTIME = `${HOST}runtime`;
@@ -106,7 +107,7 @@ export function bundledImports(code: string): string[] {
 }
 
 function importedBy(root: string, importer: string | undefined): string {
-	return importer ? ` (imported by ${relative(root, importer)})` : "";
+	return importer ? ` (imported by ${toPosix(relative(root, importer))})` : "";
 }
 
 interface UnsharedName {
@@ -276,7 +277,7 @@ export async function bundleWebHalf({ root, entry, outFile, minify, manifest }: 
 		const missing = missingSharedExports(error);
 		if (missing.length > 0) throw unsharedError(manifest, root, [...missing, ...unshared]);
 		throw new ExtensionBuildError(
-			`bundling ${relative(root, entry)} failed:\n${error instanceof Error ? error.message : String(error)}`,
+			`bundling ${toPosix(relative(root, entry))} failed:\n${error instanceof Error ? error.message : String(error)}`,
 		);
 	}
 	if (unshared.length > 0) throw unsharedError(manifest, root, unshared);

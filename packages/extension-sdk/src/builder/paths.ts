@@ -8,6 +8,10 @@ export interface LabelledPath {
 	path: string;
 }
 
+export function toPosix(path: string, separator: string = sep): string {
+	return separator === "/" ? path : path.split(separator).join("/");
+}
+
 function canonical(path: string): string {
 	let existing = path;
 	const rest: string[] = [];
@@ -33,7 +37,7 @@ function overlap(a: string, b: string): "same" | "nested" | undefined {
 }
 
 function shown(root: string, path: string): string {
-	const inside = relative(root, path);
+	const inside = toPosix(relative(root, path));
 	return inside === "" || inside.startsWith("..") ? path : inside;
 }
 

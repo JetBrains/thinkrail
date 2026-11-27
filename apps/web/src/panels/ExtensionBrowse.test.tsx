@@ -1,7 +1,17 @@
 import { expect, test } from "bun:test";
 import type { ExtensionBrowseEntry } from "@thinkrail/contracts";
+import { localKeys } from "@thinkrail/ui/local-keys";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
+import { LOCAL_KEY_DEFAULTS } from "../keybindings";
+import {
+	dom,
+	type FakeNode,
+	parseMarkup,
+	press,
+	resetDom,
+} from "../settingsKit/settingsFakeDom.test";
+import { settingsKeyDown } from "../settingsKit/useSettingsKeyboard";
 import {
 	AUTHORING_GUIDE_URL,
 	ExtensionBrowse,
@@ -92,10 +102,9 @@ test("listings are one keyboard list after the search field, said in visible tex
 	expect(markup).toContain('data-focus-list="extension-browse"');
 	expect(markup).toContain(`data-focus-row="${WEATHER.name}"`);
 	expect(markup).toMatch(/<li[^>]*data-setting-row="extension-browse\/[^"]+"[^>]*tabindex="-1"/);
-	expect(markup).toMatch(/data-setting-primary=""[^>]*aria-haspopup="dialog"/);
-	expect(markup).toMatch(
-		/aria-disabled="true"[^>]*data-setting-primary=""|data-setting-primary=""[^>]*aria-disabled="true"/,
-	);
+	expect(markup).toMatch(/aria-haspopup="dialog"[^>]*data-testid="extension-browse-install"/);
+	expect(markup).not.toContain("data-setting-primary");
+	expect(markup).not.toContain("aria-disabled");
 	expect(markup).toMatch(/tabindex="(0|-1)"[^>]*data-testid="extension-browse-install"/);
 	expect(markup).toMatch(/tabindex="(0|-1)"[^>]*data-testid="extension-browse-npm"/);
 	expect(markup).not.toContain("truncate");
@@ -137,4 +146,26 @@ test("an unreachable, offline or invalid catalog says so with a retry", () => {
 		"couldn&#x27;t be read",
 	);
 	expect(render({ status: "loading" })).toContain('data-status="loading"');
+});
+
+test("the row walk reaches a listing's Install after its links, and Install has no twin", () => {
+	const root = parseMarkup(render(loaded([WEATHER])));
+	const walkKeys = localKeys(null, "settings", LOCAL_KEY_DEFAULTS.settings);
+	const landed: (string | null)[] = [];
+	let target = root.querySelector('[data-testid="extension-browse-npm"]');
+	for (let step = 0; step < 2 && target; step++) {
+		resetDom();
+		settingsKeyDown(
+			{ defaultPrevented: false, nativeEvent: press("ArrowRight") },
+			root,
+			target,
+			walkKeys,
+			{ toNav: () => {} },
+		);
+		const focused: FakeNode | null = dom.focused;
+		landed.push(focused?.getAttribute("data-testid") ?? null);
+		target = focused;
+	}
+	expect(landed).toEqual(["extension-browse-repository", "extension-browse-install"]);
+	expect(root.querySelectorAll('[aria-haspopup="dialog"]')).toHaveLength(1);
 });

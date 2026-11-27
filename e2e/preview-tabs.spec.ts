@@ -303,6 +303,26 @@ test("a newer tab click cancels an older preview-tab settle timer", async ({ pag
 	await expect(readme).toHaveAttribute("data-preview", "true");
 });
 
+test("a click's settled keep of the active preview tab leaves focus where the reader moved it", async ({
+	page,
+}) => {
+	await page.clock.install();
+	await openWorkspaceFiles(page);
+	const row = page.getByTestId("file-node").filter({ hasText: "notes.txt" });
+	await row.click();
+	const tab = page.getByTestId("editor-tab").filter({ hasText: "notes.txt" });
+	await expect(tab).toHaveAttribute("data-preview", "true");
+	await freezePageTimers(page);
+	await tab.getByRole("tab").click();
+	await expect(tab.getByRole("tab")).toBeFocused();
+	await row.focus();
+
+	await page.clock.runFor(PAST_SETTLE_WINDOW_MS);
+	await expect(tab).toHaveAttribute("data-preview", "false");
+	await page.clock.runFor(PAST_SETTLE_WINDOW_MS);
+	await expect(row).toBeFocused();
+});
+
 test("the Specs panel shares the one slot, and closing the preview tab releases it", async ({
 	page,
 }) => {

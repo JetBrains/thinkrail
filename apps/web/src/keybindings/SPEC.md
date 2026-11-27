@@ -54,7 +54,8 @@ binding does.
   `workspace.new`, `files.findInFiles`, `chat.history`, `region.next`, `focus.composer`, `view.changes`,
   `focus.group1`…, and the active-tab commands `tab.close`, `group.splitRight`,
   `tab.moveToPreviousGroup` / `tab.moveToNextGroup`, which are also the workbench's tab-action ids);
-  `search.open` and the chip chords `suggestions.send1…9` / `suggestions.edit1…9` have no palette row, and
+  `search.open`, `workspace.recentNext` / `workspace.recentPrevious` and the chip chords
+  `suggestions.send1…9` / `suggestions.edit1…9` have no palette row, and
   `view.files` is shown by the older `view.show.files` row.
 - **Tab chords** (VS Code's keymap; [[submodule-web-shell]], *Global chords*, owns what they do):
   `tab.close` is `Mod+W` (display-only) and `Mod+Alt+W`, `group.splitRight` is `Mod+\` (`Backslash`),
@@ -67,6 +68,11 @@ binding does.
   (tested). An F-key chord is never plain, so it acts in text entry too; it takes the press from Monaco,
   whose Peek Implementation shares the chord, as `Mod+K` does. A Mac whose top row sends media keys needs
   Fn for it, as in JetBrains IDEs (accepted).
+- **Recent workspace chords:** `workspace.recentNext` `Ctrl+Tab` and `workspace.recentPrevious`
+  `Ctrl+Shift+Tab`, literal Control on every platform (`Cmd+Tab` is the OS app switcher), matched on
+  `code: "Tab"`; held, they drive the shell's recent workspace switcher ([[submodule-web-shell]], *Global
+  chords*). Browsers keep both for their own tabs, so they act in the desktop app only unless rebound.
+  They have no palette row — the chord only makes sense held.
 - **Region and focus chords:** `region.next` `F6` and `region.previous` `Shift+F6` (no modifier, so
   `Ctrl+F6` stays the workbench's group cycling), `focus.composer` `Mod+L`, `focus.projects` `Mod+0`,
   `focus.group1…9` `Mod+1…9` (`FOCUS_GROUP_BINDINGS` lists them in group order), `shortcuts.open`
@@ -114,7 +120,9 @@ binding does.
   browser tab advertises `Mod+Alt+N` / `Mod+Alt+W` while the desktop webview advertises `Mod+N` / `Mod+W`.
   `Mod+N` and its alias both match everywhere; `Mod+W` never matches here. The reserved set is one list
   (`isBrowserReservedChord`): `Mod+T`, `Mod+N`, `Mod+W`, `Mod+Q`, `Mod+Tab`, `Mod+Shift+Tab`,
-  `Mod+Shift+T`, `Mod+Shift+N`, `Mod+Shift+W`; the table carries no per-chord flag. An unbound command, or
+  `Ctrl+Tab`, `Ctrl+Shift+Tab` (literal Control: the Mac browsers switch tabs with it too, which `Mod+Tab`
+  — Cmd+Tab there — missed), `Mod+Shift+T`, `Mod+Shift+N`, `Mod+Shift+W`; the table carries no per-chord
+  flag. An unbound command, or
   one whose every chord lost, shows nothing (`undefined`, no caps, an empty label).
 - **Labels** for tooltips and prose (`⌘K`, `Ctrl+K`, `⌥⌘N`, `Ctrl+Alt+N`) come from `keybindingLabel`
   (the shown chord) and `keybindingLabels` (every active chord, in the command's order), joining

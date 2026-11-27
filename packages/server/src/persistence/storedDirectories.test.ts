@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join, relative, resolve, sep } from "node:path";
 import { dataDir, loadProjects, loadWorkspaces, saveProjects, saveWorkspaces } from "./persistence";
 
@@ -76,6 +76,25 @@ test("a value that is not an absolute path on this host is left as stored", () =
 	expect(stored?.path).toBe(foreign);
 	expect(pathless?.path).toBeUndefined();
 	expect(loadWorkspaces()[0]?.worktreePath).toBe(foreign);
+});
+
+test("a blank THINKRAIL_DATA_DIR falls back to ~/.thinkrail instead of the host's cwd", () => {
+	for (const value of ["", "  "]) {
+		process.env.THINKRAIL_DATA_DIR = value;
+		expect(dataDir()).toBe(join(homedir(), ".thinkrail"));
+	}
+});
+
+test("a nonblank THINKRAIL_DATA_DIR keeps its surrounding spaces", () => {
+	process.env.THINKRAIL_DATA_DIR = `${root} `;
+	expect(dataDir()).toBe(`${root} `);
+});
+
+test("a THINKRAIL_DATA_DIR starting with ~ is under the home directory", () => {
+	process.env.THINKRAIL_DATA_DIR = "~/.local/state/thinkrail";
+	expect(dataDir()).toBe(join(homedir(), ".local", "state", "thinkrail"));
+	process.env.THINKRAIL_DATA_DIR = "~";
+	expect(dataDir()).toBe(homedir());
 });
 
 test("a relative THINKRAIL_DATA_DIR still names one absolute data directory", () => {
