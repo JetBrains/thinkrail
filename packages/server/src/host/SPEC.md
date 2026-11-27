@@ -656,7 +656,8 @@ nudges `fsChanged`. Nothing cleans the folder: sent messages keep naming its fil
     review: the first, lossy key returned the wrong project to `start_workspace`). The key is compared with every remote URL — not just `origin`, since a
     fork clone keeps the original as `upstream` — of the open and recent projects (the Chats container
     excluded): an open match returns `open`, a closed one is reopened. Otherwise the destination is
-    `<projectsFolder>/<repo>`, or the first free `<repo>-N` past unrelated folders; a repository named like a
+    `<projectsFolder>/<repo>`, or the first free `<repo>-N` past unrelated folders — chosen only after every
+    `<repo>`, `<repo>-2` … `<repo>-99` was checked, so an existing clone at a later number is still found; a repository named like a
     Windows device (`con`, `nul`, `com1`, …) gets `<repo>-repo` and a name is capped at 200 characters, because
     the tool has no destination override and the clone door refuses those names; an existing folder
     there with a matching remote is opened instead. A clone plan carries `notice` while

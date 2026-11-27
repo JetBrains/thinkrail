@@ -203,18 +203,23 @@ export async function planOpenProject(
 	const parentPath = getConfig().projectsFolder;
 	const parent = resolveProjectPath(parentPath);
 	const base = repositoryFolderName(url);
+	let free: string | null = null;
 	for (let suffix = 1; suffix <= MAX_NAME_SUFFIX; suffix++) {
 		const name = suffix === 1 ? base : `${base}-${suffix}`;
 		const status = inspectProjectPath(join(parent, name));
 		if (status.kind === "missing") {
-			const destination = inspectCloneDestination(parentPath, name);
-			const notice = !getConfig().projectsFolderNoticeShown;
-			if (notice) markProjectsFolderNoticeShown();
-			return { kind: "clone", url, parentPath, name, destination, notice };
+			free ??= name;
+			continue;
 		}
 		if (status.kind === "repo" && key && (await matchesRemote(join(parent, name), key, deps))) {
 			return { kind: "ready", project: openPath(join(parent, name)) };
 		}
+	}
+	if (free !== null) {
+		const destination = inspectCloneDestination(parentPath, free);
+		const notice = !getConfig().projectsFolderNoticeShown;
+		if (notice) markProjectsFolderNoticeShown();
+		return { kind: "clone", url, parentPath, name: free, destination, notice };
 	}
 	throw new CodedError(
 		"PROJECT_CLONE_INVALID",

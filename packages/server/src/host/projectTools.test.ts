@@ -233,6 +233,16 @@ test("one project with a malformed remote URL does not break matching for the ot
 	expect(plan).toMatchObject({ kind: "clone", name: "widget" });
 });
 
+test("an unregistered clone at a later numbered folder is opened even when the plain name is free", async () => {
+	mkdirSync(folder, { recursive: true });
+	git(folder, "clone", "--quiet", url, "widget-2");
+	const found = await planOpenProject("s-1", { repository: url }, deps());
+	expect(found).toMatchObject({
+		kind: "ready",
+		project: { path: join(folder, "widget-2"), outcome: "opened" },
+	});
+});
+
 test("a repository named like a Windows device still gets a folder it can be cloned into", async () => {
 	const device = repo(join(root, "upstream", "con"));
 	const plan = await planOpenProject("s-1", { repository: pathToFileURL(device).href }, deps());
