@@ -162,7 +162,8 @@ colon stays the thinking delimiter and `opus:` / `opus:turbo` keep the suffix hi
 Several candidates are narrowed by family, never by registry order: they group by provider and family
 (the id's non-numeric parts; a size such as `8b`, `70b` or `32k` belongs to the family) and each
 group keeps its newest — highest version, then the undated alias over a dated snapshot
-(`20251101`, `2024-11-20`, `0613`), then the latest date. One survivor resolves ("opus" → the
+(`20251101`, `2024-11-20`, `0613`, `08-2024`, trailing `02-15`), then the latest date; dates of
+different formats are incomparable and stay ambiguous. One survivor resolves ("opus" → the
 newest Claude Opus, user-settled 2026-11: `getAvailable()` lists every catalog model of a signed-in
 provider, so a strict rule would make every family name fail). Otherwise the reference is ambiguous:
 different providers, families or sizes are never chosen between.

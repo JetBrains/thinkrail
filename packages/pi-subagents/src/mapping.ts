@@ -17,7 +17,16 @@ type ModelMatch =
 	| { reason: "ambiguous"; candidates: ModelRef[] };
 
 const NUMBER_TOKEN = /^\d+$/;
-const SNAPSHOT_DATE = /(?<![0-9])(?:\d{4}-\d{2}-\d{2}|\d{4,8})(?![0-9])/g;
+const MONTH = "(?:0[1-9]|1[0-2])";
+const SNAPSHOT_DATE = new RegExp(
+	`(?<![0-9])(?:\\d{4}-\\d{2}-\\d{2}|${MONTH}-20\\d{2}|${MONTH}-(?:0[1-9]|[12]\\d|3[01])(?=$|:)|\\d{4,8})(?![0-9])`,
+	"g",
+);
+
+function normalizeDate(raw: string): string {
+	const [first = "", second] = raw.split("-", 3);
+	return second?.length === 4 ? `${second}${first}` : raw.replaceAll("-", "");
+}
 
 function tokens(text: string): string[] {
 	return text.toLowerCase().match(/[a-z]+|[0-9]+/g) ?? [];
@@ -47,13 +56,12 @@ function family(id: string): string {
 		.join("-");
 }
 
-function snapshot(id: string): { version: number[]; date: number } {
-	const dates = id.match(SNAPSHOT_DATE) ?? [];
+function snapshot(id: string): { version: number[]; date: string } {
 	return {
 		version: idParts(id.replace(SNAPSHOT_DATE, "-"))
 			.filter((part) => NUMBER_TOKEN.test(part))
 			.map(Number),
-		date: Number(dates.join("").replaceAll("-", "")),
+		date: (id.match(SNAPSHOT_DATE) ?? []).map(normalizeDate).join(""),
 	};
 }
 
@@ -63,8 +71,8 @@ function compareNewest(a: string, b: string): number {
 		const diff = (sb.version[i] ?? 0) - (sa.version[i] ?? 0);
 		if (diff !== 0) return diff;
 	}
-	if ((sa.date === 0) !== (sb.date === 0)) return sa.date === 0 ? -1 : 1;
-	return sb.date - sa.date;
+	if ((sa.date === "") !== (sb.date === "")) return sa.date === "" ? -1 : 1;
+	return sa.date.length === sb.date.length ? Number(sb.date) - Number(sa.date) : 0;
 }
 
 function pickCandidate(candidates: readonly ModelRef[]): ModelMatch {

@@ -112,6 +112,26 @@ test("informal names resolve case-insensitively on id words, newest of one famil
 	});
 });
 
+test("every catalog date shape is a snapshot date; mixed formats stay ambiguous", () => {
+	const catalog = [
+		"qwen/qwen3.5-plus-02-15",
+		"qwen/qwen3.5-plus-04-20",
+		"qwen/qwen3.5-flash-02-23",
+		"qwen/qwen3.5-flash-20260420",
+		"cohere/command-r-08-2024",
+		"cohere/command-r-03-2025",
+		"google/deep-research-preview",
+		"google/deep-research-preview-04-2026",
+	].map((id) => ({ provider: "openrouter", id }));
+	const resolve = (ref: string) => resolveModelRef(ref, catalog)?.id;
+	expect(resolve("qwen 3.5 plus")).toBe("qwen/qwen3.5-plus-04-20");
+	expect(resolve("command r")).toBe("cohere/command-r-03-2025");
+	expect(resolve("deep research preview")).toBe("google/deep-research-preview");
+	expect(modelError("qwen 3.5 flash", catalog)).toContain(
+		"it matches openrouter/qwen/qwen3.5-flash-02-23, openrouter/qwen/qwen3.5-flash-20260420.",
+	);
+});
+
 test("model sizes name different families, never newer versions", () => {
 	const sized = [
 		"meta-llama/llama-3.1-70b-instruct",
