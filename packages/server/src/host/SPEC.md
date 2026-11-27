@@ -466,8 +466,8 @@ nudges `fsChanged`. Nothing cleans the folder: sent messages keep naming its fil
   (`AUTO_CYCLES_TERMINAL`) on top of the optimistic round, alongside the `rollbackSend` that returns any marked findings to `draft`.
   A post-filing failure escaping as a throw would strand the item at the optimistic round — the whole point of
   the unified catch. Leaving that round there would strand the step forever: nothing asked the worker to change anything, so
-  no fresh delta can ever reach `maybeAutoReReview`, while a later manual review would read the cycle as
-  spent and refuse to send. A claim the fix latch refuses (a manual Ask-to-fix already in flight) settles
+  no fresh delta can ever reach `maybeAutoReReview`, while a later review would count the undelivered
+  round as spent and silently burn part of the budget. A claim the fix latch refuses (a manual Ask-to-fix already in flight) settles
   the same way. On the button
   path a live budget also **delivers the fix to the worker chat** (`deliverFixToWorker`): the item's
   origin-scoped draft findings (`itemFixFindings` — this item, this worker session, non-stale; an

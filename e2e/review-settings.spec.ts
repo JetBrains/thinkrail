@@ -34,7 +34,7 @@ test("Review settings: the model picker follows the default and the auto-fix tog
 	const reset = page.getByTestId("settings-reset-auto-fix");
 	await expect(toggle).toHaveAttribute("data-active", "false");
 	await expect(page.getByTestId("review-autofix-row")).toContainText(
-		"Send requested changes back to the agent once.",
+		"Send requested changes back to the agent to fix, then review again.",
 	);
 	await expect(reset).toHaveCount(0);
 	await toggle.click();
@@ -49,6 +49,42 @@ test("Review settings: the model picker follows the default and the auto-fix tog
 	await reset.click();
 	await expect(toggle).toHaveAttribute("data-active", "false");
 	await expect(reset).toHaveCount(0);
+
+	await closeSettings(page);
+});
+
+test("Review settings: the fix-rounds limit follows the auto-fix switch and persists across a reload", async ({
+	page,
+}) => {
+	await page.goto("/");
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+
+	await openSettingsSection(page, "models");
+	const row = page.getByTestId("models-review-group").getByTestId("review-autofix-rounds-row");
+	await expect(row).toContainText("Automatic fix rounds");
+	const input = page.getByTestId("review-autofix-rounds-input");
+	const reset = page.getByTestId("settings-reset-auto-fix-rounds");
+	await expect(input).toHaveValue("3");
+	await expect(input).toBeDisabled();
+	await expect(reset).toHaveCount(0);
+
+	await page.getByTestId("review-autofix-toggle").click();
+	await expect(input).toBeEnabled();
+	await input.fill("5");
+	await input.press("Enter");
+	await expect(row).toContainText("Changed");
+
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await openSettingsSection(page, "models");
+	await expect(input).toHaveValue("5");
+	await expect(input).toBeEnabled();
+
+	await reset.click();
+	await expect(input).toHaveValue("3");
+	await expect(reset).toHaveCount(0);
+	await page.getByTestId("settings-reset-auto-fix").click();
+	await expect(input).toBeDisabled();
 
 	await closeSettings(page);
 });
