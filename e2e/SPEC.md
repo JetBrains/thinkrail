@@ -122,6 +122,11 @@ The focused `outputs.live` probe also requests a report in an explicit project d
 or publication attempt. This complements the default Outputs case and `artifacts.live`'s temporary-file
 protection; only the tagged live probes spend provider tokens.
 
+`reveal-file-actions.spec.ts` exercises OS reveal from Files rows, file/diff tab menus and the Active
+tab palette through the existing `fs.reveal` contract. Its socket observer acknowledges the request
+without launching a file manager. It checks clicked versus active paths, compact folders, keyboard
+menus, preview retention, host-platform labels, old hosts, reconnect gating and error feedback.
+
 ## Repository cloning
 
 `clone-project.spec.ts` clones disposable local `file:` repositories through the Welcome and rail menus,

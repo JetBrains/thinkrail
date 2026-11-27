@@ -15,7 +15,7 @@ The shell-owned, headless workbench engine: the normalized frontend-local frame 
 ## Boundary
 
 - **Owns:** web-local `WorkbenchFrame`/`WorkspaceViewState` types; frame-plus-view projection; pure topology, placement, attention, and policy operations; semantic minimum and independent group-limit checks; one-result drag previews; center/side/bottom renderers; alignment-owned nested composition and side-width projection; tab-strip overflow; ARIA tab/separator behavior; and the terminal visibility gate.
-- **Public surface (`index.ts`):** all current-layout types; workbench renderer/controller; the edge-chrome primitives (`AuxiliaryRail`, `AuxiliaryRailToolButton`, `AuxiliaryRailActionButton`, `AuxiliaryPaneHeader`, `AuxiliaryPaneHideButton`); pure mutations, projection, and validation helpers; the tab-action list (`tabActions`, `TabAction`), the injected chat actions' shape (`ChatTabAction`, `ChatTabActions`) and the `WorkbenchTabCommands` provider contract; built-in preset definitions plus instantiate/apply/capture operations and `frameMatchesPreset` (geometry equality ignoring generated ids, which Settings uses to mark the applied preset); attention fallback helpers; and unavailable-reason results. Callers inject resource renderers, the workspace worktree path for file-tab copy actions, the left rail's footer items (`leftRailFooter`, `AuxiliaryRailFooterItem`s), the chat tabs' extra actions (`chatActions`) and the key caps of the chords that repeat a chrome control (`chromeShortcuts`), and commit complete pure results rather than splicing arrays.
+- **Public surface (`index.ts`):** all current-layout types; workbench renderer/controller; the edge-chrome primitives (`AuxiliaryRail`, `AuxiliaryRailToolButton`, `AuxiliaryRailActionButton`, `AuxiliaryPaneHeader`, `AuxiliaryPaneHideButton`); pure mutations, projection, and validation helpers; the tab-action list (`tabActions`, `TabAction`), the injected chat actions' shape (`ChatTabAction`, `ChatTabActions`), the file reveal action's shape (`FileTabReveal`), and the `WorkbenchTabCommands` provider contract; built-in preset definitions plus instantiate/apply/capture operations and `frameMatchesPreset` (geometry equality ignoring generated ids, which Settings uses to mark the applied preset); attention fallback helpers; and unavailable-reason results. Callers inject resource renderers, the workspace worktree path for file-tab copy actions, the left rail's footer items (`leftRailFooter`, `AuxiliaryRailFooterItem`s), the chat tabs' extra actions (`chatActions`) and the key caps of the chords that repeat a chrome control (`chromeShortcuts`), and commit complete pure results rather than splicing arrays.
 - **External deps:** `@thinkrail/contracts` for the resource-free custom-preset DTO and git diff-scope type only; shell-neutral `lib` attention/id primitives plus `copyText` / `joinWorkspacePath` for file-tab copy actions; React; `@thinkrail/ui/*` (including `@thinkrail/ui/resizable`); `@dnd-kit/core`; the `keybindings` module's `LOCAL_KEY_DEFAULTS` for scopes `tabs` / `rails`, matched through `@thinkrail/ui/local-keys`' `useLocalKeys` (reading the shell-provided keymap context keeps the layout props-pure: never a chord's meaning, which the shell injects).
 - **Forbidden:** server/shared/pi imports; domain-resource lifetime; browser persistence or WS calls; feature-panel internals; a mutable third-party docking model; inline component styles; or non-semantic colour values.
 
@@ -292,8 +292,12 @@ target reroutes through the current local focus rule. Menus name a pane by its c
 pane (Changes, Review)`, at most three names then `+N`, `(empty)` when it has none — never by an id, and
 a tab's menu lists only commands that can ever apply to it: tools carry no center-only items (keep
 preview, the four splits) and auxiliary terminals carry no splits. File and diff tabs add **Copy path**
-and **Copy relative path** in a separate group; other kinds omit them. Copying identifies the clicked
-tab and does not select or keep it. The shell injects the workspace worktree path so the layout can join
+and **Copy relative path** in a separate group; other kinds omit them. The same group offers the
+shell-injected **Reveal in Finder / Show in Explorer / Reveal in file manager** action. It identifies
+the clicked file or diff tab's current worktree path without selecting or keeping it. The menu stays
+text-only, and unsupported or disconnected hosts show the action disabled with a reason. The shell
+injects its label, availability and path callback; layout imports no store or transport. Copying
+identifies the clicked tab and does not select or keep it. The shell injects the workspace worktree path so the layout can join
 it with the tab's file path without importing store or transport. A chat tab adds, right after *Rename
 chat*, each action the shell injects for its session (`chatActions`, by session id: a label and a bound
 `run`, such as an extension's *Analyze session*); like rename, the layout never learns what it opens.
@@ -305,7 +309,9 @@ document, the group limits and the group's measured split geometry, the pure `ta
 command the tab's context menu shows — with its stable id, label, menu section, and an `unavailable`
 label/reason where it applies but cannot run now — and its effect (a lazily computed `model.ts` result,
 or a select / rename / focus-group / copy / hide / reveal / close request that `performTabAction` hands
-to injected handlers, or an injected chat action's own `run`). The context menu renders from it (sections become separators; computed only when
+to injected handlers, or an injected action's own `run`). The OS reveal uses that `run` effect and
+appears in both the menu and the Active tab palette. It leaves the tab-selection epoch untouched.
+The context menu renders from it (sections become separators; computed only when
 the menu opens); the shell's palette lists from it through the provider below. Neither keeps an inline
 availability rule, so they cannot drift. Each action names its `surface`: *Focus tab*, the in-strip
 reorders, *Show <tool>* and *Remove tool from group* are menu-only; *Move to previous / next group* is

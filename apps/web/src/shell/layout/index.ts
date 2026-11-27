@@ -13,6 +13,7 @@ export * from "./presets";
 export {
 	type ChatTabAction,
 	type ChatTabActions,
+	type FileTabReveal,
 	type TabAction,
 	type TabActionEffect,
 	type TabActionSection,

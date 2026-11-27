@@ -120,6 +120,7 @@ export function Workbench({
 	onRenameChat,
 	chatFirstPrompts,
 	chatActions,
+	fileReveal,
 	onNewChat,
 	onNewTerminal,
 	onGestureCanceled,
@@ -787,10 +788,20 @@ export function Workbench({
 				worktreePath,
 				chatFirstPrompts,
 				chatActions,
+				fileReveal,
 			});
 			return { tab, location, actions };
 		},
-		[chatActions, chatFirstPrompts, maxBottomGroups, maxSideGroups, onRenameChat, t, worktreePath],
+		[
+			chatActions,
+			chatFirstPrompts,
+			fileReveal,
+			maxBottomGroups,
+			maxSideGroups,
+			onRenameChat,
+			t,
+			worktreePath,
+		],
 	);
 	useEffect(
 		() =>
@@ -809,7 +820,7 @@ export function Workbench({
 					) {
 						return;
 					}
-					tabSelectionEpoch.current += 1;
+					if (action.id !== "tab.revealFile") tabSelectionEpoch.current += 1;
 					performTabAction(action, {
 						apply,
 						select: (keep) => {
@@ -873,6 +884,7 @@ export function Workbench({
 		registerChatRename,
 		chatFirstPrompts,
 		chatActions,
+		fileReveal,
 		canFocusAdjacentGroup,
 		chromeShortcuts,
 	};

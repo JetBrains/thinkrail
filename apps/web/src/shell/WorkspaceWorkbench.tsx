@@ -42,9 +42,11 @@ import { ArtifactsPanel } from "../panels/ArtifactsPanel";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
 import { FilesPanel } from "../panels/FilesPanel";
+import { revealInFileManager } from "../panels/fileTreeActions";
 import { startChatInTab } from "../panels/openChat";
 import { fileComparisonTab, openFileInTab } from "../panels/openTabs";
 import { ProjectTree } from "../panels/ProjectTree";
+import { useFileManagerRevealAction } from "../panels/RevealMenuItems";
 import { ReviewPanel, selectActiveReviewedPath } from "../panels/ReviewPanel";
 import { reviewFlagForPaths, reviewFlags, tabReviewPaths } from "../panels/reviewModel";
 import { SpecsPanel } from "../panels/SpecsPanel";
@@ -400,6 +402,15 @@ function suggestionShortcuts(keybindings: ResolvedKeybindings): SuggestionShortc
 }
 
 export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
+	const { label, unavailableReason } = useFileManagerRevealAction();
+	const fileReveal = useMemo(
+		() => ({
+			label,
+			unavailableReason,
+			run: (path: string) => revealInFileManager(workspaceId, path),
+		}),
+		[label, unavailableReason, workspaceId],
+	);
 	const t = useT();
 	const status = useAppStore((state) => state.status);
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
@@ -1045,6 +1056,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				leftRailFooter={railFooter}
 				renderTabBody={renderTabBody}
 				renderTabAdornment={renderTabAdornment}
+				fileReveal={fileReveal}
 				renderToolBody={renderToolBody}
 				renderEmptyCenter={renderEmptyCenter}
 				renderCenterActions={renderCenterActions}

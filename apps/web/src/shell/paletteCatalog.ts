@@ -598,7 +598,8 @@ const HIDE_ICONS = {
 	bottom: RiLayoutBottomLine,
 } as const;
 
-function tabActionIcon({ effect, section }: TabAction): RemixiconComponentType {
+function tabActionIcon({ id, effect, section }: TabAction): RemixiconComponentType {
+	if (id === "tab.revealFile") return RiFolderOpenLine;
 	switch (effect.kind) {
 		case "close":
 			return RiCloseLine;
@@ -627,7 +628,11 @@ function tabCommands(deps: PaletteCatalogDeps): Command[] {
 				title: action.id === "tab.close" ? t("commands.tab.close") : action.label,
 				group: "tab",
 				icon: tabActionIcon(action),
-				keywords: ["tab", "editor", "group", "pane"],
+				keywords:
+					action.id === "tab.revealFile"
+						? ["tab", "file", "finder", "explorer", "file manager"]
+						: ["tab", "editor", "group", "pane"],
+				...(action.id === "tab.revealFile" ? { mutates: true } : {}),
 				...(isKeybindingId(action.id) ? shortcutOf(deps, action.id) : {}),
 				run: () => actions.runTabAction(action.id),
 			}),

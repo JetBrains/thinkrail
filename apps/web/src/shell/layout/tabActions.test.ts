@@ -160,6 +160,41 @@ describe("tabActions", () => {
 		});
 	});
 
+	test("file and diff reveal share the target path across menu and palette without selecting", () => {
+		const calls: string[] = [];
+		const fileReveal = { label: "Reveal in Finder", run: (path: string) => calls.push(path) };
+		const targets: LayoutCenterTab[] = [
+			file("a2"),
+			{ kind: "diff", id: "diff", name: "change", path: "src/changed.ts", before: "old" },
+		];
+		const document = documentWith({ center: { kind: "group", id: "center-a", tabs: targets } });
+		for (const tab of targets) {
+			const action = actionsFor(document, tab, { fileReveal }).find(
+				(item) => item.id === "tab.revealFile",
+			);
+			expect(action).toMatchObject({ surface: "both", label: fileReveal.label });
+			if (!action) throw new Error("no file reveal action");
+			performTabAction(action, {
+				apply: () => calls.push("apply"),
+				select: () => calls.push("select"),
+				rename: () => calls.push("rename"),
+				focusGroup: () => calls.push("focus"),
+				hide: () => calls.push("hide"),
+				revealTool: () => calls.push("tool"),
+				close: () => calls.push("close"),
+			});
+		}
+		expect(calls).toEqual(["src/a2", "src/changed.ts"]);
+		expect(
+			actionsFor(document, file("a2"), {
+				fileReveal: { ...fileReveal, unavailableReason: "Host is offline" },
+			}).find((action) => action.id === "tab.revealFile")?.unavailable?.reason,
+		).toBe("Host is offline");
+		expect(
+			actionsFor(documentWith(), terminal, { fileReveal }).map((action) => action.id),
+		).not.toContain("tab.revealFile");
+	});
+
 	test("a singleton tool gets no center-only commands and is never closed as a tab", () => {
 		const actions = actionsFor(documentWith(), toolTab("projects"));
 		const all = actions.map((action) => action.id);

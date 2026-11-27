@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, expect, mock, test } from "bun:test";
-import { FS_MUTATIONS_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import { FS_MUTATIONS_PROTOCOL_VERSION, FS_REVEAL_PROTOCOL_VERSION } from "@thinkrail/contracts";
 
 const requests: { method: string; params: unknown }[] = [];
 let answer: () => Promise<unknown> = () => Promise.resolve({ ok: true });
@@ -22,6 +22,7 @@ const {
 	pasteDestination,
 	pasteInto,
 	renameEntry,
+	revealInFileManager,
 	supportsFileMutations,
 } = await import("./fileTreeActions");
 
@@ -38,6 +39,34 @@ test("copy, paste and delete stay hidden until the host serves them", () => {
 	expect(supportsFileMutations(null)).toBe(false);
 	expect(supportsFileMutations(FS_MUTATIONS_PROTOCOL_VERSION - 1)).toBe(false);
 	expect(supportsFileMutations(FS_MUTATIONS_PROTOCOL_VERSION)).toBe(true);
+});
+
+test("reveal rechecks the live host before requesting and reports failures", async () => {
+	const { status, protocolVersion } = useAppStore.getState();
+	try {
+		for (const connection of [
+			{ status: "disconnected", protocolVersion: FS_REVEAL_PROTOCOL_VERSION },
+			{ status: "connected", protocolVersion: null },
+			{ status: "connected", protocolVersion: FS_REVEAL_PROTOCOL_VERSION - 1 },
+		] as const) {
+			useAppStore.setState(connection);
+			revealInFileManager("w1", "src/app");
+		}
+		expect(requests).toEqual([]);
+		useAppStore.setState({ status: "connected", protocolVersion: FS_REVEAL_PROTOCOL_VERSION });
+		answer = () => Promise.reject(new Error("The selected item no longer exists"));
+		revealInFileManager("w1", "src/app");
+		await Promise.resolve();
+		expect(requests).toEqual([
+			{ method: "fs.reveal", params: { workspaceId: "w1", path: "src/app" } },
+		]);
+		expect(useAppStore.getState().toasts[0]).toMatchObject({
+			title: "Couldn't reveal it",
+			message: "The selected item no longer exists",
+		});
+	} finally {
+		useAppStore.setState({ status, protocolVersion });
+	}
 });
 
 test("a paste on a file lands beside it, on a folder inside it", () => {

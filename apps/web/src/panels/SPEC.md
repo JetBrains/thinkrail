@@ -338,7 +338,11 @@ treatment.
   entry's folder with the entry selected. Its label follows `hostPlatform` (*Reveal in Finder* / *Show in
   Explorer* / *Reveal in file manager* on Linux or an unknown host) because the name tells the user which
   app will open. A failure shows a toast. Like every host reveal, it happens on the host's machine, so a
-  remote browser does not see it. The Files, Artifacts and Specs menus share this one item. "Open in browser" opens the host's `/view/` URL with `window.open(…,
+  remote browser does not see it. The Files, Artifacts and Specs menus share this one item.
+  `useFileManagerRevealAction` supplies the shell's file/diff tab actions with the same label and a
+  disabled reason for disconnected or pre-v134 hosts. The shared request helper rechecks connection
+  and `supportsFsReveal` before sending, so a stale menu cannot queue a reveal for reconnect.
+  "Open in browser" opens the host's `/view/` URL with `window.open(…,
   "noopener,noreferrer")`: a new tab on the web, the system browser on the desktop
   ([[submodule-server-host]] serves it sandboxed, [[module-desktop]] routes it to the OS). A compacted folder copies its deepest path, matching its label, and copying
   neither opens nor selects the row. The row stays highlighted while its menu is open. From a host at
