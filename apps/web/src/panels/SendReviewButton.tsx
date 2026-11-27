@@ -1,8 +1,15 @@
-import { RiSendPlaneLine as Send } from "@remixicon/react";
+import { RiArrowDownSLine as ChevronDown, RiSendPlaneLine as Send } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
 import { useMemo, useState } from "react";
-import { useAppStore } from "../store";
+import { useShallow } from "zustand/react/shallow";
+import { selectOpenChatTitles, useAppStore } from "../store";
 import { allDraftIds, fileDraftIds } from "./reviewModel";
 import { sendReviewBatch } from "./reviewSend";
 
@@ -31,7 +38,8 @@ export function SendReviewButton({
 			testid={testid}
 			label={t("panels.sendReview.file", { total: draftIds.length })}
 			count={draftIds.length}
-			send={() => sendReviewBatch(workspaceId, draftIds, chatSessionId)}
+			pickerWorkspaceId={chatSessionId ? undefined : workspaceId}
+			send={(target) => sendReviewBatch(workspaceId, draftIds, target ?? chatSessionId)}
 		/>
 	);
 }
@@ -56,7 +64,8 @@ export function SendAllReviewsButton({
 				total: count,
 			})}
 			count={count}
-			send={() => sendReviewBatch(workspaceId)}
+			pickerWorkspaceId={workspaceId}
+			send={(target) => sendReviewBatch(workspaceId, undefined, target)}
 		/>
 	);
 }
@@ -65,32 +74,72 @@ function SendButtonBase({
 	testid,
 	label,
 	count,
+	pickerWorkspaceId,
 	send,
 }: {
 	testid: string;
 	label: string;
 	count: number;
-	send: () => Promise<void>;
+	pickerWorkspaceId: string | undefined;
+	send: (target?: string) => Promise<void>;
 }) {
 	const [busy, setBusy] = useState(false);
 	if (count === 0) return null;
-	const run = async () => {
+	const run = async (target?: string) => {
 		setBusy(true);
-		await send()
+		await send(target)
 			.catch(() => {})
 			.finally(() => setBusy(false));
 	};
 	return (
-		<Button
-			variant="primary"
-			size="m"
-			iconLeft={Send}
-			data-testid={testid}
-			loading={busy}
-			onClick={() => void run()}
-			className="shrink-0"
-		>
-			{label}
-		</Button>
+		<div className="inline-flex shrink-0 items-center gap-2">
+			<Button
+				variant="primary"
+				size="m"
+				iconLeft={Send}
+				data-testid={testid}
+				loading={busy}
+				onClick={() => void run()}
+			>
+				{label}
+			</Button>
+			{pickerWorkspaceId && (
+				<ReviewChatMenu workspaceId={pickerWorkspaceId} busy={busy} onSend={run} />
+			)}
+		</div>
+	);
+}
+
+function ReviewChatMenu({
+	workspaceId,
+	busy,
+	onSend,
+}: {
+	workspaceId: string;
+	busy: boolean;
+	onSend: (target: string) => Promise<void>;
+}) {
+	const t = useT();
+	const titles = useAppStore(useShallow((s) => selectOpenChatTitles(t, s, workspaceId)));
+	const chats = Object.entries(titles);
+	if (chats.length === 0) return null;
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<IconButton
+					icon={ChevronDown}
+					label={t("panels.sendReview.chooseChat")}
+					disabled={busy}
+					wrapTrigger
+				/>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end" aria-label={t("panels.sendReview.chooseChat")}>
+				{chats.map(([sessionId, title]) => (
+					<DropdownMenuItem key={sessionId} onSelect={() => void onSend(sessionId)}>
+						{title}
+					</DropdownMenuItem>
+				))}
+			</DropdownMenuContent>
+		</DropdownMenu>
 	);
 }

@@ -180,10 +180,10 @@ test("sending a file review does not redirect its discussion to another open cha
 		name: "Review script.ts",
 		messages: [{ role: "user", text: "Review script.ts", timestamp: 1_700_000_000_000 }],
 	}).id;
-	seedWorkspaceSession(worktree(), {
+	const otherSession = seedWorkspaceSession(worktree(), {
 		name: "Unrelated chat",
 		messages: [{ role: "user", text: "Work on another file", timestamp: 1_700_000_010_000 }],
-	});
+	}).id;
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await openPersistedChat(page, "Review script.ts");
@@ -197,12 +197,36 @@ test("sending a file review does not redirect its discussion to another open cha
 	markSentOnDisk(earlier.id, pinnedSession);
 	await composeComment(page, "two = 2", "Keep this in the file's review chat");
 	await page.getByTestId("review-composer-save").click();
+	const picker = page
+		.getByTestId("send-review-button")
+		.locator("..")
+		.getByRole("button", { name: "Send to chat…" });
+	await picker.click();
+	await expect(page.getByRole("menuitem", { name: "Unrelated chat" })).toBeVisible();
+	await page.keyboard.press("Escape");
+	expect(sends).toHaveLength(0);
 	await page.getByTestId("send-review-button").click();
 	await expect.poll(() => sends.length).toBe(1);
 	expect(sends[0]).not.toHaveProperty("sessionId");
 	await expect(
 		page.locator('[data-testid="editor-tab"][data-kind="chat"][data-active="true"]'),
 	).toContainText("Review script.ts");
+	await revealWorkbenchTool(page, "review");
+	const section = page.locator('[data-testid="review-file-section"][data-path="script.ts"]');
+	if ((await section.getAttribute("data-expanded")) !== "true") {
+		await section.getByTestId("review-file-row").click();
+	}
+	await page
+		.getByTestId("review-panel-send")
+		.locator("..")
+		.getByRole("button", { name: "Send to chat…" })
+		.click();
+	await page.getByRole("menuitem", { name: "Unrelated chat" }).click();
+	await expect.poll(() => sends.length).toBe(2);
+	expect(sends[1]).toMatchObject({ sessionId: otherSession, commentIds: sends[0]?.commentIds });
+	await expect(
+		page.locator('[data-testid="editor-tab"][data-kind="chat"][data-active="true"]'),
+	).toContainText("Unrelated chat");
 });
 
 test("selection → icon → inline composer → draft; the tab wears the violet Review flag", async ({

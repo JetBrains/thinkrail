@@ -1468,6 +1468,24 @@ export function selectChatTitle(
 	);
 }
 
+export function selectOpenChatTitles(
+	t: Translator,
+	state: { tabsByWorkspace: Record<string, EditorTab[]> } & ChatFirstPromptState,
+	workspaceId: string,
+): Record<string, string> {
+	const titles: Record<string, string> = {};
+	for (const tab of state.tabsByWorkspace[workspaceId] ?? []) {
+		if (tab.kind === "chat") {
+			titles[tab.sessionId] = chatDisplayName(
+				t,
+				tab.name,
+				selectChatFirstPrompt(state, workspaceId, tab.sessionId),
+			);
+		}
+	}
+	return titles;
+}
+
 export function selectCompactionTurnIds(
 	state: { sessions: Record<string, SessionRuntime> },
 	sessionId: string,
