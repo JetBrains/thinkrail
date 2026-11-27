@@ -11,6 +11,7 @@ import {
 import { validateCustomLayoutPresets } from "./layoutPresets";
 import {
 	getConfig,
+	markProjectsFolderNoticeShown,
 	noteRecentModel,
 	resetConfigCache,
 	type SettingsPublisher,
@@ -1195,6 +1196,36 @@ test("the settle idle window defaults to 7 days, accepts null for never, and rej
 	expect(updateConfig({ settleIdleDays: null }).settleIdleDays).toBeNull();
 	resetConfigCache();
 	expect(getConfig().settleIdleDays).toBeNull();
+});
+
+test("the projects folder defaults to ~/thinkrail, is trimmed, and rejects blank or relative paths", () => {
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ projectsFolder: "  " }));
+	resetConfigCache();
+	expect(getConfig().projectsFolder).toBe("~/thinkrail");
+
+	const before = getConfig();
+	expect(() => updateConfig({ projectsFolder: " " })).toThrow("projectsFolder must be");
+	expect(() => updateConfig({ projectsFolder: "code" })).toThrow(
+		"projectsFolder must be an absolute host folder or start with ~/",
+	);
+	if (process.platform !== "win32") {
+		for (const foreign of ["C:\\code", "~\\code", "\\\\host\\share"]) {
+			expect(() => updateConfig({ projectsFolder: foreign })).toThrow("projectsFolder must be");
+		}
+	}
+	expect(() => updateConfig({ projectsFolder: 7 as unknown as string })).toThrow(
+		"projectsFolder must be",
+	);
+	expect(getConfig()).toEqual(before);
+
+	expect(updateConfig({ projectsFolder: " ~/code " }).projectsFolder).toBe("~/code");
+	expect(() =>
+		updateConfig({ projectsFolderNoticeShown: true } as unknown as AppConfigUpdate),
+	).toThrow("Unknown setting: projectsFolderNoticeShown");
+	expect(getConfig().projectsFolderNoticeShown).toBe(false);
+	expect(markProjectsFolderNoticeShown().projectsFolderNoticeShown).toBe(true);
+	resetConfigCache();
+	expect(getConfig().projectsFolder).toBe("~/code");
 });
 
 test("locale defaults to system, keeps an unavailable tag, and rejects non-canonical values", () => {

@@ -1,3 +1,4 @@
+import { isAbsolute } from "node:path";
 import {
 	type AppConfig,
 	type AppConfigUpdate,
@@ -13,6 +14,7 @@ import {
 	isKeybindingOverrides,
 	isLineWidth,
 	isLocalePreference,
+	isProjectsFolder,
 	isPullRequestFilter,
 	isQuestionPanelHeight,
 	isSettleIdleDays,
@@ -68,6 +70,7 @@ const ACCEPTED_UPDATE_KEYS = {
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: true,
 	settleIdleDays: true,
+	projectsFolder: true,
 	disabledSubagents: true,
 	disabledExtensions: true,
 	extensionSettings: true,
@@ -86,6 +89,14 @@ const ACCEPTED_UPDATE_KEYS = {
 	layout: true,
 	recentModels: true,
 } satisfies Record<keyof RuntimeAppConfigUpdate, true>;
+
+function isHostProjectsFolder(value: unknown): value is string {
+	if (!isProjectsFolder(value)) return false;
+	const path = value.trim();
+	if (path === "~" || path.startsWith("~/")) return true;
+	if (path.startsWith("~\\")) return process.platform === "win32";
+	return isAbsolute(path);
+}
 
 function assertUpdateShape(update: unknown): void {
 	if (typeof update !== "object" || update === null || Array.isArray(update)) {
@@ -368,6 +379,15 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	) {
 		throw new Error("settleIdleDays must be a whole number of days from 1 to 365, or null");
 	}
+	if (
+		runtimeUpdate.projectsFolder !== undefined &&
+		!isHostProjectsFolder(runtimeUpdate.projectsFolder)
+	) {
+		throw new CodedError(
+			"PROJECTS_FOLDER_INVALID",
+			"projectsFolder must be an absolute host folder or start with ~/",
+		);
+	}
 	if (runtimeUpdate.locale !== undefined && !isLocalePreference(runtimeUpdate.locale)) {
 		throw new Error('locale must be "system" or a canonical BCP-47 language tag');
 	}
@@ -429,6 +449,9 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 						pullRequestFiltersUpdate,
 					),
 				}),
+		...(runtimeUpdate.projectsFolder === undefined
+			? {}
+			: { projectsFolder: runtimeUpdate.projectsFolder.trim() }),
 	};
 	if (defaultModel !== undefined) {
 		if (defaultModel === null) delete next.defaultModel;
@@ -471,6 +494,16 @@ export function noteRecentModel(model: WireModel): AppConfig {
 		...current.recentModels.filter((candidate) => !sameModel(candidate, model)),
 	].slice(0, RECENT_MODELS_LIMIT);
 	const next: AppConfig = { ...current, recentModels };
+	saveConfig(next);
+	cached = next;
+	publishSettings?.(next, {});
+	return next;
+}
+
+export function markProjectsFolderNoticeShown(): AppConfig {
+	const current = getConfig();
+	if (current.projectsFolderNoticeShown) return current;
+	const next: AppConfig = { ...current, projectsFolderNoticeShown: true };
 	saveConfig(next);
 	cached = next;
 	publishSettings?.(next, {});

@@ -36,7 +36,7 @@ For latest version, see the [Releases page](https://github.com/JetBrains/thinkra
 
 ## What you get
 
-- **Isolated workspaces.** Open any git repo as a project and create `git worktree` workspaces from it, each with its own branch and working directory. Agents can then work in parallel without touching your original codebase; when they finish, merge the results you want to keep and delete the rest. Ask a chat to do something "in a side workspace" and the agent starts that workspace and its chat itself, then checks how its chats and pull requests are doing. You can also attach existing git worktrees or explicitly work in the project folder.
+- **Isolated workspaces.** Open any git repo as a project and create `git worktree` workspaces from it, each with its own branch and working directory. Agents can then work in parallel without touching your original codebase; when they finish, merge the results you want to keep and delete the rest. Ask a chat to do something "in a side workspace" and the agent starts that workspace and its chat itself, then checks how its chats and pull requests are doing. That works for a repository you don't have yet, too: after you approve, the agent clones it into your projects folder (`~/thinkrail` by default) and opens it as a project, for example to fix a good first issue it found for you. You can also attach existing git worktrees or explicitly work in the project folder.
 
   * Finished and dormant workspaces are settled when their pull request merges or closes, or after a quiet week, and return the moment you work in them again.
 
@@ -129,8 +129,8 @@ Then run `thinkrail`, optionally with a git repo to open as a project:
 thinkrail ~/code/my-repo
 ```
 
-* `thinkrail` needs `git` on your PATH and a model provider. You can sign in with JetBrains AI from the app or use your own provider credentials. The first launch walks you through connecting a provider and picking a project; **Start a new project** creates an empty git repository (under `~/thinkrail` by default), so you don't need one ready.
-* **Add project → Clone repository…** clones a Git URL into a new folder on the computer running ThinkRail and opens it as a project. Choose the parent folder and folder name, optionally limit the history depth, or cancel an in-progress clone.
+* `thinkrail` needs `git` on your PATH and a model provider. You can sign in with JetBrains AI from the app or use your own provider credentials. The first launch walks you through connecting a provider and picking a project; **Start a new project** creates an empty git repository (in your projects folder, `~/thinkrail` by default; change it in **Settings → Workspaces**), so you don't need one ready.
+* **Add project → Clone repository…** clones a Git URL into a new folder on the computer running ThinkRail and opens it as a project. It starts in your projects folder; choose another parent folder or folder name, optionally limit the history depth, or cancel an in-progress clone.
 * GitHub and other Git hosts work with the Git credentials and SSH keys already on your machine.
 * `thinkrail --help` lists the flags, and `thinkrail --version` prints the build.
 

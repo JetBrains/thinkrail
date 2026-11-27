@@ -25,6 +25,7 @@ import { type ListProps, Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { useShallow } from "zustand/react/shallow";
 import {
 	EMPTY_RUNTIME,
+	SettingsSection,
 	selectArtifactsRoundFilter,
 	selectChatAttended,
 	selectChatsContainer,
@@ -775,6 +776,7 @@ const ChatTranscript = forwardRef<
 			readMcpOutput,
 			openMcpSettings,
 			openProviderSettings,
+			openWorkspacesSettings: () => useAppStore.getState().openSettings(SettingsSection.Workspaces),
 			disableServerFallback,
 			findModel,
 			continuationOf,

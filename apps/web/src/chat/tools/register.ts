@@ -3,6 +3,7 @@ import { projectRelativePath } from "@/lib";
 import { registerToolRenderer } from "../toolRegistry";
 import { BashCard } from "./BashCard";
 import { EditCard } from "./EditCard";
+import { OpenProjectCard, openProjectSummary } from "./OpenProjectCard";
 import { ReadCard } from "./ReadCard";
 import { RequestReviewCard, requestReviewSummary } from "./RequestReviewCard";
 import { ResolveCommentCard } from "./ResolveCommentCard";
@@ -49,6 +50,12 @@ registerToolRenderer("resolve_comment", ResolveCommentCard, {
 
 registerToolRenderer("request_review", RequestReviewCard, {
 	summary: requestReviewSummary,
+	prominence: "primary",
+	defaultExpanded: true,
+});
+
+registerToolRenderer("open_project", OpenProjectCard, {
+	summary: openProjectSummary,
 	prominence: "primary",
 	defaultExpanded: true,
 });

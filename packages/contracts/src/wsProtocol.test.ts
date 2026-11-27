@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
 	DEFAULT_CONFIG,
+	DEFAULT_PROJECTS_FOLDER,
+	isProjectsFolder,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
 	RECENT_MODELS_LIMIT,
@@ -75,6 +77,7 @@ import {
 	PROJECT_RENAME_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROJECT_TRUST_PROTOCOL_VERSION,
+	PROJECTS_FOLDER_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	PROVIDER_WARNINGS_PROTOCOL_VERSION,
 	PULL_REQUEST_REVIEW_PROTOCOL_VERSION,
@@ -400,8 +403,33 @@ test("revealing a worktree entry in the OS file manager is pinned to v134", () =
 });
 
 test("base-branch skill and template previews are pinned to v135", () => {
-	expect(PROTOCOL_VERSION).toBe(135);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(REF_RESOURCE_PREVIEW_PROTOCOL_VERSION);
 	expect(REF_RESOURCE_PREVIEW_PROTOCOL_VERSION).toBe(135);
+});
+
+test("the projects folder and open_project are pinned to v136", () => {
+	expect(PROTOCOL_VERSION).toBe(136);
+	expect(PROJECTS_FOLDER_PROTOCOL_VERSION).toBe(136);
+	expect(DEFAULT_CONFIG.projectsFolder).toBe(DEFAULT_PROJECTS_FOLDER);
+	expect(DEFAULT_CONFIG.projectsFolderNoticeShown).toBe(false);
+	for (const rooted of [
+		"~/thinkrail",
+		"~",
+		" ~/code ",
+		"/srv/code",
+		"C:\\code",
+		"D:/code",
+		"\\\\host\\share",
+	]) {
+		expect(isProjectsFolder(rooted)).toBe(true);
+	}
+	for (const relative of ["code", "./code", "../code", "~code", "C:code"]) {
+		expect(isProjectsFolder(relative)).toBe(false);
+	}
+	expect(isProjectsFolder("  ")).toBe(false);
+	expect(isProjectsFolder("~/a\0b")).toBe(false);
+	expect(isProjectsFolder("x".repeat(4097))).toBe(false);
+	expect(isProjectsFolder(42)).toBe(false);
 });
 
 test("the community catalog is pinned to v132", () => {

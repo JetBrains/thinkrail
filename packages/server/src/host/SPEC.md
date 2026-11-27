@@ -642,6 +642,28 @@ nudges `fsChanged`. Nothing cleans the folder: sent messages keep naming its fil
     an owed branch move never counts as unnamed and never re-prompts), so agent's
     turn-start `pending-naming` reminder and the write policy can't disagree.
   - A target the agent never names stays unnamed; there is no fallback.
+  - `projectTools.ts` — the **project-tools host** (`setProjectToolsHost`) for `open_project`, composing
+    `agent` + `projects` + `git` + `settings` + `workspaces`. `plan` resolves without writing anything but
+    an opened record: a path-like input (absolute, `~`, `./` against the caller's worktree, a drive or UNC)
+    must already be a repository (`inspectProjectPath`; anything else is `PROJECT_NOT_REPOSITORY`, never
+    `git init`), and a GitHub `owner/repo` expands to its HTTPS URL before `validateCloneUrl`, so a bad URL
+    fails before any prompt. A URL's **repository key** treats spellings as one repository only where the
+    host is known to: on `github.com` (`CASE_INSENSITIVE_HOSTS`) HTTPS, SSH and scp forms, letter case and a
+    trailing `.git` collapse to `github.com/owner/repo`; any other host keeps its scheme, port (SSH's 22
+    excepted), SSH user (scp or `ssh://` form — `alice@host:shared.git` and `bob@host:shared.git` can be
+    different repositories) and path exactly, minus a trailing slash, and a `file:` URL keeps its real path —
+    two servers on different ports, or local `widget` and `widget.git`, are different repositories (PR #1535
+    review: the first, lossy key returned the wrong project to `start_workspace`). The key is compared with every remote URL — not just `origin`, since a
+    fork clone keeps the original as `upstream` — of the open and recent projects (the Chats container
+    excluded): an open match returns `open`, a closed one is reopened. Otherwise the destination is
+    `<projectsFolder>/<repo>`, or the first free `<repo>-N` past unrelated folders — chosen only after every
+    `<repo>`, `<repo>-2` … `<repo>-99` was checked, so an existing clone at a later number is still found; a repository named like a
+    Windows device (`con`, `nul`, `com1`, …) gets `<repo>-repo` and a name is capped at 200 characters, because
+    the tool has no destination override and the clone door refuses those names; an existing folder
+    there with a matching remote is opened instead. A clone plan carries `notice` while
+    `projectsFolderNoticeShown` is unset and marks it at once, so the explanation is shown once per host.
+    `clone` runs `cloneProject` (full history, pi's signal) and reports a Stop as "nothing was cloned".
+    Like an agent's `start_workspace`, nothing here records a setup action.
   - `workspaceTools.ts` — the **workspace-tools host** (`setWorkspaceToolsHost`), composing `agent` +
     `projects` + `workspaces` + `git` for `start_workspace` / `workspace_status`:
     - A spawned workspace goes through the same background creation as the New Workspace dialog
@@ -657,7 +679,8 @@ nudges `fsChanged`. Nothing cleans the folder: sent messages keep naming its fil
     - Projects are the open repositories, matched by id, slug or name (default: the caller's). The
       Chats container is never one ([[submodule-server-workspaces]]): it is never resolved or listed,
       and its chats never match a named status lookup. A chat without a project has no default, so
-      both tools refuse a call without `project` and list the open repositories.
+      both tools refuse a call without `project` and list the open repositories. An unknown or missing
+      project's error also names `open_project`, the way to add a repository.
       Attachments resolve against the caller's worktree: images ride as prompt images, and other files
       are listed by absolute path, because the child's worktree only has committed refs.
     - Project, model and attachments are validated **before** any worktree exists. If the chat fails to

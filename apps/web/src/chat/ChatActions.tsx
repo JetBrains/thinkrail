@@ -37,6 +37,7 @@ export interface ChatActions {
 	readMcpOutput?: ((toolCallId: string) => Promise<McpReadOutputResult>) | undefined;
 	openMcpSettings?: (() => void) | undefined;
 	openProviderSettings?: (() => void) | undefined;
+	openWorkspacesSettings?: (() => void) | undefined;
 	disableServerFallback?: (() => Promise<void>) | undefined;
 	findModel?: ((ref: string) => WireModel | null) | undefined;
 	/** Continue in workspace: the host-owned phase of an operation, where it went, and how to ask again. */

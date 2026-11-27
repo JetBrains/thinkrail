@@ -1,13 +1,20 @@
-import { WORKSPACE_SETTLE_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import {
+	isProjectsFolder,
+	PROJECTS_FOLDER_PROTOCOL_VERSION,
+	WORKSPACE_SETTLE_PROTOCOL_VERSION,
+} from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
-import { useState } from "react";
+import { cn } from "@thinkrail/ui/utils";
+import { useId, useState } from "react";
 import {
+	SETTINGS_INPUT,
 	SETTINGS_ROWS,
 	SettingsChoice,
 	SettingsPage,
 	type SettingsReset,
 	SettingsRow,
+	useSettingsDraft,
 } from "@/settingsKit";
 import { useAppStore } from "@/store";
 import { saveSettings } from "./saveSettings";
@@ -57,11 +64,24 @@ export function idleDescription(pending: IdleChoice | null, value: IdleChoice): 
 	return IDLE_CHOICES.find((choice) => choice.id === shown)?.description ?? null;
 }
 
+export interface ProjectsFolderField {
+	value: string;
+	reset: SettingsReset;
+	onCommit: (next: string) => Promise<boolean>;
+}
+
 export function WorkspacesSettings() {
 	const t = useT();
 	const settleIdleDays = useAppStore((s) => s.settleIdleDays);
+	const projectsFolder = useAppStore((s) => s.projectsFolder);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const reset = useConfigReset("settleIdleDays", "settings.workspaces.changeFailed");
+	const folderReset = useConfigReset(
+		"projectsFolder",
+		"settings.workspaces.projectsFolder.changeFailed",
+	);
+	const folderSupported =
+		protocolVersion !== null && protocolVersion >= PROJECTS_FOLDER_PROTOCOL_VERSION;
 
 	const select = (choice: IdleChoice) => {
 		const next = choice === "never" ? null : Number(choice);
@@ -75,6 +95,56 @@ export function WorkspacesSettings() {
 			supported={protocolVersion !== null && protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION}
 			reset={reset}
 			onSelect={select}
+			projectsFolder={
+				folderSupported
+					? {
+							value: projectsFolder,
+							reset: folderReset,
+							onCommit: (next) =>
+								saveSettings(
+									{ projectsFolder: next },
+									t("settings.workspaces.projectsFolder.changeFailed"),
+								),
+						}
+					: null
+			}
+		/>
+	);
+}
+
+function ProjectsFolderRow({ value, reset, onCommit }: ProjectsFolderField) {
+	const t = useT();
+	const errorId = useId();
+	const { invalid, dirty, inputProps } = useSettingsDraft({
+		saved: value,
+		isValid: isProjectsFolder,
+		normalize: (draft) => draft.trim(),
+		commit: onCommit,
+	});
+	return (
+		<SettingsRow
+			{...settingProps(t, SETTING.projectsFolder)}
+			reset={reset}
+			control={
+				<span className="flex flex-col items-end gap-2">
+					<input
+						type="text"
+						spellCheck={false}
+						autoComplete="off"
+						{...inputProps}
+						aria-label={t(SETTING.projectsFolder.label)}
+						aria-describedby={invalid ? errorId : undefined}
+						data-testid="projects-folder-input"
+						data-setting-clean={dirty ? undefined : ""}
+						className={cn(SETTINGS_INPUT, "w-240")}
+					/>
+					{invalid ? (
+						<span id={errorId} className="text-feedback-error tr-text-metadata">
+							{t("settings.workspaces.projectsFolder.invalid")}
+						</span>
+					) : null}
+				</span>
+			}
 		/>
 	);
 }
@@ -84,11 +154,13 @@ export function WorkspacesSettingsView({
 	supported,
 	reset,
 	onSelect,
+	projectsFolder,
 }: {
 	settleIdleDays: number | null;
 	supported: boolean;
 	reset: SettingsReset;
 	onSelect: (choice: IdleChoice) => void;
+	projectsFolder: ProjectsFolderField | null;
 }) {
 	const t = useT();
 	const [pending, setPending] = useState<IdleChoice | null>(null);
@@ -127,6 +199,7 @@ export function WorkspacesSettingsView({
 						/>
 					}
 				/>
+				{projectsFolder ? <ProjectsFolderRow {...projectsFolder} /> : null}
 			</div>
 		</SettingsPage>
 	);

@@ -40,6 +40,7 @@ export function shouldCommitDraft({
 export interface SettingsDraftOptions {
 	saved: string;
 	isValid: (draft: string) => boolean;
+	normalize?: (draft: string) => string;
 	commit: (draft: string) => undefined | Promise<boolean>;
 	onEdit?: () => void;
 }
@@ -63,6 +64,7 @@ export interface SettingsDraft {
 export function useSettingsDraft({
 	saved,
 	isValid,
+	normalize,
 	commit,
 	onEdit,
 }: SettingsDraftOptions): SettingsDraft {
@@ -109,13 +111,15 @@ export function useSettingsDraft({
 	};
 	const commitDraft = () => {
 		editingRef.current = false;
+		const next = normalize && !invalid ? normalize(draft) : draft;
 		const go = shouldCommitDraft({
-			draft,
+			draft: next,
 			invalid,
 			submitted: submittedRef.current,
 			authoritative: authoritative(),
 		});
-		if (go) submit(draft);
+		if (go) submit(next);
+		else if (next !== draft) setDraftState(next);
 	};
 
 	return {
