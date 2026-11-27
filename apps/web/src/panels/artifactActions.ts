@@ -22,13 +22,6 @@ export function mentionArtifact(workspaceId: string, path: string): void {
 	store.requestComposerFocus(workspaceId, sessionId, { dismissHistory: true });
 }
 
-export function revealArtifact(workspaceId: string, path: string): void {
-	const store = useAppStore.getState();
-	store.setFilesMode("all");
-	store.revealInFiles(workspaceId, path);
-	store.requestToolView(workspaceId, "files");
-}
-
 export function revealArtifactsListing(workspaceId: string): void {
 	const store = useAppStore.getState();
 	if (selectArtifactsView(store) === "outputs") store.setArtifactsView("list");

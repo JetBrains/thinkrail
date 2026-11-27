@@ -498,7 +498,10 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   name }` → `{ path }`, in place, refused with `ENTRY_EXISTS` when another entry holds the name) and
   `fs.move` (`fs.copy`'s params → `{ path }`, the Cut-and-Paste move, same or another workspace, refused
   with `ENTRY_EXISTS` instead of renaming, for a folder into itself, and with `MOVE_ACROSS_DEVICES` when
-  source and destination are on different file systems),
+  source and destination are on different file systems), and from **`FS_REVEAL_PROTOCOL_VERSION`** (v134)
+  `fs.reveal` (`{ workspaceId, path }` → ack: the host's OS file manager opens with that worktree entry
+  selected — on the host's machine, which a remote browser does not see; a client hides the action from
+  older hosts),
   the **Artifacts** tool's wire from the same version: `artifacts.list` (`{ workspaceId }` →
   **`WorkspaceArtifactsSnapshot`**: `dir` (the artifacts folder, `.thinkrail/context`; agents write mockups to
   its **`WORKSPACE_MOCKUP_DIR`**, `.thinkrail/context/mockups`, the one name the host's mockup check and the
@@ -654,7 +657,11 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   `submodule-server-terminal`'s shell-selection decision for what each value spawns.
   **`PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION`** pins v63's additive project-located `template.list` /
   `template.get` reads, allowing Create Workspace to preview global plus current-checkout project templates
-  without sending host paths; older hosts retain a global-only fallback. `themeMode` defaults to `"fixed"`
+  without sending host paths; older hosts retain a global-only fallback.
+  **`REF_RESOURCE_PREVIEW_PROTOCOL_VERSION`** (v135) adds an optional **`baseRef`** beside `projectId` on
+  those reads and on `skill.list`: the host answers from the project's resources as they are at that ref (what
+  a worktree cut from it will hold) instead of the current checkout, and falls back to the checkout when the
+  ref does not resolve. The dialog sends it only on a v135+ host; an older host would ignore it. `themeMode` defaults to `"fixed"`
   and no pair, preserving both legacy configs
   and the explicit Dark default; `subagentsEnabled` is the host-wide subagent default (`true` for current
   behavior), overridden only by `Workspace.subagentsOverride`; `subagentMaxConcurrent` (whole number in
@@ -1025,8 +1032,8 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   **`project.setTrust`** (persist a project's trust grant → the updated `Project`; gates its committed
   cross-agent skill aliases; `resources: true` also grants pi-level resource trust, see Project trust) /
   **`skill.list`** (a pre-session, skill-only `SlashCommandInfo[]` preview for a `projectId`, resolved from
-  that project's current checkout with its **project-scoped aliases gated by trust**; the eventual worktree
-  session is authoritative) / the **Skills-manager set** — **`project.aliasSkills`** (present committed alias
+  that project's current checkout — or, with v135's optional `baseRef`, its resources at that ref — with its
+  **project-scoped aliases gated by trust**; the eventual worktree session is authoritative) / the **Skills-manager set** — **`project.aliasSkills`** (present committed alias
   names, for the presence-gated notice's count) / **`project.acknowledgeSkills`** (confirm skills that
   appeared after trust) / **`project.setSkillEnabled`** (project baseline) / **`project.setGroupEnabled`**
   (turn a plugin / source tier / `@plugins` on/off at the baseline) / **`workspace.setSkillOverride`**

@@ -47,6 +47,20 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
 
 ## Boundary
 
+- **Owns:** **`previewRefPaths(project, ref, roots)`** — what a worktree cut from `ref` would hold at `roots`,
+  without creating one, for the New Workspace dialog's skill/template preview. The ref resolves exactly as
+  creation's start point does (a `<remote>/<branch>` through `refs/remotes/…`, never a same-named local
+  branch; unsafe refs are refused), and only roots that exist at the commit are extracted. Extraction goes
+  through a throwaway `GIT_INDEX_FILE` (`read-tree --prefix` per root + `checkout-index --prefix`), so the
+  repo's own index and working tree are never touched, into `<dataDir>/cache/ref-previews/<projectId>/<sha>`,
+  which is landed by atomic rename. It is keyed by commit, so it is immutable and a hit is free. The folder
+  keeps an empty `.git` marker so pi's ancestor `.agents/skills` walk stops at the preview root, just as it
+  stops at the project's git root. Concurrent requests for one commit share one extraction. A hit refreshes
+  the folder's mtime; per project the 4 most recently used previews survive, and older ones and orphaned
+  `.tmp-` staging folders are pruned only after 10 idle minutes, so a folder just handed to a reader is never
+  deleted under it. Any failure answers `null` (logged), and the caller falls back to the current checkout.
+  The root list is the caller's (host composes `agent`'s `PROJECT_SKILL_ROOTS` + `templates`'
+  `PROJECT_TEMPLATE_ROOT`), so this module never learns what a skill is.
 - **Owns:** `listExistingWorktrees(projectId)` (**async** — parses `git worktree list --porcelain -z` read
   through `gitAsync`, the same request-path-read rule `git/SPEC.md` states for `gitStatus`/`listCommits`:
   this is the Existing-Worktree dialog's populate call, so a slow/large registry must not freeze the host's
@@ -410,7 +424,8 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   `setWorkspaceCreationHandoff`, `CreationHandoff`,
   `setWorkspaceCreationPublisher`, `WorkspaceCreationEvent`, `creationOwnsPath`, `listExistingWorktrees`,
   `openExistingWorktree`,
-  `listWorkspaces`, `listWorkspaceRecords`, `listAllWorkspaceRecords`, `resolveWorkspacePath`, `forgetWorkspace`,
+  `listWorkspaces`, `listWorkspaceRecords`, `listAllWorkspaceRecords`, `resolveWorkspacePath`, `previewRefPaths`,
+  `forgetWorkspace`,
   `reclaimWorktree`, `removeWorkspace`,
   `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `syncWorkspaceBranch`, `branchMoveOwed`,
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,

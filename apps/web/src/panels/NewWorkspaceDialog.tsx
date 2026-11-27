@@ -11,6 +11,7 @@ import {
 import {
 	type ModelDefault,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
+	REF_RESOURCE_PREVIEW_PROTOCOL_VERSION,
 	type SlashCommandInfo,
 	type TemplateInfo,
 	type TemplateReadLocation,
@@ -111,6 +112,10 @@ import { enterDefaultWorkspace } from "./defaultWorkspace";
 
 type WorkspaceTarget = "worktree" | "default" | "chat";
 
+function skillListParams(projectId: string, baseRef: string | null) {
+	return { projectId, ...(baseRef ? { baseRef } : {}) };
+}
+
 export function reconcileModel(
 	models: readonly WireModel[],
 	model: WireModel,
@@ -193,16 +198,51 @@ export function NewWorkspaceDialog({
 
 	const focusPromptSelection = usePendingSelection(promptRef);
 
+	const [catalogRefresh, setCatalogRefresh] = useState(0);
+	const baseChosenFor = useRef<string | null>(null);
+	const prefetchBase = (ref: string) => {
+		if (!ref) return;
+		getTransport()
+			.request("git.prefetch", { projectId: selectedProjectId, ref })
+			.then(({ ok }) => {
+				if (ok) setCatalogRefresh((n) => n + 1);
+			})
+			.catch(() => {});
+	};
+
+	const {
+		branches,
+		failed: branchesFailed,
+		refreshing,
+		refresh: refreshBranches,
+	} = useBranchList(open && !chat ? selectedProjectId : null, (list) => {
+		if (baseChosenFor.current === selectedProjectId) return;
+		const initial = retryDraft?.baseRef ?? list.defaultBranch;
+		setBaseRef(initial);
+		prefetchBase(initial);
+	});
+
+	const selectBaseRef = (ref: string) => {
+		baseChosenFor.current = selectedProjectId;
+		setBaseRef(ref);
+		if (branches?.remote.includes(ref)) prefetchBase(ref);
+	};
 	const supportsProjectTemplatePreview =
 		protocolVersion !== null && protocolVersion >= PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION;
+	const refPreview =
+		target === "worktree" &&
+		protocolVersion !== null &&
+		protocolVersion >= REF_RESOURCE_PREVIEW_PROTOCOL_VERSION;
+	const previewRef = refPreview && baseRef ? baseRef : null;
+	const previewPending = refPreview && !baseRef && !branchesFailed;
 	const loadTemplate = useCallback(
 		(name: string) => {
 			const location: TemplateReadLocation = supportsProjectTemplatePreview
-				? { projectId: scopeProjectId }
+				? { projectId: scopeProjectId, ...(previewRef ? { baseRef: previewRef } : {}) }
 				: {};
 			return getTransport().request("template.get", { ...location, name });
 		},
-		[scopeProjectId, supportsProjectTemplatePreview],
+		[scopeProjectId, previewRef, supportsProjectTemplatePreview],
 	);
 	const applyTemplate = useCallback(
 		(template: ParsedTemplate) => {
@@ -214,7 +254,7 @@ export function NewWorkspaceDialog({
 	);
 	const { pending: templatePending, pick: pickTemplate } = useTemplateCommandPicker({
 		draft: prompt,
-		contextKey: `${scopeProjectId}:${supportsProjectTemplatePreview ? "project" : "global"}`,
+		contextKey: `${scopeProjectId}:${supportsProjectTemplatePreview ? "project" : "global"}:${previewRef ?? ""}`,
 		load: loadTemplate,
 		onApply: applyTemplate,
 	});
@@ -243,7 +283,6 @@ export function NewWorkspaceDialog({
 	const prChipRef = useRef<HTMLButtonElement>(null);
 	const backdropRef = useRef<HTMLDivElement>(null);
 	const [prBase, setPrBase] = useState<{ number: number; baseRef: string } | null>(null);
-	const baseChosenFor = useRef<string | null>(null);
 	const pickPullRequest = (index: number) => {
 		const pr = pullRequests?.pick(index);
 		const argument = slashArgument(prompt, skillCommands);
@@ -332,24 +371,28 @@ export function NewWorkspaceDialog({
 
 	useEffect(() => {
 		if (!open) return;
-		let cancelled = false;
 		setSkillCommands([]);
 		setTemplates([]);
+	}, [open, scopeProjectId, previewRef]);
+
+	useEffect(() => {
+		if (!open || previewPending) return;
+		let cancelled = false;
 		void slashCommandCatalogOrEmpty(() =>
-			getTransport().request("skill.list", { projectId: scopeProjectId }),
+			getTransport().request("skill.list", skillListParams(scopeProjectId, previewRef)),
 		).then((commands) => {
 			if (!cancelled) setSkillCommands(commands);
 		});
 		return () => {
 			cancelled = true;
 		};
-	}, [open, scopeProjectId]);
+	}, [open, previewPending, scopeProjectId, previewRef, catalogRefresh]);
 
 	useEffect(() => {
-		if (!open || !slashActive) return;
+		if (!open || !slashActive || previewPending) return;
 		let cancelled = false;
 		const location: TemplateReadLocation = supportsProjectTemplatePreview
-			? { projectId: scopeProjectId }
+			? { projectId: scopeProjectId, ...(previewRef ? { baseRef: previewRef } : {}) }
 			: {};
 		getTransport()
 			.request("template.list", location)
@@ -362,7 +405,15 @@ export function NewWorkspaceDialog({
 		return () => {
 			cancelled = true;
 		};
-	}, [open, scopeProjectId, slashActive, supportsProjectTemplatePreview]);
+	}, [
+		open,
+		previewPending,
+		scopeProjectId,
+		previewRef,
+		catalogRefresh,
+		slashActive,
+		supportsProjectTemplatePreview,
+	]);
 
 	const trustSummary = useProjectTrustSummary(selectedProjectId, open && !chat);
 
@@ -456,30 +507,6 @@ export function NewWorkspaceDialog({
 		};
 	}, [open, model, thinkingLevel]);
 
-	const prefetchBase = (ref: string) => {
-		if (!ref) return;
-		getTransport()
-			.request("git.prefetch", { projectId: selectedProjectId, ref })
-			.catch(() => {});
-	};
-
-	const selectBaseRef = (ref: string) => {
-		baseChosenFor.current = selectedProjectId;
-		setBaseRef(ref);
-		if (branches?.remote.includes(ref)) prefetchBase(ref);
-	};
-
-	const {
-		branches,
-		failed: branchesFailed,
-		refreshing,
-		refresh: refreshBranches,
-	} = useBranchList(open && !chat ? selectedProjectId : null, (list) => {
-		if (baseChosenFor.current === selectedProjectId) return;
-		const initial = retryDraft?.baseRef ?? list.defaultBranch;
-		setBaseRef(initial);
-		prefetchBase(initial);
-	});
 	const submitEnabled = !creating && !templatePending && attachedImages.pending === 0;
 
 	const uploadFiles = async (): Promise<string[] | null> => {
@@ -614,10 +641,7 @@ export function NewWorkspaceDialog({
 				trustGrantParams(selectedProjectId, notice),
 			);
 			useAppStore.getState().applyProjectUpdated(updated);
-			const commands = await slashCommandCatalogOrEmpty(() =>
-				getTransport().request("skill.list", { projectId: selectedProjectId }),
-			);
-			setSkillCommands(commands);
+			setCatalogRefresh((n) => n + 1);
 		};
 		await trust()
 			.catch((err: unknown) => toast.error(errorText(err), t("panels.newWorkspace.trustFailed")))
@@ -903,6 +927,17 @@ export function NewWorkspaceDialog({
 							className="px-4 text-text-muted tr-text-metadata"
 						>
 							{t("panels.newWorkspace.namingHint")}
+						</p>
+					) : previewRef ? (
+						<p className="mt-4 text-text-muted tr-text-metadata">
+							<T
+								i18nKey="panels.newWorkspace.slashHintRef"
+								values={{ ref: previewRef }}
+								components={[
+									<span key="slash" className="tr-code-text" />,
+									<span key="ref" className="tr-code-text" />,
+								]}
+							/>
 						</p>
 					) : (
 						<p className="mt-4 text-text-muted tr-text-metadata">

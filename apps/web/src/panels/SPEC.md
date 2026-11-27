@@ -331,8 +331,14 @@ treatment.
   a focused row) opens its menu: **Open in browser** first for an HTML file from a host at
   `BROWSER_VIEW_PROTOCOL_VERSION` (v122; `OpenInBrowserMenuItem`, also in the Artifacts row menu after
   Reveal, and `OpenInBrowserButton` in the file tab's toolbar and, through `ResourceHost.OpenInBrowser`, in
-  every framed preview), then **Copy path** (absolute, through `joinWorkspacePath`) and **Copy relative
-  path** (worktree-relative). "Open in browser" opens the host's `/view/` URL with `window.open(…,
+  every framed preview), then the **OS reveal** (below), then **Copy path** (absolute, through
+  `fileTreeActions.copyWorkspacePath`, shared with the Artifacts and Specs menus) and **Copy relative
+  path** (worktree-relative). The **OS reveal** (`RevealMenuItems.RevealInFileManagerMenuItem`, shown from
+  a host at `FS_REVEAL_PROTOCOL_VERSION`, v134) calls `fs.reveal`, so the host's file manager opens the
+  entry's folder with the entry selected. Its label follows `hostPlatform` (*Reveal in Finder* / *Show in
+  Explorer* / *Reveal in file manager* on Linux or an unknown host) because the name tells the user which
+  app will open. A failure shows a toast. Like every host reveal, it happens on the host's machine, so a
+  remote browser does not see it. The Files, Artifacts and Specs menus share this one item. "Open in browser" opens the host's `/view/` URL with `window.open(…,
   "noopener,noreferrer")`: a new tab on the web, the system browser on the desktop
   ([[submodule-server-host]] serves it sandboxed, [[module-desktop]] routes it to the OS). A compacted folder copies its deepest path, matching its label, and copying
   neither opens nor selects the row. The row stays highlighted while its menu is open. From a host at
@@ -691,13 +697,21 @@ a project picker, the prompt hero, and the reused
   runnable by the held model by asking the host for pi's clamp (**`model.clampThinking`**) rather than
   deciding locally, so an explicit switch and a refresh that shrank a model's set resolve the same way
   pi would. `model.default` needs no adjustment: the host already returns a self-consistent pair.
-  On open and project-picker changes, the dialog reads **`skill.list({projectId})`**; whenever a leading
-  slash token becomes active it also reads **`template.list({projectId})`**. It feeds both into the shared
-  `prompt` module, so Create Workspace and live chat use the same filtering, menu, keyboard navigation,
-  race-safe template pick, and Tab-through placeholder state machine. Skills come from the selected project's
-  **current checkout** plus personal/bundled sources; templates merge global + current-checkout project scope
-  with project precedence. Selecting a skill inserts `/skill:<name> `; selecting a template reads
-  `template.get({projectId, name})`, replaces the complete draft with its body, and activates its placeholders.
+  On open and on project-picker, target and base-branch changes, the dialog reads **`skill.list({projectId,
+  baseRef?})`**; whenever a leading slash token becomes active it also reads **`template.list({projectId,
+  baseRef?})`**. It feeds both into the shared `prompt` module, so Create Workspace and live chat use the same
+  filtering, menu, keyboard navigation, race-safe template pick, and Tab-through placeholder state machine.
+  In **New worktree** mode on a v135+ host (`REF_RESOURCE_PREVIEW_PROTOCOL_VERSION`) `baseRef` is the selected
+  base branch, so project skills and templates are the ones the created worktree will hold — a stale or
+  untracked checkout neither hides nor adds any; both reads repeat after that base's `git.prefetch` succeeds
+  (a moved tracking ref can bring new skills) and after a trust grant, through one refresh counter the
+  cancellation-safe effects depend on, so a late answer for a previous ref is dropped. Until the branch list
+  names that base (or fails), worktree mode reads nothing, so a pick can't start on the checkout catalog and
+  then be invalidated when the ref arrives. Work in project folder
+  and older hosts omit `baseRef` and preview the **current checkout**. Personal/bundled skills and global
+  templates join either way, project templates taking precedence. Selecting a skill inserts `/skill:<name> `;
+  selecting a template reads `template.get({projectId, baseRef?, name})` (the picker's context key includes
+  the ref), replaces the complete draft with its body, and activates its placeholders.
   Up/Down navigate, Enter/Tab select, Escape dismisses the menu; outside an open menu Tab/Shift+Tab cycle active
   template slots and Escape ends that session. Submission mirrors edited repeated slots and removes untouched
   markers before the finalized text becomes the first prompt. While a selected template body is loading,
@@ -705,8 +719,10 @@ a project picker, the prompt hero, and the reused
   invalidates an in-flight pick, so a response from the previous checkout cannot populate the next project's
   prompt. The first prompt is snapshotted before asynchronous workspace creation begins.
   Listing/get failures preserve the draft and degrade to whichever source remains available. Extension commands and `/compact` stay absent because no live
-  session exists. A caption under the prompt marks the catalog as **from the current checkout** (the created
-  worktree's session is authoritative if the selected base branch differs). When the selected project ships anything
+  session exists. A caption under the prompt names the catalog's source: **`from <baseRef>, the branch this
+  workspace starts from`** when `baseRef` travels, else **from the current checkout** (the created
+  workspace's session is authoritative). The trust notice below still counts the **current checkout's** gated resources
+  — a base branch that adds the repo's first gated skill is previewed without it until trust is granted. When the selected project ships anything
   still **untrusted** (the same `useProjectTrustSummary` + `deriveProjectTrustNotice` pair as the Welcome
   notice — counts and kinds, never names), a **trust notice** shows a *Trust project* button — the repo's
   skills and pi resources stay withheld until granted (`project.setTrust` from the same `trustGrantParams`,
@@ -1334,7 +1350,7 @@ a project picker, the prompt hero, and the reused
     `nemo-speech` on PATH; focus returns to the Delete button on cancel and to the Voice input switch
     after deleting.
   The mic itself is not here: the page-level dictation layer ([[submodule-web-speech]]) shows it on
-  whichever text field has focus;
+  whichever text field has focus, and on every chat composer without focus;
   **`TerminalSettings`** — **Scrollback**, a cheap segmented choice (`store.terminalReplayKb`, five presets
   from Off to 1 MB; a valid non-preset host value selects none rather than a wrong preset;
   `settings.update { terminalReplayKb }`, applies to terminals opened from now on) and, on
@@ -2592,7 +2608,9 @@ own section. The kebab menu (`plan-menu`, a
   duplicate root, preview pane, or graph canvas. `FileTree` shares the same file gesture model
   (preview/keep) but keeps its own directory behaviour — a whole-row click toggles dirs, no collision
   there. File and folder rows also carry the copy-path, Copy / Paste and Delete context menu described with
-  `FilesPanel`.
+  `FilesPanel`. A spec row's context menu (right-click, Context Menu key, Shift+F10) is read-only: the OS
+  reveal, **Reveal in Files** (`RevealInFilesMenuItem` → `fileTreeActions.revealInFilesPanel`, the same
+  jump the Artifacts menu uses), and the two Copy paths. The row stays highlighted while its menu is open.
 - **`ArtifactsPanel` is the Artifacts tool's body** — a reader of the host's artifact index
   ([[submodule-server-artifacts]]). Like specs, the `artifacts.list` snapshot lands in the store
   (`artifactsByWorkspace`) through **`useWorkspaceArtifacts`**, which the workbench calls for every
@@ -2673,11 +2691,11 @@ own section. The kebab menu (`plan-menu`, a
   (`artifactRowParts.ArtifactEntryMenu`, shared by both views): Mention in chat
   (pastes `@<path> ` into the attended chat's composer through `pasteIntoComposer` and focuses it, closing the chat's history overlay as `Mod+L` does — run once the row
 menu has closed, because a closing menu returns focus to its row; disabled
-  without one), Reveal in Files, Open ‹chat› for an attributed row (the chip's action), the two Copy paths,
+  without one), the OS reveal and Reveal in Files (both from `RevealMenuItems`), Open ‹chat› for an attributed row (the chip's action), the two Copy paths,
   Copy / Cut (the shared Files clipboard; a cut pastes
   through `fs.move`), Rename (inline, `fs.rename`), Restore for a deleted row, and Delete — `fs.delete` for a
   live file, `artifacts.discard` for a kept copy, both behind a confirmation. A Tree folder's menu is
-  Mention in chat (`@<folder>/ `), Reveal in Files, the two Copy paths, Copy / Cut, Paste here (with a
+  Mention in chat (`@<folder>/ `), the OS reveal, Reveal in Files, the two Copy paths, Copy / Cut, Paste here (with a
   clipboard) and Rename — no Delete or Restore: removing or restoring a folder of kept copies one
   request per file would mean hundreds of reconciles and trash calls, and a host batch was not worth it
   yet. Each section is its own sidebar

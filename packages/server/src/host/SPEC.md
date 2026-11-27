@@ -344,7 +344,10 @@ nudges `fsChanged`. Nothing cleans the folder: sent messages keep naming its fil
   the **Skills-manager set**: `skill.list` / `skills.state` / `project.skills` build
   the admission context from `projects` (+ the
   workspace's `skillOverrides` when workspace-scoped) and pass it into agent's `listSkillCommands`/
-  `listSkillCatalog`; the **MCP set** (`mcp.*`, `host/mcp.ts`) composes `agent`'s MCP
+  `listSkillCatalog`; `skill.list` and the project-located `template.list`/`template.get` with a `baseRef`
+  read from `workspaces`' `previewRefPaths(project, baseRef, [...PROJECT_SKILL_ROOTS, PROJECT_TEMPLATE_ROOT])`
+  folder instead of the project checkout (same admission, so trust gates are unchanged), falling back to the
+  checkout when the preview is `null`; the **MCP set** (`mcp.*`, `host/mcp.ts`) composes `agent`'s MCP
   service with `projects` (approvals, overrides, pi-level trust) and publishes `mcp.status` snapshots (topic
   subscribed only by clients at `MCP_PROTOCOL_VERSION` or later) plus `session.resourcesChanged`
   invalidations. Every request that names a workspace resolves it and its project; one without (user scope
@@ -997,7 +1000,8 @@ inotify watch per folder; background runs in big repositories would otherwise ex
 and settle do not depend on it. `setArtifactsPublisher` fans
 the index's change out as the pathless `workspace.artifactsChanged` nudge to v121+ sockets of that
 workspace. `fs.delete`, `fs.rename` and `fs.move` run their mutation inside `withUserRemoval` (a move locks
-both workspaces in id order), `fs.copy` and `fs.move` first call `prepareArtifactsDestination` for their
+both workspaces in id order); `fs.reveal` resolves its path through `fs`'s `resolveWorktreeEntry` (contained,
+never `.git`) before handing it to `editors.revealItemInFileManager`; `fs.copy` and `fs.move` first call `prepareArtifactsDestination` for their
 destination folder, and `workspace.remove` / `chat.delete` call `removeWorkspaceArtifacts` once the
 workspace or chat record is gone.
 

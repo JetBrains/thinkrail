@@ -201,14 +201,17 @@ assumption; re-verify on a pi bump.
   name validation as the traversal gate; frontmatter → metadata extraction for `description` /
   `argumentHint`. Never touches any other path — no `resolvePath` / symlink-following of caller input,
   only `join(dir, \`${name}.md\`)` after `name` has passed `isValidTemplateName`.
-- **Public surface (barrel):** `templateDirs`, `TemplateDirs`, `listTemplates`, `getTemplate`,
-  `saveTemplate`, `deleteTemplate`.
+- **Public surface (barrel):** `templateDirs`, `TemplateDirs`, `PROJECT_TEMPLATE_ROOT`, `listTemplates`,
+  `getTemplate`, `saveTemplate`, `deleteTemplate`.
+- `PROJECT_TEMPLATE_ROOT` is the repo-relative `.pi/prompts` that `projectDir` joins — the one definition the
+  host's base-ref preview extracts.
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (`getAgentDir`, `CONFIG_DIR_NAME`,
   `parseFrontmatter` — root exports only), `@thinkrail/contracts` (`TemplateInfo`, `TemplateScope`,
   `isValidTemplateName`),
   `node:fs`, `node:path`.
 - **Forbidden:** importing `workspaces` / `projects` — stays registry-free like `history`; the
   `template.*` handler resolves the read request's one optional `workspaceId` / `projectId` location to `cwd`
+  (with `projectId`, an optional `baseRef` swaps the checkout for `workspaces`' ref preview folder)
   and passes it into `templateDirs` itself. Both ids together are rejected; no location remains global-only.
   Caching the listing across calls. Writing or reading anything outside `globalDir` / `projectDir`.
 
