@@ -27,6 +27,7 @@ import {
 	isProjectsFolder,
 	isPullRequestFilter,
 	isQuestionPanelHeight,
+	isReviewAutoFixRounds,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
 	isTerminalWindowsShell,
@@ -746,6 +747,9 @@ export function loadConfig(): AppConfig {
 				: DEFAULT_CONFIG.voiceInputEnabled,
 		reviewAutoFix:
 			typeof value.reviewAutoFix === "boolean" ? value.reviewAutoFix : DEFAULT_CONFIG.reviewAutoFix,
+		reviewAutoFixRounds: isReviewAutoFixRounds(value.reviewAutoFixRounds)
+			? value.reviewAutoFixRounds
+			: DEFAULT_CONFIG.reviewAutoFixRounds,
 		agentReviewEnabled:
 			typeof value.agentReviewEnabled === "boolean"
 				? value.agentReviewEnabled

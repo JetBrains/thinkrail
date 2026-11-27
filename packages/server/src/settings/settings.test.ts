@@ -373,6 +373,20 @@ test("reviewAutoFix defaults off; an old config without it loads the default; to
 	expect(getConfig().reviewAutoFix).toBe(true);
 });
 
+test("reviewAutoFixRounds defaults to 3; an old or malformed value loads the default; out-of-range updates reject", () => {
+	expect(DEFAULT_CONFIG.reviewAutoFixRounds).toBe(3);
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark", reviewAutoFixRounds: 99 }));
+	resetConfigCache();
+	expect(getConfig().reviewAutoFixRounds).toBe(3);
+	expect(updateConfig({ reviewAutoFixRounds: 5 }).reviewAutoFixRounds).toBe(5);
+	resetConfigCache();
+	expect(getConfig().reviewAutoFixRounds).toBe(5);
+	for (const bad of [0, 11, 2.5, "3"]) {
+		expect(() => updateConfig({ reviewAutoFixRounds: bad as number })).toThrow("reviewAutoFixRounds");
+	}
+	expect(getConfig().reviewAutoFixRounds).toBe(5);
+});
+
 test("agentReviewEnabled defaults off; an old config loads the default; toggling on round-trips; non-boolean rejected", () => {
 	expect(DEFAULT_CONFIG.agentReviewEnabled).toBe(false);
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ theme: "dark" }));

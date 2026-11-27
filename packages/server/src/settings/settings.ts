@@ -17,6 +17,7 @@ import {
 	isProjectsFolder,
 	isPullRequestFilter,
 	isQuestionPanelHeight,
+	isReviewAutoFixRounds,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
 	isSystemThemePair,
@@ -27,6 +28,7 @@ import {
 	type PullRequestFilter,
 	QUESTION_PANEL_HEIGHT_PERCENT,
 	RECENT_MODELS_LIMIT,
+	REVIEW_AUTO_FIX_ROUNDS,
 	sameModel,
 	type WireModel,
 } from "@thinkrail/contracts";
@@ -64,6 +66,7 @@ const ACCEPTED_UPDATE_KEYS = {
 	reviewModel: true,
 	reviewEffort: true,
 	reviewAutoFix: true,
+	reviewAutoFixRounds: true,
 	agentReviewEnabled: true,
 	subagentsEnabled: true,
 	subagentMaxConcurrent: true,
@@ -339,6 +342,14 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	}
 	if (subagentsEnabled !== undefined && typeof subagentsEnabled !== "boolean") {
 		throw new Error("subagentsEnabled must be a boolean");
+	}
+	if (
+		runtimeUpdate.reviewAutoFixRounds !== undefined &&
+		!isReviewAutoFixRounds(runtimeUpdate.reviewAutoFixRounds)
+	) {
+		throw new Error(
+			`reviewAutoFixRounds must be a whole number from ${REVIEW_AUTO_FIX_ROUNDS.min} to ${REVIEW_AUTO_FIX_ROUNDS.max}`,
+		);
 	}
 	if (
 		runtimeUpdate.subagentMaxConcurrent !== undefined &&
