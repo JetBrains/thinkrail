@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { PROTOCOL_VERSION, WS_CHANNELS, WS_MAX_FRAME_BYTES } from "@thinkrail/contracts";
-import { wsErrorCode } from "./requestError";
+import { RequestTimeoutError, wsErrorCode } from "./requestError";
 import { reconnectDelay, WsTransport } from "./transport";
 
 class TestWebSocket {
@@ -381,5 +381,377 @@ describe("reconnectDelay", () => {
 	test("a connection that stayed up for 5 s retries after 0.5 s again", () => {
 		expect(reconnectDelay(10_000, 5_000)).toEqual({ waitMs: 500, nextMs: 1_000 });
 		expect(reconnectDelay(10_000, 4_999)).toEqual({ waitMs: 10_000, nextMs: 10_000 });
+	});
+});
+
+function testSocket(index = 0): TestWebSocket {
+	const socket = TestWebSocket.instances[index];
+	if (!socket) throw new Error(`Missing test socket ${index}`);
+	return socket;
+}
+
+async function answerQueuedRequests(socket: TestWebSocket): Promise<void> {
+	const answered = new Set<string>();
+	for (;;) {
+		const requests = requestsIn(socket.sent).filter((frame) => !answered.has(frame.id ?? ""));
+		if (requests.length === 0) return;
+		for (const frame of requests) {
+			answered.add(frame.id ?? "");
+			socket.message(
+				JSON.stringify({
+					id: frame.id,
+					ok: true,
+					result: frame.method === "session.abort" ? { ok: true } : [],
+				}),
+			);
+		}
+		await tick(0);
+	}
+}
+
+function trackHostOccupancy(socket: TestWebSocket): () => number {
+	const held = new Set<string>();
+	let peak = 0;
+	const send = socket.send.bind(socket);
+	socket.send = (data) => {
+		send(data);
+		if (typeof data !== "string") return;
+		const frame = parse(data);
+		if (frame.method && frame.id) held.add(frame.id);
+		for (const id of frame.ack ?? []) held.delete(id);
+		peak = Math.max(peak, held.size);
+	};
+	return () => peak;
+}
+
+describe("WsTransport admission", () => {
+	test.each(["ordinary", "control"] as const)(
+		"late timers cannot admit an expired queued %s request",
+		async (lane) => {
+			const callbacks: (() => void)[] = [];
+			const setTimer = globalThis.setTimeout;
+			const timers = spyOn(globalThis, "setTimeout").mockImplementation(
+				Object.assign((...args: Parameters<typeof setTimeout>) => {
+					const timer = setTimer(...args);
+					const [callback, , ...callbackArgs] = args;
+					callbacks.push(() => {
+						clearTimeout(timer);
+						callback(...callbackArgs);
+					});
+					return timer;
+				}, setTimer),
+			);
+			const clock = spyOn(performance, "now").mockReturnValue(1_000);
+			try {
+				const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+				transport.connect();
+				const socket = testSocket();
+				socket.open();
+				const count = lane === "ordinary" ? 256 : 32;
+				const held = Array.from({ length: count }, () =>
+					lane === "ordinary"
+						? transport.request("project.list", {}, { timeoutMs: 10 })
+						: transport.request("terminal.write", { id: "term", data: "held" }, { timeoutMs: 10 }),
+				);
+				const request = (timeoutMs: number) =>
+					lane === "ordinary"
+						? transport.request(
+								"session.followUp",
+								{ sessionId: "session", text: "continue" },
+								{ timeoutMs },
+							)
+						: transport.request("terminal.write", { id: "term", data: "queued" }, { timeoutMs });
+				const expired = request(20);
+				const current = request(60_000);
+				const results = Promise.allSettled([...held, expired, current]);
+				clock.mockReturnValue(1_030);
+				callbacks[0]?.();
+				const admitted = requestsIn(socket.sent);
+				for (const callback of callbacks) callback();
+				const outcomes = await results;
+				expect(outcomes[count]).toMatchObject({
+					status: "rejected",
+					reason: expect.any(RequestTimeoutError),
+				});
+				expect(admitted.some((frame) => frame.id === `trpi_${count + 1}`)).toBe(false);
+				expect(admitted.at(-1)?.id).toBe(`trpi_${count + 2}`);
+				expect(acksIn(socket.sent)).not.toContain(`trpi_${count + 1}`);
+			} finally {
+				for (const callback of callbacks) callback();
+				timers.mockRestore();
+				clock.mockRestore();
+			}
+		},
+	);
+
+	test("reconnect discards overdue unsent work before reconciliation and admission", async () => {
+		const clock = spyOn(performance, "now").mockReturnValue(1_000);
+		try {
+			const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+			transport.connect();
+			const first = testSocket();
+			first.open();
+			first.close();
+			const expired = transport.request(
+				"session.followUp",
+				{ sessionId: "session", text: "expired" },
+				{ timeoutMs: 60_000 },
+			);
+			const expiredResult = expired.catch((error: unknown) => error);
+			const current = transport.request("project.list", {}, { timeoutMs: 120_000 });
+			await tick(520);
+			clock.mockReturnValue(61_000);
+			const replacement = testSocket(1);
+			replacement.open();
+			const reconciled = resumesIn(replacement.sent);
+			const admitted = requestsIn(replacement.sent);
+			await answerQueuedRequests(replacement);
+			expect(await current).toEqual([]);
+			expect(await expiredResult).toBeInstanceOf(RequestTimeoutError);
+			expect(reconciled).toEqual([["trpi_2"]]);
+			expect(admitted.map((frame) => frame.id)).toEqual(["trpi_2"]);
+			expect(acksIn(replacement.sent)).toEqual(["trpi_2"]);
+		} finally {
+			clock.mockRestore();
+		}
+	});
+
+	test("a burst stays below the host replay ceiling and every caller receives its result", async () => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+		transport.connect();
+		const socket = testSocket();
+		socket.open();
+		const peak = trackHostOccupancy(socket);
+		const results = Array.from({ length: 600 }, () => transport.request("project.list", {}));
+		const admitted = requestsIn(socket.sent).length;
+		await answerQueuedRequests(socket);
+		expect(await Promise.all(results)).toEqual(Array.from({ length: 600 }, () => []));
+		expect(admitted).toBeGreaterThan(0);
+		expect(admitted).toBeLessThan(512);
+		expect(peak()).toBeLessThan(512);
+		expect(new Set(requestsIn(socket.sent).map((frame) => frame.id)).size).toBe(600);
+	});
+
+	test("Stop has its own bounded window while ordinary requests are held", async () => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+		transport.connect();
+		const socket = testSocket();
+		socket.open();
+		const peak = trackHostOccupancy(socket);
+		const reads = Array.from({ length: 600 }, () => transport.request("project.list", {}));
+		const stops = Array.from({ length: 90 }, () =>
+			transport.request("session.abort", { sessionId: "s1" }),
+		);
+		const admitted = requestsIn(socket.sent);
+		await answerQueuedRequests(socket);
+		await Promise.all([...reads, ...stops]);
+		const stopCount = admitted.filter((frame) => frame.method === "session.abort").length;
+		expect(admitted.filter((frame) => frame.method === "project.list").length).toBeLessThan(600);
+		expect(stopCount).toBeGreaterThan(0);
+		expect(stopCount).toBeLessThan(90);
+		expect(peak()).toBeLessThan(512);
+	});
+
+	test.each(["clone", "follow-up", "steer"] as const)(
+		"control traffic preserves queued %s initiation order",
+		async (kind) => {
+			const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+			transport.connect();
+			const socket = testSocket();
+			socket.open();
+			const reads = Array.from({ length: 600 }, () => transport.request("project.list", {}));
+			const operation =
+				kind === "clone"
+					? transport.request("project.clone", {
+							operationId: "clone",
+							url: "local-fixture",
+							parentPath: "/fixture",
+							name: "repo",
+						})
+					: transport.request(kind === "follow-up" ? "session.followUp" : "session.steer", {
+							sessionId: "session",
+							text: "continue",
+						});
+			const control =
+				kind === "clone"
+					? transport.request("project.cancelClone", { operationId: "clone" })
+					: transport.request("session.abort", { sessionId: "session", restoreQueue: true });
+			const early = requestsIn(socket.sent).filter((frame) => frame.method !== "project.list");
+			await answerQueuedRequests(socket);
+			await Promise.all([...reads, operation, control]);
+			expect(early).toEqual([]);
+			expect(
+				requestsIn(socket.sent)
+					.filter((frame) => frame.method !== "project.list")
+					.map((frame) => frame.method),
+			).toEqual(
+				kind === "clone"
+					? ["project.clone", "project.cancelClone"]
+					: [kind === "follow-up" ? "session.followUp" : "session.steer", "session.abort"],
+			);
+		},
+	);
+
+	test("a full control window cannot move a later follow-up ahead of Stop", async () => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+		transport.connect();
+		const socket = testSocket();
+		socket.open();
+		const stops = Array.from({ length: 90 }, () =>
+			transport.request("session.abort", { sessionId: "session", restoreQueue: true }),
+		);
+		const followUp = transport.request("session.followUp", {
+			sessionId: "session",
+			text: "new continuation",
+		});
+		const early = requestsIn(socket.sent).some((frame) => frame.method === "session.followUp");
+		await answerQueuedRequests(socket);
+		await Promise.all([...stops, followUp]);
+		expect(early).toBe(false);
+		expect(requestsIn(socket.sent).at(-1)?.method).toBe("session.followUp");
+	});
+
+	test("reconnect preserves a queued clone and cancellation behind replayed reads", async () => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+		transport.connect();
+		const first = testSocket();
+		first.open();
+		const reads = Array.from({ length: 600 }, () => transport.request("project.list", {}));
+		const clone = transport.request("project.clone", {
+			operationId: "clone",
+			url: "local-fixture",
+			parentPath: "/fixture",
+			name: "repo",
+		});
+		first.close();
+		const cancel = transport.request("project.cancelClone", { operationId: "clone" });
+		await tick(520);
+		const replacement = testSocket(1);
+		replacement.open();
+		const early = requestsIn(replacement.sent).filter((frame) => frame.method !== "project.list");
+		await answerQueuedRequests(replacement);
+		await Promise.all([...reads, clone, cancel]);
+		expect(early).toEqual([]);
+		expect(resumesIn(replacement.sent)[0]).toHaveLength(602);
+		expect(
+			requestsIn(replacement.sent)
+				.filter((frame) => frame.method !== "project.list")
+				.map((frame) => frame.method),
+		).toEqual(["project.clone", "project.cancelClone"]);
+	});
+
+	test("a queued mutation deadline removes the ordering barrier for later Stop", async () => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+		transport.connect();
+		const socket = testSocket();
+		socket.open();
+		const reads = Array.from({ length: 600 }, () => transport.request("project.list", {}));
+		const expired = transport.request(
+			"session.followUp",
+			{ sessionId: "session", text: "continue" },
+			{ timeoutMs: 10 },
+		);
+		const stop = transport.request("session.abort", { sessionId: "session", restoreQueue: true });
+		const early = requestsIn(socket.sent).some((frame) => frame.method === "session.abort");
+		await expect(expired).rejects.toThrow();
+		const afterDeadline = requestsIn(socket.sent).some((frame) => frame.method === "session.abort");
+		await answerQueuedRequests(socket);
+		await Promise.all([...reads, stop]);
+		expect(early).toBe(false);
+		expect(afterDeadline).toBe(true);
+		expect(requestsIn(socket.sent).some((frame) => frame.method === "session.followUp")).toBe(
+			false,
+		);
+	});
+
+	test("a queued deadline expires without sending the request or acknowledging unstarted work", async () => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+		transport.connect();
+		const socket = testSocket();
+		socket.open();
+		const reads = Array.from({ length: 600 }, () => transport.request("project.list", {}));
+		const expired = transport.request(
+			"workspace.list",
+			{ projectId: "expired" },
+			{ timeoutMs: 10 },
+		);
+		await expect(expired).rejects.toThrow();
+		await answerQueuedRequests(socket);
+		await Promise.all(reads);
+		expect(requestsIn(socket.sent).some((frame) => frame.method === "workspace.list")).toBe(false);
+		expect(acksIn(socket.sent)).toHaveLength(600);
+	});
+
+	test("a sent deadline releases a slot only after its abandonment receipt", async () => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+		transport.connect();
+		const socket = testSocket();
+		socket.open();
+		const expired = transport.request(
+			"workspace.list",
+			{ projectId: "expired" },
+			{ timeoutMs: 10 },
+		);
+		const reads = Array.from({ length: 600 }, () => transport.request("project.list", {}));
+		const before = requestsIn(socket.sent).length;
+		await expect(expired).rejects.toThrow();
+		await tick(0);
+		const after = requestsIn(socket.sent).length;
+		const receiptIndex = socket.sent.findIndex((frame) => parse(frame).ack?.includes("trpi_1"));
+		const replacementIndex = socket.sent.findIndex(
+			(frame) => parse(frame).id === `trpi_${before + 1}`,
+		);
+		await answerQueuedRequests(socket);
+		await Promise.all(reads);
+		expect(after).toBe(before + 1);
+		expect(receiptIndex).toBeGreaterThanOrEqual(0);
+		expect(replacementIndex).toBeGreaterThan(receiptIndex);
+	});
+
+	test("reconnect replays admitted IDs and keeps unsent requests behind the same window", async () => {
+		const transport = new WsTransport({ url: "ws://localhost:24242/ws" });
+		transport.connect();
+		const first = testSocket();
+		first.open();
+		const reads = Array.from({ length: 600 }, () => transport.request("project.list", {}));
+		const admitted = requestsIn(first.sent);
+		first.close();
+		const offline = transport.request("workspace.list", { projectId: "offline" });
+		await tick(520);
+		const replacement = testSocket(1);
+		replacement.open();
+		const replayed = requestsIn(replacement.sent);
+		const reconciled = resumesIn(replacement.sent);
+		await answerQueuedRequests(replacement);
+		await Promise.all([...reads, offline]);
+		expect(replayed).toEqual(admitted);
+		expect(replayed.length).toBeLessThan(512);
+		expect(reconciled[0]).toHaveLength(601);
+		expect(new Set(requestsIn(replacement.sent).map((frame) => frame.id)).size).toBe(601);
+	});
+
+	test("a failed send retains one slot and retries that same ID after reconnect", async () => {
+		const statuses: string[] = [];
+		const transport = new WsTransport({
+			url: "ws://localhost:24242/ws",
+			onStatus: (status) => statuses.push(status),
+		});
+		transport.connect();
+		const first = testSocket();
+		first.open();
+		first.send = () => {
+			throw new Error("socket buffer closed");
+		};
+		const reads = Array.from({ length: 600 }, () => transport.request("project.list", {}));
+		await tick(520);
+		const replacement = testSocket(1);
+		replacement.open();
+		const initial = requestsIn(replacement.sent);
+		await answerQueuedRequests(replacement);
+		await Promise.all(reads);
+		expect(initial[0]?.id).toBe("trpi_1");
+		expect(initial.length).toBeLessThan(512);
+		expect(new Set(requestsIn(replacement.sent).map((frame) => frame.id)).size).toBe(600);
+		expect(statuses.at(-1)).toBe("connected");
 	});
 });

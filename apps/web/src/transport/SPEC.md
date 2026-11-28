@@ -269,6 +269,23 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
 
 ## Get right
 
+- **Bound admission without blocking control replies.** A transport sends at most 256 ordinary
+  unresolved requests and 32 control requests at once, below the host's 512 live replay entries. Stop,
+  terminal input/resize/close, provider login replies/cancellation, and tool/dialog replies use the
+  separate control window. They may pass queued project/session snapshots and git reads explicitly
+  listed by the transport. Any other unsent method forms a FIFO barrier for later work until it is
+  sent or expires; unknown methods are barriers too. In particular, cancellation must not overtake
+  clone initiation, and Stop must not overtake a follow-up or steering request that could restart work.
+  A full control window also preserves that ordering for later ordinary requests.
+  A reply or deadline releases the local slot, and its
+  receipt is sent before replacement work. The original caller deadline includes queue time: an
+  unsent request that expires is removed without execution or a receipt. Admission checks the original
+  monotonic deadline even when its timer callback is delayed. Reconnect first removes expired unsent
+  work, reconciles the remaining unresolved set, replays admitted frames under their original IDs,
+  then admits queued work within the same windows. Receipts and reconciliation themselves never need
+  an admission slot.
+  The host's retention, deduplication, and 2048 tracked-entry ceiling remain authoritative: repeatedly
+  abandoned handlers can still reach that ceiling, and admission is not a cancellation mechanism.
 - **`DEFAULT_TIMEOUT_MS` is the ceiling a host-side budget has to fit under, and nothing enforces it.**
   The server bounds network `git` at 55s precisely so its own error — naming the ref, carrying git's
   stderr — wins the race against the causeless `request "…" timed out` this side raises at 60s (issue #209;
