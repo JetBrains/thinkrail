@@ -197,7 +197,10 @@ describe("bundled host skills", () => {
 		);
 		expect(content).toContain("Never edit `~/.thinkrail/config.json`");
 		expect(content).toContain("Never run `pi` CLI commands");
-		expect(content).toContain("Never read or print secrets");
+		expect(content).toContain("Never read or print credential-bearing files");
+		expect(content).toContain(
+			"Do **not** call `read` on `$PI_DIR/auth.json`, `$PI_DIR/mcp.json`, or `$PI_DIR/models.json`",
+		);
 		expect(content).toContain("cannot be added in **Settings ›");
 	});
 });

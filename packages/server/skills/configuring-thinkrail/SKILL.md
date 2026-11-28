@@ -21,8 +21,12 @@ actually want to tune.
    `${PI_CODING_AGENT_DIR:-~/.pi/agent}/mcp.json`, `settings.json`, or `models.json` only after
    showing the exact change and getting the user's explicit confirmation. Never write plaintext API
    keys or tokens; use `${ENV_VAR}` or `!command` references.
-4. **Never read or print secrets.** Check only whether `auth.json` exists (`test -f`); never print
-   its contents, and never dump full `env` output that could expose API keys or tokens.
+4. **Never read or print credential-bearing files.** Never call `read` (or `cat`) on `auth.json`,
+   `models.json`, or `mcp.json`: `models.json` can hold saved `providers.*.apiKey` values and
+   `mcp.json` can hold literal header/env secrets, and any raw read leaks them into model context
+   and the session transcript. Check `auth.json` only with `test -f`, extract only allowlisted
+   top-level names (`mcpServers` / `providers` keys) locally in the shell (skipping if no JSON
+   parser is available), and never dump full `env` output.
 5. **No Node required.** ThinkRail needs no Node.js at runtime; run plain shell commands and file
    reads that work on any developer machine.
 
@@ -59,6 +63,21 @@ done
 echo ""
 
 echo "pi_auth_present=$(test -f "$PI_DIR/auth.json" && echo yes || echo no)"
+extract_keys() {
+  file="$1"; key="$2"
+  [ -f "$file" ] || { echo "absent"; return; }
+  if command -v jq >/dev/null 2>&1; then
+    jq -r --arg k "$key" '(.[$k] // {}) | keys | join(", ")' "$file" 2>/dev/null || echo "unparseable"
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(", ".join((d.get(sys.argv[2]) or {}).keys()))' "$file" "$key" 2>/dev/null || echo "unparseable"
+  elif command -v node >/dev/null 2>&1; then
+    node -e 'const fs=require("fs"),d=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));console.log(Object.keys(d[process.argv[2]]||{}).join(", "))' "$file" "$key" 2>/dev/null || echo "unparseable"
+  else
+    echo "present (names skipped)"
+  fi
+}
+echo "mcp_servers=$(extract_keys "$PI_DIR/mcp.json" mcpServers)"
+echo "custom_providers=$(extract_keys "$PI_DIR/models.json" providers)"
 echo "other_agent_skills:"
 CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 for d in "$CLAUDE_DIR/skills" "${CODEX_HOME:-$HOME/.codex}/skills" "$HOME/.copilot/skills" "${GEMINI_CLI_HOME:-$HOME}/.gemini/skills"; do
@@ -70,13 +89,13 @@ fi
 true
 ```
 
-Then use `read` (read-only) on whichever of these files exist:
+Then use `read` (read-only) on whichever of these non-secret files exist:
 - `$DATA_DIR/config.json` — inspect `defaultModel`, `defaultEffort`, `reviewModel`, `reviewEffort`,
   `agentReviewEnabled`, `reviewAutoFix`, `reviewAutoFixRounds`, `projectsFolder`,
   `otherAgentSkills`, `theme`, `themeMode`, `locale`, `voiceInputEnabled`.
 - `$PI_DIR/settings.json` — inspect `cacheWarming` and fallback defaults (if present).
-- `$PI_DIR/mcp.json` — inspect configured server names (never echo secret values if any appear).
-- `$PI_DIR/models.json` — inspect custom provider names (never echo secret values if any appear).
+
+Do **not** call `read` on `$PI_DIR/auth.json`, `$PI_DIR/mcp.json`, or `$PI_DIR/models.json`.
 
 ## Step 2 — Present a concise status summary
 

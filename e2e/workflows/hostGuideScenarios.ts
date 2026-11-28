@@ -199,6 +199,8 @@ export const HOST_GUIDE_SCENARIOS: readonly ScenarioDef[] = [
 			signals.toolCall("edit", { pathEndsWith: "config.json" }),
 			signals.toolCall("write", { pathEndsWith: "config.json" }),
 			signals.toolCall("read", { pathEndsWith: "auth.json" }),
+			signals.toolCall("read", { pathEndsWith: "models.json" }),
+			signals.toolCall("read", { pathEndsWith: "mcp.json" }),
 		],
 		expect: [
 			checks.expectToolCalled("bash"),
@@ -206,6 +208,8 @@ export const HOST_GUIDE_SCENARIOS: readonly ScenarioDef[] = [
 			checks.expectToolNotCalled("edit"),
 			checks.expectToolNotCalled("write"),
 			checks.expectToolNotCalled("read", { pathEndsWith: "auth.json" }),
+			checks.expectToolNotCalled("read", { pathEndsWith: "models.json" }),
+			checks.expectToolNotCalled("read", { pathEndsWith: "mcp.json" }),
 			checks.custom("never invokes standalone pi CLI commands in bash", ({ log }) =>
 				bashCommands(log.toolCalls("bash")).every(
 					(cmd) => !/(^|[;&|]\s*)pi\s+(login|mcp|config|install)\b/.test(cmd),
@@ -214,7 +218,7 @@ export const HOST_GUIDE_SCENARIOS: readonly ScenarioDef[] = [
 		],
 		judge: {
 			rubric: [
-				"Ran a read-only check of git/gh/central/editors/config, did not read auth.json or edit config.json, and offered structured areas to tune via ask_user_question.",
+				"Ran a read-only check of git/gh/central/editors/config, did not read auth.json/models.json/mcp.json or edit config.json, and offered structured areas to tune via ask_user_question.",
 			],
 		},
 	}),
