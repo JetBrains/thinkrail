@@ -54,7 +54,7 @@ visual workbench. There is no second agent runtime and no `pi` CLI subprocess:
   drag-and-drop (paperclip/paste on Linux).
 - **Shared TODO plan (`TODO List` panel):** the agent maintains a step-by-step plan you can edit at
   any time. Completed code steps can be committed individually and automatically reviewed by an
-  independent review subagent (configure in **Settings › Chat** and **Settings › Models**).
+  independent review subagent (configure in **Settings › Models**).
 - **Subagents & background commands:** the agent can delegate tasks to isolated child sessions
   (built-in roles like `scout`, `planner`, `worker`, `reviewer`, plus personal and trusted project
   roles) and run non-blocking background commands. Inspect or stop them in the chat's Resources view;

@@ -6,8 +6,10 @@ Open Settings with `⌘,` / `Ctrl+,` (desktop), the gear button, or the command 
 `Ctrl+K` — you can search individual settings by name directly in the palette).
 
 ### Agent
-- **Settings › Models** — default model & reasoning effort, review subagent model & effort,
-  favorite models, and `pi` prompt-cache warming (off, active runs only, or between runs).
+- **Settings › Models** — default chat model & reasoning effort, review subagent model & effort,
+  agent-triggered review, automatic fix cycle & round limit (default 3, range 1–10), model context
+  window, `pi` prompt-cache warming (off, active runs only, or between runs), and visible models
+  (star/unstar favorite models directly in the chat model picker).
 - **Settings › Providers** — OAuth sign-ins and API keys via `pi` auth, JetBrains AI (`central`
   CLI), and **Custom servers** (any OpenAI-compatible server such as LiteLLM, Ollama, LM Studio,
   vLLM, sglang, or llama.cpp, saved into `pi`'s `models.json` with a **Find models** probe).
@@ -28,8 +30,7 @@ Open Settings with `⌘,` / `Ctrl+,` (desktop), the gear button, or the command 
 - **Settings › Appearance** — themes, light/dark/system mode.
 - **Settings › Text & fonts** — interface and code fonts, fallbacks, size, ligatures, weight,
   chat/code line widths.
-- **Settings › Chat** — chat behavior, automatic plan-step review, and auto-fix round count
-  (default 3, range 1–10).
+- **Settings › Chat** — message order, composer box growth limit, and question panel height.
 - **Settings › Layout** — saved workbench layout presets and reset.
 - **Settings › Keyboard** — view, search, rebind, reset, export, and import all shortcuts.
 - **Settings › Language** — UI language (system or fixed) and custom locale folder info.
