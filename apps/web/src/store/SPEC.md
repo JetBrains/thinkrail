@@ -387,7 +387,7 @@ roster's catalog reads ([[submodule-web-panels]]).
     layout tab, then the history row. **`selectChatPersisted`** says whether a chat has a session file
     for a reader of past sessions: pi writes the file with the first user or assistant message, so it is a
     known first prompt, else a loaded user or assistant turn (a turn without a readable prompt, such as a
-    review package, still counts); `selectPersistedChatTabs` lists a workspace's chat tabs that hold one
+    review package, still counts); `selectOpenChatTitles` supplies review destinations from that workspace’s open chats and their display names; `selectPersistedChatTabs` lists a workspace's chat tabs that hold one
     (by session id, for `useShallow`) and `selectChatWorkspaceSession` the first such chat of a chat
     workspace — the shell's chat actions are offered only there ([[submodule-web-shell]]).
     `SessionRuntime.hostState` is installed with transcript hydration and by state pushes delivered after Pi

@@ -766,11 +766,11 @@ nudges `fsChanged`. Nothing cleans the folder: sent messages keep naming its fil
   handlers route through `sendToFileChat`: comments are grouped by `reviews.reviewSessionKey` (the
   anchor's path, or the review-level bucket for anchorless remarks — pinned like a file so a second
   overall remark continues one discussion), and each group lands, in order of preference, in the
-  client's explicit chat context (the optional `sessionId` the send carries from a chat card), else
+  client's explicit chat context (the optional `sessionId` from a chat card or the reviewer's choice), else
   the key's pinned chat (`reviews.fileReviewSession`), else a NEW chat; whatever
   received the package becomes the key's pin (`markCommentsSent`), so the sidebar's "open the
   discussion" always follows the comments. **A send that names its chat is one package**: when the client
-  passes `sessionId` (a chat card's own chat) every comment goes into that chat in one
+  passes `sessionId` every comment goes into that chat in one
   structured message, because grouping exists to route each key to its own chat, and per-key packages into
   the same chat made the agent take one review — a before/after mockup's two files — in separate turns.
   **`review.sendBatch` answers with every session it touched**, in group

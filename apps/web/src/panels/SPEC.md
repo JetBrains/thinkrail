@@ -2469,9 +2469,9 @@ own section. The kebab menu (`plan-menu`, a
   `SendReviewButton` take an optional chat session id: without it the host routes each file to its pinned
   review chat, creating one on its first send. Open tabs never supply an implicit override: a sidebar or
   file-pane send must not move an existing discussion into an unrelated chat, and Send all must preserve
-  per-file routing. With an explicit id — a file shown in a chat tool card, whose `ResourcePreview` reads
-  the chat's scope — that `sessionId` wins over the pinned chat, so feedback lands in the chat that showed
-  the file. This does not infer file authorship from turn snapshots, which cover the whole workspace's
+  per-file routing. Beside the file and batch send buttons, a reviewer can choose an open chat in
+  this workspace to receive those drafts together. Dismissing the menu sends nothing. A send from
+  a chat tool card keeps the card's own session as its explicit destination. This does not infer file authorship from turn snapshots, which cover the whole workspace's
   interval rather than exclusive writes. The shell's `AppResourceHost` exposes exactly these (bound per call) as the
   renderers' `FileReview` / `ReviewSend` host capabilities.
   A batch answers with EVERY session it touched (one per group), so a multi-file batch opens every chat

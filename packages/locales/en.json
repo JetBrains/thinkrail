@@ -1415,6 +1415,7 @@
 	"panels.reviewCommenting.updateFailed": "Couldn't update the comment",
 	"panels.reviewZones.line": "Line {{line}}",
 	"panels.reviewZones.lines": "Lines {{start}}–{{end}}",
+	"panels.sendReview.chooseChat": "Send to chat…",
 	"panels.sendReview.file": "Send review ({{total}})",
 	"panels.sendReview.sendAll": "Send all",
 	"panels.sendReview.withCount": "{{verb}} ({{total}})",
