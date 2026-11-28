@@ -3252,6 +3252,17 @@ menu has closed, because a closing menu returns focus to its row; disabled
   otherwise open inspect-element), so it never writes `^C`; xterm itself encodes Ctrl+letter only without
   Shift. Plain Ctrl+C stays xterm's SIGINT, and macOS keeps xterm's defaults. Ctrl+Shift+V needs no handler:
   xterm leaves it unencoded, so Chromium's paste-as-plain-text reaches xterm's own paste listener.
+- **Terminal URLs.** `TerminalInstance` registers `terminalLinks.createTerminalLinkProvider` with xterm's
+  core link API (no addon): every http(s) URL the terminal printed is underlined with a pointer cursor, and
+  **Cmd+click** (Apple) / **Ctrl+click** (elsewhere, `hasPlatformModifier`) opens it through
+  `window.open(…, "noopener,noreferrer")` — the desktop shell sends that to the system browser. A plain
+  click stays a selection click, and hovering sets the terminal's `title` to the modifier hint. The
+  provider reads one logical line at a time (`readLogicalLine`: up to 32 soft-wrapped rows joined, each
+  UTF-16 unit mapped back to its cell, wide-character spacers skipped, and the empty cell xterm leaves
+  at the end of a row when a wide character wraps not read as a space), so a URL wrapped across rows is
+  one link offered from each row it covers. `parseTerminalUrls` is pure: it trims trailing punctuation and
+  unbalanced closing brackets in one pass, so a long run of closers stays linear. It reads no paths, so it
+  needs nothing from the host.
 - **Korean IME replacement bridge (WebKit).** WebKit — Safari and the desktop app's WKWebView — drives
   the macOS Korean input method without `composition*` events: a syllable's first jamo lands as an
   `insertText` input, every re-composition of it (`ㄱ`→`가`→`간`) as `insertReplacementText`, the next
