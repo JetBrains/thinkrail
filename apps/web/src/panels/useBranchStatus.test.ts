@@ -373,3 +373,42 @@ test("an open PR polls while checks run, and for a few polls after an action bef
 	expect(state.getSnapshot(key)?.discovery).toBeUndefined();
 	expect(ciPollWanted(state.getSnapshot(key))).toBe(false);
 });
+
+function startWithCooldown(cooldownMs: number) {
+	const host = scriptedHost();
+	const focusTarget = new EventTarget();
+	const time = { now: 1_000_000 };
+	const controller = startBranchStatusSync({
+		workspaceId: "w1",
+		key: KEY,
+		state: createBranchStatusState(),
+		focusTarget,
+		connected: true,
+		request: host.request,
+		focusFetchCooldownMs: cooldownMs,
+		now: () => time.now,
+	});
+	return { host, focusTarget, controller, time };
+}
+
+test("a focus inside the cooldown re-reads the review without fetching origin", () => {
+	const { host, focusTarget, controller, time } = startWithCooldown(60_000);
+	focusTarget.dispatchEvent(new Event("focus"));
+	time.now += 59_000;
+	focusTarget.dispatchEvent(new Event("focus"));
+	time.now += 2_000;
+	focusTarget.dispatchEvent(new Event("focus"));
+	expect(host.sent()).toEqual([{ allowCached: true }, {}, { skipFetch: true }, {}]);
+	controller.stop();
+});
+
+test("an explicit refresh always fetches origin and restarts the focus cooldown", () => {
+	const { host, focusTarget, controller, time } = startWithCooldown(60_000);
+	focusTarget.dispatchEvent(new Event("focus"));
+	time.now += 10_000;
+	controller.refresh();
+	time.now += 10_000;
+	focusTarget.dispatchEvent(new Event("focus"));
+	expect(host.sent()).toEqual([{ allowCached: true }, {}, {}, { skipFetch: true }]);
+	controller.stop();
+});

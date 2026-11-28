@@ -2066,7 +2066,7 @@ own section. The kebab menu (`plan-menu`, a
   `allowCached: true`, while omission on focus preserves the wire's original force-fresh behavior for
   older clients, so a PR closed/merged on GitHub drops out of the chip, label, and stepper on that
   refetch instead of sticking until remount. Focus received while disconnected latches that fresh
-  intent and spends it on reconnect rather than falling back to a cache-eligible activation read. The
+  intent and spends it on reconnect rather than falling back to a cache-eligible activation read. A focus still re-reads the review fresh, but fetches origin at most once per five minutes per mount (`FOCUS_FETCH_COOLDOWN_MS`): a focus inside that window sends `skipFetch: true`, so a PR closed on GitHub still drops out while repeated window switches stop triggering an SSH authorization each time on an agent that confirms every use; an explicit refresh and a reconnect always fetch. The
   workspace's `fsChanged` tick re-reads with `allowCached: true` (`reload`): the host drops its cached
   answer on a `.git` meta nudge, so a PR opened or pushed from a terminal still surfaces, while a fresh
   read would `git fetch`, write `.git`, nudge again, and loop. Cache-eligible reads (activation,
