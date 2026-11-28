@@ -15,6 +15,8 @@ import {
 	resolveShellEnv,
 } from "./shellEnv";
 
+const posix = test.skipIf(process.platform === "win32");
+
 const LOCALE_VARS = ["LANG", "LC_ALL", "LC_CTYPE"];
 const IMPORT_VARS = ["TR_TEST_IMPORTED", "TR_TEST_PRESET", "PI_TEST_SHELL", "THINKRAIL_TEST_SHELL"];
 const LAUNCHD_DEFAULT_PATH = "/Users/x/.pi/agent/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin";
@@ -63,7 +65,7 @@ afterEach(() => {
 
 const noProbe = async () => null;
 
-test("mergePath keeps explicit current entries ahead of the login PATH without duplicates", () => {
+posix("mergePath keeps explicit current entries ahead of the login PATH without duplicates", () => {
 	expect(mergePath("/venv/bin:/usr/bin:/bin", "/opt/homebrew/bin:/usr/bin:/bin")).toBe(
 		"/venv/bin:/opt/homebrew/bin:/usr/bin:/bin",
 	);
@@ -71,13 +73,13 @@ test("mergePath keeps explicit current entries ahead of the login PATH without d
 	expect(mergePath("/usr/bin::/bin", "/usr/bin:/bin")).toBe("/usr/bin:/bin");
 });
 
-test("repairShellEnv adopts the login shell PATH from the launchd default", async () => {
+posix("repairShellEnv adopts the login shell PATH from the launchd default", async () => {
 	await repairShellEnv();
 
 	expect(process.env.PATH).toBe(`/Users/x/.pi/agent/bin:${LOGIN_PATH}`);
 });
 
-test("repairShellEnv probes from a base PATH and keeps a terminal's extras in front", async () => {
+posix("repairShellEnv probes from a base PATH and keeps a terminal's extras in front", async () => {
 	fakeShell(`printf '${LOGIN_ENV_MARKER}PATH=/Users/x/.local/bin:%s\\0${LOGIN_ENV_END}' "$PATH"`);
 	process.env.PATH = `/work/.venv/bin:${LOGIN_PATH}`;
 
@@ -88,7 +90,7 @@ test("repairShellEnv probes from a base PATH and keeps a terminal's extras in fr
 	);
 });
 
-test("repairShellEnv falls back to a non-interactive login shell", async () => {
+posix("repairShellEnv falls back to a non-interactive login shell", async () => {
 	fakeShell(
 		`case "$*" in *-i*) exit 1;; esac\nprintf '${LOGIN_ENV_MARKER}PATH=${LOGIN_PATH}\\0${LOGIN_ENV_END}'`,
 	);
@@ -116,7 +118,7 @@ test("localeRepair supplies a UTF-8 locale only when none is configured", () => 
 	expect(localeRepair({ LC_CTYPE: "ru_RU.UTF-8" }, "linux")).toBeNull();
 });
 
-test("repairShellEnv installs LANG when the host has no locale at all", async () => {
+posix("repairShellEnv installs LANG when the host has no locale at all", async () => {
 	for (const key of LOCALE_VARS) delete process.env[key];
 
 	await repairShellEnv({ probe: noProbe });
@@ -168,29 +170,32 @@ test("loginShellImports adds only what the process lacks and never host-reserved
 	expect(imports).toEqual({ GITHUB_TOKEN: "ghp_x" });
 });
 
-test("repairShellEnv imports the login-shell environment only for a host launched without a terminal", async () => {
-	process.env.TR_TEST_PRESET = "process";
-	const probe = async () =>
-		new Map([
-			["TR_TEST_IMPORTED", "from-shell"],
-			["TR_TEST_PRESET", "shell"],
-			["PI_TEST_SHELL", "never"],
-			["THINKRAIL_TEST_SHELL", "never"],
-		]);
+posix(
+	"repairShellEnv imports the login-shell environment only for a host launched without a terminal",
+	async () => {
+		process.env.TR_TEST_PRESET = "process";
+		const probe = async () =>
+			new Map([
+				["TR_TEST_IMPORTED", "from-shell"],
+				["TR_TEST_PRESET", "shell"],
+				["PI_TEST_SHELL", "never"],
+				["THINKRAIL_TEST_SHELL", "never"],
+			]);
 
-	process.env.TERM = "xterm-256color";
-	await repairShellEnv({ probe });
-	expect(process.env.TR_TEST_IMPORTED).toBeUndefined();
+		process.env.TERM = "xterm-256color";
+		await repairShellEnv({ probe });
+		expect(process.env.TR_TEST_IMPORTED).toBeUndefined();
 
-	delete process.env.TERM;
-	await repairShellEnv({ probe });
-	expect(process.env.TR_TEST_IMPORTED).toBe("from-shell");
-	expect(process.env.TR_TEST_PRESET).toBe("process");
-	expect(process.env.PI_TEST_SHELL).toBeUndefined();
-	expect(process.env.THINKRAIL_TEST_SHELL).toBeUndefined();
-});
+		delete process.env.TERM;
+		await repairShellEnv({ probe });
+		expect(process.env.TR_TEST_IMPORTED).toBe("from-shell");
+		expect(process.env.TR_TEST_PRESET).toBe("process");
+		expect(process.env.PI_TEST_SHELL).toBeUndefined();
+		expect(process.env.THINKRAIL_TEST_SHELL).toBeUndefined();
+	},
+);
 
-test("the PATH repair and the import share one login-shell probe", async () => {
+posix("the PATH repair and the import share one login-shell probe", async () => {
 	delete process.env.TERM;
 	process.env.PATH = "/usr/bin:/bin";
 	let probes = 0;
@@ -204,7 +209,7 @@ test("the PATH repair and the import share one login-shell probe", async () => {
 	expect(process.env.PATH).toBe("/opt/homebrew/bin:/usr/bin:/bin");
 });
 
-test("the login shell probe does not block the event loop", async () => {
+posix("the login shell probe does not block the event loop", async () => {
 	const gate = join(shellDir, "gate");
 	fakeShell(
 		`while [ ! -e '${gate}' ]; do sleep 0.01; done\nprintf '${LOGIN_ENV_MARKER}PATH=${LOGIN_PATH}\\0${LOGIN_ENV_END}'`,
@@ -244,43 +249,52 @@ async function settledPids(pids: number[]): Promise<number[]> {
 	return pids.filter(running);
 }
 
-test("a background job holding stdout neither holds the probe open nor drops the login PATH", async () => {
-	const jobs = join(shellDir, "jobs");
-	fakeShell(
-		`sleep 30 &\necho $! >> '${jobs}'\nprintf '${LOGIN_ENV_MARKER}PATH=${LOGIN_PATH}\\0${LOGIN_ENV_END}'`,
-	);
-	try {
+posix(
+	"a background job holding stdout neither holds the probe open nor drops the login PATH",
+	async () => {
+		const jobs = join(shellDir, "jobs");
+		fakeShell(
+			`sleep 30 &\necho $! >> '${jobs}'\nprintf '${LOGIN_ENV_MARKER}PATH=${LOGIN_PATH}\\0${LOGIN_ENV_END}'`,
+		);
+		try {
+			await repairShellEnv();
+			expect(process.env.PATH).toBe(`/Users/x/.pi/agent/bin:${LOGIN_PATH}`);
+		} finally {
+			for (const pid of jobPids(jobs).filter(running)) process.kill(pid, "SIGKILL");
+		}
+	},
+);
+
+posix(
+	"output after the end marker is drained so a chatty logout hook cannot stall the shell",
+	async () => {
+		fakeShell(
+			`printf '${LOGIN_ENV_MARKER}PATH=${LOGIN_PATH}\\0${LOGIN_ENV_END}'\nhead -c 16777216 /dev/zero`,
+		);
+
 		await repairShellEnv();
+
 		expect(process.env.PATH).toBe(`/Users/x/.pi/agent/bin:${LOGIN_PATH}`);
-	} finally {
-		for (const pid of jobPids(jobs).filter(running)) process.kill(pid, "SIGKILL");
-	}
-});
+	},
+);
 
-test("output after the end marker is drained so a chatty logout hook cannot stall the shell", async () => {
-	fakeShell(
-		`printf '${LOGIN_ENV_MARKER}PATH=${LOGIN_PATH}\\0${LOGIN_ENV_END}'\nhead -c 16777216 /dev/zero`,
-	);
-
-	await repairShellEnv();
-
-	expect(process.env.PATH).toBe(`/Users/x/.pi/agent/bin:${LOGIN_PATH}`);
-});
-
-test("a hung interactive login shell that ignores SIGTERM is killed with its children", async () => {
-	const jobs = join(shellDir, "jobs");
-	fakeShell(
-		`case "$*" in *-i*) trap '' TERM; sleep 30 & echo $! >> '${jobs}'; wait;; esac\nexit 1`,
-	);
-	try {
-		await repairShellEnv({ probe: loginShellProbe(1000) });
-		expect(process.env.PATH).toBe(LAUNCHD_DEFAULT_PATH);
-		expect(jobPids(jobs)).toHaveLength(1);
-		expect(await settledPids(jobPids(jobs))).toEqual([]);
-	} finally {
-		for (const pid of jobPids(jobs).filter(running)) process.kill(pid, "SIGKILL");
-	}
-});
+posix(
+	"a hung interactive login shell that ignores SIGTERM is killed with its children",
+	async () => {
+		const jobs = join(shellDir, "jobs");
+		fakeShell(
+			`case "$*" in *-i*) trap '' TERM; sleep 30 & echo $! >> '${jobs}'; wait;; esac\nexit 1`,
+		);
+		try {
+			await repairShellEnv({ probe: loginShellProbe(1000) });
+			expect(process.env.PATH).toBe(LAUNCHD_DEFAULT_PATH);
+			expect(jobPids(jobs)).toHaveLength(1);
+			expect(await settledPids(jobPids(jobs))).toEqual([]);
+		} finally {
+			for (const pid of jobPids(jobs).filter(running)) process.kill(pid, "SIGKILL");
+		}
+	},
+);
 
 test("every resolveShellEnv caller awaits the same run, across bundled copies", async () => {
 	const run = resolveShellEnv();
@@ -292,22 +306,25 @@ test("every resolveShellEnv caller awaits the same run, across bundled copies", 
 	await run;
 });
 
-test("launchEnvKeys keeps the keys set before the shell repair, not the ones it imports", async () => {
-	delete process.env.TERM;
-	process.env.TR_TEST_PRESET = "launch";
-	fakeShell(
-		`printf '${LOGIN_ENV_MARKER}TR_TEST_IMPORTED=login\\0PATH=${LOGIN_PATH}\\0${LOGIN_ENV_END}'`,
-	);
-	const run = resolveShellEnv();
-	await run;
-	expect(process.env.TR_TEST_IMPORTED).toBe("login");
-	expect(launchEnvKeys().has("TR_TEST_PRESET")).toBe(true);
-	expect(launchEnvKeys().has("TR_TEST_IMPORTED")).toBe(false);
-	const copy: typeof import("./shellEnv") = await import(
-		`${import.meta.dir}/shellEnv.ts?bundled-copy-keys`
-	);
-	expect(copy.launchEnvKeys()).toBe(launchEnvKeys());
-});
+posix(
+	"launchEnvKeys keeps the keys set before the shell repair, not the ones it imports",
+	async () => {
+		delete process.env.TERM;
+		process.env.TR_TEST_PRESET = "launch";
+		fakeShell(
+			`printf '${LOGIN_ENV_MARKER}TR_TEST_IMPORTED=login\\0PATH=${LOGIN_PATH}\\0${LOGIN_ENV_END}'`,
+		);
+		const run = resolveShellEnv();
+		await run;
+		expect(process.env.TR_TEST_IMPORTED).toBe("login");
+		expect(launchEnvKeys().has("TR_TEST_PRESET")).toBe(true);
+		expect(launchEnvKeys().has("TR_TEST_IMPORTED")).toBe(false);
+		const copy: typeof import("./shellEnv") = await import(
+			`${import.meta.dir}/shellEnv.ts?bundled-copy-keys`
+		);
+		expect(copy.launchEnvKeys()).toBe(launchEnvKeys());
+	},
+);
 
 test("launchEnvKeys without a shell repair is the current environment", () => {
 	process.env.TR_TEST_PRESET = "now";
