@@ -17,6 +17,7 @@ import { Button, IconButton } from "@thinkrail/ui/button";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useResourcePreferences } from "../../host";
 import type {
 	ResourceContent,
 	ResourceDiffProps,
@@ -63,7 +64,10 @@ type DiffAnnotationMetadata =
 const NO_PLACED_THREADS: ReadonlySet<string> = new Set();
 const NO_BLOCKS: ChangeBlock[] = [];
 const NO_ROWS: DiffRow[] = [];
-const CURSOR_SIDE_CSS = `
+const DIFF_SURFACE_CSS = `
+[data-overflow="wrap"] [data-gutter-utility-slot] {
+	pointer-events: none;
+}
 :host(.review-cursor-deletions) [data-additions] [data-selected-line],
 :host(.review-cursor-additions) [data-deletions] [data-selected-line] {
 	--diffs-computed-selected-line-bg: var(--diffs-computed-diff-line-bg);
@@ -233,6 +237,7 @@ function PierreDiffSurface({
 }: ResourceDiffProps) {
 	const t = useT();
 	const plain = usePierrePlain();
+	const { diffWrapLines } = useResourcePreferences();
 	const originalText = textSide(original);
 	const modifiedText = textSide(modified);
 	const originalHash = contentHash(original);
@@ -471,14 +476,14 @@ function PierreDiffSurface({
 			hunkSeparators: "line-info" as const,
 			lineDiffType: "word" as const,
 			parseDiffOptions: { ignoreWhitespace },
-			overflow: "scroll" as const,
+			overflow: diffWrapLines ? ("wrap" as const) : ("scroll" as const),
 			disableFileHeader: true,
 			enableLineSelection: review !== undefined,
 			enableGutterUtility: review !== undefined,
 			onLineSelectionEnd: openPointerSelection,
-			unsafeCSS: CURSOR_SIDE_CSS,
+			unsafeCSS: DIFF_SURFACE_CSS,
 		}),
-		[ignoreWhitespace, layout, openPointerSelection, review],
+		[diffWrapLines, ignoreWhitespace, layout, openPointerSelection, review],
 	);
 	usePierreFocus(
 		rootRef,
@@ -515,7 +520,7 @@ function PierreDiffSurface({
 					</p>
 				) : null}
 				{plain ? (
-					<PlainCode runs={plainDiffRuns(fileDiff)} diff />
+					<PlainCode runs={plainDiffRuns(fileDiff)} diff wrapLines={diffWrapLines} />
 				) : (
 					<FileDiff<DiffAnnotationMetadata>
 						fileDiff={fileDiff}
@@ -535,6 +540,7 @@ function PierreDiffSurface({
 								label={t("viewer.code.commentOnLine")}
 								variant="primary"
 								data-testid="review-add-icon"
+								className="pointer-events-auto"
 								tabIndex={-1}
 								onPointerDown={(event) => {
 									event.preventDefault();

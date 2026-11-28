@@ -5249,6 +5249,7 @@
 	"viewer.code.line": "Line {{line}}",
 	"viewer.code.lines": "Lines {{start}}–{{end}}",
 	"viewer.code.noDifferences": "No differences between the two sides.",
+	"viewer.code.wrapLines": "Wrap lines",
 	"viewer.composer.fileChanged": "The file changed — select again.",
 	"viewer.csv.emptyTable": "Empty table",
 	"viewer.cursor.at": "{{place}}: {{text}}",

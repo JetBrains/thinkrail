@@ -138,6 +138,7 @@ export interface ResourceRenderer {
 		copy: boolean;
 		layout: boolean;
 		whitespace: boolean;
+		lineWrap?: boolean;
 		boundedDiff?: "always" | "large";
 		preload?: boolean;
 	};

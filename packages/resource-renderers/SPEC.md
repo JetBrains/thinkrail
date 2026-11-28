@@ -36,7 +36,7 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   `diffRendererCapabilities` returns, from a path alone (before content loads), the capabilities of the
   diff renderer it would resolve to — inferring the text/binary split from the path's MIME so known image
   and PDF paths resolve to their layout-less renderers; MIME inference itself stays module-internal. A pane
-  uses it to hide scope-wide layout and whitespace controls no file can use;
+  uses it to hide scope-wide layout, whitespace and line-wrap controls no file can use;
 - the host seam — `ResourceHostProvider`, `ResourcePreferencesProvider`, `ResourceEnvironmentProvider`,
   `ResourceScopeProvider`, `useOptionalResourceHost`, `useResourceScope` and the `ResourceHost`,
   `ResourcePreferences`, `ResourceScope`, `ResourceFileReviewProps`, `ResourceReviewSendProps`,
@@ -112,6 +112,8 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   - **`RendererToggles`** — the renderer candidate segments, plus Split/Inline when the caller passes a diff
     `layout`, the renderer supports layout and the viewport is not phone-class (one rule, so a phone never
     shows a layout the diff refuses and a single-file view never shows diff layout);
+  - **`DiffWrapToggle`** — the shared, labelled **Wrap lines** pressed-state button for source-diff
+    toolbars; it reads and updates the client reading preference through `ResourcePreferencesProvider`;
   - `UnplacedReviewStrip`, `ReviewThreadCard`, `ReviewDraftContext`/`ReviewDraftPersistence`,
     `createAskAgentRequest`, and `focusReviewCard` (a card's keyboard landing, for the app's own reveals);
 - **`REVIEW_SURFACE_COMMANDS`** and **`REVIEW_SURFACE_SCOPE`** (`review.surface`) — the review surfaces'
@@ -165,7 +167,9 @@ link and image in open previews and notebook cells. The reader's line-width pref
 (`fileLineWidth` / `fileLineWidthBounded`) arrives separately through `ResourcePreferencesProvider`;
 `MonacoEditor` reads those fields. The Markdown preview reads the outline's `markdownOutlineVisible`
 (`null` until the reader chooses) / `setMarkdownOutlineVisible` and `markdownOutlineSide` from the same
-value; the host persists them. A preference object identity change re-renders both consumers. The phone class arrives the same way
+value; the host persists them. Source diffs and `DiffWrapToggle` read `diffWrapLines` /
+`setDiffWrapLines` from that value: false by default, remembered by the host client, independent of ordinary
+file line-width settings. A preference object identity change re-renders the consumers. The phone class arrives the same way
 through `ResourceEnvironmentProvider` (the registry's `ResourceEnvironment`, `{ mobile }`); only
 `ResourcePreview` reads it — panes resolve with their own viewport reading — so a viewport flip re-renders
 only the previews that must re-resolve their renderer. A subtree that belongs to one workspace and chat
@@ -277,7 +281,8 @@ and diff panes. Selection is metadata-driven: matching renderers are filtered by
 ranked, and followed by the required text or byte fallback. MIME matching uses the same extension-derived
 fallback as resource description when host MIME metadata is absent. The resulting ordered list is both
 dispatch policy and the pane's view-toggle grammar. Renderer capabilities also state whether the selected
-surface supports copying its modified source, split/unified layout, and ignore-whitespace recomputation; the
+surface supports copying its modified source, split/unified layout, ignore-whitespace recomputation, and
+optional `lineWrap` for source-diff wrapping; the
 pane exposes only those applicable controls. `preload` marks a view worth loading before its first mount
 (only the code view sets it). `boundedDiff: "always"` marks a diff renderer that manages its
 own viewport (virtualized table, paged PDF, sandboxed HTML frame) and therefore needs a bounded height;
@@ -360,7 +365,7 @@ recompute on every restart.
 ## Bundled renderers
 
 Bundled candidates are registered once by `registerBundledResourceRenderers()`: `thinkrail/code` renders
-every source diff with Pierre `FileDiff` and supports copy, layout, and whitespace controls;
+every source diff with Pierre `FileDiff` and supports copy, layout, whitespace, and line-wrap controls;
 `thinkrail/markdown` supplies `RenderedDiff`, and `thinkrail/binary` reports both sides' byte sizes. Rich
 renderers omit those controls, except CSV, JSON, and notebook diffs support modified-source copy.
 `thinkrail/lfs` claims the host's `application/vnd.git-lfs` text (a file that *is* a Git LFS pointer,
@@ -656,6 +661,14 @@ present side's hash, so a remount — a Stacked/One-file switch, or a section sc
 highlighted on its first frame instead of plain text followed by a colour pop. The phone code-file implementation is Pierre `File` with the same theme and
 review grammar; desktop files alone load Monaco.
 
+**Source-diff line wrapping is a client reading preference.** With `diffWrapLines` on, `PierreDiff`
+passes Pierre's native `overflow: "wrap"` option; otherwise it keeps `"scroll"`. Both split and unified
+layouts, including virtualized diffs and before/after previews, follow the same preference. Changing it
+updates the existing renderer in place, without reparsing the diff, replacing the scroll owner, or changing
+review anchors and source line numbers. Ordinary file views and rich-format diffs keep their own layouts.
+Non-compact before/after preview toolbars show **Wrap lines** only when their renderer advertises `lineWrap`;
+a single-file preview never shows it.
+
 **Without WebAssembly the Pierre surfaces show plain text.** `@pierre/highlights` is WebAssembly only,
 and Pierre paints nothing — not even its own plain-text pass — until a main-thread highlighter loads; it
 has no highlighter-free mode, and Shiki stays out of the build. `PierreProvider` therefore reports
@@ -666,6 +679,9 @@ or once `preloadHighlighter` for the `thinkrail` theme rejects, which latches fo
 same scroller. Review annotations, line selection, the line cursor and hunk toolbars need Pierre's rows
 and are absent in this mode. Each run of one kind is one text node rather than an element per line, so a 100k-line file
 stays a handful of nodes without a virtualizer, which the mirrored `PierreScroller` would have to feed.
+A wrapped source diff still uses one text node per run: it places each source line's `-`/`+` marker in that
+text before applying pre-wrapping and arbitrary-token breaking, so continuation rows cannot drift against a
+separate marker column. Unwrapped diffs and ordinary files retain their existing separate markers and text.
 
 **Pierre surfaces are virtualized.** Unvirtualized Pierre puts every line in the DOM (≈400k nodes for a
 100k-line file), which WebKit — the desktop shell's engine — cannot style or lay out, hanging the app.

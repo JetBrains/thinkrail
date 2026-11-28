@@ -1299,6 +1299,7 @@ interface AppState {
 	fileLineWidthBounded: boolean;
 	voiceInputEnabled: boolean;
 	chatMessageOrder: ChatMessageOrder;
+	diffWrapLines: boolean;
 	markdownOutlineVisible: boolean | null;
 	markdownOutlineSide: MarkdownOutlineSide;
 	defaultModel: WireModel | undefined;
@@ -1683,6 +1684,7 @@ interface AppState {
 	closeShortcuts: () => void;
 	setDoubleShiftSearch: (enabled: boolean) => void;
 	setChatMessageOrder: (order: ChatMessageOrder) => void;
+	setDiffWrapLines: (wrap: boolean) => void;
 	setMarkdownOutlineVisible: (visible: boolean) => void;
 	setMarkdownOutlineSide: (side: MarkdownOutlineSide) => void;
 	applyConfig: (config: AppConfig) => void;
@@ -2804,6 +2806,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	fileLineWidthBounded: DEFAULT_CONFIG.fileLineWidthBounded,
 	voiceInputEnabled: DEFAULT_CONFIG.voiceInputEnabled,
 	chatMessageOrder: "oldest-first",
+	diffWrapLines: false,
 	markdownOutlineVisible: null,
 	markdownOutlineSide: CLIENT_PREFERENCE_DEFAULTS.markdownOutlineSide,
 	customLayoutPresets: DEFAULT_CONFIG.customLayoutPresets,
@@ -5154,6 +5157,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closeSurveyWindow: () => set({ surveyWindowOpen: false }),
 	setInAppSurvey: (survey) => set({ inAppSurvey: survey }),
 	setChatMessageOrder: (chatMessageOrder) => set({ chatMessageOrder }),
+	setDiffWrapLines: (diffWrapLines) => set({ diffWrapLines }),
 	setMarkdownOutlineVisible: (markdownOutlineVisible) => set({ markdownOutlineVisible }),
 	setMarkdownOutlineSide: (markdownOutlineSide) => set({ markdownOutlineSide }),
 	applyConfig: (config) => set(configPatch(config)),

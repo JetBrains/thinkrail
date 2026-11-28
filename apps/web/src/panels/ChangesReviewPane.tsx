@@ -9,7 +9,7 @@ import {
 } from "@remixicon/react";
 import type { GitFileChange, GitStatus } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
-import { diffRendererCapabilities } from "@thinkrail/resource-renderers";
+import { DiffWrapToggle, diffRendererCapabilities } from "@thinkrail/resource-renderers";
 import { Button } from "@thinkrail/ui/button";
 import { DiffStatBadge } from "@thinkrail/ui/diff-stat-badge";
 import { useLocalKeys } from "@thinkrail/ui/local-keys";
@@ -173,6 +173,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 		return {
 			layout: capabilities.some((candidate) => candidate.layout),
 			whitespace: capabilities.some((candidate) => candidate.whitespace),
+			lineWrap: capabilities.some((candidate) => candidate.lineWrap),
 		};
 	}, [files, mobile, rendererIds, scope, workspaceId]);
 	const ignoreWhitespace = tab.ignoreWhitespace ?? false;
@@ -398,6 +399,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 							icon={Pilcrow}
 						/>
 					) : null}
+					{controls.lineWrap ? <DiffWrapToggle /> : null}
 					{!mobile && controls.layout ? (
 						<>
 							<ToggleSegment

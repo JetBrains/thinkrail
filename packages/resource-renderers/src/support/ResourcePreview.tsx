@@ -19,6 +19,7 @@ import {
 	type SurfaceReview,
 } from "../registry";
 import type { HtmlViewport } from "../renderers/html/viewport";
+import { DiffWrapToggle } from "./DiffWrapToggle";
 import { GuardedRendererDiff } from "./GuardedRendererDiff";
 import { surfaceLineCount } from "./largeDiff";
 import { type RendererLayout, RendererToggles } from "./RendererToggles";
@@ -258,6 +259,7 @@ function PreviewToolbar({
 			{compact ? null : (
 				<>
 					<ReviewSend workspaceId={props.workspaceId} paths={paths} sessionId={props.sessionId} />
+					{props.before !== undefined && renderer.capabilities.lineWrap ? <DiffWrapToggle /> : null}
 					<RendererToggles
 						candidates={candidates}
 						renderer={renderer}

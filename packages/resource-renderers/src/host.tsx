@@ -85,6 +85,8 @@ export type MarkdownOutlineSide = "left" | "right";
 export interface ResourcePreferences {
 	fileLineWidth: number;
 	fileLineWidthBounded: boolean;
+	diffWrapLines: boolean;
+	setDiffWrapLines: (wrap: boolean) => void;
 	markdownOutlineVisible: boolean | null;
 	setMarkdownOutlineVisible: (visible: boolean) => void;
 	markdownOutlineSide: MarkdownOutlineSide;

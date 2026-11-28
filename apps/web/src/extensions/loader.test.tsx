@@ -399,6 +399,8 @@ describe("a runtime-loaded card inside a chat row", () => {
 						value={{
 							fileLineWidth: 100,
 							fileLineWidthBounded: false,
+							diffWrapLines: false,
+							setDiffWrapLines: () => {},
 							markdownOutlineVisible: null,
 							setMarkdownOutlineVisible: () => {},
 							markdownOutlineSide: "right",
