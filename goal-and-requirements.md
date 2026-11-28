@@ -168,8 +168,10 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   sections that answer a question by words with one engine, and the palette hands a question that shares
   no words with the specs to the agent ([[module-spec-graph]], [[submodule-server-spec]],
   [[submodule-web-search]]).
-- **Workflows** — bundled workflow skills for project setup, design brainstorming, and shipping a PR
-  ([[module-thinkrail-workflow]]).
+- **Workflows & built-in guidance** — bundled workflow skills for project setup, design brainstorming,
+  and shipping a PR ([[module-thinkrail-workflow]]), plus ThinkRail-only host skills for learning the
+  app (`about-thinkrail`) and running a post-wizard tune-up (`configuring-thinkrail`), reachable from
+  Welcome and the command palette ([[submodule-server-agent]], [[submodule-web-panels]]).
 - **Providers** — in-app sign-in and API keys through pi's auth, JetBrains AI through the user's
   `central` CLI, and the user's own OpenAI-compatible servers (a company gateway or a local model server)
   added from Settings into pi's `models.json` ([[submodule-server-auth]], [[central-integration]],

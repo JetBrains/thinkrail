@@ -53,10 +53,12 @@ const INTRO_BEATS = [
 
 export function OnboardingWizard({
 	projectCards,
+	footer,
 	onConnected,
 	onSkip,
 }: {
 	projectCards: ReactNode;
+	footer?: ReactNode;
 	onConnected: (connected: ConnectedSummary) => void;
 	onSkip: () => void;
 }) {
@@ -100,7 +102,12 @@ export function OnboardingWizard({
 			) : step === "privacy" ? (
 				<PrivacyStep titleRef={titleRef} onContinue={() => setStep("connect")} />
 			) : done && connected ? (
-				<DoneStep titleRef={titleRef} connected={connected} projectCards={projectCards} />
+				<DoneStep
+					titleRef={titleRef}
+					connected={connected}
+					projectCards={projectCards}
+					footer={footer}
+				/>
 			) : (
 				<ConnectStep
 					titleRef={titleRef}
@@ -191,10 +198,12 @@ function DoneStep({
 	titleRef,
 	connected,
 	projectCards,
+	footer,
 }: {
 	titleRef: RefObject<HTMLHeadingElement | null>;
 	connected: ConnectedSummary;
 	projectCards: ReactNode;
+	footer?: ReactNode;
 }) {
 	const t = useT();
 	return (
@@ -209,6 +218,7 @@ function DoneStep({
 			</h1>
 			<ConnectedLine summary={connected} />
 			<div className="flex flex-wrap justify-center gap-12">{projectCards}</div>
+			{footer}
 		</div>
 	);
 }

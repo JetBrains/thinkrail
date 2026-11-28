@@ -1362,9 +1362,12 @@ re-opened transcripts provider-valid.
       **lazily on first use** (never at module load: the resolve requires `node_modules`, which a
       compiled binary lacks). The workspace packages' `pi.skills` manifests aren't auto-discovered for
       file-path entries — their `skills/` dirs (`pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`), the
-      host's own skills (`packages/server/skills`: ThinkRail-only guidance — `managing-mcp-servers` and
-      `making-thinkrail-extensions`, which would be wrong under vanilla pi and so cannot live in a portable
-      package; a skill folder may carry reference files and plain-Node scripts, staged with it, never tests) plus the registry extensions' owner-resolved skill roots are wired via
+      host's own skills (`packages/server/skills`: ThinkRail-only guidance — `managing-mcp-servers`,
+      `making-thinkrail-extensions`, `about-thinkrail` with topic files under `reference/`, and
+      `configuring-thinkrail` which stays pure-shell and treats `$THINKRAIL_DATA_DIR/config.json` as
+      read-only because the running host caches it in memory — all of which would be wrong under vanilla
+      pi and so cannot live in a portable package; a skill folder may carry reference files and plain-Node
+      scripts, staged with it, never tests) plus the registry extensions' owner-resolved skill roots are wired via
       **`additionalSkillPaths`**; `build-support`'s `skillRoots` lists the same host root for both bundles.
       Registry extensions themselves are never path-loaded: they are the same named inline factories in
       both modes (one composition mode; `{ name, factory }` keeps `<inline:visualize>` in diagnostics).

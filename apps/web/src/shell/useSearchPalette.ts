@@ -9,6 +9,7 @@ import { startChatInTab } from "../panels/openChat";
 import { KEYBOARD_OPEN, openFileInTab } from "../panels/openTabs";
 import { availableSettings, useSettingsCatalogContext } from "../panels/settingsCatalog";
 import { settingsNavGroups } from "../panels/settingsNav";
+import { startAboutThinkrailChat, startConfigureThinkrailChat } from "../panels/setupPrompt";
 import {
 	canSettleWorkspace,
 	markWorkspaceRead,
@@ -312,6 +313,8 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				openSettings: (section?: SettingsSection, settingId?: string) =>
 					store().openSettings(section, settingId),
 				openShortcuts: () => store().openShortcuts(),
+				setupThinkrail: () => void startConfigureThinkrailChat(),
+				aboutThinkrail: () => void startAboutThinkrailChat(),
 				runTabAction: runActiveTabAction,
 			},
 		};

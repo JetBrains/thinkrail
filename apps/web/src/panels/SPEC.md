@@ -452,11 +452,11 @@ the Welcome banner while no project is shown, the hero reads **"You're set"** ov
 otherwise** — the marketing paragraph was removed as unread; the screen is heading → banners →
 **one-to-three cards** (icon top-left,
 label + explainer bottom-left; the primary is a filled-primary card carrying the stable `welcome-cta`
-hook, others quiet `welcome-action`s). Welcome is **the mode fork**: with a project shown it always pairs
+hook, others quiet `welcome-action`s), plus — when no project is shown and `canStartProjectlessChat` is true — the quiet `WelcomeGuideLinks` help line underneath the cards. Welcome is **the mode fork**: with a project shown it always pairs
 **"Start building"** (isolated worktree) with **"Work in project folder"** (the Default workspace) so the
 two working modes are a visible choice, not a hidden default. The cards by state: **no projects** →
-**"Start a new project"** (primary, `welcome-cta`) + **"Open project"** — or "Open project" alone as the
-primary against a host below `ONBOARDING_PROTOCOL_VERSION`; **project + `hasSpecs`** → **"Start building"** (primary) + "Work in
+**"Start a new project"** (primary, `welcome-cta`) + **"Open project"** (or "Open project" alone as the
+primary against a host below `ONBOARDING_PROTOCOL_VERSION`) + **"Chat without a project"** (when `canStartProjectlessChat` is true), with `WelcomeGuideLinks` beneath; **project + `hasSpecs`** → **"Start building"** (primary) + "Work in
 project folder"; **project + no specs** → a spec-first **"Set up project"** (primary) + "Start building"
 + "Work in project folder". **"Open project" appears only in the no-projects state** — where, with
 "Start a new project", it's the only possible action; once a project is shown, opening another is the projects-rail **"+"** (the same
@@ -597,8 +597,8 @@ A non-empty list (or an unreadable one: the connection
 itself succeeded) moves the wizard to **done** with no Done button, as a screen change rather than a resize: the
 whole connect screen (title, options, Skip) fades out in place over 200 ms, then the done screen fades in — the
 "You're set" hero, one `ConnectedLine` ("Anthropic connected · Claude Fable 5 is the default model") and Welcome's
-own two cards (Start a new project / Open project, passed in as `projectCards` so their menus and dialogs stay
-Welcome's). Nothing animates height, so no list is clipped mid-collapse and the centered column only re-centers
+own cards (Start a new project / Open project / Chat without a project, passed in as `projectCards` so their menus and dialogs stay
+Welcome's) and the quiet guide-skill help line (`footer`, `WelcomeGuideLinks`: *"New to ThinkRail? Set it up with the agent · Ask the agent about ThinkRail"*, gated on `canStartProjectlessChat` — also shown beneath the cards on the regular no-project Welcome; each button auto-sends `/skill:configuring-thinkrail` or `/skill:about-thinkrail` in a new chat without a project via `setupPrompt`'s `startConfigureThinkrailChat` / `startAboutThinkrailChat`). Nothing animates height, so no list is clipped mid-collapse and the centered column only re-centers
 while it is invisible; under reduced motion the swap is instant. Reaching done persists
 `onboardingDismissed`; the wizard (and with it the hidden rail and held prompts) stays until a project opens. A still-empty
 refresh warns and offers **Check again**

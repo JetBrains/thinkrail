@@ -134,6 +134,8 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 			openIn: noop,
 			openSettings: noop,
 			openShortcuts: noop,
+			setupThinkrail: noop,
+			aboutThinkrail: noop,
 			runTabAction: noop,
 		},
 		...overrides,
@@ -180,6 +182,36 @@ describe("palette project and Settings commands", () => {
 		);
 		expect(row("workspace.new", deps({ contextProjectId: null }))).toBeUndefined();
 		expect(row("workspace.openDefault", deps({ contextProjectId: null }))).toBeUndefined();
+	});
+
+	test("ThinkRail setup and about commands are offered only where a projectless chat can start and require being online", () => {
+		expect(row("help.setupThinkrail", deps())).toBeUndefined();
+		expect(row("help.aboutThinkrail", deps())).toBeUndefined();
+
+		let setupRan = 0;
+		let aboutRan = 0;
+		const catalog = deps({
+			canStartChat: true,
+			actions: {
+				...deps().actions,
+				setupThinkrail: () => (setupRan += 1),
+				aboutThinkrail: () => (aboutRan += 1),
+			},
+		});
+		const setup = row("help.setupThinkrail", catalog);
+		const about = row("help.aboutThinkrail", catalog);
+		expect(setup?.title).toBe("Set up ThinkRail with the agent");
+		expect(about?.title).toBe("Ask about ThinkRail");
+		expect(row("help.setupThinkrail", catalog, false)?.disabledReason).toBe(
+			currentTranslator()("search.palette.offlineReason"),
+		);
+		expect(row("help.aboutThinkrail", catalog, false)?.disabledReason).toBe(
+			currentTranslator()("search.palette.offlineReason"),
+		);
+		setup?.run?.();
+		about?.run?.();
+		expect(setupRan).toBe(1);
+		expect(aboutRan).toBe(1);
 	});
 
 	test("Review a pull request is offered only for a repository on a host that lists pull requests", () => {
