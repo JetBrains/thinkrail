@@ -5,7 +5,10 @@ import {
 	mkdtempSync,
 	readdirSync,
 	readFileSync,
+	renameSync,
 	rmSync,
+	statSync,
+	utimesSync,
 	writeFileSync,
 } from "node:fs";
 import { createRequire } from "node:module";
@@ -4794,3 +4797,253 @@ test("host per-name subagent resolver stays live for existing and future chats",
 		for (const id of ids) await removeSession(id);
 	}
 });
+
+test("disk snapshot cache reuses pi parsing while workspace receipts remain live", () =>
+	withFreshDataDir(async () => {
+		const cwd = tmpCwd("trpi-cache-receipts-");
+		const { id } = writeFinishedDiskSession(cwd);
+		const workspace = { id: "ws-cache-receipts", projectId: "p-cache", cwd };
+		const open = jest.spyOn(SessionManager, "open");
+		try {
+			await initializeSessionStates([workspace]);
+			const initial = await listSessionStates([workspace]);
+			expect(initial).toEqual([
+				expect.objectContaining({
+					sessionId: id,
+					firstPrompt: "hi",
+					state: expect.objectContaining({ completionUnread: false }),
+				}),
+			]);
+			expect(await listSessionStates([workspace])).toEqual(initial);
+			expect(await listSessions(workspace.id, cwd)).toEqual([
+				expect.objectContaining({ sessionId: id, firstPrompt: "hi", live: false }),
+			]);
+			expect((await markWorkspaceUnread(workspace))?.state.completionUnread).toBe(true);
+			expect((await listSessionStates([workspace]))[0]?.state.completionUnread).toBe(true);
+			expect((await markWorkspaceRead(workspace))[0]?.state.completionUnread).toBe(false);
+			expect((await listSessionStates([workspace]))[0]?.state.completionUnread).toBe(false);
+			expect(open).toHaveBeenCalledTimes(1);
+		} finally {
+			open.mockRestore();
+		}
+	}));
+
+test("disk snapshot cache refreshes same-size restored-mtime edits and atomic replacements", () =>
+	withFreshDataDir(async () => {
+		const cwd = tmpCwd("trpi-cache-rewrites-");
+		const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+		const { id, path } = writeFixtureSession(dir, {
+			cwd,
+			name: "First",
+			messages: [
+				{ role: "user", text: "hi", timestamp: 1_000 },
+				{ role: "assistant", text: "done", stopReason: "stop", timestamp: 1_001 },
+			],
+		});
+		utimesSync(path, 1_000, 1_000);
+		const workspace = { id: "ws-cache-rewrites", projectId: "p-cache", cwd };
+		const open = jest.spyOn(SessionManager, "open");
+		try {
+			await initializeSessionStates([workspace]);
+			expect((await listSessionStates([workspace]))[0]?.title).toBe("First");
+			const before = statSync(path, { bigint: true });
+			writeFileSync(
+				path,
+				readFileSync(path, "utf8").replace('"First"', '"Other"').replace('"hi"', '"yo"'),
+			);
+			utimesSync(path, 1_000, 1_000);
+			const after = statSync(path, { bigint: true });
+			expect(after.size).toBe(before.size);
+			expect(after.mtimeNs).toBe(before.mtimeNs);
+			expect((await listSessionStates([workspace]))[0]).toMatchObject({
+				sessionId: id,
+				title: "Other",
+				firstPrompt: "yo",
+			});
+			const replacement = join(dir, "replacement.tmp");
+			writeFileSync(replacement, readFileSync(path, "utf8").replace('"Other"', '"Third"'));
+			utimesSync(replacement, 1_000, 1_000);
+			renameSync(replacement, path);
+			expect((await listSessionStates([workspace]))[0]?.title).toBe("Third");
+			expect(open).toHaveBeenCalledTimes(3);
+		} finally {
+			open.mockRestore();
+		}
+	}));
+
+test("disk snapshot cache cannot hide corrupt, deleted or recreated transcripts", () =>
+	withFreshDataDir(async () => {
+		const cwd = tmpCwd("trpi-cache-strict-");
+		const { id, dir } = writeFinishedDiskSession(cwd);
+		const path = (await SessionManager.list(cwd)).find((info) => info.id === id)?.path;
+		if (!path) throw new Error("fixture transcript missing");
+		const original = readFileSync(path, "utf8");
+		const workspace = { id: "ws-cache-strict", projectId: "p-cache", cwd };
+		const open = jest.spyOn(SessionManager, "open");
+		try {
+			await initializeSessionStates([workspace]);
+			writeFileSync(join(dir, "extension-sidecar.jsonl"), '{"type":"extension-log"}\n');
+			expect(await listSessionStates([workspace])).toHaveLength(1);
+			expect(open).toHaveBeenCalledTimes(1);
+			writeFileSync(path, "");
+			await expect(listSessionStates([workspace])).rejects.toThrow("unreadable or malformed");
+			writeFileSync(path, original);
+			expect(await listSessionStates([workspace])).toHaveLength(1);
+			expect(open).toHaveBeenCalledTimes(2);
+			rmSync(path);
+			expect(await listSessionStates([workspace])).toEqual([]);
+			writeFileSync(path, original);
+			expect(await listSessionStates([workspace])).toHaveLength(1);
+			expect(open).toHaveBeenCalledTimes(3);
+		} finally {
+			open.mockRestore();
+		}
+	}));
+
+test("disk snapshot cache re-derives pending questions when the enabled tool registry changes", () =>
+	withFreshDataDir(async () => {
+		const cwd = tmpCwd("trpi-cache-registry-");
+		const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+		writeFixtureSession(dir, {
+			cwd,
+			messages: [
+				{ role: "user", text: "ask me", timestamp: 1_000 },
+				{
+					role: "assistant",
+					content: [
+						{
+							type: "toolCall",
+							id: "cached-question",
+							name: "ask_user_question",
+							arguments: { questions: [] },
+						},
+					],
+					stopReason: "toolUse",
+					timestamp: 1_001,
+				},
+			],
+		});
+		const workspace = { id: "ws-cache-registry", projectId: "p-cache", cwd };
+		let disabled = new Set<string>();
+		setDisabledExtensionsResolver(() => disabled);
+		const open = jest.spyOn(SessionManager, "open");
+		try {
+			await initializeSessionStates([workspace]);
+			expect((await listSessionStates([workspace]))[0]?.state.needsInput).toMatchObject({
+				toolCallId: "cached-question",
+			});
+			disabled = new Set(["ask-user-question"]);
+			expect((await listSessionStates([workspace]))[0]?.state).toMatchObject({
+				needsInput: null,
+				completion: { outcome: "interrupted" },
+			});
+			disabled = new Set();
+			expect((await listSessionStates([workspace]))[0]?.state.needsInput).toMatchObject({
+				toolCallId: "cached-question",
+			});
+			expect(open).toHaveBeenCalledTimes(1);
+		} finally {
+			open.mockRestore();
+			setDisabledExtensionsResolver(() => new Set());
+		}
+	}));
+
+test("disk snapshot cache yields to a chat attached after the cache was populated", () =>
+	withFreshDataDir(async () => {
+		const cwd = tmpCwd("trpi-cache-live-");
+		const { id } = writeFinishedDiskSession(cwd);
+		const workspace = { id: "ws-cache-live", projectId: "p-cache", cwd };
+		await initializeSessionStates([workspace]);
+		expect((await listSessionStates([workspace]))[0]?.title).toBe("");
+		try {
+			expect(await ensureSessionAttached(id, workspace.id, cwd)).toBe(true);
+			await renameSession(id, workspace.id, cwd, "Live renamed chat");
+			expect(await listSessionStates([workspace])).toEqual([
+				expect.objectContaining({ sessionId: id, title: "Live renamed chat" }),
+			]);
+			expect(await listSessions(workspace.id, cwd)).toEqual([
+				expect.objectContaining({ sessionId: id, title: "Live renamed chat", live: true }),
+			]);
+		} finally {
+			await removeSession(id);
+		}
+		expect((await listSessionStates([workspace]))[0]?.title).toBe("Live renamed chat");
+	}));
+
+test("disk snapshot cache keeps non-message branch activity when choosing the latest unread chat", () =>
+	withFreshDataDir(async () => {
+		const cwd = tmpCwd("trpi-cache-activity-");
+		const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+		const older = writeFixtureSession(dir, {
+			cwd,
+			messages: [
+				{ role: "user", text: "older", timestamp: 1_000 },
+				{ role: "assistant", text: "done", stopReason: "stop", timestamp: 1_001 },
+			],
+		});
+		writeFixtureSession(dir, {
+			cwd,
+			messages: [
+				{ role: "user", text: "newer", timestamp: 5_000 },
+				{ role: "assistant", text: "done", stopReason: "stop", timestamp: 5_001 },
+			],
+		});
+		SessionManager.open(older.path).appendSessionInfo("Recently renamed");
+		const workspace = { id: "ws-cache-activity", projectId: "p-cache", cwd };
+		const open = jest.spyOn(SessionManager, "open");
+		try {
+			await initializeSessionStates([workspace]);
+			const unread = await markWorkspaceUnread(workspace);
+			expect(unread).toMatchObject({
+				sessionId: older.id,
+				title: "Recently renamed",
+				state: { completionUnread: true },
+			});
+			expect(open).toHaveBeenCalledTimes(2);
+		} finally {
+			open.mockRestore();
+		}
+	}));
+
+test("disk snapshot cache preserves an unfamiliar persisted message role without hiding the chat", () =>
+	withFreshDataDir(async () => {
+		const cwd = tmpCwd("trpi-cache-unknown-role-");
+		const { id } = writeFinishedDiskSession(cwd);
+		const path = (await SessionManager.list(cwd)).find((info) => info.id === id)?.path;
+		if (!path) throw new Error("fixture transcript missing");
+		const manager = SessionManager.open(path);
+		writeFileSync(
+			path,
+			readFileSync(path, "utf8") +
+				JSON.stringify({
+					type: "message",
+					id: "external-message",
+					parentId: manager.getLeafId(),
+					timestamp: new Date(2_000).toISOString(),
+					message: {
+						role: "extension-progress",
+						content: "extension-owned payload",
+						timestamp: 2_000,
+					},
+				}) +
+				"\n",
+		);
+		const workspace = { id: "ws-cache-unknown-role", projectId: "p-cache", cwd };
+		const open = jest.spyOn(SessionManager, "open");
+		try {
+			await initializeSessionStates([workspace]);
+			const initial = await listSessionStates([workspace]);
+			expect(initial).toEqual([
+				expect.objectContaining({
+					sessionId: id,
+					state: expect.objectContaining({
+						completion: expect.objectContaining({ outcome: "interrupted" }),
+					}),
+				}),
+			]);
+			expect(await listSessionStates([workspace])).toEqual(initial);
+			expect(open).toHaveBeenCalledTimes(1);
+		} finally {
+			open.mockRestore();
+		}
+	}));

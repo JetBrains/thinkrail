@@ -432,6 +432,22 @@ re-opened transcripts provider-valid.
     best-effort reader: an unreadable transcript or session directory is logged and left unbaselined
     instead of blocking host startup, while the later snapshot keeps failing until the file is repaired.
     Receipt writes are serialized and atomic.
+    Disk-only state reads reuse a bounded in-memory `diskSessionCache` projection, never an attached
+    `SessionManager` or a final `SessionState`. The existing strict header scan and pi listing still run
+    before each authoritative read. A snapshot keeps the title, first prompt, last branch activity and
+    `sessionState`'s minimal entries from the last user prompt onward (the whole branch when there is no
+    user prompt); older entries cannot affect the latest run or an unsuperseded interactive call. Known
+    message formats drop text, image bytes, tool arguments and result bodies. An unknown message role
+    retains its original entry under the same cache budget, preserving the previous reader's behavior.
+    Receipts, cancellation/completion
+    metadata and the enabled interactive-tool registry remain live inputs to every derivation.
+    The LRU holds at most 2,048 snapshots and 8 Mi characters of serialized projection. Each read checks
+    the resolved path's device, inode, size, nanosecond modification/change times and mode; changed,
+    missing or unreadable files discard their entry. A parse that changes its own file (pi migration) or
+    overlaps an external write is returned for that read but never cached under an old stamp. Directory
+    discovery prunes deleted entries, trash/workspace removal forgets their snapshots, and disposal
+    clears the cache. This removes repeated `SessionManager.open`/branch projection work, not pi's
+    remaining per-scan listing cost or cold-start parsing.
     Sessions publish full state records on semantic change. Pending extension dialogs retain their
     full request so reconnecting clients can render and answer the exact blocker rather than seeing an
     unusable needs-input marker.

@@ -100,6 +100,7 @@ import {
 	stopSessionChildren,
 	subagentsFor,
 } from "./delegation";
+import { DiskSessionCache, type DiskSessionSnapshot } from "./diskSessionCache";
 import {
 	buildResourceLoader,
 	disabledExtensions,
@@ -145,7 +146,7 @@ import { REQUEST_REVIEW_TOOL_NAME } from "./requestReviewTool";
 import { declaresServerFallback, disableModelFallback } from "./serverFallback";
 import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
-import { deriveSessionState } from "./sessionState";
+import { deriveSessionState, diskStateEntries } from "./sessionState";
 import type { SkillAdmissionContext } from "./skillAdmission";
 import {
 	assessRespondability,
@@ -280,6 +281,7 @@ function trackSessionPreparation<T>(
 let sessionMetadataRoot: string | null = null;
 let sessionLifecycle: SessionLifecycle | null = null;
 let sessionReceipts: SessionReceipts | null | undefined;
+const diskSessionCache = new DiskSessionCache();
 
 function loadedSessionMetadata<T>(load: SessionMetadataLoad<T>): T | null {
 	if (load.kind === "loaded") return load.value;
@@ -295,6 +297,7 @@ function loadedSessionMetadata<T>(load: SessionMetadataLoad<T>): T | null {
 function ensureSessionMetadata(): void {
 	const root = dataDir();
 	if (sessionMetadataRoot === root && sessionLifecycle) return;
+	diskSessionCache.clear();
 	const loadedLifecycle = loadedSessionMetadata(loadSessionLifecycle());
 	const loadedReceipts = loadedSessionMetadata(loadSessionReceipts());
 	sessionMetadataRoot = root;
@@ -533,22 +536,41 @@ export function scheduleSessionStatePublish(sessionId: string): void {
 function diskStateRecord(
 	sessionId: string,
 	workspace: { id: string; projectId: string },
-	manager: SessionManager,
+	snapshot: DiskSessionSnapshot,
 	legacy = false,
 ): SessionStateRecord {
 	return {
 		sessionId,
 		workspaceId: workspace.id,
 		projectId: workspace.projectId,
-		state: stateFromDisk(sessionId, manager, legacy),
-		title: displayedSessionTitle(manager.getSessionName()),
-		...firstPromptOf(manager.getEntries()),
+		state: stateFromDisk(sessionId, snapshot, legacy),
+		title: snapshot.title,
+		...(snapshot.firstPrompt ? { firstPrompt: snapshot.firstPrompt } : {}),
 	};
 }
 
-function stateFromDisk(sessionId: string, manager: SessionManager, legacy = false): SessionState {
+function diskSnapshot(manager: SessionManager): DiskSessionSnapshot {
+	const branch = manager.getBranch();
+	const last = branch.at(-1);
+	return {
+		entries: diskStateEntries(branch),
+		title: displayedSessionTitle(manager.getSessionName()),
+		...firstPromptOf(manager.getEntries()),
+		lastActivityAt: last ? Date.parse(last.timestamp) || 0 : 0,
+	};
+}
+
+function readDiskSnapshot(path: string): DiskSessionSnapshot {
+	return diskSessionCache.read(path, () => diskSnapshot(SessionManager.open(path)));
+}
+
+function stateFromDisk(
+	sessionId: string,
+	snapshot: DiskSessionSnapshot,
+	legacy = false,
+): SessionState {
 	return deriveSessionState({
-		entries: manager.getBranch(),
+		entries: snapshot.entries,
 		isStreaming: false,
 		pendingMessageCount: 0,
 		backgroundWorkActive: false,
@@ -1795,6 +1817,10 @@ async function listSessionInfosStrict(
 		return !listed || listed.id !== file.identity.id || listed.cwd !== file.identity.cwd;
 	});
 	if (omitted) throw new Error(`Session transcript could not be listed: ${omitted.path}`);
+	diskSessionCache.retainDirectory(
+		defaultSessionDirectory(cwd),
+		new Set(infos.map((info) => resolve(info.path))),
+	);
 	return infos;
 }
 
@@ -1816,19 +1842,19 @@ async function listSessionsInternal(workspaceId: string, cwd: string): Promise<S
 				info.cwd === cwd && !liveIds.has(info.id) && !isSessionDeleted(info.id, workspaceId),
 		)
 		.map((info) => {
-			const manager = SessionManager.open(info.path);
+			const snapshot = readDiskSnapshot(info.path);
 			return {
 				sessionId: info.id,
 				workspaceId,
 				title: displayedSessionTitle(info.name),
-				...firstPromptOf(manager.getEntries()),
+				...(snapshot.firstPrompt ? { firstPrompt: snapshot.firstPrompt } : {}),
 				model: null,
 				thinkingLevel: "medium",
 				isStreaming: false,
 				messageCount: info.messageCount,
 				updatedAt: info.modified.getTime(),
 				live: false,
-				state: stateFromDisk(info.id, manager),
+				state: stateFromDisk(info.id, snapshot),
 			};
 		});
 	return [...live, ...disk];
@@ -1855,7 +1881,7 @@ async function listBaselineSessionInfos(cwd: string): Promise<SessionInfo[]> {
 
 interface CollectedSessionState {
 	record: SessionStateRecord;
-	branch: () => readonly SessionEntry[];
+	lastActivityAt: () => number;
 	publish: () => SessionStateRecord;
 }
 
@@ -1893,7 +1919,10 @@ async function collectSessionStateSources(
 				title: entryTitle(entry),
 				...entryFirstPrompt(entry),
 			},
-			branch: () => entry.session.sessionManager.getBranch(),
+			lastActivityAt: () => {
+				const last = entry.session.sessionManager.getBranch().at(-1);
+				return last ? Date.parse(last.timestamp) || 0 : 0;
+			},
 			publish: () => {
 				publishEntryState(entry);
 				return stateRecordForEntry(entry);
@@ -1909,16 +1938,15 @@ async function collectSessionStateSources(
 			) {
 				continue;
 			}
-			const manager = SessionManager.open(info.path);
-			const record = diskStateRecord(info.id, workspace, manager, baseline);
+			const snapshot = readDiskSnapshot(info.path);
+			const record = diskStateRecord(info.id, workspace, snapshot, baseline);
 			records.push({
 				record,
-				branch: () => manager.getBranch(),
+				lastActivityAt: () => snapshot.lastActivityAt,
 				publish: () => {
 					const current = {
 						...record,
-						state: stateFromDisk(info.id, manager),
-						title: displayedSessionTitle(manager.getSessionName()),
+						state: stateFromDisk(info.id, snapshot),
 					};
 					publishState(current);
 					return current;
@@ -1927,11 +1955,6 @@ async function collectSessionStateSources(
 		}
 	}
 	return records;
-}
-
-function lastActivityAt(source: CollectedSessionState): number {
-	const last = source.branch().at(-1);
-	return last ? Date.parse(last.timestamp) || 0 : 0;
 }
 
 function initializedReceipts(): SessionReceipts {
@@ -1946,7 +1969,7 @@ export async function markWorkspaceUnread(
 	initializedReceipts();
 	const sources = await collectSessionStateSources([workspace], false);
 	const ranked = sources
-		.map((source) => ({ source, at: lastActivityAt(source) }))
+		.map((source) => ({ source, at: source.lastActivityAt() }))
 		.sort((a, b) => b.at - a.at);
 	for (const { source } of ranked) {
 		if (!canMarkCompletionUnread(source.record.state)) continue;
@@ -2082,7 +2105,9 @@ export function renameSession(
 		publish({ sessionId, event: { type: "session_info_changed", name: normalized } }, workspaceId);
 		const projectId = resolveProjectId(workspaceId);
 		if (projectId)
-			publishState(diskStateRecord(sessionId, { id: workspaceId, projectId }, manager));
+			publishState(
+				diskStateRecord(sessionId, { id: workspaceId, projectId }, diskSnapshot(manager)),
+			);
 		return true;
 	});
 }
@@ -3251,6 +3276,7 @@ export function removeSession(sessionId: string): Promise<void> {
 }
 
 export function disposeAllSessions(): void {
+	diskSessionCache.clear();
 	sessionLifecycleGeneration++;
 	workspaceLifecycleGenerations.clear();
 	closingWorkspaces.clear();
@@ -3369,6 +3395,7 @@ async function purgeDiskSessions(cwd: string): Promise<void> {
 	for (const info of infos) {
 		if (info.cwd !== cwd) continue;
 		rmSync(info.path, { force: true });
+		diskSessionCache.forget(info.path);
 		try {
 			removeSessionStateMetadata(info.id);
 		} catch (error) {
@@ -3431,6 +3458,7 @@ async function runDeleteTransaction(
 			)?.path;
 		}
 		if (path && existsSync(path)) await trashFile(path);
+		if (path) diskSessionCache.forget(path);
 	} catch (error) {
 		if (installedTombstone) {
 			deletedSessions.delete(sessionId);

@@ -1,8 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import { fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { Message } from "@thinkrail/contracts";
 import type { InteractiveTools } from "../extensions";
-import { deriveSessionState } from "./sessionState";
+import {
+	deriveSessionState as deriveState,
+	diskStateEntries,
+	type SessionStateInputs,
+} from "./sessionState";
 
 const INTERACTIVE: InteractiveTools = new Map([["ask_user_question", {}]]);
 
@@ -47,7 +52,7 @@ const assistant = (
 		parentId,
 	);
 
-function inputs(overrides: Partial<Parameters<typeof deriveSessionState>[0]> = {}) {
+function inputs(overrides: Partial<SessionStateInputs> = {}) {
 	return {
 		entries: [user(), assistant("a1", "stop")],
 		isStreaming: false,
@@ -65,7 +70,9 @@ function inputs(overrides: Partial<Parameters<typeof deriveSessionState>[0]> = {
 	};
 }
 
-describe("deriveSessionState", () => {
+describe.each([false, true])("deriveSessionState (cached projection: %s)", (compact) => {
+	const deriveSessionState = (input: SessionStateInputs) =>
+		deriveState({ ...input, entries: compact ? diskStateEntries(input.entries) : input.entries });
 	test("a live interaction outranks running while retaining execution and queue facts", () => {
 		expect(
 			deriveSessionState(
@@ -354,4 +361,109 @@ describe("deriveSessionState", () => {
 			backgroundWork: false,
 		});
 	});
+});
+
+test("disk state projections retain state facts without retaining old turns or large payloads", () => {
+	const payload = "LARGE_CACHE_PAYLOAD".repeat(10_000);
+	const prompt: SessionEntry = {
+		type: "message",
+		id: "new-user",
+		parentId: "old-assistant",
+		timestamp: new Date(3).toISOString(),
+		message: {
+			role: "user",
+			content: [
+				{ type: "text", text: payload },
+				{ type: "image", data: payload, mimeType: "image/png" },
+			],
+			timestamp: 3,
+		},
+	};
+	const question: SessionEntry = {
+		type: "message",
+		id: "new-assistant",
+		parentId: "new-user",
+		timestamp: new Date(4).toISOString(),
+		message: {
+			...fauxAssistantMessage(payload),
+			content: [
+				{ type: "toolCall", id: "question", name: "ask_user_question", arguments: { payload } },
+			],
+			stopReason: "toolUse",
+		},
+	};
+	const pending: SessionEntry = {
+		type: "message",
+		id: "pending",
+		parentId: "new-assistant",
+		timestamp: new Date(5).toISOString(),
+		message: {
+			role: "toolResult",
+			toolCallId: "question",
+			toolName: "ask_user_question",
+			content: [{ type: "image", data: payload, mimeType: "image/png" }],
+			details: { kind: "ack", payload },
+			isError: false,
+			timestamp: 5,
+		},
+	};
+	const entries = [
+		user("old-user"),
+		assistant("old-assistant", "stop", "old-user"),
+		prompt,
+		question,
+		pending,
+	];
+	const original = JSON.stringify(entries);
+	const compact = diskStateEntries(entries);
+	expect(compact.map((item) => item.id)).toEqual(["new-user", "new-assistant", "pending"]);
+	expect(JSON.stringify(compact)).not.toContain("LARGE_CACHE_PAYLOAD");
+	expect(JSON.stringify(compact).length).toBeLessThan(2_000);
+	expect(JSON.stringify(entries)).toBe(original);
+	for (const tools of [INTERACTIVE, new Map()]) {
+		for (const liveRegistry of [false, true]) {
+			const stateInput = inputs({ entries, interactiveTools: tools, liveRegistry });
+			expect(deriveState({ ...stateInput, entries: compact })).toEqual(deriveState(stateInput));
+		}
+	}
+});
+
+test("disk state projections preserve modern and legacy replies and malformed reply boundaries", () => {
+	const question: SessionEntry = {
+		type: "message",
+		id: "call-entry",
+		parentId: "u1",
+		timestamp: new Date(2).toISOString(),
+		message: {
+			...fauxAssistantMessage(""),
+			content: [
+				{ type: "toolCall", id: "question", name: "ask_user_question", arguments: QUESTION_ARGS },
+			],
+			stopReason: "toolUse",
+		},
+	};
+	for (const [customType, details, pending] of [
+		["tool-response", { toolCallId: "question", response: "answer" }, false],
+		["ask-user-answers", { toolCallId: "question", result: "answer" }, false],
+		["tool-response", { toolCallId: "question" }, true],
+		["ask-user-answers", { toolCallId: "question" }, true],
+		["tool-response", { toolCallId: "another-question", response: "answer" }, true],
+		["chat-handoff", { toolCallId: "question", response: "answer" }, true],
+	] as const) {
+		const reply: SessionEntry = {
+			type: "custom_message",
+			id: "reply",
+			parentId: "call-entry",
+			timestamp: new Date(3).toISOString(),
+			customType,
+			details,
+			content: "answer body",
+			display: true,
+		};
+		const entries = [user(), question, reply];
+		const full = deriveState(inputs({ entries }));
+		const compact = deriveState(inputs({ entries: diskStateEntries(entries) }));
+		expect(compact).toEqual(full);
+		expect(compact.needsInput !== null).toBe(pending);
+	}
 });
