@@ -748,6 +748,50 @@ test("creating after a rename skips the freed name whose worktree dir is still o
 	expect(existsSync(next.worktreePath)).toBe(true);
 });
 
+test.each([
+	{ name: undefined, branch: "workspace-2" },
+	{ name: "Workspace 1", branch: "workspace-1-2" },
+])(
+	"creation skips a missing worktree's registered path and uses $branch",
+	async ({ name, branch }) => {
+		const stale = {
+			id: "missing-workspace",
+			projectId: "p1",
+			name: "Old workspace",
+			branch: "old-workspace",
+			worktreePath: join(dataDir, "worktrees", "repo", "workspace-1"),
+			baseBranch: "main",
+			renamed: true,
+		} satisfies Workspace;
+		writeFileSync(join(dataDir, "workspaces.json"), JSON.stringify([stale]));
+
+		const ws = await createWorkspace("p1", name);
+
+		expect(ws).toMatchObject({ branch, name: name ?? branch });
+		expect(existsSync(join(ws.worktreePath, "README.md"))).toBe(true);
+		expect(existsSync(stale.worktreePath)).toBe(false);
+		expect(listWorkspaceRecords("p1")).toContainEqual(stale);
+	},
+);
+
+test("a missing path containing a registered project blocks creation but not branch-only renaming", async () => {
+	const path = join(dataDir, "worktrees", "repo", "workspace-1");
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([
+			{ id: "p1", name: "repo", path: repo, slug: "repo", lastOpened: 1 },
+			{ id: "p2", name: "nested", path: join(path, "nested"), slug: "nested", lastOpened: 2 },
+		]),
+	);
+
+	const ws = await createWorkspace("p1");
+	const renamed = renameWorkspace(ws.id, "Workspace 1", { branch: "workspace-1" }).workspace;
+
+	expect(basename(ws.worktreePath)).toBe("workspace-2");
+	expect(renamed).toMatchObject({ branch: "workspace-1", worktreePath: ws.worktreePath });
+	expect(existsSync(path)).toBe(false);
+});
+
 test("auto naming skips a long run of existing workspace-N branches in one pass", async () => {
 	for (let n = 1; n <= 60; n += 1) {
 		git(repo, "branch", `workspace-${n}`);

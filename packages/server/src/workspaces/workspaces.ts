@@ -104,26 +104,29 @@ function existingHeads(project: Project): Set<string> {
 	return heads;
 }
 
-function nameTakenAmong(heads: ReadonlySet<string>, project: Project, candidate: string): boolean {
-	return (
-		heads.has(candidate.toLowerCase()) ||
-		existsSync(managedWorktreePath(project, candidate)) ||
-		creationBranchReserved(project.id, candidate)
-	);
+function nameTakenFor(project: Project, pathOwned?: (path: string) => boolean) {
+	const heads = existingHeads(project);
+	return (candidate: string): boolean => {
+		if (heads.has(candidate.toLowerCase())) return true;
+		const path = managedWorktreePath(project, candidate);
+		return (
+			existsSync(path) ||
+			pathOwned?.(path) === true ||
+			creationBranchReserved(project.id, candidate)
+		);
+	};
 }
 
-function uniqueBranch(project: Project, base: string): string {
-	const heads = existingHeads(project);
-	if (!nameTakenAmong(heads, project, base)) return base;
+function uniqueBranch(base: string, nameTaken: (candidate: string) => boolean): string {
+	if (!nameTaken(base)) return base;
 	let n = 2;
-	while (nameTakenAmong(heads, project, `${base}-${n}`)) n += 1;
+	while (nameTaken(`${base}-${n}`)) n += 1;
 	return `${base}-${n}`;
 }
 
-function nextAutoBranch(project: Project): string {
-	const heads = existingHeads(project);
+function nextAutoBranch(nameTaken: (candidate: string) => boolean): string {
 	let n = 1;
-	while (nameTakenAmong(heads, project, `workspace-${n}`)) n += 1;
+	while (nameTaken(`workspace-${n}`)) n += 1;
 	return `workspace-${n}`;
 }
 
@@ -272,9 +275,10 @@ export function planManagedWorkspace(
 ): ManagedWorkspacePlan {
 	const project = openProjectById(projectId);
 	const displayName = name ? toDisplayName(name) : null;
+	const nameTaken = nameTakenFor(project, snapshotManagedPathOwnership());
 	const branch = displayName
-		? uniqueBranch(project, toBranch(displayName))
-		: nextAutoBranch(project);
+		? uniqueBranch(toBranch(displayName), nameTaken)
+		: nextAutoBranch(nameTaken);
 	const base = baseRef?.trim();
 	let baseBranch: string;
 	if (base) baseBranch = base;
@@ -295,15 +299,30 @@ export function planManagedWorkspace(
 	};
 }
 
+function projectInsideManagedPath(path: string, projectPath: string): boolean {
+	const rel = relative(path, projectPath);
+	return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+}
+
+function snapshotManagedPathOwnership() {
+	const worktreePaths = new Set(
+		loadWorkspaces().map(({ worktreePath }) => canonicalPath(worktreePath)),
+	);
+	const projectPaths = loadProjects().map(({ path }) => canonicalPath(path));
+	return (path: string): boolean => {
+		const wanted = canonicalPath(path);
+		return (
+			worktreePaths.has(wanted) ||
+			projectPaths.some((projectPath) => projectInsideManagedPath(wanted, projectPath))
+		);
+	};
+}
+
 export function managedPathOwned(path: string): boolean {
 	const wanted = canonicalPath(path);
-	const within = (candidate: string) => {
-		const rel = relative(wanted, canonicalPath(candidate));
-		return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
-	};
 	return (
-		loadWorkspaces().some((workspace) => canonicalPath(workspace.worktreePath) === wanted) ||
-		loadProjects().some((project) => within(project.path))
+		loadWorkspaces().some(({ worktreePath }) => canonicalPath(worktreePath) === wanted) ||
+		loadProjects().some((project) => projectInsideManagedPath(wanted, canonicalPath(project.path)))
 	);
 }
 
@@ -501,7 +520,8 @@ export function renameWorkspace(
 	const movable = requested !== undefined && branchMoveOwed(ws, opts.by);
 	const branchKept = movable ? keptBranchReason(ws, live) : undefined;
 	const wanted = movable && !branchKept ? branchSlug(requested) : "";
-	const branch = !wanted || wanted === ws.branch ? ws.branch : uniqueBranch(project, wanted);
+	const branch =
+		!wanted || wanted === ws.branch ? ws.branch : uniqueBranch(wanted, nameTakenFor(project));
 	const branchChanged = branch !== ws.branch;
 	if (branchChanged) {
 		const moved = git(project.path, ["branch", "-m", ws.branch, branch], { timeoutMs: null });
