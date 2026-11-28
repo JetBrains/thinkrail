@@ -14,6 +14,7 @@ import { E2eWire } from "./fixtures/wire";
 
 const SCREENSHOT_PATH = join(E2E_SCREENSHOT_DIR, "models-settings", "default-model.png");
 const MODELS_PATH = join(E2E_PI_AGENT_DIR, "models.json");
+const LONG_MODEL_PREFIX = "accounts/e2e/models";
 const LONG_CATALOG = {
 	providers: {
 		"e2e-long": {
@@ -21,7 +22,8 @@ const LONG_CATALOG = {
 			api: "openai-completions",
 			apiKey: "e2e-long-catalog",
 			models: Array.from({ length: 40 }, (_, index) => ({
-				id: `long-model-${String(index).padStart(2, "0")}`,
+				id: `${LONG_MODEL_PREFIX}/long-model-${String(index).padStart(2, "0")}`,
+				name: "Long catalog model",
 			})),
 		},
 	},
@@ -284,7 +286,9 @@ test("the Settings model pickers open inside the dialog, and the model list scro
 				await trigger.click();
 				await revealModelGroups(page);
 				await expandModelGroup(page, "e2e-long");
-				await expect(list.locator('[data-model-id="long-model-39"]')).toBeAttached();
+				await expect(
+					list.locator(`[data-model-id="${LONG_MODEL_PREFIX}/long-model-39"]`),
+				).toBeAttached();
 				await list.evaluate((element) => element.scrollTo({ top: 0 }));
 				await list.hover();
 				await page.mouse.wheel(0, 600);
@@ -300,5 +304,96 @@ test("the Settings model pickers open inside the dialog, and the model list scro
 	} finally {
 		writeFileSync(MODELS_PATH, JSON.stringify({ providers: {} }));
 		await withHostWire(page, (wire) => wire.request("provider.jbcentralDisconnect", {}));
+	}
+});
+
+test("Settings and composer open on the current model and copy its full ID without selecting", async ({
+	page,
+	context,
+}) => {
+	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+	await openWorkspaceChat(page);
+	const before = await withHostWire(page, (wire) =>
+		wire.request("settings.update", { config: {} }),
+	);
+	writeFileSync(MODELS_PATH, JSON.stringify(LONG_CATALOG));
+
+	try {
+		await connectFixtureProvider(page);
+		const models = await withHostWire(page, (wire) => wire.request("model.list", {}));
+		const current = models.find((model) => model.id === `${LONG_MODEL_PREFIX}/long-model-39`);
+		const other = models.find((model) => model.id === `${LONG_MODEL_PREFIX}/long-model-00`);
+		if (!current || !other) throw new Error("The long catalog fixture was not loaded");
+		const modelRef = { provider: current.provider, id: current.id };
+		await withHostWire(page, (wire) =>
+			wire.request("settings.update", {
+				config: {
+					defaultModel: current,
+					defaultEffort: "off",
+					reviewModel: current,
+					reviewEffort: "off",
+					favoriteModels: [other],
+				},
+			}),
+		);
+		await page.getByTestId("settings-nav-models").click();
+		await page.setViewportSize({ width: 320, height: 568 });
+		const list = page.locator("[cmdk-list]");
+		const currentRow = list
+			.locator(`[data-testid="model-option"][data-model-id="${current.id}"]`)
+			.first();
+		const copy = list
+			.locator(`[data-testid="model-option"][data-model-id="${other.id}"]`)
+			.first()
+			.getByTestId("chat-copy");
+		for (const row of ["default-model-row", "review-model-row"]) {
+			const trigger = page.getByTestId(row).getByTestId("model-selector");
+			await expect(trigger).toHaveAttribute("title", new RegExp(current.id));
+			await trigger.click();
+			await expect(currentRow).toHaveAttribute("aria-selected", "true");
+			await expect(currentRow).toBeInViewport({ ratio: 1 });
+			await expect(currentRow).toHaveAccessibleName(new RegExp(current.id));
+			await copy.focus();
+			await copy.press("Enter");
+			await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(other.id);
+			await expect(copy).toHaveAttribute("data-copied", "true");
+			await expect(trigger).toHaveAttribute("data-open", "true");
+			expect(await readDefaults(page)).toMatchObject({ defaultModel: modelRef });
+			expect(
+				await withHostWire(page, (wire) => wire.request("settings.update", { config: {} })),
+			).toMatchObject({ reviewModel: modelRef });
+			await page.keyboard.press("Escape");
+		}
+
+		await closeSettings(page);
+		await openFreshChat(page);
+		const trigger = page.getByTestId("model-selector").last();
+		await expect(trigger).toHaveAttribute("title", new RegExp(current.id));
+		await trigger.click();
+		await expect(currentRow).toHaveAttribute("aria-selected", "true");
+		await expect(currentRow).toBeInViewport({ ratio: 1 });
+		await copy.click();
+		await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(other.id);
+		await expect(copy).toHaveAttribute("data-copied", "true");
+		await expect(trigger).toHaveAttribute("data-open", "true");
+		await expect(trigger).toHaveAttribute("title", new RegExp(current.id));
+		await page.keyboard.press("Escape");
+	} finally {
+		writeFileSync(MODELS_PATH, JSON.stringify({ providers: {} }));
+		await withHostWire(page, async (wire) => {
+			try {
+				await wire.request("settings.update", {
+					config: {
+						defaultModel: before.defaultModel ?? null,
+						defaultEffort: before.defaultEffort ?? null,
+						reviewModel: before.reviewModel ?? null,
+						reviewEffort: before.reviewEffort ?? null,
+						favoriteModels: before.favoriteModels,
+					},
+				});
+			} finally {
+				await wire.request("provider.jbcentralDisconnect", {});
+			}
+		});
 	}
 });

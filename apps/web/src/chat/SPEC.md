@@ -232,7 +232,9 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   self-contained presentational primitive that copies through the shared `copyText()` (`@/lib`) — the
   one clipboard-write path with its degradation baked in — flipping to a local ~1.2s `Copy`→`Check` icon
   only when it reports success; it does **not** reach the store toast the way `panels/PlanPane` does,
-  keeping the message renderers props-driven.
+  keeping the message renderers props-driven. It also serves model-ID rows; optional click and keyboard
+  handlers let a nested copy action stop the enclosing command item from selecting, without replacing
+  clipboard handling or success feedback.
   Skill-invocation and review-package cards keep their own disclosure UI and carry no copy affordance.
 - `tool` — a **primary** tool call: the collapsible `ToolCard` frame (collapsed unless registered
   `defaultExpanded`; errors auto-expand; a manual toggle wins), or a `"bare"` renderer that owns its
@@ -1335,10 +1337,21 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `model.clampThinking` and applies the answer — the reconcile `NewWorkspaceDialog` already runs for its
   pair, and the same clamp pi applies at request time — so the pill and slider show the level pi will
   actually use rather than a stop the rail does not have.
-  Rows are **two lines**: the name, then `provider · [kind glyph] what it draws on · price · context`. The list reads **Default
+  Rows are **two lines**: the name, then `provider · [kind glyph] what it draws on · price · context`.
+  Row and trigger tooltips expose the complete friendly name, provider-qualified ID and connection detail;
+  each row also exposes the full ID as screen-reader text. Its copy action writes the exact canonical
+  `model.id`, including path prefixes, without selecting the model or closing the picker, by mouse or
+  keyboard. Search continues to match both name and full ID. The list reads **Default
   row** (pre-session callers only, `defaultOption`: what the host would pick, checked while the caller
   follows it) → **Pinned** → **Recent** (the host's list minus pinned models) → provider groups, folded behind one
-  "All models" row while a shortlist exists and expanded by search. Each provider group is collapsible: its
+  "All models" row while a shortlist exists and expanded by search. Opening without a query highlights
+  and scrolls to the current model in Pinned, Recent, or its provider group; a current model outside the
+  shortlist reveals the provider groups. Following the host default instead highlights the Default row.
+  This is cmdk's initial value, not controlled highlight state: subsequent keyboard navigation, search
+  and catalog refreshes stay owned by cmdk, and reopening resolves the current selection again.
+  When popover fitting changes the list's dimensions after its initial scroll, the list reveals cmdk's
+  highlighted row again by adjusting only its own scroll position, without moving the surrounding dialog.
+  Each provider group is collapsible: its
   header is itself a cmdk row (`model-group-toggle`, `aria-expanded`, Enter toggles) carrying the match
   count, and a picker opens with every group collapsed except the current model's (none when that model
   is pinned); a search opens every matching group, each still collapsible for that search. The header

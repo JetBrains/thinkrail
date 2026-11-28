@@ -24,7 +24,7 @@ import {
 	type ThinkingLevel,
 	type WireModel,
 } from "@thinkrail/contracts";
-import { useT } from "@thinkrail/locales/react";
+import { type Translator, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import {
 	Command,
@@ -42,11 +42,13 @@ import {
 	type CSSProperties,
 	forwardRef,
 	type KeyboardEvent,
+	useEffect,
 	useImperativeHandle,
 	useMemo,
 	useRef,
 	useState,
 } from "react";
+import { CopyButton } from "./CopyButton";
 import { ModelEffortPill, TONE_TEXT } from "./ModelEffortLabel";
 import {
 	CENTRAL_KIND_TAG,
@@ -115,6 +117,13 @@ export interface ModelEffortPickerProps {
 }
 
 const FIT_PADDING = 8;
+const DEFAULT_PAIR_ROW = "default:pair";
+
+function modelDescription(t: Translator, model: WireModel): string {
+	return [model.name, `${model.provider}/${model.id}`, describeAuth(t, model)]
+		.filter(Boolean)
+		.join("\n");
+}
 
 function rowKeywords(model: WireModel): string[] {
 	return [model.name, model.id, model.provider, ...model.thinkingLevels];
@@ -342,15 +351,44 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 	) {
 		const t = useT();
 		const triggerRef = useRef<HTMLButtonElement>(null);
+		const [list, setList] = useState<HTMLDivElement | null>(null);
 		const [open, setOpen] = useState(false);
 		const [query, setQuery] = useState("");
 		const [showAll, setShowAll] = useState(false);
 		const [expansion, setExpansion] = useState<GroupExpansion>(() =>
 			initialGroupExpansion(null, []),
 		);
+		const currentSection =
+			current && models.some((model) => sameModel(model, current))
+				? preferences.favorites.some((model) => sameModel(model, current))
+					? "fav"
+					: preferences.recents.some((model) => sameModel(model, current))
+						? "recent"
+						: "all"
+				: null;
+		const initialRow = defaultOption?.active
+			? DEFAULT_PAIR_ROW
+			: current && currentSection
+				? rowValue(currentSection, current)
+				: "";
+		useEffect(() => {
+			if (!list) return;
+			const observer = new ResizeObserver(() => {
+				const item = list.querySelector<HTMLElement>('[cmdk-item][aria-selected="true"]');
+				if (!item) return;
+				const viewport = list.getBoundingClientRect();
+				if (viewport.height === 0) return;
+				const bounds = item.getBoundingClientRect();
+				if (bounds.top < viewport.top) list.scrollTop -= viewport.top - bounds.top;
+				else if (bounds.bottom > viewport.bottom) list.scrollTop += bounds.bottom - viewport.bottom;
+			});
+			observer.observe(list);
+			return () => observer.disconnect();
+		}, [list]);
 
 		const openWith = (next: string) => {
 			setQuery(next);
+			setShowAll(next === "" && currentSection === "all" && !defaultOption?.active);
 			setExpansion(initialGroupExpansion(current, preferences.favorites));
 			setOpen(true);
 			onRefresh(false);
@@ -406,7 +444,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 					data-testid="model-option"
 					data-model-id={model.id}
 					data-provider={model.provider}
-					title={describeAuth(t, model) ?? undefined}
+					title={modelDescription(t, model)}
 					onSelect={() => pickModel(model)}
 					className={cn(
 						"group/row items-start gap-8 py-4",
@@ -419,9 +457,19 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 					)}
 					<span className="flex min-w-0 flex-1 flex-col">
 						<span className="truncate">{model.name}</span>
+						<span className="sr-only">{`${model.provider}/${model.id}`}</span>
 						<RowMeta model={model} withProvider={!grouped} />
 					</span>
 					{isCurrent ? <Check className="mt-2 size-14 shrink-0 text-primary" /> : null}
+					<CopyButton
+						getText={() => model.id}
+						label={t("chat.modelPicker.copyModelId", { id: model.id })}
+						onClick={(event) => event.stopPropagation()}
+						onKeyDown={(event) => {
+							if (event.key === "Enter" || event.key === " ") event.stopPropagation();
+						}}
+						className="mt-2 group-hover/row:opacity-100 group-data-[selected=true]/row:opacity-100"
+					/>
 					{preferences.supported ? (
 						<IconButton
 							icon={favorite ? StarFill : StarLine}
@@ -493,6 +541,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 					ref={triggerRef}
 					data-testid="model-selector"
 					data-open={open}
+					title={pillModel ? modelDescription(t, pillModel) : undefined}
 					tabIndex={tabIndex}
 					onKeyDown={(event) => {
 						if (!isImeComposing(event.nativeEvent)) onTriggerKeyDown?.(event);
@@ -541,13 +590,14 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 					<Command
 						className="min-h-0 flex-1 bg-transparent"
 						filter={pickerFilter(groups, groupRow)}
+						defaultValue={query === "" ? initialRow : ""}
 					>
 						<CommandInput
 							placeholder={t("chat.modelPicker.searchWithLevel")}
 							value={query}
 							onValueChange={setQuery}
 						/>
-						<CommandList className="max-h-340 min-h-0 flex-1">
+						<CommandList ref={setList} className="max-h-340 min-h-0 flex-1">
 							{emptyState === "no-match" ? (
 								<CommandEmpty>{t("chat.modelPicker.noMatch")}</CommandEmpty>
 							) : null}
@@ -559,7 +609,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 							{defaultOption ? (
 								<CommandGroup>
 									<CommandItem
-										value="default:pair"
+										value={DEFAULT_PAIR_ROW}
 										keywords={["default"]}
 										data-testid="model-option-default"
 										onSelect={() => {

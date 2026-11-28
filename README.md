@@ -71,6 +71,7 @@ For latest version, see the [Releases page](https://github.com/JetBrains/thinkra
 - **MCP servers.** Connect the MCP servers in your `pi` `mcp.json`, or configure them in Settings → MCP servers. Your own servers, which apply to every project, can be added, switched on or off and removed there even with no project open. ThinkRail asks in the chat before calls that the server does not mark read-only, or always allows the tools you trust in a project. Servers a repository defines stay off until you approve them. ThinkRail signs you in to OAuth servers from Settings and shows each chat's servers next to its background commands and subagents, with each server's state and the chat's calls to it.
 
 - **Your providers, your credentials.** Sign in with [JetBrains AI](https://www.jetbrains.com/ai/) or connect any provider through `pi`'s own auth. ThinkRail has no accounts of its own.
+  Model pickers open on your current choice; hover to read its full name and ID, or copy a model's canonical ID from its row.
 
 - **Your `pi` setup.** ThinkRail reads your existing `pi` configuration (`~/.pi/agent`). To use another one (for example, a personal `~/.pi/agent-personal`), or to pass extra environment variables to the agent, terminals and MCP servers, set them in Settings → Environment. The configuration becomes active on the next start. Settings → Models also holds `pi`'s prompt-cache warming (off, only while a run is active, or also between runs); ThinkRail keeps it to active runs unless you choose otherwise, so idle chats don't spend in the background.
 

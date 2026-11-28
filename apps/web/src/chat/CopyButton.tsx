@@ -2,17 +2,27 @@ import { RiCheckLine as Check, RiFileCopyLine as Copy } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
-import { useEffect, useRef, useState } from "react";
+import {
+	type KeyboardEventHandler,
+	type MouseEventHandler,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import { copyText } from "@/lib";
 
 export function CopyButton({
 	getText,
 	label,
 	className,
+	onClick,
+	onKeyDown,
 }: {
 	getText: () => string;
 	label?: string;
 	className?: string | undefined;
+	onClick?: MouseEventHandler<HTMLButtonElement>;
+	onKeyDown?: KeyboardEventHandler<HTMLButtonElement>;
 }) {
 	const t = useT();
 	const accessibleLabel = label ?? t("chat.copyMessage");
@@ -28,7 +38,10 @@ export function CopyButton({
 			data-hint-reveal
 			data-copied={copied || undefined}
 			label={accessibleLabel}
-			onClick={() => {
+			onKeyDown={onKeyDown}
+			onClick={(event) => {
+				onClick?.(event);
+				if (event.defaultPrevented) return;
 				void (async () => {
 					if (!(await copyText(getText()))) return;
 					setCopied(true);
