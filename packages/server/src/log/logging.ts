@@ -54,14 +54,17 @@ export function resolveLogLevel(
 	return { level: "info", invalidEnv: true };
 }
 
-export function describeError(error: unknown): string {
+export function describeError(
+	error: unknown,
+	replacer?: (key: string, value: unknown) => unknown,
+): string {
 	try {
 		if (error instanceof Error) {
 			const { stack } = error;
 			return typeof stack === "string" && stack ? stack : `${error.name}: ${error.message}`;
 		}
 		if (typeof error === "string") return `Non-Error thrown: ${error}`;
-		return `Non-Error thrown: ${JSON.stringify(error) ?? String(error)}`;
+		return `Non-Error thrown: ${JSON.stringify(error, replacer) ?? String(error)}`;
 	} catch {}
 	try {
 		return `Unrenderable throw: ${String(error)}`;
