@@ -20,6 +20,7 @@ import { createSingleFlight } from "./singleFlight";
 type BranchStatusRequestParams = { workspaceId: string; allowCached?: true; skipFetch?: true };
 
 export const CI_POLL_INTERVAL_MS = 20_000;
+export const FOCUS_FETCH_COOLDOWN_MS = 5 * 60_000;
 type BranchStatusRequest = (params: BranchStatusRequestParams) => Promise<BranchAnswer>;
 
 export interface BranchStatusHookState {
@@ -62,6 +63,8 @@ export function startBranchStatusSync(options: {
 	state: BranchStatusStateStore;
 	focusTarget: EventTarget;
 	connected: boolean;
+	focusFetchCooldownMs?: number;
+	now?: () => number;
 }): {
 	setConnected: (connected: boolean) => void;
 	refresh: () => void;
@@ -81,7 +84,20 @@ export function startBranchStatusSync(options: {
 			request: options.request,
 			state: options.state,
 		});
-	const loadFresh = (skipFetch = false) => void load(false, skipFetch);
+	let lastFetchAt = Number.NEGATIVE_INFINITY;
+	const clock = options.now ?? Date.now;
+	const cooldownMs = options.focusFetchCooldownMs ?? 0;
+	const loadFresh = (skipFetch = false) => {
+		if (!skipFetch) lastFetchAt = clock();
+		void load(false, skipFetch);
+	};
+	const onFocus = () => {
+		if (!connected) {
+			freshOnReconnect = true;
+			return;
+		}
+		loadFresh(clock() - lastFetchAt < cooldownMs);
+	};
 	const reload = () => {
 		if (connected) cachedReads.run(() => (connected ? load(true) : undefined));
 	};
@@ -102,11 +118,11 @@ export function startBranchStatusSync(options: {
 	};
 	const stop = () => {
 		cachedReads.stop();
-		options.focusTarget.removeEventListener("focus", refresh);
+		options.focusTarget.removeEventListener("focus", onFocus);
 	};
 
 	reload();
-	options.focusTarget.addEventListener("focus", refresh);
+	options.focusTarget.addEventListener("focus", onFocus);
 	return { setConnected, refresh, reload, poll, stop };
 }
 
@@ -181,6 +197,7 @@ export function useBranchStatus(
 			request: transportRequest,
 			state: branchStatusState,
 			focusTarget: window,
+			focusFetchCooldownMs: FOCUS_FETCH_COOLDOWN_MS,
 			connected: connectedRef.current,
 		});
 		sync.current = controller;
