@@ -5,14 +5,23 @@ import {
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
+import { cn } from "@thinkrail/ui/utils";
 import type * as React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 5;
 
 function clamp(scale: number): number {
 	return Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
+}
+
+function clampInlinePan(viewport: HTMLDivElement, left: number, top: number): void {
+	const drawing = viewport.firstElementChild;
+	if (!drawing) return;
+	const bounds = drawing.getBoundingClientRect();
+	viewport.scrollLeft = Math.max(0, Math.min(left, bounds.width - viewport.clientWidth));
+	viewport.scrollTop = Math.max(0, Math.min(top, bounds.height - viewport.clientHeight));
 }
 
 export function installPanZoomGestures(
@@ -47,7 +56,15 @@ export function installPanZoomGestures(
 	};
 }
 
-export function PanZoomView({ svg }: { svg: string }) {
+export function PanZoomView({
+	svg,
+	inline = false,
+	actions,
+}: {
+	svg: string;
+	inline?: boolean;
+	actions?: React.ReactNode;
+}) {
 	const t = useT();
 	const [scale, setScale] = useState(1);
 	const scaleRef = useRef(1);
@@ -58,6 +75,20 @@ export function PanZoomView({ svg }: { svg: string }) {
 		scaleRef.current = bounded;
 		setScale(bounded);
 	}, []);
+
+	useLayoutEffect(() => {
+		const el = scrollRef.current;
+		if (inline && el) clampInlinePan(el, el.scrollLeft, el.scrollTop);
+	}, [inline, scale, svg]);
+
+	useEffect(() => {
+		const el = scrollRef.current;
+		if (!inline || !el) return;
+		const observer = new ResizeObserver(() => clampInlinePan(el, el.scrollLeft, el.scrollTop));
+		observer.observe(el);
+		if (el.firstElementChild) observer.observe(el.firstElementChild);
+		return () => observer.disconnect();
+	}, [inline, svg]);
 
 	useEffect(() => {
 		const el = scrollRef.current;
@@ -79,7 +110,8 @@ export function PanZoomView({ svg }: { svg: string }) {
 	}, [setZoom]);
 
 	const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-		if (e.pointerType !== "mouse") return;
+		if (e.pointerType !== "mouse" || e.button !== 0) return;
+		if (e.target instanceof Element && e.target.closest("a")) return;
 		const el = scrollRef.current;
 		if (!el) return;
 		drag.current = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop };
@@ -89,8 +121,13 @@ export function PanZoomView({ svg }: { svg: string }) {
 		const el = scrollRef.current;
 		const start = drag.current;
 		if (!el || !start) return;
-		el.scrollLeft = start.left - (e.clientX - start.x);
-		el.scrollTop = start.top - (e.clientY - start.y);
+		const left = start.left - (e.clientX - start.x);
+		const top = start.top - (e.clientY - start.y);
+		if (inline) clampInlinePan(el, left, top);
+		else {
+			el.scrollLeft = left;
+			el.scrollTop = top;
+		}
 	};
 	const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
 		const el = scrollRef.current;
@@ -107,19 +144,30 @@ export function PanZoomView({ svg }: { svg: string }) {
 	};
 
 	return (
-		<div className="relative min-h-0 flex-1">
+		<div className={cn("relative", inline ? "max-w-full" : "min-h-0 flex-1")}>
 			<div
 				ref={scrollRef}
-				data-testid="mermaid-fullscreen-svg"
-				className="h-full w-full cursor-grab select-none overflow-auto active:cursor-grabbing [&_svg]:!h-auto [&_svg]:!w-[var(--zoom)] [&_svg]:!max-w-none"
-				style={{ "--zoom": `${scale * 100}%` } as React.CSSProperties}
+				data-testid={inline ? "mermaid-svg" : "mermaid-fullscreen-svg"}
+				className={cn(
+					"cursor-grab select-none active:cursor-grabbing",
+					inline
+						? "max-h-[min(60vh,480px)] overflow-hidden [&>svg]:block [&>svg]:h-auto [&>svg]:max-w-full [&>svg]:origin-top-left [&>svg]:scale-[var(--zoom)]"
+						: "h-full w-full overflow-auto [&>svg]:!h-auto [&>svg]:!w-[var(--zoom)] [&>svg]:!max-w-none",
+				)}
+				style={{ "--zoom": inline ? scale : `${scale * 100}%` } as React.CSSProperties}
 				onPointerDown={onPointerDown}
 				onPointerMove={onPointerMove}
 				onPointerUp={endDrag}
 				onPointerCancel={endDrag}
+				onLostPointerCapture={endDrag}
 				dangerouslySetInnerHTML={{ __html: svg }}
 			/>
-			<div className="absolute right-8 bottom-8 flex items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg p-4 tr-text-metadata shadow-[var(--shadow-lg)]">
+			<div
+				className={cn(
+					"flex items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg p-4 tr-text-metadata shadow-[var(--shadow-lg)]",
+					inline ? "mt-4 ml-auto w-fit max-w-full flex-wrap" : "absolute right-8 bottom-8",
+				)}
+			>
 				<IconButton
 					icon={Minus}
 					label={t("visualize.panZoom.zoomOut")}
@@ -144,6 +192,7 @@ export function PanZoomView({ svg }: { svg: string }) {
 					data-testid="mermaid-zoom-reset"
 					onClick={reset}
 				/>
+				{actions}
 			</div>
 		</div>
 	);

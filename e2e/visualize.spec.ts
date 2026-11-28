@@ -132,6 +132,13 @@ test("completed visualize diagrams expand by default and support fullscreen zoom
 	await expect(diagram.getByTestId("mermaid-svg").locator("svg")).toBeVisible({
 		timeout: 20_000,
 	});
+	const inlineViewport = diagram.getByTestId("mermaid-svg");
+	const inlineHeight = (await inlineViewport.boundingBox())?.height ?? 0;
+	expect(inlineHeight).toBeGreaterThan(0);
+	await clickTranscriptControl(diagram.getByTestId("mermaid-zoom-in"));
+	await expect(diagram.getByTestId("mermaid-zoom-level")).toHaveText("125%");
+	expect((await inlineViewport.boundingBox())?.height).toBeCloseTo(inlineHeight, 0);
+	await clickTranscriptControl(diagram.getByTestId("mermaid-zoom-reset"));
 	await clickTranscriptControl(diagram.getByTestId("mermaid-fullscreen"));
 	const dialog = page.getByTestId("mermaid-fullscreen-dialog");
 	await expect(dialog).toBeVisible();

@@ -147,8 +147,8 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   anchor activation cannot escape into the SPA fallback. That override keeps a stable component identity
   while its workspace inputs are unchanged: workbench focus can rerender a chat row between pointer-down and
   click, and replacing the control in that interval cancels activation. A fenced
-  ```mermaid block renders as a themed diagram via `@thinkrail/ext-visualize/web`'s `MermaidView` (fullscreen
-  pan-zoom, error → source fallback) — uniform across every `Markdown` surface (chat, file/specs
+  ```mermaid block renders as a themed diagram via `@thinkrail/ext-visualize/web`'s `MermaidView` (bounded
+  inline pan-zoom, fullscreen, error → source fallback) — uniform across every `Markdown` surface (chat, file/specs
   preview); until mounted it renders as highlighted source, so static contexts (`RenderedDiff`'s
   `renderToStaticMarkup`) degrade to code exactly like highlighted blocks do.
   Assistant text renders per top-level block (`BlockMarkdown`): `markdownBlocks` splits it with the `marked`

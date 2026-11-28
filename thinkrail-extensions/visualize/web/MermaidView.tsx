@@ -75,20 +75,20 @@ export function MermaidView({
 		);
 	}
 	return (
-		<div className="relative">
-			<div
-				data-testid="mermaid-svg"
-				className="overflow-auto [&_svg]:h-auto [&_svg]:max-w-full"
-				dangerouslySetInnerHTML={{ __html: svg }}
-			/>
-			<IconButton
-				icon={Maximize2}
-				label={t("visualize.mermaid.fullScreenLabel")}
-				tooltip={t("visualize.mermaid.fullScreen")}
-				variant="outline"
-				data-testid="mermaid-fullscreen"
-				onClick={() => setOpen(true)}
-				className="absolute top-4 right-4"
+		<div>
+			<PanZoomView
+				svg={svg}
+				inline
+				actions={
+					<IconButton
+						icon={Maximize2}
+						label={t("visualize.mermaid.fullScreenLabel")}
+						tooltip={t("visualize.mermaid.fullScreen")}
+						variant="outline"
+						data-testid="mermaid-fullscreen"
+						onClick={() => setOpen(true)}
+					/>
+				}
 			/>
 			<Dialog open={open} onOpenChange={setOpen}>
 				<DialogContent
