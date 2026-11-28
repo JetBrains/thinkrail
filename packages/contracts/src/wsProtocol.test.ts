@@ -112,6 +112,7 @@ import {
 	WORKSPACE_PATH_RESOLVE_PROTOCOL_VERSION,
 	WORKSPACE_READ_STATE_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
+	WORKTREE_DIRECTORY_PROTOCOL_VERSION,
 	WS_CHANNELS,
 	WS_METHODS,
 	type WsErrorCode,
@@ -120,6 +121,11 @@ import {
 test("retired workspace activity keeps only its empty snapshot compatibility method", () => {
 	expect(WS_METHODS.sessionActivityList).toBe("session.activityList");
 	expect(Object.hasOwn(WS_CHANNELS, "sessionActivity")).toBe(false);
+});
+
+test("worktree directory settings advance the protocol", () => {
+	expect(WORKTREE_DIRECTORY_PROTOCOL_VERSION).toBe(138);
+	expect(PROTOCOL_VERSION).toBe(138);
 });
 
 test("system theme settings advance the protocol", () => {
@@ -434,7 +440,7 @@ test("the projects folder and open_project are pinned to v136", () => {
 });
 
 test("the automatic review fix-rounds setting is pinned to v137", () => {
-	expect(PROTOCOL_VERSION).toBe(137);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(REVIEW_FIX_ROUNDS_SETTING_PROTOCOL_VERSION);
 	expect(REVIEW_FIX_ROUNDS_SETTING_PROTOCOL_VERSION).toBe(137);
 });
 

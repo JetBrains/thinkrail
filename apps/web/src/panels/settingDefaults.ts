@@ -11,6 +11,7 @@ export const CLEARABLE_CONFIG_KEYS = [
 	"defaultEffort",
 	"reviewModel",
 	"reviewEffort",
+	"worktreeDirectory",
 ] as const;
 
 type ClearableConfigKey = (typeof CLEARABLE_CONFIG_KEYS)[number];

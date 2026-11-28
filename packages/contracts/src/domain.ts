@@ -1671,6 +1671,8 @@ export interface AppConfig extends ThemePreference {
 	terminalWindowsShell: TerminalWindowsShell;
 	/** Idle days after which a quiet workspace settles onto its project's shelf; `null` = never. */
 	settleIdleDays: number | null;
+	/** Absolute root for newly created managed worktrees; unset keeps the data-dir default. */
+	worktreeDirectory?: string;
 	/** Host folder new projects and clones go into by default; `~` is the host user's home. */
 	projectsFolder: string;
 	/** The first agent clone told the user about the projects folder; host-maintained, never client-written. */
@@ -1814,10 +1816,12 @@ export type AppConfigUpdate = Partial<
 		| "reviewModel"
 		| "reviewEffort"
 		| "recentModels"
+		| "worktreeDirectory"
 		| "pullRequestFilters"
 		| "projectsFolderNoticeShown"
 	>
 > & {
+	worktreeDirectory?: string | null;
 	/** Merged per project; `null` forgets a project's filter. */
 	pullRequestFilters?: Record<string, PullRequestFilter | null>;
 	defaultModel?: WireModel | null;

@@ -203,6 +203,7 @@ import {
 	setWorkspaceCreationHandoff,
 	setWorkspaceCreationPublisher,
 	setWorkspacePublisher,
+	setWorktreeDirectoryResolver,
 	stopWorkspaceCreations,
 	syncWorkspaceBranch,
 	type WorkspaceLifecycleEvent,
@@ -976,6 +977,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			throw new Error("This folder belongs to a workspace ThinkRail is still creating");
 	});
 	setWorkspaceCreationHandoff(workspaceCreationHandoff);
+	setWorktreeDirectoryResolver(() => getConfig().worktreeDirectory);
 	void replayPendingHandoffs().catch((err) => log.warn("replaying workspace handoffs failed", err));
 	setWorkspaceCreationPublisher((event) => {
 		const channel =
@@ -1380,6 +1382,7 @@ function restoreSeamDefaults(): void {
 	setWorkspacePublisher(null);
 	setWorkspaceCreationPublisher(null);
 	setWorkspaceCreationHandoff(null);
+	setWorktreeDirectoryResolver(null);
 	setProjectPathGuard(null);
 	setPiPackagesPublisher(null);
 	setSpeechPublisher(null);

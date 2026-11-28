@@ -2,9 +2,11 @@ import {
 	isProjectsFolder,
 	PROJECTS_FOLDER_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
+	WORKTREE_DIRECTORY_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import { useId, useState } from "react";
 import {
@@ -17,6 +19,7 @@ import {
 	useSettingsDraft,
 } from "@/settingsKit";
 import { useAppStore } from "@/store";
+import { getTransport } from "@/transport";
 import { saveSettings } from "./saveSettings";
 import { useConfigReset } from "./settingDefaults";
 import { SETTING, settingProps } from "./settingsCatalog";
@@ -70,18 +73,39 @@ export interface ProjectsFolderField {
 	onCommit: (next: string) => Promise<boolean>;
 }
 
+export interface WorktreeDirectoryField {
+	value: string;
+	reset: SettingsReset;
+	onCommit: (next: string | null) => Promise<boolean>;
+	onPick: () => Promise<string | null>;
+}
+
+function isAbsolutePath(value: string): boolean {
+	const path = value.trim();
+	return (
+		path === "" || path.startsWith("/") || path.startsWith("\\\\") || /^[A-Za-z]:[\\/]/.test(path)
+	);
+}
+
 export function WorkspacesSettings() {
 	const t = useT();
 	const settleIdleDays = useAppStore((s) => s.settleIdleDays);
 	const projectsFolder = useAppStore((s) => s.projectsFolder);
+	const worktreeDirectory = useAppStore((s) => s.worktreeDirectory);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const reset = useConfigReset("settleIdleDays", "settings.workspaces.changeFailed");
 	const folderReset = useConfigReset(
 		"projectsFolder",
 		"settings.workspaces.projectsFolder.changeFailed",
 	);
+	const directoryReset = useConfigReset(
+		"worktreeDirectory",
+		"settings.workspaces.directoryChangeFailed",
+	);
 	const folderSupported =
 		protocolVersion !== null && protocolVersion >= PROJECTS_FOLDER_PROTOCOL_VERSION;
+	const directorySupported =
+		protocolVersion !== null && protocolVersion >= WORKTREE_DIRECTORY_PROTOCOL_VERSION;
 
 	const select = (choice: IdleChoice) => {
 		const next = choice === "never" ? null : Number(choice);
@@ -105,6 +129,23 @@ export function WorkspacesSettings() {
 									{ projectsFolder: next },
 									t("settings.workspaces.projectsFolder.changeFailed"),
 								),
+						}
+					: null
+			}
+			worktreeDirectory={
+				directorySupported
+					? {
+							value: worktreeDirectory ?? "",
+							reset: directoryReset,
+							onCommit: (next) =>
+								saveSettings(
+									{ worktreeDirectory: next },
+									t("settings.workspaces.directoryChangeFailed"),
+								),
+							onPick: () =>
+								getTransport()
+									.request("dialog.selectDirectory", {})
+									.then(({ path }) => path),
 						}
 					: null
 			}
@@ -149,18 +190,71 @@ function ProjectsFolderRow({ value, reset, onCommit }: ProjectsFolderField) {
 	);
 }
 
+function WorktreeDirectoryRow({ value, reset, onCommit, onPick }: WorktreeDirectoryField) {
+	const t = useT();
+	const errorId = useId();
+	const { invalid, submit, inputProps } = useSettingsDraft({
+		saved: value,
+		isValid: isAbsolutePath,
+		normalize: (draft) => draft.trim(),
+		commit: (draft) => onCommit(draft.trim() || null),
+	});
+	return (
+		<SettingsRow
+			{...settingProps(t, SETTING.worktreeDirectory)}
+			reset={reset}
+			control={
+				<span className="flex flex-col items-end gap-2">
+					<span className="flex items-center gap-4">
+						<input
+							type="text"
+							spellCheck={false}
+							autoComplete="off"
+							{...inputProps}
+							aria-label={t(SETTING.worktreeDirectory.label)}
+							aria-describedby={invalid ? errorId : undefined}
+							data-testid="settings-worktree-directory"
+							placeholder={t("settings.workspaces.directoryDefault")}
+							className={cn(SETTINGS_INPUT, "w-240 tr-code-text")}
+						/>
+						<Button
+							variant="outline"
+							size="s"
+							data-testid="settings-worktree-directory-browse"
+							onClick={() =>
+								void onPick().then((path) => {
+									if (path) submit(path);
+								})
+							}
+						>
+							{t("settings.workspaces.directoryBrowse")}
+						</Button>
+					</span>
+					{invalid ? (
+						<span id={errorId} className="text-feedback-error tr-text-metadata">
+							{t("settings.workspaces.directoryInvalid")}
+						</span>
+					) : null}
+				</span>
+			}
+		/>
+	);
+}
+
 export function WorkspacesSettingsView({
 	settleIdleDays,
 	supported,
 	reset,
 	onSelect,
 	projectsFolder,
+	worktreeDirectory,
 }: {
 	settleIdleDays: number | null;
 	supported: boolean;
 	reset: SettingsReset;
 	onSelect: (choice: IdleChoice) => void;
 	projectsFolder: ProjectsFolderField | null;
+	worktreeDirectory: WorktreeDirectoryField | null;
 }) {
 	const t = useT();
 	const [pending, setPending] = useState<IdleChoice | null>(null);
@@ -200,6 +294,7 @@ export function WorkspacesSettingsView({
 					}
 				/>
 				{projectsFolder ? <ProjectsFolderRow {...projectsFolder} /> : null}
+				{worktreeDirectory ? <WorktreeDirectoryRow {...worktreeDirectory} /> : null}
 			</div>
 		</SettingsPage>
 	);

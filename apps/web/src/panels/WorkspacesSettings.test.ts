@@ -9,6 +9,7 @@ const view = (
 	settleIdleDays: number | null,
 	changed = false,
 	projectsFolder: { value: string; changed: boolean } | null = null,
+	worktreeDirectory: { value: string; changed: boolean } | null = null,
 ) =>
 	renderToStaticMarkup(
 		createElement(WorkspacesSettingsView, {
@@ -20,6 +21,12 @@ const view = (
 				value: projectsFolder.value,
 				reset: { changed: projectsFolder.changed, onReset: () => {} },
 				onCommit: () => Promise.resolve(true),
+			},
+			worktreeDirectory: worktreeDirectory && {
+				value: worktreeDirectory.value,
+				reset: { changed: worktreeDirectory.changed, onReset: () => {} },
+				onCommit: () => Promise.resolve(true),
+				onPick: () => Promise.resolve(null),
 			},
 		}),
 	);
@@ -74,4 +81,19 @@ test("the projects folder row shows only on a host that knows it, with its saved
 		"settings-reset-projects-folder",
 	);
 	expect(configResetPatch("projectsFolder")).toEqual({ projectsFolder: "~/thinkrail" });
+});
+
+test("the worktree directory row takes an absolute path and resets to the default", () => {
+	expect(view(7)).not.toContain('data-setting-id="worktree-directory"');
+	const markup = view(7, false, null, { value: "/worktrees", changed: true });
+	expect(markup).toContain('data-setting-id="worktree-directory"');
+	expect(markup).toContain('data-testid="settings-worktree-directory"');
+	expect(markup).toContain('value="/worktrees"');
+	expect(markup).toContain('data-testid="settings-worktree-directory-browse"');
+	expect(markup).toContain('data-testid="settings-reset-worktree-directory"');
+	expect(view(7, false, null, { value: "", changed: false })).not.toContain(
+		"settings-reset-worktree-directory",
+	);
+	expect(isConfigDefault("worktreeDirectory", undefined)).toBe(true);
+	expect(configResetPatch("worktreeDirectory")).toEqual({ worktreeDirectory: null });
 });

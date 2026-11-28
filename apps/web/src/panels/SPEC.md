@@ -1318,11 +1318,17 @@ a project picker, the prompt hero, and the reused
   provided; `panels` neither discovers native nor host update capabilities. If a later welcome removes injected content while Updates is selected, Appearance
   is rendered and highlighted rather than leaving no active row);
   **`WorkspacesSettings`** (the **Workspaces** section, listed only at
-  `protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION`) — **Projects folder** (from
-  `PROJECTS_FOLDER_PROTOCOL_VERSION`): a host-path text field (`useSettingsDraft`, committed on Enter/blur as
-  `settings.update { projectsFolder }`, a blank or relative draft refused inline, a padded one committed trimmed so the host's echo settles it, Reset to `~/thinkrail`) naming where the
-  New project and Clone repository dialogs start and where an agent's `open_project` clones; and
-  **Settle idle workspaces after**, an
+  `protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION`) — three rows in one `SettingsPage`. **Projects
+  folder** (from `PROJECTS_FOLDER_PROTOCOL_VERSION`): a host-path text field (`useSettingsDraft`, committed on
+  Enter/blur as `settings.update { projectsFolder }`, a blank or relative draft refused inline, a padded one
+  committed trimmed so the host's echo settles it, Reset to `~/thinkrail`) naming where the New project and
+  Clone repository dialogs start and where an agent's `open_project` clones. From
+  `WORKTREE_DIRECTORY_PROTOCOL_VERSION`, **Worktree directory** (`worktree-directory`, catalog id) is a
+  hand-typed absolute root for future managed worktrees: the draft input saves on Enter or blur through
+  `settings.update { worktreeDirectory }` (a blank draft clears the override with `null`, an invalid one
+  refuses inline), **Browse…** picks a folder through `dialog.selectDirectory` and submits it, the row's
+  Reset clears back to the host default, and the draft reconciles with authoritative `settings.changed`
+  values through `useSettingsDraft`. **Settle idle workspaces after** is an
   **expensive** choice of 1 / 3 / 7 (default) / 14 days / Never (a stray arrow must not settle workspaces),
   written as `settings.update { settleIdleDays }` (`null` for Never) and converging through
   `settings.changed`, with Reset to 7; a valid host-configured non-preset value selects no option rather

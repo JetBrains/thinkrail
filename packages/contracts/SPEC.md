@@ -625,7 +625,7 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   is what lets a client tell "this host has no reviewer chat" from "this host is older" rather than inferring it;
   **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, analyticsConsentConfirmed, terminalReplayKb,
   terminalWindowsShell, composerGrowthLimit, questionPanelHeight, chatLineWidth, fileLineWidth, chatLineWidthBounded,
-  fileLineWidthBounded, voiceInputEnabled, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
+  fileLineWidthBounded, voiceInputEnabled, customLayoutPresets, worktreeDirectory?, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
   favoriteModels, recentModels, reviewAutoFix, reviewAutoFixRounds, agentReviewEnabled, subagentsEnabled, subagentMaxConcurrent,
   jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, disabledExtensions, extensionSettings, otherAgentSkills,
   onboardingDismissed, interfaceFont, codeFont, codeFontSize, codeLigatures, fontWeightOffset, keybindings,
@@ -677,7 +677,10 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   clones start in — a malformed update is refused with **`PROJECTS_FOLDER_INVALID`** — and
   **`projectsFolderNoticeShown`** (default `false`) is the host-owned marker that the first agent clone told the
   user about it: like `recentModels` it is absent from `AppConfigUpdate` (the agent's `open_project`, which
-  refuses a host folder that is not a repository with **`PROJECT_NOT_REPOSITORY`**, sets it); `agentReviewEnabled` (default `false`, on the
+  refuses a host folder that is not a repository with **`PROJECT_NOT_REPOSITORY`**, sets it);
+  **`worktreeDirectory`** (optional absolute root, cleared with `null`, on the wire from
+  **`WORKTREE_DIRECTORY_PROTOCOL_VERSION`** = v138) controls only future managed worktree creation and never
+  moves existing worktrees; `agentReviewEnabled` (default `false`, on the
   wire from `AGENT_REVIEW_SETTING_PROTOCOL_VERSION` = v68) gates the worker's in-session `request_review`
   tool and applies live to open sessions — the Review button is independent (see [[submodule-server-host-plan-review]]); `reviewAutoFixRounds`
   (whole number in **`REVIEW_AUTO_FIX_ROUNDS`** = 1–10, default 3, validated by `isReviewAutoFixRounds`; on the wire from

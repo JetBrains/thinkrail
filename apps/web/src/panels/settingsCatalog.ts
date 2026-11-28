@@ -20,6 +20,7 @@ import {
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	USER_THEMES_PROTOCOL_VERSION,
 	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
+	WORKTREE_DIRECTORY_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
@@ -585,6 +586,14 @@ export const SETTING = {
 		keywords: ["windows shell", "powershell", "cmd", "pwsh"],
 		requiresProtocolVersion: WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
 		when: (context: SettingsCatalogContext) => context.hostPlatform === "win32",
+	},
+	worktreeDirectory: {
+		id: "worktree-directory",
+		section: SettingsSection.Workspaces,
+		label: "settings.workspaces.directoryTitle",
+		description: "settings.workspaces.directoryDescription",
+		keywords: ["worktree", "directory", "folder", "path", "checkout"],
+		requiresProtocolVersion: WORKTREE_DIRECTORY_PROTOCOL_VERSION,
 	},
 	settleIdle: {
 		id: "settle-idle",

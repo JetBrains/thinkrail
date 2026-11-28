@@ -82,6 +82,16 @@ function toBranch(name: string): string {
 
 const MAX_DISPLAY_NAME = 60;
 
+let worktreeDirectoryResolver: (() => string | undefined) | null = null;
+
+export function setWorktreeDirectoryResolver(fn: (() => string | undefined) | null): void {
+	worktreeDirectoryResolver = fn;
+}
+
+export function managedWorktreeRoot(): string {
+	return worktreeDirectoryResolver?.() ?? join(dataDir(), "worktrees");
+}
+
 function toDisplayName(raw: string): string | null {
 	const name = raw.trim().replace(/\s+/g, " ").slice(0, MAX_DISPLAY_NAME).trimEnd();
 	return name.length > 0 ? name : null;
@@ -128,7 +138,7 @@ function nextAutoBranch(project: Project): string {
 }
 
 function managedWorktreePath(project: Project, branch: string): string {
-	return join(dataDir(), "worktrees", project.slug, branch);
+	return join(managedWorktreeRoot(), project.slug, branch);
 }
 
 function creationPaths(): Set<string> {
@@ -295,20 +305,31 @@ export function planManagedWorkspace(
 	};
 }
 
-export function managedPathOwned(path: string): boolean {
+export function managedPathOwned(path: string, opts: { excludeCreationId?: string } = {}): boolean {
 	const wanted = canonicalPath(path);
-	const within = (candidate: string) => {
-		const rel = relative(wanted, canonicalPath(candidate));
+	const contains = (ancestor: string, child: string) => {
+		const rel = relative(canonicalPath(ancestor), canonicalPath(child));
 		return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
 	};
 	return (
-		loadWorkspaces().some((workspace) => canonicalPath(workspace.worktreePath) === wanted) ||
-		loadProjects().some((project) => within(project.path))
+		loadWorkspaces().some(
+			(workspace) =>
+				contains(wanted, workspace.worktreePath) ||
+				(workspace.kind === undefined && contains(workspace.worktreePath, wanted)),
+		) ||
+		loadProjects().some((project) => contains(wanted, project.path)) ||
+		creationRecords().some(
+			(creation) =>
+				creation.id !== opts.excludeCreationId && contains(creation.worktreePath, wanted),
+		)
 	);
 }
 
-export function assertManagedPathFree(path: string): void {
-	if (managedPathOwned(path))
+export function assertManagedPathFree(
+	path: string,
+	opts: { excludeCreationId?: string } = {},
+): void {
+	if (managedPathOwned(path, opts))
 		throw new CodedError(
 			"WORKSPACE_PATH_TAKEN",
 			`The workspace folder is already open in ThinkRail: ${path}`,
@@ -320,7 +341,7 @@ export function registerManagedWorkspace(
 		renamed?: true;
 	},
 ): Workspace {
-	assertManagedPathFree(entry.worktreePath);
+	assertManagedPathFree(entry.worktreePath, { excludeCreationId: entry.id });
 	const all = loadWorkspaces();
 	const workspace: Workspace = {
 		id: entry.id,

@@ -152,7 +152,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never; baseRef?: string }
 	| { workspaceId?: never; projectId?: never; baseRef?: never };
 
-export const PROTOCOL_VERSION = 137;
+export const PROTOCOL_VERSION = 138;
+export const WORKTREE_DIRECTORY_PROTOCOL_VERSION = 138;
 export const REVIEW_FIX_ROUNDS_SETTING_PROTOCOL_VERSION = 137;
 export const PROJECTS_FOLDER_PROTOCOL_VERSION = 136;
 export const REF_RESOURCE_PREVIEW_PROTOCOL_VERSION = 135;

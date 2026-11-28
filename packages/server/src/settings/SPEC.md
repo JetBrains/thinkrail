@@ -10,7 +10,7 @@ depends-on: [module-contracts]
 ## Responsibility
 
 The server-synchronized app config: opaque fixed-theme selection, fixed/system mode and optional light/dark
-pair, additional-analytics preference and first-run dialog completion marker, host-owned new-chat model and
+pair, the optional absolute root for newly created managed worktrees, additional-analytics preference and first-run dialog completion marker, host-owned new-chat model and
 effort defaults, terminal replay budget and Windows shell preference, chat composer growth preset, chat/file
 visual line widths plus independent pane bounds, bounded custom layout-preset catalog, JetBrains quota
 display/cadence, the host-wide subagent default, plan-review policy, the host-registry extensions the
@@ -38,6 +38,7 @@ interval (`1–3600`, default 30), because those values govern host process cade
 
 ## Boundary
 
+- `worktreeDirectory` is an optional absolute path for the root of future managed worktrees. It is wire-gated by `WORKTREE_DIRECTORY_PROTOCOL_VERSION` (v138); missing or malformed stored values use the workspaces module's data-dir default; `null` clears the override. Changing it never moves existing worktrees.
 - `projectsFolder` — the default parent for new projects and clones (dialogs and agent `open_project`): a
   rooted host path (`isProjectsFolder`: absolute or `~`-relative — a relative value would save and then fail
   in every consumer — and absolute on this host's own platform, so `C:\code` or `~\code` is refused on

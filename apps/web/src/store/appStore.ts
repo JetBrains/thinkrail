@@ -1286,6 +1286,7 @@ interface AppState {
 	disabledSubagents: string[];
 	subagentMaxConcurrent: number;
 	settleIdleDays: number | null;
+	worktreeDirectory: string | undefined;
 	projectsFolder: string;
 	jbcentralQuotaEnabled: boolean;
 	jbcentralQuotaRefreshSeconds: number;
@@ -1756,6 +1757,8 @@ function configPatch(config: AppConfig) {
 		settleIdleDays: isSettleIdleDays(config.settleIdleDays)
 			? config.settleIdleDays
 			: DEFAULT_CONFIG.settleIdleDays,
+		worktreeDirectory:
+			typeof config.worktreeDirectory === "string" ? config.worktreeDirectory : undefined,
 		projectsFolder: isProjectsFolder(config.projectsFolder)
 			? config.projectsFolder
 			: DEFAULT_CONFIG.projectsFolder,
@@ -2791,6 +2794,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	disabledSubagents: DEFAULT_CONFIG.disabledSubagents,
 	subagentMaxConcurrent: DEFAULT_CONFIG.subagentMaxConcurrent,
 	settleIdleDays: DEFAULT_CONFIG.settleIdleDays,
+	worktreeDirectory: undefined,
 	projectsFolder: DEFAULT_CONFIG.projectsFolder,
 	jbcentralQuotaEnabled: DEFAULT_CONFIG.jbcentralQuotaEnabled,
 	jbcentralQuotaRefreshSeconds: DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,

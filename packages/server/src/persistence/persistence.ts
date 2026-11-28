@@ -597,6 +597,7 @@ export type CreationOrigin = "agent";
 
 export type WorkspaceCreationRecord = Omit<WorkspaceCreation, "kickoff"> & {
 	worktreePath: string;
+	managedRoot: string;
 	renamed?: true;
 	baseOid?: string;
 	kickoff?: WorkspaceKickoff;
@@ -608,6 +609,9 @@ export function loadWorkspaceCreations(): WorkspaceCreationRecord[] {
 		(creation) => ({
 			...creation,
 			worktreePath: storedDirectory(creation.worktreePath),
+			managedRoot: isAbsolutePath(creation.managedRoot)
+				? creation.managedRoot
+				: join(dataDir(), "worktrees"),
 		}),
 	);
 }
@@ -707,6 +711,7 @@ export function loadConfig(): AppConfig {
 	delete extensions.layout;
 	delete extensions.themeMode;
 	delete extensions.systemThemePair;
+	delete extensions.worktreeDirectory;
 	return {
 		...extensions,
 		...normalizeThemePreference(value),
@@ -779,6 +784,9 @@ export function loadConfig(): AppConfig {
 		settleIdleDays: isSettleIdleDays(value.settleIdleDays)
 			? value.settleIdleDays
 			: DEFAULT_CONFIG.settleIdleDays,
+		...(isAbsolutePath(value.worktreeDirectory)
+			? { worktreeDirectory: value.worktreeDirectory }
+			: {}),
 		projectsFolder: isProjectsFolder(value.projectsFolder)
 			? value.projectsFolder.trim()
 			: DEFAULT_CONFIG.projectsFolder,

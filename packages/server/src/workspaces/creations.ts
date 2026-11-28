@@ -28,10 +28,11 @@ import { logger } from "../log";
 import {
 	type CreationOrigin,
 	dataDir,
+	landsInChatsRoot,
 	loadWorkspaces,
 	type WorkspaceCreationRecord,
 } from "../persistence";
-import { getProjects } from "../projects";
+import { assertOutsideChatsRoot, getProjects } from "../projects";
 import {
 	addCreation,
 	creationRecords,
@@ -98,8 +99,9 @@ function projectOf(record: WorkspaceCreationRecord): Project {
 	return project;
 }
 
-function isManagedPath(path: string): boolean {
-	const rel = relative(join(dataDir(), "worktrees"), resolve(path));
+function isManagedPath(path: string, root: string): boolean {
+	if (landsInChatsRoot(path)) return false;
+	const rel = relative(resolve(root), resolve(path));
 	return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
 }
 
@@ -225,7 +227,7 @@ async function cleanupCreation(
 ): Promise<CleanupResult> {
 	const untouched = { clean: true, removed: false };
 	const taken = () => {
-		if (!managedPathOwned(record.worktreePath)) return false;
+		if (!managedPathOwned(record.worktreePath, { excludeCreationId: record.id })) return false;
 		log.warn(`left ${record.worktreePath} alone: ThinkRail has it open now`);
 		return true;
 	};
@@ -247,7 +249,7 @@ async function cleanupCreation(
 		entries = await gitWorktreeEntries(projectPath);
 	}
 	if (taken()) return { clean: true, removed };
-	if (existsSync(record.worktreePath) && isManagedPath(record.worktreePath)) {
+	if (existsSync(record.worktreePath) && isManagedPath(record.worktreePath, record.managedRoot)) {
 		await rm(record.worktreePath, { recursive: true, force: true });
 		removed = true;
 	}
@@ -264,7 +266,8 @@ function branchStillExists(projectPath: string, ref: string): boolean {
 async function prepare(id: string, project: Project, signal: AbortSignal): Promise<void> {
 	let record = findCreation(id);
 	if (!record) throw new CreationAborted();
-	assertManagedPathFree(record.worktreePath);
+	assertOutsideChatsRoot(record.worktreePath, "used for a managed workspace");
+	assertManagedPathFree(record.worktreePath, { excludeCreationId: record.id });
 	if (record.baseOid && !(await cleanupCreation(project.path, record)).clean)
 		fail("WORKTREE_ADD_FAILED", `Could not clear the earlier attempt at ${record.worktreePath}`);
 	if (record.baseOid)
@@ -354,7 +357,7 @@ function checkoutConfig(projectPath: string): string[] {
 async function checkOut(id: string, projectPath: string, signal: AbortSignal): Promise<void> {
 	const record = findCreation(id);
 	if (!record?.baseOid) throw new CreationAborted();
-	assertManagedPathFree(record.worktreePath);
+	assertManagedPathFree(record.worktreePath, { excludeCreationId: record.id });
 	const progress = progressFeed(id);
 	const checkout = await gitAsync(
 		record.worktreePath,
@@ -516,6 +519,7 @@ export function startWorkspaceCreation(
 		name: plan.name,
 		branch: plan.branch,
 		worktreePath: plan.worktreePath,
+		managedRoot: dirname(dirname(plan.worktreePath)),
 		baseBranch: plan.baseBranch,
 		state: "running",
 		phase: "preparing",
