@@ -210,8 +210,24 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   the move is owed to that chat only, and
   the call returns `branchKept`: `"detached"` when `HEAD` is detached or unreadable (mid-rebase `-m` would
   corrupt the rebase's head-name), `"not-own"` when the worktree has a branch checked out outside ThinkRail.
+  An own branch with a configured upstream is kept as `"published"`, including when a narrow fetch
+  refspec or pruning leaves no tracking ref: the branch's `remote` and `merge` config still protect it.
+  Otherwise an exact same-name remote-tracking ref on a configured remote counts only when its tip is
+  the current branch tip or an ancestor of it. A fetched teammate branch or old squash branch with commits
+  outside that history does not prevent naming. This is conservative local evidence, not proof of who
+  pushed: a same-name ref at the shared base also counts, preserving a branch pushed before any own
+  commit. The same rule keeps a reused name when an old same-name remote branch was merged with a
+  merge commit and its tip remains in the new branch's history; if that remote branch has not been
+  deleted, the next push continues it. A branch pushed without an upstream and later rewritten or
+  advanced remotely cannot be identified reliably. No fetch or remote probe runs; the ancestry read
+  disables lazy fetching, and an unsupported or failed read is unverified. Remote names containing `/` are supported; a remote branch
+  with a different path but the same basename does not count. A failed metadata read
+  keeps the branch as `"unverified"` while still setting the display name. Publication is final for naming:
+  it clears `branchNamePending` instead of leaving an automatic move owed after a later unpublish/prune.
+  An unverified read remains retryable by the same chat, like a detached or adopted branch.
   `renamed` locks only the display name: once `HEAD` is back on the own branch, a later call from the same
-  chat with `opts.branch` moves it. Every call that does not keep a branch clears `branchNamePending`, so a
+  chat with `opts.branch` moves it if its publication state is readable and it is still unpublished.
+  Every call that does not temporarily keep a branch clears `branchNamePending`, so a
   manual rename cancels the owed move; a later chat never inherits it (its task would give a different slug,
   and the branch may already back a PR). `branchNamePending` is the one persisted naming field besides
   `renamed`. Returns `{ workspace, branchKept? }`. The branch-moving path

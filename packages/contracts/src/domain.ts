@@ -152,7 +152,7 @@ export interface Workspace {
 	baseBranch: string;
 	diffBase?: string;
 	renamed?: boolean;
-	/** Session id of the chat whose `set_title` named the workspace but kept its branch; only that chat may still move it. */
+	/** Session id of the chat whose `set_title` temporarily kept its branch; published branches never owe a move. */
 	branchNamePending?: string;
 	initialTerminalPending?: true;
 	diffStats?: DiffStats;

@@ -19,6 +19,9 @@ const RETRY_BRANCH_MOVE =
 const KEPT_BRANCH_REASON = {
 	detached: ` unchanged: HEAD is detached or unreadable. ${RETRY_BRANCH_MOVE}`,
 	"not-own": ` unchanged: it was checked out in this worktree outside ThinkRail. ${RETRY_BRANCH_MOVE}`,
+	published: " unchanged: it has an upstream or is already published. Naming is complete",
+	unverified:
+		" unchanged: its publication state could not be read. Check the repository's Git state, then retry set_title with workspace_name and branch",
 } satisfies Record<NonNullable<ReturnType<typeof renameWorkspace>["branchKept"]>, string>;
 
 export interface AgentTitleDeps {

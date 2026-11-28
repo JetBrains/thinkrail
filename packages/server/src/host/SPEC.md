@@ -631,9 +631,11 @@ nudges `fsChanged`. Nothing cleans the folder: sent messages keep naming its fil
     subagent child — gets an error result.
   - `chat_title` → `renameSession(…, { onlyIfUnnamed: true })`. `workspace_name` → only when the workspace
     is managed (not `default`/`external`) and not `renamed`, via `renameWorkspace(id, name, { branch })`
-    (locks the name; moves the branch only while the workspace is on its own branch, never an adopted one or a
-    detached `HEAD`; when the branch is kept the name is still set and the result text says which branch
-    was kept, why, and that a later call can still move it — see [[submodule-server-workspaces]]). A `renamed` record whose `branchNamePending`
+    (locks the name; moves the branch only while the workspace is on its own unpublished branch, never an
+    adopted one or a detached `HEAD`; when the branch is kept the name is still set and the result text
+    says which branch was kept and why — see [[submodule-server-workspaces]]). Published branches finish
+    naming without a retry instruction or an owed move; temporarily kept branches can still move on a
+    later call after their Git state permits it. A `renamed` record whose `branchNamePending`
     is this chat's session id accepts one more call with a `branch` (`branchMoveOwed`): the name stays, only
     the branch moves. Other chats get "already named". There is no branch-shape gate, so records an older host's
     provisional pass left unlocked are still nameable.

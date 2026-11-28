@@ -195,6 +195,65 @@ test("a kept branch moves on a later call from the same chat once HEAD is back o
 	);
 });
 
+test("naming a published branch finishes without offering or retaining an automatic move", async () => {
+	const ws = await createWorkspace("p1");
+	const remoteRepo = join(dataDir, "published.git");
+	git(repo, "init", "--bare", remoteRepo);
+	git(repo, "remote", "add", "origin", remoteRepo);
+	git(ws.worktreePath, "push", "--set-upstream", "origin", ws.branch);
+	const chat = fakeChat(ws.id);
+
+	const text = await applyAgentTitle(
+		"s1",
+		{ chat_title: "First task", workspace_name: "First task", branch: "first-task" },
+		chat.deps,
+	);
+
+	expect(getWorkspace(ws.id)).toMatchObject({
+		name: "First task",
+		branch: ws.branch,
+		renamed: true,
+	});
+	expect(text).toContain('Chat title set to "First task".');
+	expect(text).toContain(
+		`Workspace renamed to "First task" (branch ${ws.branch} unchanged: it has an upstream or is already published. Naming is complete).`,
+	);
+	expect(getWorkspace(ws.id).branchNamePending).toBeUndefined();
+	git(ws.worktreePath, "branch", "--unset-upstream");
+	git(repo, "update-ref", "-d", `refs/remotes/origin/${ws.branch}`);
+
+	expect(await applyAgentTitle("s1", { workspace_name: "Later", branch: "later" }, chat.deps)).toBe(
+		"Workspace name kept: this workspace is already named.",
+	);
+	expect(getWorkspace(ws.id).branch).toBe(ws.branch);
+});
+
+test("a deferred naming move stops if the own branch was published before retry", async () => {
+	const ws = await createWorkspace("p1");
+	const chat = fakeChat(ws.id);
+	git(ws.worktreePath, "switch", "-c", "peek");
+	await applyAgentTitle("s1", { workspace_name: "First", branch: "first" }, chat.deps);
+	expect(getWorkspace(ws.id).branchNamePending).toBe("s1");
+	git(ws.worktreePath, "switch", ws.branch);
+	const remoteRepo = join(dataDir, "published.git");
+	git(repo, "init", "--bare", remoteRepo);
+	git(repo, "remote", "add", "origin", remoteRepo);
+	git(ws.worktreePath, "push", "--set-upstream", "origin", ws.branch);
+
+	const text = await applyAgentTitle(
+		"s1",
+		{ workspace_name: "Second", branch: "second" },
+		chat.deps,
+	);
+
+	expect(getWorkspace(ws.id)).toMatchObject({ name: "First", branch: ws.branch, renamed: true });
+	expect(text).toContain('Workspace name kept as "First"');
+	expect(text).toContain(
+		`branch ${ws.branch} unchanged: it has an upstream or is already published`,
+	);
+	expect(getWorkspace(ws.id).branchNamePending).toBeUndefined();
+});
+
 test("a kept branch never moves for another chat or after a manual rename", async () => {
 	const ws = await createWorkspace("p1");
 	git(ws.worktreePath, "switch", "-c", "peek");

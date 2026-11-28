@@ -23,6 +23,7 @@ import {
 	gitAsync,
 	headBranchAt,
 	headShaAt,
+	remoteTrackingRef,
 	resolveDefaultBranch,
 	resolveDiffRange,
 	SLOW_GIT_TIMEOUT_MS,
@@ -476,6 +477,55 @@ export function branchMoveOwed(
 function keptBranchReason(workspace: Workspace, live: string | null) {
 	if (live === null) return "detached" as const;
 	if (!onOwnBranch(workspace)) return "not-own" as const;
+	const localRef = `refs/heads/${workspace.branch}`;
+	const refs = git(
+		workspace.worktreePath,
+		[
+			"for-each-ref",
+			"--format=%(refname)%09%(upstream)%09%(symref)%09%(objectname)",
+			localRef,
+			"refs/remotes",
+		],
+		{ onTimeout: "return" },
+	);
+	if (!refs.ok) return "unverified" as const;
+	const rows = refs.out.split("\n").map((line) => line.split("\t"));
+	const local = rows.find(([ref]) => ref === localRef);
+	if (!local?.[3]) return "unverified" as const;
+	if (local[1]) return "published" as const;
+	const remote = git(
+		workspace.worktreePath,
+		["config", "--get", "--default", "", `branch.${workspace.branch}.remote`],
+		{ onTimeout: "return" },
+	);
+	if (!remote.ok) return "unverified" as const;
+	if (remote.out) {
+		const merge = git(
+			workspace.worktreePath,
+			["config", "--get", "--default", "", `branch.${workspace.branch}.merge`],
+			{ onTimeout: "return" },
+		);
+		if (!merge.ok) return "unverified" as const;
+		if (merge.out) return "published" as const;
+	}
+	const remotes = git(workspace.worktreePath, ["remote"], { onTimeout: "return" });
+	if (!remotes.ok) return "unverified" as const;
+	const remoteNames = remotes.out.split("\n").filter(Boolean);
+	const publishedRefs = new Set(
+		remoteNames.map((remote) => remoteTrackingRef(`${remote}/${workspace.branch}`, remoteNames)),
+	);
+	for (const [ref, _upstream, symref, oid] of rows) {
+		if (!ref || symref || !publishedRefs.has(ref)) continue;
+		if (!oid) return "unverified" as const;
+		if (oid === local[3]) return "published" as const;
+		const unseen = git(
+			workspace.worktreePath,
+			["--no-lazy-fetch", "rev-list", "--max-count=1", oid, "--not", local[3], "--"],
+			{ onTimeout: "return" },
+		);
+		if (!unseen.ok) return "unverified" as const;
+		if (!unseen.out) return "published" as const;
+	}
 	return undefined;
 }
 
@@ -528,7 +578,7 @@ export function renameWorkspace(
 	if (branchChanged) delete target.review;
 	target.branch = branch;
 	target.renamed = true;
-	if (branchKept && opts.by) target.branchNamePending = opts.by;
+	if (branchKept && branchKept !== "published" && opts.by) target.branchNamePending = opts.by;
 	else delete target.branchNamePending;
 	saveWorkspaces(all);
 	emit({ kind: "updated", workspace: target });

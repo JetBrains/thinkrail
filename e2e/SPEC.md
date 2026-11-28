@@ -889,6 +889,10 @@ and clears the data folder before each test; every test opens the panel through 
 `openInsightsPanel(page, { rows })`, which refreshes (`fresh: true`) until the index is ready and the list
 holds exactly that test's sessions, since the host's index may still list the previous test's. Its shots
 under `e2e/screenshots/session-insights*/` are review evidence only.
+Agent naming (`agent-naming.live.spec.ts`) covers the first name/branch move and the published-branch
+guard: push an unnamed workspace to a disposable local bare remote, let the real agent name it, and
+assert the tool's kept-branch verdict, persisted label, live sidebar and unchanged upstream. No external
+Git remote is contacted; the agent phase still requires the ordinary live-provider qualification.
 `environment-settings.spec.ts` drives Settings →
 Environment through rejected and accepted saves and a reload; the host was launched with
 `PI_CODING_AGENT_DIR`, so it also proves the launch value stays in use and is reported as set at launch. It
