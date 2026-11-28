@@ -834,10 +834,11 @@ re-opened transcripts provider-valid.
   - `imageGuard` — the oversized-image guard: an inline extension (`oversizedImageGuard`, one of
     `buildResourceLoader`'s shared factories and the whole delegated-child base set) hooked on pi's
     **`context` event** (fired before every LLM
-    call, live sessions included). **Anthropic-family only**: the caps are Anthropic's model-level rules,
-    so the handler gates on the context's active model (`isAnthropicFamilyModel` — native
+    call, live sessions included). The existing byte, format and dimension rules are
+    **Anthropic-family only**: the handler gates those on the context's active model
+    (`isAnthropicFamilyModel` — native
     `anthropic`/`anthropic-messages`, or a Claude model id through Bedrock/Vertex/aggregators; unknown
-    model ⇒ no-op) and every other provider's image context passes through untouched. It sniffs each image block's pixel dimensions straight from the base64
+    model ⇒ no-op). It sniffs each image block's pixel dimensions straight from the base64
     header bytes (PNG/JPEG/GIF/WebP — no codec, never strips what it can't sniff; **bounded work per
     pass**: only a 256KiB decoded prefix is ever materialized — a JPEG whose SOF lies beyond it sniffs as
     unknown, not stripped — and each block is sniffed exactly once per pass) and replaces any block
@@ -860,8 +861,20 @@ re-opened transcripts provider-valid.
     has no image codec (the autoResize tradeoff above), so the guard transforms the **outgoing context
     only** — session file and transcript stay untouched, and a stuck chat recovers on its very next
     message. The count-aware cap also degrades a raw >2000px `read`-tool image to a note instead of a
-    brick once a session crosses 21 images. Pure core (`guardOversizedImages`, plus `imageDimensions` now
-    owned by `images`) unit-tested with hand-built header bytes.
+    brick once a session crosses 21 images.
+    After those rules, every model's declared positive integer
+    `inputLimits.images.maxPerRequest` bounds the **number of surviving image occurrences**. Missing or
+    invalid metadata falls back to a conservative 100-image budget only for Anthropic-family models;
+    other models without a declared count pass through. An explicit larger limit is honored, so a
+    model declaring 600 images keeps that capacity. Older excess images become short text notes;
+    the latest images, all existing text, message ordering and metadata remain intact. Count positions,
+    not object identities: the same image object can occur in both old and recent messages. This runs
+    on every request, including retries, without mutating the session or its append-only transcript.
+    A custom endpoint can declare a lower count in its model's `models.json` `inputLimits` (or a
+    `modelOverrides` entry); an endpoint whose actual cap is lower than its declared cap must correct
+    that metadata. The fallback is a host protection budget, not a claim that every Anthropic endpoint
+    has the same provider limit. Pure rules are unit-tested; an in-process pi session probe verifies
+    repeated outgoing contexts are bounded while the stored transcript retains every image.
   - `skillCatalog` — the skill-listing budget (#1210): an inline extension in `buildResourceLoader`'s
     shared factories and the opt-in `childExtensionFactories` — never the tool-free base set, since it
     registers `skill_search` (pi-delegation decision #25), so a child gets it only with `extensions: true`

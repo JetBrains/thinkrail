@@ -21,12 +21,12 @@ const REMOVAL_HINT = "ask the user to re-attach a smaller version if it is still
 const mb = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 const mbLimit = (bytes: number) => `${bytes / (1024 * 1024)}MB`;
 
-export function guardOversizedImages(messages: AgentMessage[]): AgentMessage[] | undefined {
-	const blocksOf = (m: AgentMessage): ContentBlock[] | undefined => {
-		const content = (m as { content?: unknown }).content;
-		return Array.isArray(content) ? (content as ContentBlock[]) : undefined;
-	};
+const blocksOf = (m: AgentMessage): ContentBlock[] | undefined => {
+	const content = (m as { content?: unknown }).content;
+	return Array.isArray(content) ? (content as ContentBlock[]) : undefined;
+};
 
+export function guardOversizedImages(messages: AgentMessage[]): AgentMessage[] | undefined {
 	const sniffed = new Map<ContentBlock, Dimensions | undefined>();
 	const imageBlocks: (ContentBlock & { data: string })[] = [];
 	for (const message of messages) {
@@ -112,6 +112,36 @@ export function guardOversizedImages(messages: AgentMessage[]): AgentMessage[] |
 	return guarded;
 }
 
+function guardImageCount(messages: AgentMessage[], limit: number): AgentMessage[] | undefined {
+	let kept = 0;
+	let guarded: AgentMessage[] | undefined;
+	for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex--) {
+		const message = messages[messageIndex];
+		if (!message) continue;
+		const blocks = blocksOf(message);
+		if (!blocks) continue;
+		let content: ContentBlock[] | undefined;
+		for (let blockIndex = blocks.length - 1; blockIndex >= 0; blockIndex--) {
+			const block = blocks[blockIndex];
+			if (!block || !isImageBlock(block)) continue;
+			if (kept < limit) {
+				kept++;
+				continue;
+			}
+			content ??= [...blocks];
+			content[blockIndex] = {
+				type: "text",
+				text: `[older image omitted: the outgoing context keeps the most recent ${limit} ${limit === 1 ? "image" : "images"} — re-attach it if it is still needed]`,
+			};
+		}
+		if (content) {
+			guarded ??= [...messages];
+			guarded[messageIndex] = Object.assign({}, message, { content });
+		}
+	}
+	return guarded;
+}
+
 export function isAnthropicFamilyModel(
 	model: { api?: string; provider?: string; id?: string } | undefined,
 ): boolean {
@@ -122,8 +152,17 @@ export function isAnthropicFamilyModel(
 
 export function oversizedImageGuard(pi: ExtensionAPI): void {
 	pi.on("context", (event, ctx) => {
-		if (!isAnthropicFamilyModel(ctx.model)) return undefined;
-		const messages = guardOversizedImages(event.messages);
+		const anthropic = isAnthropicFamilyModel(ctx.model);
+		const declaredLimit = ctx.model?.inputLimits?.images?.maxPerRequest;
+		const countLimit =
+			typeof declaredLimit === "number" && Number.isSafeInteger(declaredLimit) && declaredLimit > 0
+				? declaredLimit
+				: anthropic
+					? 100
+					: undefined;
+		let messages = anthropic ? guardOversizedImages(event.messages) : undefined;
+		if (countLimit !== undefined)
+			messages = guardImageCount(messages ?? event.messages, countLimit) ?? messages;
 		return messages ? { messages } : undefined;
 	});
 }
