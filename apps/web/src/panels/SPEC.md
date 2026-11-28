@@ -1497,7 +1497,7 @@ a project picker, the prompt hero, and the reused
   (`review-autofix-rounds-row`, `review-autofix-rounds-input`, over `store.reviewAutoFixRounds`) is a
   1–10 number field with Reset that caps the fix-and-re-review rounds per step; it stays visible but
   disabled while `reviewAutoFix` is off, and is hidden below `REVIEW_FIX_ROUNDS_SETTING_PROTOCOL_VERSION`
-  (v136), whose host would reject the unknown key.
+  (v137), whose host would reject the unknown key.
 
   At v76, **`ModelContextSettings`** adds the **GPT context window** group (the pi CLI / restart note as its
   description): **All GPT models**, one cheap Default / 1M / Custom choice over the rows the contracts'

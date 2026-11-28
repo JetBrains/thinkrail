@@ -681,7 +681,7 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   wire from `AGENT_REVIEW_SETTING_PROTOCOL_VERSION` = v68) gates the worker's in-session `request_review`
   tool and applies live to open sessions — the Review button is independent (see [[submodule-server-host-plan-review]]); `reviewAutoFixRounds`
   (whole number in **`REVIEW_AUTO_FIX_ROUNDS`** = 1–10, default 3, validated by `isReviewAutoFixRounds`; on the wire from
-  **`REVIEW_FIX_ROUNDS_SETTING_PROTOCOL_VERSION`** = v136) caps how many automatic fix rounds one plan step gets while
+  **`REVIEW_FIX_ROUNDS_SETTING_PROTOCOL_VERSION`** = v137) caps how many automatic fix rounds one plan step gets while
   `reviewAutoFix` is on — a client of an older host hides the row, since that host rejects the unknown key; `disabledExtensions` (default `[]`, on the wire
   from `EXTENSION_CATALOG_PROTOCOL_VERSION` = v82) names the host-registry extensions the user switched off —
   unknown names are kept and ignored, and the host applies it to new and open sessions (see
