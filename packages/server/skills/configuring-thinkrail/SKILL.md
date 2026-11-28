@@ -64,7 +64,10 @@ CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 for d in "$CLAUDE_DIR/skills" "${CODEX_HOME:-$HOME/.codex}/skills" "$HOME/.copilot/skills" "${GEMINI_CLI_HOME:-$HOME}/.gemini/skills"; do
   [ -d "$d" ] && echo "  dir: $d"
 done
-[ -f "$CLAUDE_DIR/plugins/installed_plugins.json" ] && echo "  file: $CLAUDE_DIR/plugins/installed_plugins.json"
+if [ -f "$CLAUDE_DIR/plugins/installed_plugins.json" ]; then
+  echo "  file: $CLAUDE_DIR/plugins/installed_plugins.json"
+fi
+true
 ```
 
 Then use `read` (read-only) on whichever of these files exist:
@@ -143,11 +146,13 @@ setting:
 
 ### Workspace, editor, voice & interface
 - **Projects folder & auto-settle** → **Settings › Workspaces** (default `~/thinkrail`).
-- **External editor ("Open in")** → ThinkRail probes `PATH` for `code`, `idea`, `webstorm`,
-  `pycharm`, `goland`, `rider`, `clion`, `phpstorm`, `rubymine`, `emacs`, and `vim`. If their
-  preferred editor was not detected, explain how to install its shell command (e.g., VS Code's
-  `code` command or JetBrains Toolbox shell scripts) or add its directory to `PATH` in
-  **Settings › Environment** and restart ThinkRail.
+- **External editor ("Open in")** → ThinkRail probes your login-shell `PATH` for `code`, `idea`,
+  `webstorm`, `pycharm`, `goland`, `rider`, `clion`, `phpstorm`, `rubymine`, `emacs`, and `vim`. If
+  their preferred editor was not detected, explain how to install its shell command (e.g., VS Code's
+  `code` command or JetBrains Toolbox shell scripts) or add its bin directory to their login-shell
+  profile (`~/.zprofile` / `~/.bash_profile` / system `PATH` on Windows) and restart ThinkRail.
+  (Note: `PATH` is managed by ThinkRail from the login shell and cannot be added in **Settings ›
+  Environment**.)
 - **Voice input** → **Settings › Voice input** (one-time download of the local Nemotron model;
   trigger with the mic button or `⌘⇧Space` / `Ctrl+Shift+Space`).
 - **Look, language & shortcuts** → **Settings › Appearance** (themes), **Settings › Text & fonts**,
