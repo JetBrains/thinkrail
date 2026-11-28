@@ -17,6 +17,11 @@ ref off the workspace-create critical path.
 
 ## Boundary
 
+Untracked-file listings for `gitStatus` and `gitUncommittedPaths` exclude `.DS_Store` at every
+path depth in addition to Git's standard ignore rules. Finder metadata must not flood changed-file
+views or TODO work windows when a repository has no matching ignore rule. Tracked edits and staged
+additions remain visible; the host never rewrites the user's repository or global ignore configuration.
+
 - **Owns:** `git(cwd, args)` (spawn git *sync*, capture trimmed stdout/stderr + ok; `opts.raw` keeps
   decoded stdout untrimmed) and its module-internal `gitBytes(cwd, args, opts?)` twin (sync,
   byte-preserving, retained for `reviews`' synchronous snapshot pass). **Every sync call has a deadline**

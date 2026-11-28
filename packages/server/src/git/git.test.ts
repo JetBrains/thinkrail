@@ -151,6 +151,43 @@ test("gitDiffFile: untracked → empty original; deleted → empty modified", as
 	expect(deleted.modified).toBe("");
 });
 
+test("untracked .DS_Store files are excluded at every depth without hiding other dotfiles", async () => {
+	seedWorkspace();
+	git(repo, "config", "core.excludesFile", join(dataDir, "no-global-excludes"));
+	mkdirSync(join(repo, "nested"));
+	for (const path of [
+		".DS_Store",
+		"nested/.DS_Store",
+		".env",
+		".DS_Store.backup",
+		"nested/file.txt",
+	]) {
+		writeFileSync(join(repo, path), "new\n");
+	}
+	const expected = [".DS_Store.backup", ".env", "nested/file.txt"];
+	expect(gitUncommittedPaths("w1")).toEqual(expected);
+	for (const scope of [{ kind: "branch" }, { kind: "uncommitted" }] as const) {
+		expect((await gitStatus("w1", scope)).changes.map((change) => change.path)).toEqual(expected);
+	}
+});
+
+test("tracked .DS_Store edits and staged additions remain visible", async () => {
+	seedWorkspace();
+	writeFileSync(join(repo, ".DS_Store"), "before\n");
+	git(repo, "add", "-f", ".DS_Store");
+	git(repo, "commit", "-m", "track metadata");
+	writeFileSync(join(repo, ".DS_Store"), "after\n");
+	mkdirSync(join(repo, "nested"));
+	writeFileSync(join(repo, "nested/.DS_Store"), "staged\n");
+	git(repo, "add", "-f", "nested/.DS_Store");
+	expect(gitUncommittedPaths("w1")).toEqual([".DS_Store", "nested/.DS_Store"]);
+	const { changes } = await gitStatus("w1", { kind: "uncommitted" });
+	expect(changes).toEqual([
+		{ path: ".DS_Store", status: "modified", added: 1, removed: 1 },
+		{ path: "nested/.DS_Store", status: "added", added: 1, removed: 0 },
+	]);
+});
+
 test("git paths preserve legal leading and trailing filename whitespace", async () => {
 	seedWorkspace();
 	writeFileSync(join(repo, " tracked "), "before\n");
