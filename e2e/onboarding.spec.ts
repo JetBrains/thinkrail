@@ -436,6 +436,9 @@ test("a provider connected through Settings during the intro is verified on reac
 	await wizard.getByTestId("onboarding-start").click();
 	await expect(wizard).toHaveAttribute("data-step", "done");
 	await expect(wizard.getByTestId("welcome-connected")).toContainText("E2E Key Provider connected");
+	await expect(wizard.getByTestId("welcome-guide-links")).toBeVisible();
+	await expect(wizard.getByTestId("welcome-setup-thinkrail")).toBeVisible();
+	await expect(wizard.getByTestId("welcome-about-thinkrail")).toBeVisible();
 });
 
 test("a provider connected and signed out again through Settings during the intro is not verified", {

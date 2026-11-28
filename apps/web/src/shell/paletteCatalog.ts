@@ -35,6 +35,7 @@ import {
 	RiMailUnreadLine,
 	RiNodeTree,
 	RiPushpinLine,
+	RiQuestionLine,
 	RiResetLeftLine,
 	RiSearchEyeLine,
 	RiSettings3Line,
@@ -141,6 +142,8 @@ export interface PaletteCatalogActions {
 	readonly openIn: (workspace: Workspace, editor: EditorInfo) => void;
 	readonly openSettings: (section?: SettingsSection, settingId?: string) => void;
 	readonly openShortcuts: () => void;
+	readonly setupThinkrail: () => void;
+	readonly aboutThinkrail: () => void;
 	readonly runTabAction: (actionId: string) => void;
 }
 
@@ -494,6 +497,49 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 			run: actions.openShortcuts,
 		},
 	);
+	if (deps.canStartChat) {
+		commands.push(
+			{
+				id: "help.setupThinkrail",
+				title: t("commands.help.setupThinkrail"),
+				group: "settings",
+				icon: RiSparkling2Line,
+				keywords: [
+					"setup",
+					"configure",
+					"onboarding",
+					"wizard",
+					"health",
+					"check",
+					"help",
+					"getting started",
+					"thinkrail",
+				],
+				mutates: true,
+				run: actions.setupThinkrail,
+			},
+			{
+				id: "help.aboutThinkrail",
+				title: t("commands.help.aboutThinkrail"),
+				group: "settings",
+				icon: RiQuestionLine,
+				keywords: [
+					"about",
+					"help",
+					"guide",
+					"docs",
+					"learn",
+					"features",
+					"shortcuts",
+					"how to",
+					"what is",
+					"thinkrail",
+				],
+				mutates: true,
+				run: actions.aboutThinkrail,
+			},
+		);
+	}
 	return commands;
 }
 

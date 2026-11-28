@@ -28,12 +28,43 @@ import { ProjectTrustNotice } from "./ProjectTrustNotice";
 import { ProviderWarningBanner } from "./ProviderWarningBanner";
 import {
 	setupDialogRequest,
+	startAboutThinkrailChat,
+	startConfigureThinkrailChat,
 	startProjectSetupChat,
 	type WorkspaceDialogRequest,
 } from "./setupPrompt";
 import { useOpenProject } from "./useOpenProject";
 import { useHasProvider } from "./useProviderStatus";
 import { Card, CardSkeleton } from "./WelcomeCard";
+
+function WelcomeGuideLinks() {
+	const t = useT();
+	return (
+		<p
+			data-testid="welcome-guide-links"
+			className="flex flex-wrap items-center justify-center gap-8 text-text-muted tr-text-metadata"
+		>
+			<span>{t("panels.welcome.guidePrefix")}</span>
+			<button
+				type="button"
+				data-testid="welcome-setup-thinkrail"
+				onClick={() => void startConfigureThinkrailChat()}
+				className="cursor-pointer rounded-sm text-primary underline-offset-4 hover:underline focus-visible:focus-ring"
+			>
+				{t("panels.welcome.guideSetup")}
+			</button>
+			<span aria-hidden="true">{"·"}</span>
+			<button
+				type="button"
+				data-testid="welcome-about-thinkrail"
+				onClick={() => void startAboutThinkrailChat()}
+				className="cursor-pointer rounded-sm text-primary underline-offset-4 hover:underline focus-visible:focus-ring"
+			>
+				{t("panels.welcome.guideAbout")}
+			</button>
+		</p>
+	);
+}
 
 export function WelcomePanel() {
 	const t = useT();
@@ -171,6 +202,7 @@ export function WelcomePanel() {
 			{showWizard ? (
 				<OnboardingWizard
 					projectCards={noProjectCards()}
+					footer={canStartChat ? <WelcomeGuideLinks /> : null}
 					onConnected={dismissOnboarding}
 					onSkip={() => {
 						setWizard("hidden");
@@ -258,6 +290,11 @@ export function WelcomePanel() {
 							</>
 						)}
 					</div>
+					{noProjects && wizard !== "pending" && canStartChat ? (
+						<div className="mt-16">
+							<WelcomeGuideLinks />
+						</div>
+					) : null}
 				</>
 			)}
 
