@@ -452,11 +452,11 @@ the Welcome banner while no project is shown, the hero reads **"You're set"** ov
 otherwise** — the marketing paragraph was removed as unread; the screen is heading → banners →
 **one-to-three cards** (icon top-left,
 label + explainer bottom-left; the primary is a filled-primary card carrying the stable `welcome-cta`
-hook, others quiet `welcome-action`s). Welcome is **the mode fork**: with a project shown it always pairs
+hook, others quiet `welcome-action`s), plus — when no project is shown and `canStartProjectlessChat` is true — the quiet `WelcomeGuideLinks` help line underneath the cards. Welcome is **the mode fork**: with a project shown it always pairs
 **"Start building"** (isolated worktree) with **"Work in project folder"** (the Default workspace) so the
 two working modes are a visible choice, not a hidden default. The cards by state: **no projects** →
-**"Start a new project"** (primary, `welcome-cta`) + **"Open project"** — or "Open project" alone as the
-primary against a host below `ONBOARDING_PROTOCOL_VERSION`; **project + `hasSpecs`** → **"Start building"** (primary) + "Work in
+**"Start a new project"** (primary, `welcome-cta`) + **"Open project"** (or "Open project" alone as the
+primary against a host below `ONBOARDING_PROTOCOL_VERSION`) + **"Chat without a project"** (when `canStartProjectlessChat` is true), with `WelcomeGuideLinks` beneath; **project + `hasSpecs`** → **"Start building"** (primary) + "Work in
 project folder"; **project + no specs** → a spec-first **"Set up project"** (primary) + "Start building"
 + "Work in project folder". **"Open project" appears only in the no-projects state** — where, with
 "Start a new project", it's the only possible action; once a project is shown, opening another is the projects-rail **"+"** (the same
