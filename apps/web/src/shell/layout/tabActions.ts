@@ -78,6 +78,12 @@ export interface ChatTabAction {
 
 export type ChatTabActions = Readonly<Record<string, readonly ChatTabAction[]>>;
 
+export interface FileTabReveal {
+	readonly label: string;
+	readonly unavailableReason?: string | undefined;
+	readonly run: (path: string) => void;
+}
+
 export interface TabActionContext {
 	readonly document: WorkspaceLayoutDocument;
 	readonly tab: LayoutTab;
@@ -92,6 +98,7 @@ export interface TabActionContext {
 	readonly worktreePath: string;
 	readonly chatFirstPrompts?: ChatFirstPrompts | undefined;
 	readonly chatActions?: ChatTabActions | undefined;
+	readonly fileReveal?: FileTabReveal | undefined;
 }
 
 export interface TabActionHandlers {
@@ -298,9 +305,12 @@ function primaryActions(t: Translator, context: TabActionContext): TabAction[] {
 	return actions;
 }
 
-function copyActions(t: Translator, { tab, worktreePath }: TabActionContext): TabAction[] {
+function fileActions(
+	t: Translator,
+	{ tab, worktreePath, fileReveal }: TabActionContext,
+): TabAction[] {
 	if (tab.kind !== "file" && tab.kind !== "diff") return [];
-	return [
+	const actions: TabAction[] = [
 		{
 			id: "tab.copyPath",
 			section: "copy",
@@ -318,6 +328,21 @@ function copyActions(t: Translator, { tab, worktreePath }: TabActionContext): Ta
 			effect: { kind: "copy", text: tab.path },
 		},
 	];
+	if (fileReveal) {
+		const { label, unavailableReason } = fileReveal;
+		actions.push({
+			id: "tab.revealFile",
+			section: "copy",
+			surface: "both",
+			label,
+			testId: "file-reveal",
+			...(unavailableReason !== undefined
+				? { unavailable: { label, reason: unavailableReason } }
+				: {}),
+			effect: { kind: "run", run: () => fileReveal.run(tab.path) },
+		});
+	}
+	return actions;
 }
 
 function splitActions(t: Translator, context: TabActionContext): TabAction[] {
@@ -504,7 +529,7 @@ function groupActions(t: Translator, context: TabActionContext): TabAction[] {
 export function tabActions(t: Translator, context: TabActionContext): TabAction[] {
 	return [
 		...primaryActions(t, context),
-		...copyActions(t, context),
+		...fileActions(t, context),
 		...splitActions(t, context),
 		...moveActions(t, context),
 		...newGroupActions(t, context),

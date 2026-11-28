@@ -1409,6 +1409,8 @@
 	"panels.reveal.fileManager": "Reveal in file manager",
 	"panels.reveal.files": "Reveal in Files",
 	"panels.reveal.finder": "Reveal in Finder",
+	"panels.reveal.offline": "Reconnect to reveal this item",
+	"panels.reveal.unsupportedHost": "Update the host to reveal files and folders",
 	"panels.reviewCommenting.deleteFailed": "Couldn't delete the draft",
 	"panels.reviewCommenting.hostTooOld": "This host is older than the review surface: it would not keep a region or cell comment. Update the host, or comment on the source instead.",
 	"panels.reviewCommenting.saveFailed": "Couldn't save the comment",

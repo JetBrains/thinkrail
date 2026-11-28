@@ -18,6 +18,20 @@ export function revealInFileManagerLabel(platform: HostPlatform | null): Message
 	return "panels.reveal.fileManager";
 }
 
+export function useFileManagerRevealAction() {
+	const t = useT();
+	const supported = useAppStore((s) => supportsFsReveal(s.protocolVersion));
+	const status = useAppStore((s) => s.status);
+	const labelKey = useAppStore((s) => revealInFileManagerLabel(s.hostPlatform));
+	const unavailableReason =
+		status !== "connected"
+			? t("panels.reveal.offline")
+			: supported
+				? undefined
+				: t("panels.reveal.unsupportedHost");
+	return { label: t(labelKey), unavailableReason };
+}
+
 export function RevealInFileManagerMenuItem({ workspaceId, path, testId }: RevealMenuItemProps) {
 	const t = useT();
 	const supported = useAppStore((s) => supportsFsReveal(s.protocolVersion));

@@ -33,7 +33,7 @@ import {
 	type LayoutSide,
 	layoutTabName,
 } from "./model";
-import type { ChatTabActions, WorkbenchTabCommands } from "./tabActions";
+import type { ChatTabActions, FileTabReveal, WorkbenchTabCommands } from "./tabActions";
 import type {
 	LayoutAuxiliaryRegion,
 	LayoutCenterTab,
@@ -90,6 +90,7 @@ export interface WorkbenchProps {
 	onRenameChat?: (sessionId: string, titleInput: string, currentTitle: string) => void;
 	chatFirstPrompts?: ChatFirstPrompts;
 	chatActions?: ChatTabActions;
+	fileReveal?: FileTabReveal;
 	onNewChat: (groupId: string) => void;
 	onNewTerminal: (
 		groupId: string,
@@ -678,6 +679,7 @@ export interface SharedGroupProps {
 	registerChatRename: RegisterChatRename;
 	chatFirstPrompts: WorkbenchProps["chatFirstPrompts"];
 	chatActions: WorkbenchProps["chatActions"];
+	fileReveal: WorkbenchProps["fileReveal"];
 	canFocusAdjacentGroup: boolean;
 	chromeShortcuts: WorkbenchChromeShortcuts | undefined;
 }

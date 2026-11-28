@@ -120,6 +120,7 @@ export interface TabStripProps {
 	registerChatRename?: RegisterChatRename | undefined;
 	chatFirstPrompts?: WorkbenchProps["chatFirstPrompts"];
 	chatActions?: WorkbenchProps["chatActions"];
+	fileReveal?: WorkbenchProps["fileReveal"];
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
 	splitGeometry?: CenterSplitGeometry;
@@ -155,6 +156,7 @@ export const TabStrip = memo(function TabStrip({
 	registerChatRename,
 	chatFirstPrompts,
 	chatActions,
+	fileReveal,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
 	splitGeometry,
@@ -268,6 +270,7 @@ export const TabStrip = memo(function TabStrip({
 							registerChatRename={registerChatRename}
 							{...(chatFirstPrompts ? { chatFirstPrompts } : {})}
 							{...(chatActions ? { chatActions } : {})}
+							{...(fileReveal ? { fileReveal } : {})}
 							canFocusAdjacentGroup={canFocusAdjacentGroup}
 							renderTabAdornment={renderTabAdornment}
 							worktreePath={worktreePath}
@@ -424,6 +427,7 @@ export interface WorkbenchTabProps {
 	registerChatRename?: RegisterChatRename | undefined;
 	chatFirstPrompts?: WorkbenchProps["chatFirstPrompts"];
 	chatActions?: WorkbenchProps["chatActions"];
+	fileReveal?: WorkbenchProps["fileReveal"];
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
 	worktreePath: string;
@@ -457,6 +461,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 	registerChatRename,
 	chatFirstPrompts,
 	chatActions,
+	fileReveal,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
 	worktreePath,
@@ -765,6 +770,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 						worktreePath,
 						chatFirstPrompts,
 						chatActions,
+						fileReveal,
 					}}
 					handlers={{
 						apply: onApply,

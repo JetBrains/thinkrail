@@ -25,6 +25,8 @@ export function revealInFilesPanel(workspaceId: string, path: string): void {
 }
 
 export function revealInFileManager(workspaceId: string, path: string): void {
+	const { status, protocolVersion } = useAppStore.getState();
+	if (status !== "connected" || !supportsFsReveal(protocolVersion)) return;
 	void getTransport()
 		.request("fs.reveal", { workspaceId, path })
 		.catch((error) => toast.error(errorText(error), t("panels.reveal.failed")));
