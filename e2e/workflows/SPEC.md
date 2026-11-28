@@ -139,6 +139,14 @@ Dependency direction is one-way: `scenario` → everything; `dialog`/`signals`/`
   no-candidates regression variant (only README/CHANGELOG/TODO present → the offer must not fire, the
   plain import path unchanged). Fixture docs are seeded inline from scenario code (no `*.md` fixture
   files at rest — the masking concern above doesn't arise).
+- `host-guide-skills.live.spec.ts` (scenarios in `hostGuideScenarios.ts`) — live regression suite for
+  the bundled host guide skills (`about-thinkrail` and `configuring-thinkrail`): bare slash-command
+  progressive disclosure, concepts (`pi` relationship and worktrees vs Default workspace),
+  **Settings › Models** and data paths, troubleshooting (login-shell `PATH` and `config.json` cache),
+  MCP troubleshooting/handoff without standalone `pi` CLI advice, read-only health check +
+  `ask_user_question`, refusing direct `config.json` edits, and negative trigger boundaries (ordinary
+  code questions and `setting-up-a-project`). Passes on deterministic checks over the event log and
+  assistant output.
 - Follow-up (scenario definitions only): the remaining worker flows end-to-end (slice 3:
   `starting-a-new-project` / `brainstorming` full runs) — tracked in [[module-thinkrail-workflow]]
   § Testing.
