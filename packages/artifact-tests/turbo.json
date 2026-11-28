@@ -1,0 +1,14 @@
+{
+	"$schema": "https://turbo.build/schema.json",
+	"extends": ["//"],
+	"tasks": {
+		"test": {
+			"inputs": [
+				"$TURBO_DEFAULT$",
+				"$TURBO_ROOT$/install.sh",
+				"$TURBO_ROOT$/install.ps1",
+				"$TURBO_ROOT$/.github/actions/build-binary/**"
+			]
+		}
+	}
+}
