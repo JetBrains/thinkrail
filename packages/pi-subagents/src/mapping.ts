@@ -11,29 +11,115 @@ const PARENT_MODEL_ALIASES = new Set(["inherit", "parent", "default"]);
 const LISTED_MODELS_LIMIT = 20;
 
 type ModelRef = Pick<Model<string>, "provider" | "id">;
-type ModelMatch = { model: ModelRef } | { reason: "missing" | "ambiguous" };
+type ModelMatch =
+	| { model: ModelRef }
+	| { reason: "missing" }
+	| { reason: "ambiguous"; candidates: ModelRef[] };
+
+const NUMBER_TOKEN = /^\d+$/;
+const MONTH = "(?:0[1-9]|1[0-2])";
+const SNAPSHOT_DATE = new RegExp(
+	`(?<![0-9])(?:\\d{4}-\\d{2}-\\d{2}|${MONTH}-20\\d{2}|${MONTH}-(?:0[1-9]|[12]\\d|3[01])(?=$|:)|\\d{4,8})(?![0-9])`,
+	"g",
+);
+
+function normalizeDate(raw: string): string {
+	const [first = "", second] = raw.split("-", 3);
+	return second?.length === 4 ? `${second}${first}` : raw.replaceAll("-", "");
+}
+
+function tokens(text: string): string[] {
+	return text.toLowerCase().match(/[a-z]+|[0-9]+/g) ?? [];
+}
+
+function wordMatch(refTokens: readonly string[], id: string): boolean {
+	const idTokens = tokens(id);
+	const last = refTokens.length - 1;
+	for (let start = 0; start + last < idTokens.length; start++) {
+		if (
+			refTokens.every((token, i) =>
+				i === last ? idTokens[start + i]?.startsWith(token) : idTokens[start + i] === token,
+			)
+		)
+			return true;
+	}
+	return false;
+}
+
+function idParts(id: string): string[] {
+	return id.toLowerCase().match(/\d+(?:\.\d+)?[bmkt](?![a-z])|[a-z]+|[0-9]+/g) ?? [];
+}
+
+function family(id: string): string {
+	return idParts(id)
+		.filter((part) => !NUMBER_TOKEN.test(part))
+		.join("-");
+}
+
+function snapshot(id: string): { version: number[]; date: string } {
+	return {
+		version: idParts(id.replace(SNAPSHOT_DATE, "-"))
+			.filter((part) => NUMBER_TOKEN.test(part))
+			.map(Number),
+		date: (id.match(SNAPSHOT_DATE) ?? []).map(normalizeDate).join(""),
+	};
+}
+
+function compareNewest(a: string, b: string): number {
+	const [sa, sb] = [snapshot(a), snapshot(b)];
+	for (let i = 0; i < Math.max(sa.version.length, sb.version.length); i++) {
+		const diff = (sb.version[i] ?? 0) - (sa.version[i] ?? 0);
+		if (diff !== 0) return diff;
+	}
+	if ((sa.date === "") !== (sb.date === "")) return sa.date === "" ? -1 : 1;
+	return sa.date.length === sb.date.length ? Number(sb.date) - Number(sa.date) : 0;
+}
+
+function pickCandidate(candidates: readonly ModelRef[]): ModelMatch {
+	const groups = new Map<string, ModelRef[]>();
+	for (const { provider, id } of candidates) {
+		const key = `${provider}\u0000${family(id)}`;
+		const group = groups.get(key) ?? [];
+		if (!group.some((model) => model.id === id)) group.push({ provider, id });
+		groups.set(key, group);
+	}
+	const survivors = [...groups.values()].flatMap((group) => {
+		const newest = group.reduce((best, model) =>
+			compareNewest(model.id, best.id) < 0 ? model : best,
+		);
+		return group.filter((model) => compareNewest(model.id, newest.id) === 0);
+	});
+	const [only] = survivors;
+	return survivors.length === 1 && only
+		? { model: only }
+		: { reason: "ambiguous", candidates: survivors };
+}
 
 function matchModelRef(ref: string, available: readonly ModelRef[]): ModelMatch {
+	let pool = available;
+	let text = ref;
 	const slash = ref.indexOf("/");
 	if (slash > 0) {
-		const provider = ref.slice(0, slash);
-		const id = ref.slice(slash + 1);
-		const exact = available.find((model) => model.provider === provider && model.id === id);
-		return exact ? { model: { provider: exact.provider, id: exact.id } } : { reason: "missing" };
+		const qualifier = ref.slice(0, slash).toLowerCase();
+		const scoped = available.filter((model) => model.provider.toLowerCase() === qualifier);
+		if (scoped.length > 0) {
+			pool = scoped;
+			text = ref.slice(slash + 1);
+		}
 	}
-	const byId = available.filter((model) => model.id === ref);
-	if (byId.length === 1 && byId[0])
-		return { model: { provider: byId[0].provider, id: byId[0].id } };
-	if (byId.length > 1) return { reason: "ambiguous" };
-	const byPrefix = available.filter((model) => model.id.startsWith(ref));
-	const first = byPrefix[0];
-	if (
-		first &&
-		byPrefix.every((model) => model.id === first.id && model.provider === first.provider)
-	) {
-		return { model: { provider: first.provider, id: first.id } };
+	if (text === "") return { reason: "missing" };
+	const refTokens = text.includes(":") ? [] : tokens(text);
+	const tiers: (() => ModelRef[])[] = [
+		() => pool.filter((model) => model.id === text),
+		() => (pool === available ? [] : available.filter((model) => model.id === ref)),
+		() => pool.filter((model) => model.id.startsWith(text)),
+		() => (refTokens.length > 0 ? pool.filter((model) => wordMatch(refTokens, model.id)) : []),
+	];
+	for (const tier of tiers) {
+		const candidates = tier();
+		if (candidates.length > 0) return pickCandidate(candidates);
 	}
-	return { reason: first ? "ambiguous" : "missing" };
+	return { reason: "missing" };
 }
 
 export function resolveModelRef(ref: string, available: readonly ModelRef[]): ModelRef | undefined {
@@ -83,17 +169,19 @@ export function buildChildSystemPrompt(definition: AgentDefinition, cwd: string)
 	return `${definition.systemPrompt.trim()}\n\n${BRIDGE}\n\n${env}`;
 }
 
-function availableModelsHint(available: readonly ModelRef[]): string {
-	if (available.length === 0) return " No models are available in this session.";
-	const listed = available
+function listRefs(models: readonly ModelRef[]): string {
+	const listed = models
 		.slice(0, LISTED_MODELS_LIMIT)
 		.map((model) => `${model.provider}/${model.id}`)
 		.join(", ");
 	const more =
-		available.length > LISTED_MODELS_LIMIT
-			? ` (+${available.length - LISTED_MODELS_LIMIT} more)`
-			: "";
-	return ` Available models: ${listed}${more}.`;
+		models.length > LISTED_MODELS_LIMIT ? ` (+${models.length - LISTED_MODELS_LIMIT} more)` : "";
+	return `${listed}${more}`;
+}
+
+function availableModelsHint(available: readonly ModelRef[]): string {
+	if (available.length === 0) return " No models are available in this session.";
+	return ` Available models: ${listRefs(available)}.`;
 }
 
 export interface SpawnMapping {
@@ -132,7 +220,7 @@ export function toSpawnMapping(
 			const selection = definition.model !== undefined ? "pins" : "requests";
 			const reason =
 				match.reason === "ambiguous"
-					? 'is ambiguous — qualify it as "provider/id"'
+					? `is ambiguous — it matches ${listRefs(match.candidates)}. Retry with one of them as "provider/id"`
 					: "is not available in this session";
 			const base = lookupRef === modelRef ? "" : ` (base "${lookupRef}")`;
 			const hint =
@@ -141,7 +229,9 @@ export function toSpawnMapping(
 					: "";
 			const omit = selection === "requests" ? " Leave model out to use the parent's model." : "";
 			const guidance =
-				match.reason === "missing" ? `.${availableModelsHint(options.availableModels)}${omit}` : "";
+				match.reason === "missing"
+					? `.${availableModelsHint(options.availableModels)}${omit}`
+					: ".";
 			throw new Error(
 				`Agent "${definition.name}" ${selection} model "${modelRef}"${base}, which ${reason}${hint}${guidance}`,
 			);

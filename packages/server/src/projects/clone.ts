@@ -1,6 +1,6 @@
 import { lstatSync, mkdirSync, realpathSync, statSync } from "node:fs";
 import { rm } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { isWindowsDeviceName, type Project, type WsParams } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { gitAsync } from "../git";
@@ -19,7 +19,7 @@ function invalid(message: string): never {
 	throw new CodedError("PROJECT_CLONE_INVALID", message);
 }
 
-function repositoryUrl(value: string): string {
+export function validateCloneUrl(value: string): string {
 	if (typeof value !== "string" || value.length > 8192) invalid("Enter a Git repository URL.");
 	const url = value.trim();
 	if (!url || /[\\\s\p{Cc}]/u.test(url)) invalid("Enter a valid Git repository URL.");
@@ -73,15 +73,18 @@ export function inspectCloneDestination(parentPath: string, requestedName: strin
 		invalid("Enter a single valid folder name, without path separators.");
 	const resolved = resolveProjectPath(parentPath.trim());
 	assertOutsideChatsRoot(join(resolved, name), "used as a clone destination");
-	let parent: string;
+	let parent: string | null = null;
 	try {
 		parent = realpathSync.native(resolved);
-	} catch {
-		invalid("Choose a parent folder on the host.");
+	} catch (error) {
+		if (!(error instanceof Error && "code" in error && error.code === "ENOENT"))
+			invalid("Choose a parent folder on the host.");
 	}
-	if (!statSync(parent).isDirectory()) invalid("The parent path is not a folder.");
-	const path = join(parent, name);
+	if (parent !== null && !statSync(parent).isDirectory())
+		invalid("The parent path is not a folder.");
+	const path = join(parent ?? resolved, name);
 	assertProjectPathAllowed(path);
+	if (parent === null) return path;
 	try {
 		lstatSync(path);
 	} catch (error) {
@@ -121,7 +124,7 @@ export async function cloneProject(
 	input: CloneInput,
 	signal?: AbortSignal,
 ): Promise<Project | null> {
-	const url = repositoryUrl(input.url);
+	const url = validateCloneUrl(input.url);
 	if (
 		input.depth !== undefined &&
 		(!Number.isInteger(input.depth) || input.depth < 1 || input.depth > 2_147_483_647)
@@ -129,6 +132,11 @@ export async function cloneProject(
 		invalid("Clone depth must be a positive integer.");
 	const path = inspectCloneDestination(input.parentPath, input.name);
 	if (signal?.aborted) return null;
+	try {
+		mkdirSync(dirname(path), { recursive: true });
+	} catch {
+		throw new CodedError("PROJECT_CLONE_FAILED", `Could not create the folder ${dirname(path)}.`);
+	}
 	try {
 		mkdirSync(path);
 	} catch (error) {

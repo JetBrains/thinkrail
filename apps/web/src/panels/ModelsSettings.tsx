@@ -2,6 +2,8 @@ import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	type AppConfigUpdate,
 	type ModelDefault,
+	REVIEW_AUTO_FIX_ROUNDS,
+	REVIEW_FIX_ROUNDS_SETTING_PROTOCOL_VERSION,
 	type ThinkingLevel,
 	type WireModel,
 } from "@thinkrail/contracts";
@@ -14,6 +16,7 @@ import { useModelCatalog } from "@/chat/useModelCatalog";
 import { useModelPreferences } from "@/chat/useModelPreferences";
 import {
 	SettingsGroup,
+	SettingsNumberField,
 	SettingsPage,
 	SettingsRow,
 	useSettingsDialogContainer,
@@ -101,6 +104,7 @@ export function ModelsSettings() {
 	const reviewModel = useAppStore((s) => s.reviewModel);
 	const reviewEffort = useAppStore((s) => s.reviewEffort);
 	const autoFix = useAppStore((s) => s.reviewAutoFix);
+	const autoFixRounds = useAppStore((s) => s.reviewAutoFixRounds);
 	const agentReviewEnabled = useAppStore((s) => s.agentReviewEnabled);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const hiddenModels = useAppStore((s) => s.hiddenModels);
@@ -117,6 +121,10 @@ export function ModelsSettings() {
 		"settings.models.agentReviewFailed",
 	);
 	const autoFixReset = useConfigReset("reviewAutoFix", "settings.models.autoFixFailed");
+	const autoFixRoundsReset = useConfigReset(
+		"reviewAutoFixRounds",
+		"settings.models.autoFixRoundsFailed",
+	);
 
 	const { model: chatModel, level: chatLevel } = chat.pair;
 	const reviewCurrent = reviewModel
@@ -253,6 +261,27 @@ export function ModelsSettings() {
 					}
 					reset={autoFixReset}
 				/>
+				{protocolVersion !== null &&
+				protocolVersion >= REVIEW_FIX_ROUNDS_SETTING_PROTOCOL_VERSION ? (
+					<SettingsRow
+						{...settingProps(t, SETTING.autoFixRounds)}
+						testId="review-autofix-rounds-row"
+						control={
+							<SettingsNumberField
+								label={t("settings.models.autoFixRounds")}
+								value={autoFixRounds}
+								min={REVIEW_AUTO_FIX_ROUNDS.min}
+								max={REVIEW_AUTO_FIX_ROUNDS.max}
+								disabled={!autoFix}
+								testId="review-autofix-rounds-input"
+								onCommit={(reviewAutoFixRounds) =>
+									saveSettings({ reviewAutoFixRounds }, t("settings.models.autoFixRoundsFailed"))
+								}
+							/>
+						}
+						reset={autoFixRoundsReset}
+					/>
+				) : null}
 			</SettingsGroup>
 
 			<ModelContextSettings customEndpoints={customEndpoints} />

@@ -14,8 +14,10 @@ import {
 	isKeybindingOverrides,
 	isLineWidth,
 	isLocalePreference,
+	isProjectsFolder,
 	isPullRequestFilter,
 	isQuestionPanelHeight,
+	isReviewAutoFixRounds,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
 	isSystemThemePair,
@@ -26,6 +28,7 @@ import {
 	type PullRequestFilter,
 	QUESTION_PANEL_HEIGHT_PERCENT,
 	RECENT_MODELS_LIMIT,
+	REVIEW_AUTO_FIX_ROUNDS,
 	sameModel,
 	type WireModel,
 } from "@thinkrail/contracts";
@@ -63,6 +66,7 @@ const ACCEPTED_UPDATE_KEYS = {
 	reviewModel: true,
 	reviewEffort: true,
 	reviewAutoFix: true,
+	reviewAutoFixRounds: true,
 	agentReviewEnabled: true,
 	subagentsEnabled: true,
 	subagentMaxConcurrent: true,
@@ -70,6 +74,7 @@ const ACCEPTED_UPDATE_KEYS = {
 	jbcentralQuotaRefreshSeconds: true,
 	settleIdleDays: true,
 	worktreeDirectory: true,
+	projectsFolder: true,
 	disabledSubagents: true,
 	disabledExtensions: true,
 	extensionSettings: true,
@@ -88,6 +93,14 @@ const ACCEPTED_UPDATE_KEYS = {
 	layout: true,
 	recentModels: true,
 } satisfies Record<keyof RuntimeAppConfigUpdate, true>;
+
+function isHostProjectsFolder(value: unknown): value is string {
+	if (!isProjectsFolder(value)) return false;
+	const path = value.trim();
+	if (path === "~" || path.startsWith("~/")) return true;
+	if (path.startsWith("~\\")) return process.platform === "win32";
+	return isAbsolute(path);
+}
 
 function assertUpdateShape(update: unknown): void {
 	if (typeof update !== "object" || update === null || Array.isArray(update)) {
@@ -333,6 +346,14 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		throw new Error("subagentsEnabled must be a boolean");
 	}
 	if (
+		runtimeUpdate.reviewAutoFixRounds !== undefined &&
+		!isReviewAutoFixRounds(runtimeUpdate.reviewAutoFixRounds)
+	) {
+		throw new Error(
+			`reviewAutoFixRounds must be a whole number from ${REVIEW_AUTO_FIX_ROUNDS.min} to ${REVIEW_AUTO_FIX_ROUNDS.max}`,
+		);
+	}
+	if (
 		runtimeUpdate.subagentMaxConcurrent !== undefined &&
 		!isSubagentMaxConcurrent(runtimeUpdate.subagentMaxConcurrent)
 	) {
@@ -378,6 +399,15 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 			!isAbsolute(runtimeUpdate.worktreeDirectory.trim()))
 	) {
 		throw new Error("worktreeDirectory must be an absolute path or null");
+	}
+	if (
+		runtimeUpdate.projectsFolder !== undefined &&
+		!isHostProjectsFolder(runtimeUpdate.projectsFolder)
+	) {
+		throw new CodedError(
+			"PROJECTS_FOLDER_INVALID",
+			"projectsFolder must be an absolute host folder or start with ~/",
+		);
 	}
 	if (runtimeUpdate.locale !== undefined && !isLocalePreference(runtimeUpdate.locale)) {
 		throw new Error('locale must be "system" or a canonical BCP-47 language tag');
@@ -443,6 +473,9 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 						pullRequestFiltersUpdate,
 					),
 				}),
+		...(runtimeUpdate.projectsFolder === undefined
+			? {}
+			: { projectsFolder: runtimeUpdate.projectsFolder.trim() }),
 	};
 	if (worktreeDirectory === null) delete next.worktreeDirectory;
 	if (defaultModel !== undefined) {
@@ -486,6 +519,16 @@ export function noteRecentModel(model: WireModel): AppConfig {
 		...current.recentModels.filter((candidate) => !sameModel(candidate, model)),
 	].slice(0, RECENT_MODELS_LIMIT);
 	const next: AppConfig = { ...current, recentModels };
+	saveConfig(next);
+	cached = next;
+	publishSettings?.(next, {});
+	return next;
+}
+
+export function markProjectsFolderNoticeShown(): AppConfig {
+	const current = getConfig();
+	if (current.projectsFolderNoticeShown) return current;
+	const next: AppConfig = { ...current, projectsFolderNoticeShown: true };
 	saveConfig(next);
 	cached = next;
 	publishSettings?.(next, {});

@@ -82,7 +82,7 @@ export function resolveProject(
 	if (!needle) {
 		if (fallbackProjectId === undefined) {
 			throw new Error(
-				`This chat has no project: pass \`project\`. Open projects: ${describeProjects(open)}.`,
+				`This chat has no project: pass \`project\`. Open projects: ${describeProjects(open)}. To add a repository, call open_project.`,
 			);
 		}
 		const own = open.find((project) => project.id === fallbackProjectId);
@@ -99,7 +99,7 @@ export function resolveProject(
 	const [only] = matches;
 	if (only && matches.length === 1) return only;
 	throw new Error(
-		`${matches.length > 1 ? "Ambiguous" : "Unknown"} project "${needle}". Open projects: ${describeProjects(open)}.`,
+		`${matches.length > 1 ? "Ambiguous" : "Unknown"} project "${needle}". Open projects: ${describeProjects(open)}.${matches.length > 1 ? "" : " To add a repository, call open_project."}`,
 	);
 }
 

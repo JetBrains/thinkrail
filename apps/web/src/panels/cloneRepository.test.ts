@@ -1,7 +1,16 @@
 import { expect, test } from "bun:test";
-import { PROJECT_CLONE_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import {
+	PROJECT_CLONE_PROTOCOL_VERSION,
+	PROJECTS_FOLDER_PROTOCOL_VERSION,
+} from "@thinkrail/contracts";
 import { selectSupportsProjectClone } from "../store";
-import { cloneDepth, repositoryFolderName } from "./cloneRepository";
+import { cloneDepth, defaultCloneParent, repositoryFolderName } from "./cloneRepository";
+
+test("the clone dialog starts in the projects folder only on a host that knows it", () => {
+	expect(defaultCloneParent(PROJECTS_FOLDER_PROTOCOL_VERSION, "~/code")).toBe("~/code");
+	expect(defaultCloneParent(PROJECTS_FOLDER_PROTOCOL_VERSION - 1, "~/code")).toBe("~");
+	expect(defaultCloneParent(null, "~/code")).toBe("~");
+});
 
 test("repository URLs suggest editable folder names across Git hosts and transports", () => {
 	for (const url of [

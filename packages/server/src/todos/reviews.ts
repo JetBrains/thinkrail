@@ -17,14 +17,18 @@ export interface TodoReviewMeta {
 	pending: Record<string, { at: string; shas?: string[] }>;
 }
 
+/** `autoCycles` value of an item whose automatic fix rounds are over: the human decides. */
+export const AUTO_CYCLES_TERMINAL = -1;
+
 interface ReviewsFile {
-	version: 1;
+	version: 2;
 	items: Record<string, TodoReviewRecord>;
 	pending?: Record<string, { at: string; shas?: string[] }>;
 	// Auto fix→re-review cycles spent per item, kept OUTSIDE `items` on purpose: a redo that can't be
 	// committed (shared window / foreign dirt) drops the item's `items` entry entirely so the item reads
 	// `unreviewed` again (no sha to watermark a path-list delta against — see `todos/artifacts.ts`), but
 	// the auto-cycle cap must survive that reset, else the dropped record silently regrants a spent cycle.
+	// Value = fix rounds delivered, or AUTO_CYCLES_TERMINAL. Version 1 used `2` as its terminal mark.
 	autoCycles?: Record<string, number>;
 }
 
@@ -47,10 +51,12 @@ function isRecord(raw: unknown): raw is TodoReviewRecord {
 	);
 }
 
-function parseAutoCycles(raw: unknown): Record<string, number> | undefined {
+function parseAutoCycles(raw: unknown, legacy: boolean): Record<string, number> | undefined {
 	if (typeof raw !== "object" || raw === null) return undefined;
 	const autoCycles = Object.fromEntries(
-		Object.entries(raw).filter((entry): entry is [string, number] => typeof entry[1] === "number"),
+		Object.entries(raw)
+			.filter((entry): entry is [string, number] => typeof entry[1] === "number")
+			.map(([id, n]) => [id, legacy && n >= 2 ? AUTO_CYCLES_TERMINAL : n]),
 	);
 	return Object.keys(autoCycles).length > 0 ? autoCycles : undefined;
 }
@@ -58,7 +64,7 @@ function parseAutoCycles(raw: unknown): Record<string, number> | undefined {
 function readFile(root: string, sessionId: string): ReviewsFile {
 	try {
 		const parsed: unknown = JSON.parse(readFileSync(reviewsPath(root, sessionId), "utf8"));
-		if (typeof parsed !== "object" || parsed === null) return { version: 1, items: {} };
+		if (typeof parsed !== "object" || parsed === null) return { version: 2, items: {} };
 		const o = parsed as Record<string, unknown>;
 		const items: Record<string, TodoReviewRecord> = {};
 		if (typeof o.items === "object" && o.items !== null) {
@@ -66,7 +72,7 @@ function readFile(root: string, sessionId: string): ReviewsFile {
 				if (isRecord(value)) items[id] = value;
 			}
 		}
-		const file: ReviewsFile = { version: 1, items };
+		const file: ReviewsFile = { version: 2, items };
 		if (typeof o.pending === "object" && o.pending !== null) {
 			const pending: ReviewsFile["pending"] = {};
 			for (const [id, value] of Object.entries(o.pending)) {
@@ -81,11 +87,11 @@ function readFile(root: string, sessionId: string): ReviewsFile {
 			}
 			if (Object.keys(pending).length > 0) file.pending = pending;
 		}
-		const autoCycles = parseAutoCycles(o.autoCycles);
+		const autoCycles = parseAutoCycles(o.autoCycles, o.version !== 2);
 		if (autoCycles) file.autoCycles = autoCycles;
 		return file;
 	} catch {
-		return { version: 1, items: {} };
+		return { version: 2, items: {} };
 	}
 }
 

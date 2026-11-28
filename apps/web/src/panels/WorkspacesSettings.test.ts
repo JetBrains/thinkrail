@@ -8,7 +8,8 @@ import { idleDescription, toChoice, WorkspacesSettingsView } from "./WorkspacesS
 const view = (
 	settleIdleDays: number | null,
 	changed = false,
-	worktreeDirectory: string | undefined = undefined,
+	projectsFolder: { value: string; changed: boolean } | null = null,
+	worktreeDirectory: { value: string; changed: boolean } | null = null,
 ) =>
 	renderToStaticMarkup(
 		createElement(WorkspacesSettingsView, {
@@ -16,11 +17,17 @@ const view = (
 			supported: true,
 			reset: { changed, onReset: () => {} },
 			onSelect: () => {},
-			worktreeDirectory,
-			directorySupported: true,
-			directoryReset: { changed: worktreeDirectory !== undefined, onReset: () => {} },
-			onSaveDirectory: async () => true,
-			onPickDirectory: async () => null,
+			projectsFolder: projectsFolder && {
+				value: projectsFolder.value,
+				reset: { changed: projectsFolder.changed, onReset: () => {} },
+				onCommit: () => Promise.resolve(true),
+			},
+			worktreeDirectory: worktreeDirectory && {
+				value: worktreeDirectory.value,
+				reset: { changed: worktreeDirectory.changed, onReset: () => {} },
+				onCommit: () => Promise.resolve(true),
+				onPick: () => Promise.resolve(null),
+			},
 		}),
 	);
 
@@ -62,13 +69,31 @@ test("Reset puts back 7 days, because null means Never", () => {
 	expect(view(7)).not.toContain("settings-reset-settle-idle");
 });
 
+test("the projects folder row shows only on a host that knows it, with its saved path and Reset", () => {
+	expect(view(7)).not.toContain('data-setting-id="projects-folder"');
+	const markup = view(7, false, { value: "~/code", changed: true });
+	expect(markup).toContain('data-setting-id="projects-folder"');
+	const input = markup.match(/<input[^>]*data-testid="projects-folder-input"[^>]*>/)?.[0] ?? "";
+	expect(input).toContain('value="~/code"');
+	expect(markup).toContain(text("settings.workspaces.projectsFolder.label"));
+	expect(markup).toContain('data-testid="settings-reset-projects-folder"');
+	expect(view(7, false, { value: "~/thinkrail", changed: false })).not.toContain(
+		"settings-reset-projects-folder",
+	);
+	expect(configResetPatch("projectsFolder")).toEqual({ projectsFolder: "~/thinkrail" });
+});
+
 test("the worktree directory row takes an absolute path and resets to the default", () => {
-	const markup = view(7, true, "/worktrees");
+	expect(view(7)).not.toContain('data-setting-id="worktree-directory"');
+	const markup = view(7, false, null, { value: "/worktrees", changed: true });
 	expect(markup).toContain('data-setting-id="worktree-directory"');
 	expect(markup).toContain('data-testid="settings-worktree-directory"');
 	expect(markup).toContain('value="/worktrees"');
+	expect(markup).toContain('data-testid="settings-worktree-directory-browse"');
 	expect(markup).toContain('data-testid="settings-reset-worktree-directory"');
-	expect(view(7)).not.toContain('data-testid="settings-reset-worktree-directory"');
+	expect(view(7, false, null, { value: "", changed: false })).not.toContain(
+		"settings-reset-worktree-directory",
+	);
 	expect(isConfigDefault("worktreeDirectory", undefined)).toBe(true);
 	expect(configResetPatch("worktreeDirectory")).toEqual({ worktreeDirectory: null });
 });

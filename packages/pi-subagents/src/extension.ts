@@ -298,9 +298,11 @@ get_subagent_result only to check a run's status or re-read a finished report. L
 run on your own model. Set model only to choose another available model for an unpinned agent; a
 definition's pinned model always wins, ignoring the invocation model and its suffix. A model
 reference with no whole-reference match may end in
-:<thinking> (${THINKING_LEVELS.join(", ")}). Whole-reference matches keep their meaning;
-ambiguous references fail rather than being reinterpreted. Explicit definition thinking overrides
-a suffix; without either, thinking inherits the parent. Pi clamps thinking to model capabilities.
+:<thinking> (${THINKING_LEVELS.join(", ")}). Whole-reference matches keep their meaning.
+An informal name such as "opus" or "anthropic/sonnet 4.5" resolves to the newest model of the one
+family it names; a name matching several providers, families or sizes fails and lists the
+candidates as provider/id, so retry with one of them or ask the user. Explicit
+definition thinking overrides a suffix; without either, thinking inherits the parent. Pi clamps thinking to model capabilities.
 Subagents cannot call MCP tools (mcp__*, tool_search, the MCP resource tools): call those yourself and put what the
 subagent needs in the task.
 
@@ -316,7 +318,7 @@ ${known}`,
 					model: Type.Optional(
 						Type.String({
 							description:
-								'Leave out to use the parent model. Otherwise an available model for an unpinned agent: "provider/id" or "provider/id:thinking" (a bare id or unique id prefix also works). Whole-reference matches win; a definition pin ignores this value, and definition thinking overrides a suffix.',
+								'Leave out to use the parent model. Otherwise an available model for an unpinned agent: "provider/id" or "provider/id:thinking" (a bare id, id prefix or informal name like "opus" also works). Whole-reference matches win; a definition pin ignores this value, and definition thinking overrides a suffix.',
 						}),
 					),
 					run_in_background: Type.Optional(

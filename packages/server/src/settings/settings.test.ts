@@ -11,6 +11,7 @@ import {
 import { validateCustomLayoutPresets } from "./layoutPresets";
 import {
 	getConfig,
+	markProjectsFolderNoticeShown,
 	noteRecentModel,
 	resetConfigCache,
 	type SettingsPublisher,
@@ -370,6 +371,25 @@ test("reviewAutoFix defaults off; an old config without it loads the default; to
 	expect(next.reviewAutoFix).toBe(true);
 	resetConfigCache();
 	expect(getConfig().reviewAutoFix).toBe(true);
+});
+
+test("reviewAutoFixRounds defaults to 3; an old or malformed value loads the default; out-of-range updates reject", () => {
+	expect(DEFAULT_CONFIG.reviewAutoFixRounds).toBe(3);
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({ theme: "dark", reviewAutoFixRounds: 99 }),
+	);
+	resetConfigCache();
+	expect(getConfig().reviewAutoFixRounds).toBe(3);
+	expect(updateConfig({ reviewAutoFixRounds: 5 }).reviewAutoFixRounds).toBe(5);
+	resetConfigCache();
+	expect(getConfig().reviewAutoFixRounds).toBe(5);
+	for (const bad of [0, 11, 2.5, "3"]) {
+		expect(() => updateConfig({ reviewAutoFixRounds: bad as number })).toThrow(
+			"reviewAutoFixRounds",
+		);
+	}
+	expect(getConfig().reviewAutoFixRounds).toBe(5);
 });
 
 test("agentReviewEnabled defaults off; an old config loads the default; toggling on round-trips; non-boolean rejected", () => {
@@ -1206,6 +1226,36 @@ test("the settle idle window defaults to 7 days, accepts null for never, and rej
 	expect(updateConfig({ settleIdleDays: null }).settleIdleDays).toBeNull();
 	resetConfigCache();
 	expect(getConfig().settleIdleDays).toBeNull();
+});
+
+test("the projects folder defaults to ~/thinkrail, is trimmed, and rejects blank or relative paths", () => {
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ projectsFolder: "  " }));
+	resetConfigCache();
+	expect(getConfig().projectsFolder).toBe("~/thinkrail");
+
+	const before = getConfig();
+	expect(() => updateConfig({ projectsFolder: " " })).toThrow("projectsFolder must be");
+	expect(() => updateConfig({ projectsFolder: "code" })).toThrow(
+		"projectsFolder must be an absolute host folder or start with ~/",
+	);
+	if (process.platform !== "win32") {
+		for (const foreign of ["C:\\code", "~\\code", "\\\\host\\share"]) {
+			expect(() => updateConfig({ projectsFolder: foreign })).toThrow("projectsFolder must be");
+		}
+	}
+	expect(() => updateConfig({ projectsFolder: 7 as unknown as string })).toThrow(
+		"projectsFolder must be",
+	);
+	expect(getConfig()).toEqual(before);
+
+	expect(updateConfig({ projectsFolder: " ~/code " }).projectsFolder).toBe("~/code");
+	expect(() =>
+		updateConfig({ projectsFolderNoticeShown: true } as unknown as AppConfigUpdate),
+	).toThrow("Unknown setting: projectsFolderNoticeShown");
+	expect(getConfig().projectsFolderNoticeShown).toBe(false);
+	expect(markProjectsFolderNoticeShown().projectsFolderNoticeShown).toBe(true);
+	resetConfigCache();
+	expect(getConfig().projectsFolder).toBe("~/code");
 });
 
 test("locale defaults to system, keeps an unavailable tag, and rejects non-canonical values", () => {

@@ -153,7 +153,11 @@ as a permanently open foreign window and force every sibling chat into the fallb
   the fallback's `dropReviewRecord` used to wipe `autoCycles` along with the verdict, so a later manual
   review read `spent` as 0 and granted a second automated cycle past the cap). `approveTodoReview` clears
   it (a settled round resets the counter for the next one); `recordAgentChangesRequested` writes it
-  independently of the record it also writes; `todoReviewAutoCycles` is the read side.
+  independently of the record it also writes; `todoReviewAutoCycles` is the read side. A value is the
+  number of fix rounds delivered, or `AUTO_CYCLES_TERMINAL` (-1, exported from the barrel) once the human
+  decides. The sidecar is `version: 2`; a version-1 file used `2` as its terminal mark, so reading one maps
+  any `>= 2` to terminal — otherwise a step that ended its cycle before the upgrade would be read as two
+  rounds spent and silently granted more (and an unasked re-review).
 
 The host's own on-disk state (anything under `WORKSPACE_INTERNAL_DIR` = `.thinkrail/…`, e.g. the todos
 JSON under `context/todos/`) is filtered out of every change set — writing a todo shows up in `git status`
@@ -306,13 +310,14 @@ last two mutate three things at once — the item's record, its `autoCycles` cou
 clear — so they persist all three as ONE snapshot write (`commitReviewTransition`), never a sequence: a
 partial failure between writes could otherwise strand an item `changes_requested` at a spent cycle with
 its pending mark still set, which no cancel would undo. The auto-cycle mechanics — the
-host's **1-auto-cycle cap**: cycle 0's verdict auto-sends the reviewer's findings to the worker
-(autoCycles 1), the fixed revision auto-re-reviews once (trigger requires autoCycles === 1 + a fresh
+host's **round cap** (`reviewAutoFixRounds`, default 3): each `request_changes` within the budget
+auto-sends the reviewer's findings to the worker (autoCycles = rounds delivered), each fixed revision
+auto-re-reviews (trigger requires autoCycles > 0 + a fresh
 delta — a sha appended past the watermark, OR the state reading `unreviewed` because the path-list
 fallback reset it, itself the delta signal a path-list item has no sha to carry — see the fallback's
-autoCycles durability above), and that verdict records autoCycles 2 — terminal, the human decides; the
-cap is **short-circuited when the `reviewAutoFix` setting is off** — `host/requestReview` then records
-the verdict terminally (autoCycles 2) with no send, so findings just wait for the human). The reviewer's
+autoCycles durability above), and a `request_changes` past the budget records `AUTO_CYCLES_TERMINAL` —
+the human decides; the cap is **short-circuited when the `reviewAutoFix` setting is off** —
+`host/requestReview` then records the verdict terminally with no send, so findings just wait for the human). The reviewer's
 findings are **agent-authored review comments** in the reviews module (`author: "agent"`), never a
 parallel store; orchestration/sends live in `host/requestReview.ts`. **Host-restart safety:** the
 in-flight bookkeeping is memory-only, so a `pending` mark from a review still running when the host last

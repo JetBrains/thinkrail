@@ -554,7 +554,8 @@ because a power user there may be adding a second provider.
 
 **Starting from nothing.** "Start a new project" opens **`CreateProjectDialog`** (driven by `useOpenProject`'s
 `startNewProject`, so the rail "+" and Welcome share it): a project name, its derived folder name, and a
-**Location** — the parent folder, default `~/thinkrail`, editable as a host path or picked with the native
+**Location** — the parent folder, prefilled from the store's `projectsFolder` (`AppConfig`, default
+`~/thinkrail`, which is also every older host's default here), editable as a host path or picked with the native
 directory picker — previewed as the final path, then `project.create` (folder + `git init` + initial commit
 + open; there is no "skip git" choice because a non-repo cannot be a project). A **Draft the
 specs with the agent** switch (default **on**) makes the caller (`startProjectSetupChat`) enter the new
@@ -567,8 +568,9 @@ failed list read toasts instead of rejecting. The "Set up project" card on an ex
 `NewWorkspaceDialog`. A failure stays inline in the dialog.
 
 **Cloning a repository.** `CloneProjectDialog`, opened by `useOpenProject` from either add-project menu,
-accepts a Git URL, an editable URL-derived folder name, a host parent path (default `~`, editable or chosen
-with Browse), and optional positive history depth (empty = full history). `project.cloneDestination`
+accepts a Git URL, an editable URL-derived folder name, a host parent path (prefilled by `defaultCloneParent`:
+the store's `projectsFolder` from `PROJECTS_FOLDER_PROTOCOL_VERSION`, else `~`, because an older host neither
+knows the setting nor creates a missing parent; editable or chosen with Browse), and optional positive history depth (empty = full history). `project.cloneDestination`
 provides the absolute path preview and rejects existing destinations; only a preview matching the current
 fields enables submission, and clone validates again before writing. The dialog uses host Git credentials,
 not GitHub login. During cloning fields are locked, status is announced, and Cancel requests
@@ -1316,13 +1318,17 @@ a project picker, the prompt hero, and the reused
   provided; `panels` neither discovers native nor host update capabilities. If a later welcome removes injected content while Updates is selected, Appearance
   is rendered and highlighted rather than leaving no active row);
   **`WorkspacesSettings`** (the **Workspaces** section, listed only at
-  `protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION`) — two rows in one `SettingsPage`. From
-  `WORKTREE_DIRECTORY_PROTOCOL_VERSION`, **Worktree directory** (`worktree-directory`, catalog id) is an
-  hand-typed absolute path: the draft input saves on Enter or blur through
-  `settings.update { worktreeDirectory }` (`null` clears the override), **Browse…** picks a folder through
-  `dialog.selectDirectory` and saves it, the row's Reset clears back to the host default, and the draft
-  reconciles with authoritative `settings.changed` values through `useSettingsDraft`. The second row,
-  **Settle idle workspaces after**, is an
+  `protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION`) — three rows in one `SettingsPage`. **Projects
+  folder** (from `PROJECTS_FOLDER_PROTOCOL_VERSION`): a host-path text field (`useSettingsDraft`, committed on
+  Enter/blur as `settings.update { projectsFolder }`, a blank or relative draft refused inline, a padded one
+  committed trimmed so the host's echo settles it, Reset to `~/thinkrail`) naming where the New project and
+  Clone repository dialogs start and where an agent's `open_project` clones. From
+  `WORKTREE_DIRECTORY_PROTOCOL_VERSION`, **Worktree directory** (`worktree-directory`, catalog id) is a
+  hand-typed absolute root for future managed worktrees: the draft input saves on Enter or blur through
+  `settings.update { worktreeDirectory }` (a blank draft clears the override with `null`, an invalid one
+  refuses inline), **Browse…** picks a folder through `dialog.selectDirectory` and submits it, the row's
+  Reset clears back to the host default, and the draft reconciles with authoritative `settings.changed`
+  values through `useSettingsDraft`. **Settle idle workspaces after** is an
   **expensive** choice of 1 / 3 / 7 (default) / 14 days / Never (a stray arrow must not settle workspaces),
   written as `settings.update { settleIdleDays }` (`null` for Never) and converging through
   `settings.changed`, with Reset to 7; a valid host-configured non-preset value selects no option rather
@@ -1493,7 +1499,11 @@ a project picker, the prompt hero, and the reused
   below `AGENT_REVIEW_SETTING_PROTOCOL_VERSION` (v68), where a host could store the field while still
   registering the tool — and **Automatic fix cycle** (`review-autofix-toggle`, `review-autofix-row`, over
   `store.reviewAutoFix`) — off means a `request_changes` verdict records findings and waits (the host
-  gates its auto-fix cycle on it, see `submodule-server-todos`).
+  gates its auto-fix cycle on it, see `submodule-server-todos`). Below it, **Automatic fix rounds**
+  (`review-autofix-rounds-row`, `review-autofix-rounds-input`, over `store.reviewAutoFixRounds`) is a
+  1–10 number field with Reset that caps the fix-and-re-review rounds per step; it stays visible but
+  disabled while `reviewAutoFix` is off, and is hidden below `REVIEW_FIX_ROUNDS_SETTING_PROTOCOL_VERSION`
+  (v137), whose host would reject the unknown key.
 
   At v76, **`ModelContextSettings`** adds the **GPT context window** group (the pi CLI / restart note as its
   description): **All GPT models**, one cheap Default / 1M / Custom choice over the rows the contracts'

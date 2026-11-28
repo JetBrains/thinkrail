@@ -12,8 +12,9 @@ import {
 } from "@thinkrail/ui/dialog";
 import { useEffect, useRef, useState } from "react";
 import { randomId } from "../lib";
+import { useAppStore } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
-import { cloneDepth, repositoryFolderName } from "./cloneRepository";
+import { cloneDepth, defaultCloneParent, repositoryFolderName } from "./cloneRepository";
 
 const FIELD_CLASS =
 	"w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg px-12 py-8 tr-text-ui text-text-default placeholder:text-text-muted focus-visible:border-control-border-active focus-visible:focus-ring disabled:text-control-disabled-text";
@@ -28,7 +29,10 @@ export function CloneProjectDialog({
 	const t = useT();
 	const [url, setUrl] = useState("");
 	const [folderOverride, setFolderOverride] = useState<string | null>(null);
-	const [parent, setParent] = useState("~");
+	const [parent, setParent] = useState(() => {
+		const { protocolVersion, projectsFolder } = useAppStore.getState();
+		return defaultCloneParent(protocolVersion, projectsFolder);
+	});
 	const [depthInput, setDepthInput] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [cancelling, setCancelling] = useState(false);

@@ -1,3 +1,11 @@
+import { PROJECTS_FOLDER_PROTOCOL_VERSION } from "@thinkrail/contracts";
+
+export function defaultCloneParent(protocolVersion: number | null, projectsFolder: string): string {
+	return protocolVersion !== null && protocolVersion >= PROJECTS_FOLDER_PROTOCOL_VERSION
+		? projectsFolder
+		: "~";
+}
+
 export function repositoryFolderName(rawUrl: string): string {
 	const url = rawUrl.trim();
 	let path: string;

@@ -18,7 +18,8 @@ user turned off, the UI language preference (`locale`), and the user's keyboard 
 select the defaults every new chat receives (unset model means pi's `settings.json` default when available, else the preferred available model — pi's provider default, else the first — among non-environment connections, then among all available connections; unset effort means medium);
 `reviewModel` / `reviewEffort`
 select the reviewer runtime (unset means that same new-chat default); `reviewAutoFix: false` records a `request_changes`
-verdict and waits instead of auto-sending a fix. **`favoriteModels`** is the picker's starred list in display
+verdict and waits instead of auto-sending a fix, and `reviewAutoFixRounds` (1–10, default 3, value-checked like
+`subagentMaxConcurrent`) caps the automatic fix rounds per plan step while it is on. **`favoriteModels`** is the picker's starred list in display
 order — a whole-list client write, validated as model-shaped entries and deduped by `sameModel`;
 **`recentModels`** is host-owned: `noteRecentModel(model)` (called by `host` on an explicit `session.create`
 model and every `session.setModel`) puts the model first, dedupes, caps at `RECENT_MODELS_LIMIT`, persists and
@@ -37,12 +38,18 @@ interval (`1–3600`, default 30), because those values govern host process cade
 
 ## Boundary
 
-- `worktreeDirectory` is an optional absolute path for the root of future managed worktrees. It is wire-gated by `WORKTREE_DIRECTORY_PROTOCOL_VERSION` (v136); missing or malformed stored values use the workspaces module's data-dir default; `null` clears the override. Changing it never moves existing worktrees.
+- `worktreeDirectory` is an optional absolute path for the root of future managed worktrees. It is wire-gated by `WORKTREE_DIRECTORY_PROTOCOL_VERSION` (v138); missing or malformed stored values use the workspaces module's data-dir default; `null` clears the override. Changing it never moves existing worktrees.
+- `projectsFolder` — the default parent for new projects and clones (dialogs and agent `open_project`): a
+  rooted host path (`isProjectsFolder`: absolute or `~`-relative — a relative value would save and then fail
+  in every consumer — and absolute on this host's own platform, so `C:\code` or `~\code` is refused on
+  macOS/Linux where `resolveProjectPath` could not use it), trimmed on write, default `~/thinkrail`; a malformed update rejects with
+  `PROJECTS_FOLDER_INVALID`, a malformed stored value falls back to the default. `projectsFolderNoticeShown`
+  is host-owned like `recentModels`: only `markProjectsFolderNoticeShown()` sets it, and it is not an update key.
 - `settleIdleDays` — the Settled-shelf idle window: a positive integer number of days (clamped to 1…365) or
   `null` for never; default `7`. Validated like every other known field; a hand-edited non-number falls
   back to the default rather than disabling settling.
 - **Owns:** cached current `AppConfig`; `getConfig()`; `updateConfig(partial)` (reject a non-object or unknown key → merge → validate known fields → persist → publish the merged `AppConfig` and successful applied `AppConfigUpdate`); the font settings' shape (`interfaceFont` / `codeFont` through `isFontChoice`, `codeFontSize`, `codeLigatures`, `fontWeightOffset`), each normalized back to its own default on load — which family a choice names, and whether it renders, is the client's; line-width and resource-free custom-preset validation/normalization; custom-preset safety caps; `setSettingsPublisher`; and `resetConfigCache` for tests.
-- **Public surface (barrel):** `getConfig`, `updateConfig`, `setSubagentEnabled`, `noteRecentModel`, `setSettingsPublisher`, `SettingsPublisher`, `resetConfigCache`, plus pure custom-preset normalization used by host startup after persistence load.
+- **Public surface (barrel):** `getConfig`, `updateConfig`, `setSubagentEnabled`, `noteRecentModel`, `markProjectsFolderNoticeShown`, `setSettingsPublisher`, `SettingsPublisher`, `resetConfigCache`, plus pure custom-preset normalization used by host startup after persistence load.
 - **Allowed deps:** `persistence` (`loadConfig`/`saveConfig`); `contracts` (`AppConfig`, `LayoutPreset`,
   `isTerminalWindowsShell`, `isKeybindingOverrides`); `shared` (`CodedError`).
 - **Forbidden:** host or another feature sibling; current-layout document/snapshot types; workspace ids/resources; current frame validation; owning WS channels; or importing web preset definitions.

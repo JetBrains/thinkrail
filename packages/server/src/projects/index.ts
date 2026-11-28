@@ -3,6 +3,7 @@ export {
 	cloneProject,
 	inspectCloneDestination,
 	startProjectClone,
+	validateCloneUrl,
 } from "./clone";
 export {
 	acknowledgeProjectSkills,
@@ -20,6 +21,7 @@ export {
 	openProject,
 	refreshRecentProjectFolders,
 	renameProject,
+	resolveProjectPath,
 	revokeProjectMcpTool,
 	setPiTrustSeed,
 	setProjectGroupEnabled,

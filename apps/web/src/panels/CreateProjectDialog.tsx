@@ -12,9 +12,8 @@ import {
 } from "@thinkrail/ui/dialog";
 import { Switch } from "@thinkrail/ui/switch";
 import { useState } from "react";
+import { useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
-
-export const DEFAULT_PROJECT_PARENT = "~/thinkrail";
 
 const PICK_TIMEOUT_MS = 30 * 60_000;
 const FIELD_CLASS =
@@ -42,7 +41,7 @@ export function CreateProjectDialog({
 }) {
 	const t = useT();
 	const [name, setName] = useState("");
-	const [parent, setParent] = useState(DEFAULT_PROJECT_PARENT);
+	const [parent, setParent] = useState(() => useAppStore.getState().projectsFolder);
 	const [setup, setSetup] = useState(true);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);

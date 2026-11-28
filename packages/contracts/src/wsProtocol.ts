@@ -152,8 +152,10 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never; baseRef?: string }
 	| { workspaceId?: never; projectId?: never; baseRef?: never };
 
-export const PROTOCOL_VERSION = 136;
-export const WORKTREE_DIRECTORY_PROTOCOL_VERSION = 136;
+export const PROTOCOL_VERSION = 138;
+export const WORKTREE_DIRECTORY_PROTOCOL_VERSION = 138;
+export const REVIEW_FIX_ROUNDS_SETTING_PROTOCOL_VERSION = 137;
+export const PROJECTS_FOLDER_PROTOCOL_VERSION = 136;
 export const REF_RESOURCE_PREVIEW_PROTOCOL_VERSION = 135;
 export const FS_REVEAL_PROTOCOL_VERSION = 134;
 export const PULL_REQUEST_REVIEW_PROTOCOL_VERSION = 133;
@@ -1758,6 +1760,8 @@ export type WsErrorCode =
 	| "TEXT_SEARCH_FAILED"
 	| "FRAME_TOO_LARGE"
 	| "KEYBINDINGS_INVALID"
+	| "PROJECTS_FOLDER_INVALID"
+	| "PROJECT_NOT_REPOSITORY"
 	| "SERVER_FALLBACK_NOT_USED"
 	| "SERVER_FALLBACK_STILL_ON"
 	| "EXTENSION_DISABLED"

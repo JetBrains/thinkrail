@@ -1658,6 +1658,8 @@ export interface AppConfig extends ThemePreference {
 	recentModels: WireModel[];
 	/** When false, a `request_changes` verdict records findings and waits — no automated fix cycle. */
 	reviewAutoFix: boolean;
+	/** How many automatic fix rounds (findings sent → fix re-reviewed) one step gets while `reviewAutoFix` is on. */
+	reviewAutoFixRounds: number;
 	/** When false, the worker's in-session `request_review` tool is withheld; the Review button still works. */
 	agentReviewEnabled: boolean;
 	subagentsEnabled: boolean;
@@ -1671,6 +1673,10 @@ export interface AppConfig extends ThemePreference {
 	settleIdleDays: number | null;
 	/** Absolute root for newly created managed worktrees; unset keeps the data-dir default. */
 	worktreeDirectory?: string;
+	/** Host folder new projects and clones go into by default; `~` is the host user's home. */
+	projectsFolder: string;
+	/** The first agent clone told the user about the projects folder; host-maintained, never client-written. */
+	projectsFolderNoticeShown: boolean;
 	/** Agent definition names switched off globally; unknown names are retained. */
 	disabledSubagents: string[];
 	disabledExtensions: string[];
@@ -1812,6 +1818,7 @@ export type AppConfigUpdate = Partial<
 		| "recentModels"
 		| "worktreeDirectory"
 		| "pullRequestFilters"
+		| "projectsFolderNoticeShown"
 	>
 > & {
 	worktreeDirectory?: string | null;
@@ -1897,6 +1904,20 @@ export function isTerminalWindowsShell(value: unknown): value is TerminalWindows
 }
 
 export const SETTLE_IDLE_DAYS = { min: 1, max: 365, default: 7 } as const;
+
+export const DEFAULT_PROJECTS_FOLDER = "~/thinkrail";
+export const PROJECTS_FOLDER_MAX_LENGTH = 4096;
+
+const PROJECTS_FOLDER_ROOTED = /^(?:~(?:$|[\\/])|\/|[A-Za-z]:[\\/]|\\\\)/;
+
+export function isProjectsFolder(value: unknown): value is string {
+	return (
+		typeof value === "string" &&
+		value.length <= PROJECTS_FOLDER_MAX_LENGTH &&
+		!value.includes("\0") &&
+		PROJECTS_FOLDER_ROOTED.test(value.trim())
+	);
+}
 
 export function isSettleIdleDays(value: unknown): value is number | null {
 	return (
@@ -2074,6 +2095,17 @@ export const USER_FONT_UPLOAD_HEADER = {
 } as const;
 export const USER_FONT_EXTENSIONS = [".ttf", ".otf", ".woff", ".woff2"] as const;
 
+export const REVIEW_AUTO_FIX_ROUNDS = { min: 1, max: 10, default: 3 } as const;
+
+export function isReviewAutoFixRounds(value: unknown): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isInteger(value) &&
+		value >= REVIEW_AUTO_FIX_ROUNDS.min &&
+		value <= REVIEW_AUTO_FIX_ROUNDS.max
+	);
+}
+
 export const SUBAGENT_MAX_CONCURRENT = { min: 1, max: 16, default: 4 } as const;
 
 export function isSubagentMaxConcurrent(value: unknown): value is number {
@@ -2115,12 +2147,15 @@ export const DEFAULT_CONFIG: AppConfig = {
 	favoriteModels: [],
 	recentModels: [],
 	reviewAutoFix: false,
+	reviewAutoFixRounds: REVIEW_AUTO_FIX_ROUNDS.default,
 	agentReviewEnabled: false,
 	subagentsEnabled: true,
 	subagentMaxConcurrent: SUBAGENT_MAX_CONCURRENT.default,
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
 	settleIdleDays: SETTLE_IDLE_DAYS.default,
+	projectsFolder: DEFAULT_PROJECTS_FOLDER,
+	projectsFolderNoticeShown: false,
 	disabledSubagents: [],
 	disabledExtensions: [],
 	extensionSettings: {},

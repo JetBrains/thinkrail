@@ -51,6 +51,14 @@ renderers are registered by the host's `extensions/registry.ts`. Unregistered to
   **live** name through `ChatActions.WorkspaceName`: the child renames its workspace from `workspace-N` on
   its first turn. **Open workspace** goes through `ChatActions.openWorkspace`. Registered `primary` +
   `defaultExpanded`. `workspace_status` keeps the default renderer — its text report is the product.
+- **`OpenProjectCard`** — the card for the host-owned `open_project` tool (capability: the server `agent`
+  project tool + the `host` project-tools seam). It reads `details` defensively: while running, the
+  `approval` / `cloning` stage and its destination; when done, the project name, its path and whether it
+  was cloned, opened or already open. The Clone · Deny question itself is the shell's `ToolPromptSlot`, not
+  card code. When the host marked the call `notice` (the first agent clone on this host) it adds a
+  **Change default folder** link through the optional `ChatActions.openWorkspacesSettings` (Settings ›
+  Workspaces, supplied by `ChatTranscript`); without it the sentence stays as text. Registered `primary` +
+  `defaultExpanded`.
 - **Visualize** is owned by [[module-ext-visualize]], outside this module. Its primary/default-expanded
   registration and named `MermaidView` reach chat through the public web entrypoint.
 - **Spec-graph tools** — one defensive `SpecToolCard` registered for all seven `spec_*` names. Each keeps
