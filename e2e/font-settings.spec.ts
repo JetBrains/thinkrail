@@ -100,6 +100,9 @@ test("font settings write the typography tokens, reach every window, and survive
 	await expect.poll(() => rootToken(other, "--tr-font-weight-offset")).toBe("20");
 
 	await dialog.getByTestId("font-interface-trigger").click();
+	await expect(
+		page.getByRole("combobox", { name: "Search, or type any font name", exact: true }),
+	).toBeVisible();
 	await page
 		.locator(`[data-testid="font-interface-option"][data-font-family="${CODE_FACE}"]`)
 		.click();

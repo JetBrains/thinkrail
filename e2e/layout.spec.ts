@@ -193,6 +193,11 @@ test("overflow uses directional fades without changing tab-strip geometry", asyn
 		)
 		.toBe("none");
 	await expect(strip).toHaveCSS("height", "28px");
+	await strip.getByRole("button", { name: "Search open tabs", exact: true }).click();
+	await expect(
+		page.getByRole("combobox", { name: "Find an open tab…", exact: true }),
+	).toBeVisible();
+	await page.keyboard.press("Escape");
 	const listHeight = await height(tablist);
 	await expect.poll(() => height(strip.getByRole("tab").first())).toBeCloseTo(listHeight, 1);
 

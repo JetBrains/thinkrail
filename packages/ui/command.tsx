@@ -4,7 +4,10 @@ import { Command as CommandPrimitive } from "cmdk";
 import type * as React from "react";
 import { cn } from "./utils";
 
-function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
+function Command({
+	className,
+	...props
+}: React.ComponentProps<typeof CommandPrimitive> & { label: string }) {
 	return (
 		<CommandPrimitive
 			className={cn(

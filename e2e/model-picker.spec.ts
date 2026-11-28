@@ -66,6 +66,12 @@ test("the composer pill stars a favorite, records it as recent, and saves the pa
 		await openFreshChat(page);
 		const pill = page.getByTestId("model-selector").last();
 		await pill.click();
+		await expect(
+			page.getByRole("combobox", {
+				name: "Search models… (append a level: opus high)",
+				exact: true,
+			}),
+		).toBeVisible();
 		await revealModelGroups(page);
 		// Provider groups start collapsed unless they hold the chat's current model.
 		await expandModelGroup(page, "e2e-central");

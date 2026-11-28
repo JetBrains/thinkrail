@@ -539,6 +539,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 					)}
 				>
 					<Command
+						label={t("chat.modelPicker.searchWithLevel")}
 						className="min-h-0 flex-1 bg-transparent"
 						filter={pickerFilter(groups, groupRow)}
 					>

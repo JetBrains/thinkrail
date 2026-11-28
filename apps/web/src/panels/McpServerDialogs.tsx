@@ -23,7 +23,7 @@ import {
 import { Textarea } from "@thinkrail/ui/textarea";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { cn } from "@thinkrail/ui/utils";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useId, useMemo, useState } from "react";
 import { randomId } from "@/lib";
 import type { McpServerRow } from "@/store";
 import {
@@ -132,18 +132,23 @@ function CommandSpeedHint() {
 
 function Field({
 	label,
+	htmlFor,
 	hint,
 	error,
 	children,
 }: {
 	label: string;
+	htmlFor?: string;
 	hint?: ReactNode;
 	error?: string | undefined;
 	children: ReactNode;
 }) {
+	const Label = htmlFor ? "label" : "span";
 	return (
 		<div className="flex flex-col gap-4">
-			<span className="tr-title-compact text-text-default">{label}</span>
+			<Label htmlFor={htmlFor} className="tr-title-compact text-text-default">
+				{label}
+			</Label>
 			{children}
 			{error ? (
 				<span role="alert" className="text-feedback-error tr-text-metadata">
@@ -158,19 +163,25 @@ function Field({
 
 function Segments<T extends string>({
 	value,
+	label,
 	options,
 	testId,
 	disabled,
 	onChange,
 }: {
 	value: T;
+	label: string;
 	options: readonly { id: T; label: string; disabled?: boolean }[];
 	testId: string;
 	disabled?: boolean;
 	onChange: (value: T) => void;
 }) {
 	return (
-		<div className="flex flex-wrap items-center gap-2" data-testid={testId}>
+		<fieldset
+			aria-label={label}
+			className="flex min-w-0 flex-wrap items-center gap-2"
+			data-testid={testId}
+		>
 			{options.map((option) => (
 				<ToggleSegment
 					key={option.id}
@@ -181,7 +192,7 @@ function Segments<T extends string>({
 					onClick={() => onChange(option.id)}
 				/>
 			))}
-		</div>
+		</fieldset>
 	);
 }
 
@@ -301,10 +312,17 @@ function McpForm({
 	onChange: (draft: McpFormDraft) => void;
 }) {
 	const t = useT();
+	const fieldId = useId();
 	return (
 		<div className="flex flex-col gap-12" data-testid="mcp-add-form">
-			<Field label={t("mcp.form.name")} error={issues?.name} hint={t("mcp.form.nameHint")}>
+			<Field
+				label={t("mcp.form.name")}
+				htmlFor={`${fieldId}-name`}
+				error={issues?.name}
+				hint={t("mcp.form.nameHint")}
+			>
 				<input
+					id={`${fieldId}-name`}
 					data-testid="mcp-form-name"
 					value={draft.name}
 					placeholder={PLACEHOLDER.name}
@@ -315,6 +333,7 @@ function McpForm({
 			<Field label={t("mcp.form.transport")}>
 				<Segments
 					testId="mcp-form-transport"
+					label={t("mcp.form.transport")}
 					value={draft.transport}
 					options={[
 						{ id: "stdio", label: t("mcp.form.transportStdio") },
@@ -324,8 +343,14 @@ function McpForm({
 				/>
 			</Field>
 			{draft.transport === "http" ? (
-				<Field label={t("mcp.form.url")} error={issues?.url} hint={t("mcp.form.urlHint")}>
+				<Field
+					label={t("mcp.form.url")}
+					htmlFor={`${fieldId}-url`}
+					error={issues?.url}
+					hint={t("mcp.form.urlHint")}
+				>
 					<input
+						id={`${fieldId}-url`}
 						data-testid="mcp-form-url"
 						value={draft.url}
 						placeholder={PLACEHOLDER.url}
@@ -337,10 +362,12 @@ function McpForm({
 				<>
 					<Field
 						label={t("mcp.form.command")}
+						htmlFor={`${fieldId}-command`}
 						error={issues?.command}
 						hint={t("mcp.form.commandHint")}
 					>
 						<input
+							id={`${fieldId}-command`}
 							data-testid="mcp-form-command"
 							value={draft.command}
 							placeholder={PLACEHOLDER.command}
@@ -348,8 +375,13 @@ function McpForm({
 							className={cn(MCP_INPUT_CLASS, "tr-code-text")}
 						/>
 					</Field>
-					<Field label={t("mcp.form.args")} hint={t("mcp.form.argsHint")}>
+					<Field
+						label={t("mcp.form.args")}
+						htmlFor={`${fieldId}-args`}
+						hint={t("mcp.form.argsHint")}
+					>
 						<Textarea
+							id={`${fieldId}-args`}
 							data-testid="mcp-form-args"
 							rows={3}
 							value={draft.args}
@@ -379,13 +411,19 @@ function McpForm({
 			<Field label={t("mcp.form.exposure")} hint={t(MCP_EXPOSURE_HINT[draft.exposure])}>
 				<Segments
 					testId="mcp-form-exposure"
+					label={t("mcp.form.exposure")}
 					value={draft.exposure}
 					options={MCP_EXPOSURES.map((id) => ({ id, label: mcpExposureLabel(t, id) }))}
 					onChange={(exposure) => onChange({ ...draft, exposure })}
 				/>
 			</Field>
-			<Field label={t("mcp.form.description")} hint={t("mcp.form.descriptionHint")}>
+			<Field
+				label={t("mcp.form.description")}
+				htmlFor={`${fieldId}-description`}
+				hint={t("mcp.form.descriptionHint")}
+			>
 				<input
+					id={`${fieldId}-description`}
 					data-testid="mcp-form-description"
 					value={draft.description}
 					onChange={(event) => onChange({ ...draft, description: event.currentTarget.value })}
@@ -413,12 +451,14 @@ function McpImport({
 	onChange: (text: string) => void;
 }) {
 	const t = useT();
+	const inputId = useId();
 	const parsed = text.trim() ? parseMcpServersJson(t, text) : null;
 	const names = parsed?.ok ? parsed.servers.map((server) => server.name) : [];
 	return (
 		<div className="flex flex-col gap-12" data-testid="mcp-add-json">
-			<Field label={t("mcp.import.label")} hint={t("mcp.import.hint")}>
+			<Field htmlFor={inputId} label={t("mcp.import.label")} hint={t("mcp.import.hint")}>
 				<Textarea
+					id={inputId}
 					data-testid="mcp-json-input"
 					rows={8}
 					value={text}
@@ -733,6 +773,7 @@ export function McpAddDialog({
 							<div className="flex flex-wrap items-center justify-between gap-8">
 								<Segments
 									testId="mcp-add-tier"
+									label={t("mcp.addDialog.format")}
 									value={tier}
 									options={[
 										{ id: "form", label: t("mcp.addDialog.tierForm") },
@@ -743,6 +784,7 @@ export function McpAddDialog({
 								{userOnly ? null : (
 									<Segments
 										testId="mcp-add-scope"
+										label={t("mcp.details.scope")}
 										value={scope}
 										options={[
 											{ id: "user", label: t("mcp.addDialog.scopeUser") },
@@ -940,6 +982,7 @@ export function McpEditDialog({
 							) : null}
 							<Textarea
 								data-testid="mcp-edit-input"
+								aria-label={t("mcp.editDialog.configuration")}
 								rows={12}
 								value={text}
 								onChange={(event) => setText(event.currentTarget.value)}
