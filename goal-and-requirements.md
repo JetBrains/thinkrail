@@ -108,7 +108,9 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   chords and extensions' commands in Settings → Keyboard, stored on the host for every window, and exports
   or imports them as a JSON file. Hint mode, a
   switchable extension, labels everything clickable so a typed label presses it
-  ([[module-ext-hint-mode]]); sidebar trees search their rows on `S`.
+  ([[module-ext-hint-mode]]); sidebar trees search their rows on `S`. Desktop source files also offer an optional, read-only Vim interaction layer with normal, insert
+  and visual modes, directional search and repeat counts; its visible toggle and palette command never
+  make the file editable ([[module-resource-renderers]], [[submodule-web-shell]]).
 - **Chats** — concurrent `pi` sessions per workspace, each with its own model, pi-reported token/cost,
   steering and follow-ups mid-run, skill and prompt-template autocomplete, and history search
   ([[submodule-web-chat]], [[submodule-server-agent]]).

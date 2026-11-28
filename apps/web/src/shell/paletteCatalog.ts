@@ -120,6 +120,7 @@ export interface PaletteCatalogActions {
 	readonly toggleLeft: () => void;
 	readonly toggleRight: () => void;
 	readonly toggleBottom: () => void;
+	readonly toggleVim: () => void;
 	readonly toggleAllPanels: () => void;
 	readonly showTool: (workspaceId: string, tool: PaletteTool) => void;
 	readonly openExtensionPanel: (workspaceId: string, panel: RegisteredPanel) => void;
@@ -433,6 +434,14 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 			run: () => actions.showFiles("changed"),
 		});
 	}
+	commands.push({
+		id: "view.toggleVim",
+		title: t("commands.view.toggleVim"),
+		group: "view",
+		icon: RiKeyboardLine,
+		keywords: ["vim", "vi", "normal", "insert", "visual", "editor"],
+		run: actions.toggleVim,
+	});
 	commands.push({
 		id: "view.toggleLeft",
 		title: t("commands.view.toggleLeft"),

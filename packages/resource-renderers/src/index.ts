@@ -82,3 +82,4 @@ export {
 export { focusReviewCard } from "./support/revealFocus";
 export { UnplacedReviewStrip } from "./support/UnplacedReviewStrip";
 export { useScrollViewState, viewStateScrollTop } from "./support/useScrollViewState";
+export { toggleActiveVimMode } from "./support/vimMode";
