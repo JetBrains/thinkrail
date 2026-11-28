@@ -190,7 +190,13 @@ outside one an item is natively tabbable and unmarked, as in an extension's tree
 - Switch exposes native disabled behavior and `role="switch"`/`aria-checked`, not visible On/Off
   text. Every modal dialog's overlay carries `data-modal-layer`, and `useModalLayerOpen()` reports whether one is open: it lets callers tell "covered by a modal" from their own visibility without a dialog registry, independent of how `aria-hidden` treats live regions. Dialog accepts `hideClose` for chromeless surfaces. `DialogContent` centres on whole pixels — `top`, `left` and both translates are `--dialog-center`, `round(50%, 1px)` where that parses and plain `50%` elsewhere — because a scroll pane on a half pixel can blur its text (#1443); a caller's own `top-*` / `translate-y-0` replaces it. `DialogContent` contains what it holds: width and max height keep a window gutter, the body scrolls by default, long text wraps, and `DialogFooter` wraps its actions and then their labels (a footer `Button` grows past its fixed height only then). A caller adding a pinned footer scrolls an inner `min-h-0 flex-1` body; one portalling popovers into the content element sets `overflow-visible` and scrolls an inner body. An inner scroll body is `relative`: otherwise an absolutely positioned descendant (an `sr-only` label) takes the dialog as its containing block and stretches the dialog's own scroll area, giving it a second scrollbar. Flex rows of data still need `min-w-0`. `DialogPanel` renders Radix content in place
   without a portal or overlay for caller-positioned, non-modal dialogs; title/role semantics, Escape
-  dismissal, and focus return remain Radix-owned while surrounding UI stays interactive.
+  dismissal remain Radix-owned while surrounding UI stays interactive. Both content variants remember the
+  focused opener before open autofocus (or from the first focus entry when a child autofocuses first)
+  and return to it on close while it remains connected, including without a `DialogTrigger` or shell
+  recovery. Caller autofocus cancellation and an intentional focus
+  move outside the closing content take precedence; a removed opener falls through to the host recovery.
+  The record belongs to the content node: delayed close cleanup cannot erase a later open, and a
+  completed close releases the record.
 - **An active IME owns the key** ([[module-web]]'s text-field rule). `isImeComposing` is `isComposing`
   or the legacy `keyCode` 229 sentinel, the same test cmdk applies. The sentinel is needed because
   `compositionend` may come before the final keydown, leaving `isComposing` false while the IME still
