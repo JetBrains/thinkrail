@@ -88,6 +88,28 @@ test("a selected table cell round-trips and becomes unplaced after deletion", ()
 	).toBeNull();
 });
 
+test("a large table selection preserves its full source range in either direction", () => {
+	const count = 200_000;
+	const table = parseCsv(`id,note\n${"1,example\n".repeat(count)}`);
+	for (const [anchor, focus] of [
+		[1, count],
+		[count, 1],
+	] as const) {
+		expect(
+			csvSelectionDraft(table.rows, {
+				anchor: { row: anchor, col: 1 },
+				focus: { row: focus, col: 1 },
+			}),
+		).toEqual({
+			selectors: [
+				{ kind: "lineRange", startLine: 2, endLine: count + 1 },
+				{ kind: "structural", scheme: "table-cell", ref: `${anchor}:1` },
+			],
+			label: `R${anchor}C1`,
+		});
+	}
+});
+
 test("CSV renderer registration declares table-cell and line anchors", () => {
 	expect(currentTranslator()(csvRenderer.labelKey)).toBe("Table");
 	expect(csvRenderer).toMatchObject({

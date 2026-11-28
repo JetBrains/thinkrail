@@ -251,12 +251,18 @@ export function csvSelectionDraft(
 		return null;
 	}
 	if (sourceRows.length === 0) return null;
+	let startLine = Number.POSITIVE_INFINITY;
+	let endLine = Number.NEGATIVE_INFINITY;
+	for (const row of sourceRows) {
+		startLine = Math.min(startLine, row.startLine);
+		endLine = Math.max(endLine, row.endLine);
+	}
 	return {
 		selectors: [
 			{
 				kind: "lineRange",
-				startLine: Math.min(...sourceRows.map((row) => row.startLine)),
-				endLine: Math.max(...sourceRows.map((row) => row.endLine)),
+				startLine,
+				endLine,
 			},
 			{
 				kind: "structural",
