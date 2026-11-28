@@ -447,22 +447,27 @@ nudges `fsChanged`. Nothing cleans the folder: sent messages keep naming its fil
   accepts the position, else review-level; anchor resolution is best-effort so a bad anchor falls back to
   a review-level comment, but a store-write failure propagates and cancels the review rather than silently
   dropping the finding while still spending the cycle) and then spends the fix budget.
-  **The 1-cycle cap is the same on both paths.** `canAutoFix = reviewAutoFix !== false && spent < 1`
-  (`todoReviewAutoCycles`), and the record is written with `autoCycles: canAutoFix ? 1 : 2` — `1` means
-  "the worker was actually asked to fix, this item is mid-cycle", `2` is terminal ("the human decides
-  now"). Recording `1` without asking anyone to fix would strand the item: `maybeAutoReReview`'s trigger
-  reads exactly that value, and nothing would ever produce the fresh delta it waits for. **A cycle is spent only once the worker accepts the fix.** On the button path `deliverFixToWorker` owns
-  the whole critical section — file the findings, record the optimistic cycle `1`, select and mark them
+  **The round cap is the same on both paths.** `autoCycles` counts the fix rounds actually delivered;
+  `canAutoFix = reviewAutoFix !== false && spent !== AUTO_CYCLES_TERMINAL && spent < reviewAutoFixRounds`
+  (`todoReviewAutoCycles`, the limit read from config at verdict time, default 3), and the record is
+  written with `autoCycles: canAutoFix ? spent + 1 : AUTO_CYCLES_TERMINAL` — a positive count means "the
+  worker was actually asked to fix, this item awaits its re-review", the negative terminal mark means
+  "the human decides now" and survives a later raise of the limit. Reading the limit at verdict time means
+  a fix already sent always gets its re-review even if the limit was lowered meanwhile; only the next
+  `request_changes` stops. Recording a round without asking anyone to fix would strand the item:
+  `maybeAutoReReview`'s trigger reads exactly that value, and nothing would ever produce the fresh delta it
+  waits for. **A round is spent only once the worker accepts the fix.** On the button path `deliverFixToWorker` owns
+  the whole critical section — file the findings, record the optimistic round `spent + 1`, select and mark them
   `sent`, then send — with filing through mark held in one `withReviewLock` so no interleaved Review send
   can grab the just-filed drafts before reservation. Failure splits on whether filing completed: a *filing*
   failure throws before any record so the review cancels (`fileFindings` having compensated its partial
   persist), while any *post-filing* failure — a send rejection (worker detached, busy, pre-turn refusal)
-  **or any preparation failure** (snapshot/package/mark) — re-records the item terminally (`autoCycles: 2`)
-  on top of the optimistic `1`, alongside the `rollbackSend` that returns any marked findings to `draft`.
-  A post-filing failure escaping as a throw would strand the item at `autoCycles: 1` — the whole point of
-  the unified catch. Leaving `1` there would strand the step forever: nothing asked the worker to change anything, so
-  no fresh delta can ever reach `maybeAutoReReview`, while a later manual review would read the cycle as
-  spent and refuse to send. A claim the fix latch refuses (a manual Ask-to-fix already in flight) settles
+  **or any preparation failure** (snapshot/package/mark) — re-records the item terminally
+  (`AUTO_CYCLES_TERMINAL`) on top of the optimistic round, alongside the `rollbackSend` that returns any marked findings to `draft`.
+  A post-filing failure escaping as a throw would strand the item at the optimistic round — the whole point of
+  the unified catch. Leaving that round there would strand the step forever: nothing asked the worker to change anything, so
+  no fresh delta can ever reach `maybeAutoReReview`, while a later review would count the undelivered
+  round as spent and silently burn part of the budget. A claim the fix latch refuses (a manual Ask-to-fix already in flight) settles
   the same way. On the button
   path a live budget also **delivers the fix to the worker chat** (`deliverFixToWorker`): the item's
   origin-scoped draft findings (`itemFixFindings` — this item, this worker session, non-stale; an
@@ -482,15 +487,15 @@ nudges `fsChanged`. Nothing cleans the folder: sent messages keep naming its fil
   injected runner (no agent dep), which is also how `planReview.test.ts` drives the whole verdict →
   record → deliver path without a provider.
   **Auto re-review** (`maybeAutoReReview`, tee'd off the reconcile hook on `isTodoToolEnd`): after a fix
-  lands and the worker re-marks the step done, exactly the items still inside their one auto cycle
-  (`autoCycles === 1`, not `reviewing`, `status: "done"`) get re-reviewed. The trigger accepts either a
+  lands and the worker re-marks the step done, exactly the items with a delivered, not yet re-reviewed round
+  (`autoCycles > 0` — terminal is negative — not `reviewing`, `status: "done"`) get re-reviewed. The trigger accepts either a
   fresh commit delta on a `changes_requested` record OR a record reset to `unreviewed` — the latter is
   the path-list fallback (`todos/artifacts.ts` drops the record when the redo can't be committed), where
   a surviving spent cycle is itself the "a fix landed" signal, there being no sha to watermark against.
   An eligible item is **enqueued onto the plan's serial chain even when another review is already running**
   (a fix landing while Review All reviews a different step), and the per-item claim dedupes — it must not be
   dropped when the chain is busy, or a step fixed mid-review would stay `changes_requested` at
-  `autoCycles: 1` forever, since nothing retries once the chain drains.
+  its delivered round forever, since nothing retries once the chain drains.
   **An `approve` never settles an item that still has open findings.** The two rounds of a fix cycle are
   independent runs, so nothing structural connects round 2's approve to round 1's findings: the gate is
   explicit, `itemOpenFindings` checked before `approveTodoReview`. Its set is deliberately WIDER than the
@@ -504,7 +509,7 @@ nudges `fsChanged`. Nothing cleans the folder: sent messages keep naming its fil
   (`itemOpenFindings` empty) and the item is still `changes_requested`, its verdict record is dropped
   (`dropTodoReviewVerdict`) back to `unreviewed` — ONLY the record: an in-flight review's pending mark
   (its start-SHA watermark) and the auto-cycle count stay, so closing the last finding mid-review/fix can
-  neither watermark commits the reviewer never saw nor reset the one-cycle cap; the check is a no-op while any finding stays open, so a
+  neither watermark commits the reviewer never saw nor reset the fix-round cap; the check is a no-op while any finding stays open, so a
   whole-change verdict that never had an inline finding is never touched. The agent's `resolve_comment`
   path (`applyAgentResolution`) is deliberately NOT reconciled here — it lands inside a fix cycle whose
   following re-review re-derives the verdict, and the record is inert either way (the Open-PR gate counts

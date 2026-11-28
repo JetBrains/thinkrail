@@ -626,7 +626,7 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, analyticsConsentConfirmed, terminalReplayKb,
   terminalWindowsShell, composerGrowthLimit, questionPanelHeight, chatLineWidth, fileLineWidth, chatLineWidthBounded,
   fileLineWidthBounded, voiceInputEnabled, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
-  favoriteModels, recentModels, reviewAutoFix, agentReviewEnabled, subagentsEnabled, subagentMaxConcurrent,
+  favoriteModels, recentModels, reviewAutoFix, reviewAutoFixRounds, agentReviewEnabled, subagentsEnabled, subagentMaxConcurrent,
   jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, disabledExtensions, extensionSettings, otherAgentSkills,
   onboardingDismissed, interfaceFont, codeFont, codeFontSize, codeLigatures, fontWeightOffset, keybindings,
   pullRequestFilters }` — an extensible
@@ -679,7 +679,10 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   user about it: like `recentModels` it is absent from `AppConfigUpdate` (the agent's `open_project`, which
   refuses a host folder that is not a repository with **`PROJECT_NOT_REPOSITORY`**, sets it); `agentReviewEnabled` (default `false`, on the
   wire from `AGENT_REVIEW_SETTING_PROTOCOL_VERSION` = v68) gates the worker's in-session `request_review`
-  tool and applies live to open sessions — the Review button is independent (see [[submodule-server-host-plan-review]]); `disabledExtensions` (default `[]`, on the wire
+  tool and applies live to open sessions — the Review button is independent (see [[submodule-server-host-plan-review]]); `reviewAutoFixRounds`
+  (whole number in **`REVIEW_AUTO_FIX_ROUNDS`** = 1–10, default 3, validated by `isReviewAutoFixRounds`; on the wire from
+  **`REVIEW_FIX_ROUNDS_SETTING_PROTOCOL_VERSION`** = v137) caps how many automatic fix rounds one plan step gets while
+  `reviewAutoFix` is on — a client of an older host hides the row, since that host rejects the unknown key; `disabledExtensions` (default `[]`, on the wire
   from `EXTENSION_CATALOG_PROTOCOL_VERSION` = v82) names the host-registry extensions the user switched off —
   unknown names are kept and ignored, and the host applies it to new and open sessions (see
   [[submodule-server-extensions]]); `extensionSettings` (`ExtensionSettingValues`, default `{}`, on the wire from

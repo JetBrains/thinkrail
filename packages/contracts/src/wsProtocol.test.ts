@@ -86,6 +86,7 @@ import {
 	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	RESOURCE_META_PROTOCOL_VERSION,
 	REVIEW_ACTIONS_PROTOCOL_VERSION,
+	REVIEW_FIX_ROUNDS_SETTING_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	readToolResponseMessage,
 	SEARCH_PROTOCOL_VERSION,
@@ -408,7 +409,7 @@ test("base-branch skill and template previews are pinned to v135", () => {
 });
 
 test("the projects folder and open_project are pinned to v136", () => {
-	expect(PROTOCOL_VERSION).toBe(136);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROJECTS_FOLDER_PROTOCOL_VERSION);
 	expect(PROJECTS_FOLDER_PROTOCOL_VERSION).toBe(136);
 	expect(DEFAULT_CONFIG.projectsFolder).toBe(DEFAULT_PROJECTS_FOLDER);
 	expect(DEFAULT_CONFIG.projectsFolderNoticeShown).toBe(false);
@@ -430,6 +431,11 @@ test("the projects folder and open_project are pinned to v136", () => {
 	expect(isProjectsFolder("~/a\0b")).toBe(false);
 	expect(isProjectsFolder("x".repeat(4097))).toBe(false);
 	expect(isProjectsFolder(42)).toBe(false);
+});
+
+test("the automatic review fix-rounds setting is pinned to v137", () => {
+	expect(PROTOCOL_VERSION).toBe(137);
+	expect(REVIEW_FIX_ROUNDS_SETTING_PROTOCOL_VERSION).toBe(137);
 });
 
 test("the community catalog is pinned to v132", () => {

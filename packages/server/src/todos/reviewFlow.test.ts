@@ -353,7 +353,7 @@ test("review sidecar meta: pending marks; decoration ships reviewing/reviewedBy"
 	expect(review?.reviewing).toBeUndefined();
 });
 
-test("recordAgentChangesRequested stores the verdict note + autoCycles for the 1-cycle cap", async () => {
+test("recordAgentChangesRequested stores the verdict note + autoCycles (fix rounds delivered)", async () => {
 	const store = new TodoStore(repo, SESSION);
 	const { id } = committedItem(store, "step", "impl.ts");
 	const { recordAgentChangesRequested, todoReviewAutoCycles, todoReviewRecord, startTodoReview } =
@@ -372,6 +372,19 @@ test("recordAgentChangesRequested stores the verdict note + autoCycles for the 1
 	expect(todoReviewAutoCycles({ workspaceId: "w1", sessionId: SESSION, id })).toBe(1);
 	const plan = await listTodos({ workspaceId: "w1", sessionId: SESSION });
 	expect(plan.todos.find((t) => t.id === id)?.review?.reviewing).toBeUndefined();
+});
+
+test("a version-1 sidecar's terminal autoCycles (2) reads as terminal; a mid-cycle 1 stays 1", async () => {
+	const { AUTO_CYCLES_TERMINAL } = await import("./reviews");
+	const { todoReviewAutoCycles } = await import("./todos");
+	mkdirSync(join(repo, ".thinkrail/context/todos"), { recursive: true });
+	writeFileSync(
+		join(repo, ".thinkrail/context/todos", `${SESSION}.reviews.json`),
+		JSON.stringify({ version: 1, items: {}, autoCycles: { done: 2, mid: 1 } }),
+	);
+	const ref = (id: string) => ({ workspaceId: "w1", sessionId: SESSION, id });
+	expect(todoReviewAutoCycles(ref("done"))).toBe(AUTO_CYCLES_TERMINAL);
+	expect(todoReviewAutoCycles(ref("mid"))).toBe(1);
 });
 
 test("recordAgentChangesRequested writes record + cycle + pending-clear as one snapshot (no partial state on a late sidecar rename)", async () => {
@@ -441,7 +454,7 @@ test("the path-list fallback drops the review verdict but preserves the spent au
 	const store = new TodoStore(repo, SESSION);
 	const { id } = committedItem(store, "step", "impl.ts");
 
-	// A request_changes verdict already spent its one auto cycle.
+	// A request_changes verdict already delivered one automatic fix round.
 	putReviewRecord(repo, SESSION, id, { state: "changes_requested", reviewedShas: [], at: "t0" });
 	setAutoCycles(repo, SESSION, id, 1);
 
@@ -455,7 +468,7 @@ test("the path-list fallback drops the review verdict but preserves the spent au
 	// The sha-based verdict is honestly reset (no sha to watermark a path-list delta against)...
 	expect(readReviewRecords(repo, SESSION)[id]).toBeUndefined();
 	// ...but the auto-cycle bookkeeping must survive: a later manual review must not read this as a
-	// fresh item and grant a second automated cycle past the 1-cycle cap.
+	// fresh item and regrant the fix round it already spent.
 	expect(todoReviewAutoCycles({ workspaceId: "w1", sessionId: SESSION, id })).toBe(1);
 
 	// This is exactly the (state, reviewing, autoCycles) triple host/requestReview.ts's maybeAutoReReview

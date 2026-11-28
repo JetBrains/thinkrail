@@ -31,6 +31,7 @@ export type ValueConfigKey = Extract<
 	| "fileLineWidthBounded"
 	| "voiceInputEnabled"
 	| "reviewAutoFix"
+	| "reviewAutoFixRounds"
 	| "agentReviewEnabled"
 	| "subagentsEnabled"
 	| "subagentMaxConcurrent"

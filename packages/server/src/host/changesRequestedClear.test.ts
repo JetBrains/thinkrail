@@ -13,6 +13,7 @@ import {
 	updateComment,
 } from "../reviews";
 import {
+	AUTO_CYCLES_TERMINAL,
 	readReviewMeta,
 	recordAgentChangesRequested,
 	startTodoReview,
@@ -82,7 +83,12 @@ function flaggedItem(store: TodoStore, title: string, file: string): { id: strin
 		artifacts: [{ kind: "commit", sha: committed.sha, label: title }],
 	});
 	store.update(todo.id, { status: "done" });
-	recordAgentChangesRequested({ workspaceId: WS, sessionId: SESSION, id: todo.id, autoCycles: 2 });
+	recordAgentChangesRequested({
+		workspaceId: WS,
+		sessionId: SESSION,
+		id: todo.id,
+		autoCycles: AUTO_CYCLES_TERMINAL,
+	});
 	return { id: todo.id, sha: committed.sha };
 }
 
@@ -105,7 +111,9 @@ test("dropping the verdict keeps an in-flight review's watermark and the auto-cy
 	await clearChangesRequestedIfResolved({ workspaceId: WS, sessionId: SESSION, id });
 	expect(todoReviewRecord({ workspaceId: WS, sessionId: SESSION, id })).toBeUndefined();
 	expect(readReviewMeta(repo, SESSION).pending[id]?.shas).toEqual([sha]);
-	expect(todoReviewAutoCycles({ workspaceId: WS, sessionId: SESSION, id })).toBe(2);
+	expect(todoReviewAutoCycles({ workspaceId: WS, sessionId: SESSION, id })).toBe(
+		AUTO_CYCLES_TERMINAL,
+	);
 });
 
 test("keeps the verdict while a finding remains, drops it once the last one is deleted", async () => {

@@ -91,13 +91,18 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
   `sessionId` so only that plan's view toasts (not every plan in the workspace); split views of one session
   dedupe on the toast body. The awaited tool path needs no publish: it rejects to the worker. Pinned by the
   post-ack failure test in `planReview.test.ts`.
-- **`autoCycles` must match what actually happened.** `1` stands only when the worker really accepted the
-  fix request; a rejected fix — the send OR any of its preparation steps (snapshot/package/mark) failing —
-  or a refused fix latch re-records `2` (terminal), always after rolling the marked findings back to
-  `draft`. `deliverFixToWorker` wraps prepare+send in one catch precisely so a preparation failure cannot
-  slip out as a throw and leave the optimistic `1` standing. Writing `1` without a delivered request
-  strands the item: the auto-re-review trigger waits for a delta that nothing will produce, and a later
-  review reads the cycle as already spent. Pinned by the rejected-send and rejected-preparation tests in
+- **The round cap is configured, the counter is factual.** `autoCycles` counts fix rounds delivered
+  (`AUTO_CYCLES_TERMINAL`, -1, once the human decides); `recordVerdict` grants another round while
+  `reviewAutoFix` is on, the item is not terminal, and `spent < reviewAutoFixRounds` (default 3, read at
+  verdict time). A terminal item stays terminal when the limit is later raised; a round already delivered
+  still gets its re-review when the limit is lowered.
+- **`autoCycles` must match what actually happened.** The optimistic `spent + 1` stands only when the worker
+  really accepted the fix request; a rejected fix — the send OR any of its preparation steps
+  (snapshot/package/mark) failing — or a refused fix latch re-records `AUTO_CYCLES_TERMINAL`, always after
+  rolling the marked findings back to `draft`. `deliverFixToWorker` wraps prepare+send in one catch precisely
+  so a preparation failure cannot slip out as a throw and leave the optimistic round standing. Recording a
+  round without a delivered request strands the item: the auto-re-review trigger waits for a delta that
+  nothing will produce, and a later review reads the round as already spent. Pinned by the rejected-send and rejected-preparation tests in
   `planReview.test.ts`.
 - **An approve is a verdict, not a settlement.** `recordVerdict` settles `reviewed` only when
   `itemOpenFindings` is empty; otherwise it clears the mark, leaves the record, and reports
@@ -149,7 +154,7 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
   between filing and reservation — which would leave `itemFixFindings` (draft-only) empty and hand the
   worker a generic request with no canonical ids while still spending a cycle. Failure splits on whether
   filing completed: a *filing* failure throws (nothing recorded → the review cancels), any *post-filing*
-  failure records cycle 2 to give the auto cycle back and rolls marked findings to draft. The cycle-record
+  failure records the terminal mark and rolls marked findings to draft. The cycle-record
   write is itself part of the filing transaction on every path: if it throws after the findings are
   persisted, they are undone under the same lock — any `sent` assignment rolled back, then the drafts
   deleted (`unfileFindings`) — before the cancel propagates, so a sidecar failure never leaves an open

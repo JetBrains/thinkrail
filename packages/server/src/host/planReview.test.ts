@@ -28,7 +28,7 @@ import * as reviews from "../reviews";
 import { getReviewSnapshot } from "../reviews";
 import { resetConfigCache, updateConfig } from "../settings";
 import * as todos from "../todos";
-import { todoReviewAutoCycles, todoReviewRecord } from "../todos";
+import { AUTO_CYCLES_TERMINAL, todoReviewAutoCycles, todoReviewRecord } from "../todos";
 import { getWorkspace } from "../workspaces";
 import { handleRequest } from "./handlers";
 import { itemReviewActive } from "./planReviewQueue";
@@ -363,12 +363,35 @@ test("request_changes with auto-fix OFF files the findings but sends nothing —
 	await settle(sessionId, id);
 
 	const ref = { workspaceId: WS, sessionId, id };
-	expect(todoReviewAutoCycles(ref)).toBe(2);
+	expect(todoReviewAutoCycles(ref)).toBe(AUTO_CYCLES_TERMINAL);
 	const comments = (await getReviewSnapshot(WS)).comments.filter((c) => c.origin?.todoId === id);
 	expect(comments[0]?.status).toBe("draft");
 });
 
-test("a second request_changes on the same step is terminal — the 1-cycle cap stops the fix loop", async () => {
+test("request_changes past the configured rounds is terminal — the round cap stops the fix loop", async () => {
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+	const ref = { workspaceId: WS, sessionId, id };
+
+	for (const round of [1, 2, 3]) {
+		startPlanReview(WS, sessionId, id, verdictRunner(requestChanges));
+		await settle(sessionId, id);
+		expect(todoReviewAutoCycles(ref)).toBe(round);
+	}
+
+	startPlanReview(WS, sessionId, id, verdictRunner(requestChanges));
+	await settle(sessionId, id);
+	expect(todoReviewAutoCycles(ref)).toBe(AUTO_CYCLES_TERMINAL);
+
+	// Terminal stays terminal even when the limit is raised later: the human owns the step now.
+	updateConfig({ reviewAutoFixRounds: 10 });
+	startPlanReview(WS, sessionId, id, verdictRunner(requestChanges));
+	await settle(sessionId, id);
+	expect(todoReviewAutoCycles(ref)).toBe(AUTO_CYCLES_TERMINAL);
+});
+
+test("a one-round limit makes the first re-review's request_changes terminal", async () => {
+	updateConfig({ reviewAutoFixRounds: 1 });
 	const sessionId = await workerSession();
 	const id = committedItem(sessionId);
 	const ref = { workspaceId: WS, sessionId, id };
@@ -379,7 +402,54 @@ test("a second request_changes on the same step is terminal — the 1-cycle cap 
 
 	startPlanReview(WS, sessionId, id, verdictRunner(requestChanges));
 	await settle(sessionId, id);
+	expect(todoReviewAutoCycles(ref)).toBe(AUTO_CYCLES_TERMINAL);
+});
+
+test("auto re-review follows a later round's fix but never a terminal step", async () => {
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+	const ref = { workspaceId: WS, sessionId, id };
+	const fixLands = (sha: string) =>
+		new TodoStore(worktree, sessionId).update(id, {
+			status: "done",
+			artifacts: [
+				{ kind: "commit", sha: "sha1", label: "a" },
+				{ kind: "commit", sha, label: "fix" },
+			],
+		});
+
+	startPlanReview(WS, sessionId, id, verdictRunner(requestChanges));
+	await settle(sessionId, id);
+	fixLands("sha2");
+	await maybeAutoReReview(WS, sessionId, verdictRunner(requestChanges));
+	await settle(sessionId, id);
 	expect(todoReviewAutoCycles(ref)).toBe(2);
+
+	fixLands("sha3");
+	let reReviewed = false;
+	updateConfig({ reviewAutoFix: false });
+	await maybeAutoReReview(
+		WS,
+		sessionId,
+		verdictRunner(requestChanges, () => {
+			reReviewed = true;
+		}),
+	);
+	await settle(sessionId, id);
+	expect(reReviewed).toBe(true);
+	expect(todoReviewAutoCycles(ref)).toBe(AUTO_CYCLES_TERMINAL);
+
+	fixLands("sha4");
+	reReviewed = false;
+	await maybeAutoReReview(
+		WS,
+		sessionId,
+		verdictRunner(approve, () => {
+			reReviewed = true;
+		}),
+	);
+	await settle(sessionId, id);
+	expect(reReviewed).toBe(false);
 });
 
 test("reviews of one plan run one at a time, and a step already under review is rejected", async () => {
@@ -417,7 +487,7 @@ test("a subagent that returns no parsable verdict clears the reviewing mark inst
 	expect(itemReviewActive(sessionId, id)).toBe(false);
 });
 
-test("a fix the worker never accepted gives the auto cycle back instead of stranding the step", async () => {
+test("a fix the worker never accepted ends the automatic rounds instead of stranding the step", async () => {
 	// No session exists for this id, so the structured fix send rejects before the worker's turn.
 	const sessionId = "sess-detached";
 	const id = committedItem(sessionId);
@@ -429,7 +499,7 @@ test("a fix the worker never accepted gives the auto cycle back instead of stran
 	expect(todoReviewRecord(ref)?.state).toBe("changes_requested");
 	// Terminal, not mid-cycle: nothing asked the worker to change anything, so no fresh delta will ever
 	// reach maybeAutoReReview — recording cycle 1 here would strand the step forever.
-	expect(todoReviewAutoCycles(ref)).toBe(2);
+	expect(todoReviewAutoCycles(ref)).toBe(AUTO_CYCLES_TERMINAL);
 	// The findings are back to draft, so a later manual Ask-to-fix still carries them.
 	const comments = (await getReviewSnapshot(WS)).comments.filter((c) => c.origin?.todoId === id);
 	expect(comments).toHaveLength(1);
@@ -521,7 +591,7 @@ test("a tool request_review queues behind a button review of another step on the
 	expect(overlapped).toBe(false);
 });
 
-test("a fix whose preparation fails gives the auto cycle back instead of stranding the step", async () => {
+test("a fix whose preparation fails ends the automatic rounds instead of stranding the step", async () => {
 	const sessionId = await workerSession();
 	const id = committedItem(sessionId);
 	const ref = { workspaceId: WS, sessionId, id };
@@ -541,7 +611,7 @@ test("a fix whose preparation fails gives the auto cycle back instead of strandi
 	expect(todoReviewRecord(ref)?.state).toBe("changes_requested");
 	// Terminal, not mid-cycle: no fix reached the worker, so nothing will ever produce the delta
 	// maybeAutoReReview waits for — recording cycle 1 here would strand the step forever.
-	expect(todoReviewAutoCycles(ref)).toBe(2);
+	expect(todoReviewAutoCycles(ref)).toBe(AUTO_CYCLES_TERMINAL);
 	// A marked finding was rolled back to draft (here none had been marked yet, but the invariant holds).
 	const comments = (await getReviewSnapshot(WS)).comments.filter((c) => c.origin?.todoId === id);
 	expect(comments).toHaveLength(1);
