@@ -462,7 +462,9 @@ contain semicolons never reclassifies a comma file, while a locale export of `id
 and not one column; `.tsv` is always tab. A diff samples the modified side first and falls back to the
 original, so both sides parse with one delimiter. The view keeps the header fixed and virtualizes data rows with
 `react-virtuoso`. A selected cell or shift-extended rectangle emits the selected rows' raw-file
-`lineRange` plus `structural { scheme: "table-cell", ref: "<row>:<column>" }`, with header row zero; a
+`lineRange` plus `structural { scheme: "table-cell", ref: "<row>:<column>" }`, with header row zero.
+The selected source range is accumulated without a function argument per row, so a selection spanning
+hundreds of thousands of virtualized rows stays reviewable within the browser's argument limit; a
 missing cell, or a coordinate whose row no longer intersects the host-reanchored line range, is omitted
 from actual placement rather than guessed. The unified diff aligns complete raw-row keys with
 `diffArrays`, pairs equal-length remove/add runs as changed rows, and highlights only differing cells;

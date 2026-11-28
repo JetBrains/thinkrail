@@ -109,6 +109,34 @@ test("opens CSV with Table and Source candidates, defaulting to Table", async ({
 	await expect(page.getByTestId("csv-view")).toContainText("Table");
 });
 
+test("selects a large CSV range without replacing the editor with an error", async ({ page }) => {
+	test.setTimeout(90_000);
+	const errors: string[] = [];
+	page.on("pageerror", (error) => errors.push(error.message));
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	writeFileSync(
+		join(workspace.worktreePath, "large-selection.csv"),
+		`id,name\n${Array.from({ length: 200_000 }, (_, i) => `${i},item-${i}`).join("\n")}`,
+	);
+	await revealWorkbenchTool(page, "files");
+	await page.getByTestId("file-node").filter({ hasText: "large-selection.csv" }).dblclick();
+	const csv = page.getByTestId("csv-view");
+	await expect(csv).toBeVisible();
+	await csv.getByRole("button", { name: "name", exact: true }).click();
+	await csv.locator("[data-virtuoso-scroller]").evaluate((element) => {
+		element.scrollTop = element.scrollHeight;
+	});
+	await csv
+		.getByRole("button", { name: "item-199999", exact: true })
+		.click({ modifiers: ["Shift"] });
+	await expect(csv).toBeVisible();
+	expect(errors).toEqual([]);
+	await expect(
+		csv.getByRole("button", { name: "item-199999", exact: true }).locator(".."),
+	).toHaveClass(/outline-primary/);
+});
+
 test("opens a notebook with Notebook and Source candidates", async ({ page }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
