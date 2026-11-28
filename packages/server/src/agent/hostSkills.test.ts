@@ -144,8 +144,10 @@ describe("bundled host skills", () => {
 		expect(citedSections.size).toBe(validSections.size);
 	});
 
-	it("every /skill:<name> command cited in guide skills matches a bundled skill", () => {
+	it("every /skill:<name> command and sibling skill reference in guide skills matches a bundled skill", () => {
 		const bundled = listBundledSkillNames();
+		let checked = 0;
+
 		for (const skill of GUIDE_SKILLS) {
 			const files = walkFiles(join(HOST_SKILLS_DIR, skill)).filter((file) => file.endsWith(".md"));
 			for (const file of files) {
@@ -154,9 +156,38 @@ describe("bundled host skills", () => {
 					const name = match[1];
 					if (!name) continue;
 					expect(bundled.has(name)).toBe(true);
+					checked += 1;
 				}
 			}
 		}
+
+		const aboutSkillMd = readFileSync(join(HOST_SKILLS_DIR, "about-thinkrail", "SKILL.md"), "utf8");
+		const handoffSection = aboutSkillMd.match(/## Hand off to action skills[\s\S]*?(?=\n## |$)/);
+		expect(handoffSection).not.toBeNull();
+		for (const match of (handoffSection?.[0] ?? "").matchAll(/→ `([a-z0-9-]+)`/g)) {
+			const name = match[1];
+			if (!name) continue;
+			expect(bundled.has(name)).toBe(true);
+			checked += 1;
+		}
+
+		const conceptsMd = readFileSync(
+			join(HOST_SKILLS_DIR, "about-thinkrail", "reference", "concepts.md"),
+			"utf8",
+		);
+		const workflowsSection = conceptsMd.match(/## Bundled workflows[\s\S]*?(?=\n## |$)/);
+		expect(workflowsSection).not.toBeNull();
+		for (const line of (workflowsSection?.[0] ?? "").split(/\r?\n/)) {
+			if (!line.trimStart().startsWith("- ")) continue;
+			for (const match of line.matchAll(/`([a-z0-9-]+)`/g)) {
+				const name = match[1];
+				if (!name) continue;
+				expect(bundled.has(name)).toBe(true);
+				checked += 1;
+			}
+		}
+
+		expect(checked).toBeGreaterThanOrEqual(15);
 	});
 
 	it("configuring-thinkrail encodes host safety invariants", () => {
