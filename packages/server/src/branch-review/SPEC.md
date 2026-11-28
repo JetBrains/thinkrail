@@ -105,7 +105,7 @@ one pull request by number in any state, as `PullRequestSummary` rows. Not keyed
   local-remote inspection, thrown runner, or malformed response still degrades to `null` for the caller
   but is not retained, so fixing CLI auth or a
   transient outage can recover on the next read. Expired entries are pruned lazily on cache activity.
-- Ordinary workspace activation may reuse a settled answer. `{ fresh: true }` bypasses the settled cache and starts a new lookup generation even when an older lookup is in flight. Ordinary concurrent lookups share the current generation; callers of a superseded generation resolve through the current generation, and only the current generation may update the cache. The web uses the fresh path on window focus, preserving focus as the explicit revalidation point for reviews opened, closed, or merged outside ThinkRail.
+- Ordinary workspace activation may reuse a settled answer. `{ fresh: true }` bypasses the settled cache and starts a new lookup generation even when an older lookup is in flight. Ordinary concurrent lookups share the current generation; callers of a superseded generation resolve through the current generation, and only the current generation may update the cache. The web uses the fresh path on window focus, and the host uses it when an agent settles and during periodic review refresh, so reviews opened, closed, or merged outside the app's own actions can surface without another local file change.
 - `forgetOpenBranchReview(cwd)` invalidates every branch generation for that worktree. A lookup superseded
   while in flight must resolve through the current generation rather than return or re-cache its stale
   answer; this is what makes invalidation safe against a concurrent read.

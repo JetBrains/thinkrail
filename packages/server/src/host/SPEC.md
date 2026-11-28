@@ -1074,10 +1074,18 @@ enabled/confirmed choice before entering analytics attribution.
   override wins regardless) or a merged/closed snapshot with a valid terminal time (an incomplete settled
   answer remains live and refreshable; a reopened complete review is caught on activation) — bounded to a
   few concurrent provider calls and riding the module's 60 s cache. Idle refresh pacing is branch-aware,
-  so switching branches never inherits the old branch's 30-minute delay; a fresh
+  so switching branches never inherits the old branch's 30-minute delay. The Default workspace also
+  participates on a non-base branch on every pass, including when its last review was merged or closed:
+  it never enters the Settled shelf, and external PR changes must not require a window-focus event.
+  At `agent_settled` (never attempt-level `agent_end`), the host refreshes that workspace's review with
+  a fresh lookup after synchronizing its checked-out branch. This catches `gh`/`glab` actions that write
+  no local file. Concurrent settlements share the existing `trailingSingleFlight` rule per workspace:
+  arrivals during a lookup wait for one subsequent fresh lookup, and the queue is released after its
+  latest request settles. No command-string parsing, filesystem-triggered cache bypass, or additional
+  timer is needed. Chats and removed workspaces are ignored; a fresh
   `workspace.openReview` or `workspace.branchStatus` for the active workspace also writes the snapshot, so the
   active row is always current. Both writers pass the branch the lookup was made for, and `workspaces` drops an answer whose
-  branch has moved underneath it. All three go through `findWorkspaceReviewOutcome`, which **never looks up
+  branch has moved underneath it. Every refresh goes through `findWorkspaceReviewOutcome`, which **never looks up
   a review while a workspace of any kind sits on its base branch** (`pr`'s `onBaseBranch`): `gh pr list
   --head main` matches any fork's `main` and would mark the row settled with a foreign PR. It answers a
   reliable `null`, so a foreign snapshot stored earlier is cleared. **Protocol skew:** `RequestContext.protocolVersion` is the socket's

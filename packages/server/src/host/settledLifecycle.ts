@@ -12,10 +12,14 @@ import {
 	isChatsContainer,
 	isChatsContainerId,
 	isChatWorkspace,
+	isChatWorkspaceId,
+	listAllWorkspaceRecords,
 	listWorkspaceRecords,
 	recordWorkspaceActivity,
 	setWorkspaceReview,
+	syncWorkspaceBranch,
 } from "../workspaces";
+import { trailingSingleFlight } from "./sessionStateList";
 
 const log = logger("settled-lifecycle");
 
@@ -28,6 +32,11 @@ const IDLE_REVIEW_REFRESH_MS = 30 * 60_000;
 const passesInFlight = new Map<string, Promise<void>>();
 type ReviewRefreshStamp = { branch: string; at: number };
 const reviewRefreshedAt = new Map<string, ReviewRefreshStamp>();
+type ReviewRefreshQueue = {
+	run: () => Promise<void>;
+	latest: Promise<void> | null;
+};
+const settledReviewRefreshes = new Map<string, ReviewRefreshQueue>();
 
 export function stampSessionActivity(record: SessionStateRecord): void {
 	if (record.state.execution !== "running") return;
@@ -49,12 +58,6 @@ export function stampTerminalActivity(workspaceId: string | null, data: string):
 	}
 }
 
-/**
- * Rows whose review state can still change the partition: live rows every pass, idle-settled rows at
- * most every 30 minutes (a PR opened from outside ThinkRail must still surface), parked and complete
- * merged/closed rows never — the override wins regardless, incomplete terminal facts retry, and a reopened
- * complete review is caught on activation.
- */
 export function reviewRefreshRows(
 	rows: readonly Workspace[],
 	now = Date.now(),
@@ -62,7 +65,8 @@ export function reviewRefreshRows(
 ): Workspace[] {
 	const idleDays = getConfig().settleIdleDays;
 	return rows.filter((row) => {
-		if (row.kind === "default" || isChatWorkspace(row)) return false;
+		if (isChatWorkspace(row)) return false;
+		if (row.kind === "default") return !onBaseBranch(row);
 		if (row.settledOverride === "settled") return false;
 		if (
 			(row.review?.state === "merged" || row.review?.state === "closed") &&
@@ -131,6 +135,29 @@ async function refreshReview(row: Workspace, fresh: boolean): Promise<void> {
 	}
 }
 
+export function refreshReviewAfterAgentSettled(workspaceId: string): Promise<void> {
+	if (isChatWorkspaceId(workspaceId)) return Promise.resolve();
+	let queue = settledReviewRefreshes.get(workspaceId);
+	if (!queue) {
+		queue = {
+			run: trailingSingleFlight(async () => {
+				syncWorkspaceBranch(workspaceId);
+				const row = listAllWorkspaceRecords().find((candidate) => candidate.id === workspaceId);
+				if (row && !isChatWorkspace(row)) await refreshReview(row, true);
+			}),
+			latest: null,
+		};
+		settledReviewRefreshes.set(workspaceId, queue);
+	}
+	const pending = queue.run();
+	queue.latest = pending;
+	return pending.finally(() => {
+		if (settledReviewRefreshes.get(workspaceId) === queue && queue.latest === pending) {
+			settledReviewRefreshes.delete(workspaceId);
+		}
+	});
+}
+
 async function forEachBounded<T>(
 	items: readonly T[],
 	limit: number,
@@ -144,7 +171,7 @@ async function forEachBounded<T>(
 	);
 }
 
-/** Backfills missing activity stamps, then refreshes the review of every candidate-live row. */
+/** Backfills missing activity stamps, then refreshes the review of every candidate row. */
 export function scheduleLifecyclePass(
 	projectId: string,
 	opts: { fresh?: boolean } = {},
